@@ -520,6 +520,50 @@ label { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: 
   height: calc(100vh - 54px);
   overflow: hidden;
 }
+/* Layout variants driven by showFiles / showClips / selectedMoment */
+.editor-wide.no-left.no-right  { grid-template-columns: 1fr; }
+.editor-wide.no-left           { grid-template-columns: 1fr 320px; }
+.editor-wide.no-right          { grid-template-columns: 280px 1fr; }
+.editor-wide.focus-mode        { grid-template-columns: 260px 1fr; }
+.editor-wide.focus-mode.has-ops { grid-template-columns: 260px 1fr 320px; }
+
+/* Moments as left sidebar when files+clips are hidden (focus mode) */
+.moments-sidebar {
+  background: var(--ink-panel);
+  border-right: 1px solid var(--ink-line);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.moments-sidebar .moments-section {
+  border-top: none;
+  flex: 1;
+}
+
+/* Toggle pills for sidebar visibility in the timeline head */
+.panel-toggles {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 8px;
+}
+.panel-toggles button {
+  padding: 4px 9px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--ink-line);
+  color: var(--paper-dim);
+  min-width: 0;
+}
+.panel-toggles button.on {
+  background: var(--ink-raised);
+  color: var(--paper);
+  border-color: var(--signal-dim);
+}
+.panel-toggles button:hover { color: var(--paper); border-color: var(--signal-dim); }
 
 .side {
   background: var(--ink-panel);

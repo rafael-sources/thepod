@@ -1822,6 +1822,14 @@ var ProjectView = {
     watch(zoomOnSelect, (v) => {
       localStorage.setItem("postpod.zoomOnSelect", v ? "1" : "0");
     });
+
+    // Sidebar visibility toggles (persisted). Operations panel auto-shows
+    // when a moment is selected; no explicit toggle.
+    const showFiles = ref((localStorage.getItem("postpod.showFiles") ?? "1") === "1");
+    const showClips = ref((localStorage.getItem("postpod.showClips") ?? "1") === "1");
+    watch(showFiles, (v) => localStorage.setItem("postpod.showFiles", v ? "1" : "0"));
+    watch(showClips, (v) => localStorage.setItem("postpod.showClips", v ? "1" : "0"));
+    const focusMode = computed(() => !showFiles.value && !showClips.value);
     const selectedMomentId = ref(null);
     const capture = reactive({ show: false });
     const videoPlayerRef = ref(null);
@@ -2102,18 +2110,37 @@ var ProjectView = {
       createMoment, updateMomentLabel, removeMoment,
       addOperation, removeOperation,
       onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, zoomOnSelect,
+      showFiles, showClips, focusMode,
       silenceClip, openSilenceModal, applySilenceRemoval,
       showExport,
       formatShort,
     };
   },
   template: `
-    <div class="editor-wide">
+    <div class="editor-wide"
+         :class="{
+           'no-left':   !showFiles && !focusMode,
+           'no-right':  !showClips && !selectedMoment,
+           'focus-mode': focusMode,
+           'has-ops':    focusMode && selectedMoment != null
+         }">
       <FilesPanel
+        v-if="showFiles"
         :project="project"
         @add-to-timeline="addClipToTimeline"
         @refresh="onFilesRefresh"
       />
+      <aside v-else-if="focusMode" class="moments-sidebar">
+        <MomentsList
+          :moments="timeline.moments"
+          :selected-moment-id="selectedMomentId"
+          @goto="onSeek"
+          @preview="previewMoment"
+          @remove="removeMoment"
+          @update-label="updateMomentLabel"
+          @select="(id) => selectedMomentId = id"
+        />
+      </aside>
 
       <div class="main">
         <div v-if="error" class="error" style="margin: 8px 22px 0;">{{ error }}</div>
@@ -2132,6 +2159,10 @@ var ProjectView = {
             <span class="label">Timeline</span>
             <span class="zoom-info">zoom: <b>{{ formatShort(zoom.startSeconds) }} → {{ formatShort(zoom.endSeconds ?? playerState.duration) }}</b></span>
             <div class="spacer"></div>
+            <div class="panel-toggles" title="Mostrar/ocultar paneles laterales">
+              <button :class="{on: showFiles}" @click="showFiles = !showFiles" title="Files">📁</button>
+              <button :class="{on: showClips}" @click="showClips = !showClips" title="Clips">📋</button>
+            </div>
             <ZoomControls :zoom="zoom" :player-state="playerState" @update-zoom="onUpdateZoom" />
             <label class="zoom-toggle" :title="'Si está activo, al hacer drag-select se hace zoom al rango. Si no, sólo reposiciona el cursor.'">
               <input type="checkbox" v-model="zoomOnSelect">
@@ -2158,6 +2189,7 @@ var ProjectView = {
         </div>
 
         <MomentsList
+          v-if="!focusMode"
           :moments="timeline.moments"
           :selected-moment-id="selectedMomentId"
           @goto="onSeek"
@@ -2175,8 +2207,9 @@ var ProjectView = {
         />
       </div>
 
-      <aside class="right-col">
+      <aside v-if="showClips || selectedMoment" class="right-col">
         <ClipsPanel
+          v-if="showClips"
           :clips="clipsWithStarts"
           :total-duration="timeline.duration"
           @reorder="reorderClip"
@@ -2192,6 +2225,7 @@ var ProjectView = {
           @cancel="silenceClip = null"
         />
         <OperationsPanel
+          v-if="selectedMoment"
           :moment="selectedMoment"
           :clips="clipsWithStarts"
           :local-files="localFiles"
