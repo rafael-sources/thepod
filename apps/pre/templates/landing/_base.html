@@ -1,0 +1,31 @@
+{%- set fh = (podcast.font_heading or 'Fraunces') -%}
+{%- set fb = (podcast.font_body or 'Bricolage Grotesque') -%}
+{%- set fh_q = fh.replace(' ', '+') -%}
+{%- set fb_q = fb.replace(' ', '+') -%}
+{%- set og_image = landing.og_image_url or cover_url or logo_url or '' -%}
+<!DOCTYPE html>
+<html lang="{{ landing.language or 'es' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ podcast.name }}{% if podcast.tagline %} · {{ podcast.tagline }}{% endif %}</title>
+  <meta name="description" content="{{ podcast.description or podcast.tagline or '' }}">
+  {% if og_image %}
+  <meta property="og:image" content="{{ og_image }}">
+  {% endif %}
+  <meta property="og:title" content="{{ podcast.name }}">
+  <meta property="og:description" content="{{ podcast.description or podcast.tagline or '' }}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="alternate" type="application/rss+xml" title="{{ podcast.name }} RSS" href="{{ rss_url }}">
+  <link rel="icon" type="image/png" href="{{ logo_url or '' }}">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family={{ fh_q }}:wght@400;600;700&family={{ fb_q }}:wght@400;500;600&display=swap" rel="stylesheet">
+
+  {% if landing.analytics_code %}
+  {{ landing.analytics_code | safe }}
+  {% endif %}
+</head>

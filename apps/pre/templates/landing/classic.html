@@ -1,0 +1,166 @@
+{% include "landing/_base.html" %}
+<body>
+<style>
+  :root {
+    --p: {{ podcast.color_primary or '#5a8bff' }};
+    --s: {{ podcast.color_secondary or '#1e2a54' }};
+    --a: {{ podcast.color_accent or '#f4c770' }};
+    --fh: '{{ podcast.font_heading or "Fraunces" }}', Georgia, serif;
+    --fb: '{{ podcast.font_body or "Bricolage Grotesque" }}', -apple-system, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #f6f3ec; color: #1a1715; font-family: var(--fb); line-height: 1.6; }
+  .container { max-width: 1080px; margin: 0 auto; padding: 40px 28px; }
+  .masthead {
+    text-align: center;
+    padding: 48px 20px 40px;
+    border-top: 6px double #1a1715;
+    border-bottom: 1px solid #1a1715;
+    margin-bottom: 48px;
+  }
+  .masthead .date-line {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #5c4f3e;
+    margin-bottom: 12px;
+  }
+  h1 { font-family: var(--fh); font-size: 68px; font-weight: 700; letter-spacing: -0.02em; margin: 0; line-height: 0.95; }
+  h1 .accent { color: var(--p); font-style: italic; font-weight: 400; }
+  .tagline { font-family: var(--fh); font-style: italic; font-size: 20px; color: #5c4f3e; margin-top: 10px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 60px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+  .main-col { min-width: 0; }
+  .sidebar {
+    border-left: 1px solid rgba(26,23,21,0.15);
+    padding-left: 28px;
+  }
+  @media (max-width: 800px) { .sidebar { border-left: 0; padding-left: 0; border-top: 1px solid rgba(26,23,21,0.15); padding-top: 40px; margin-top: 40px; } }
+
+  .article { margin-bottom: 44px; padding-bottom: 44px; border-bottom: 1px solid rgba(26,23,21,0.12); }
+  .article:last-child { border-bottom: 0; }
+  .article .byline {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #5c4f3e;
+    margin-bottom: 8px;
+  }
+  .article h2 { font-family: var(--fh); font-size: 36px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 12px; }
+  .article h2 a { color: #1a1715; text-decoration: none; }
+  .article h2 a:hover { color: var(--p); }
+  .article .dek { font-family: var(--fh); font-style: italic; font-size: 19px; color: #3a3025; margin-bottom: 14px; line-height: 1.4; }
+  .article .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .article .links a {
+    font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--p); text-decoration: none; padding: 3px 0;
+    border-bottom: 1.5px solid var(--p);
+  }
+
+  .sidebar-section { margin-bottom: 32px; }
+  .sidebar-section h3 {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #5c4f3e;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(26,23,21,0.2);
+    padding-bottom: 6px;
+    margin: 0 0 12px;
+  }
+  .about p { font-size: 14px; color: #3a3025; margin: 0 0 10px; }
+  .logo-badge { width: 80px; height: 80px; border-radius: 6px; background-size: cover; background-position: center; margin: 0 0 14px; background-color: var(--s); border: 1px solid rgba(26,23,21,0.15); }
+
+  .sub-list { list-style: none; padding: 0; margin: 0; }
+  .sub-list li { margin-bottom: 6px; }
+  .sub-list a { display: inline-flex; align-items: center; gap: 8px; color: #1a1715; text-decoration: none; font-size: 14px; }
+  .sub-list a:hover { color: var(--p); }
+  .sub-list .rss { font-family: var(--fb); font-weight: 600; color: var(--p); }
+
+  .team-row { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px dotted rgba(26,23,21,0.15); }
+  .team-row:last-child { border-bottom: 0; }
+  .team-row .avatar { width: 44px; height: 44px; border-radius: 50%; background-size: cover; background-color: var(--s); flex-shrink: 0; }
+  .team-row .info .name { font-family: var(--fh); font-size: 15px; font-weight: 600; }
+  .team-row .info .role { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #5c4f3e; }
+
+  footer { text-align: center; padding: 40px 20px; color: #5c4f3e; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; border-top: 6px double #1a1715; margin-top: 40px; }
+  footer a { color: var(--p); }
+  {% if landing.custom_css %}{{ landing.custom_css | safe }}{% endif %}
+</style>
+
+<div class="container">
+  <div class="masthead">
+    <div class="date-line">Crónicas · Entrevistas · Relatos</div>
+    <h1>{{ podcast.name }}</h1>
+    {% if podcast.tagline %}<div class="tagline">{{ podcast.tagline }}</div>{% endif %}
+  </div>
+
+  <div class="layout">
+    <div class="main-col">
+      {% if episodes %}
+        {% for ep in episodes %}
+        <article class="article" id="ep{{ ep.id }}">
+          <div class="byline">
+            Episodio {{ ep.episode_number }}
+            {% if ep.scheduled_date %} · {{ ep.scheduled_date }}{% endif %}
+            {% if ep.duration_estimate %} · {{ ep.duration_estimate | int }} min{% endif %}
+          </div>
+          <h2><a href="#ep{{ ep.id }}">{{ ep.title }}</a></h2>
+          {% if ep.description %}<div class="dek">{{ ep.description }}</div>{% endif %}
+          {% if ep.links %}
+          <div class="links">
+            {% for l in ep.links %}<a href="{{ l.url }}" target="_blank" rel="noopener">→ {{ l.platform.replace('_', ' ') }}</a>{% endfor %}
+          </div>
+          {% endif %}
+        </article>
+        {% endfor %}
+      {% else %}
+        <p class="dek">Aún no hay episodios publicados.</p>
+      {% endif %}
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-section about">
+        {% if logo_url %}<div class="logo-badge" style="background-image: url('{{ logo_url }}');"></div>{% endif %}
+        <h3>Sobre el podcast</h3>
+        {% if podcast.description %}<p>{{ podcast.description }}</p>{% else %}<p style="font-style:italic; color:#9a8870;">Sin descripción.</p>{% endif %}
+      </div>
+
+      {% if socials or rss_url %}
+      <div class="sidebar-section">
+        <h3>Suscribite</h3>
+        <ul class="sub-list">
+          {% for s in socials %}<li><a href="{{ s.url }}" target="_blank" rel="noopener">· {{ s.label }}</a></li>{% endfor %}
+          <li><a class="rss" href="{{ rss_url }}">· RSS feed</a></li>
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if team %}
+      <div class="sidebar-section">
+        <h3>Equipo</h3>
+        {% for m in team %}
+        <div class="team-row">
+          {% if m.image_filename %}<div class="avatar" style="background-image: url('/media/podcasts/{{ slug }}/branding/{{ m.image_filename }}');"></div>{% else %}<div class="avatar"></div>{% endif %}
+          <div class="info">
+            <div class="name">{{ m.name }}</div>
+            {% if m.role %}<div class="role">{{ m.role }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+
+  <footer>
+    {{ podcast.name }} · <a href="{{ rss_url }}">RSS</a>
+  </footer>
+</div>
+</body>
+</html>

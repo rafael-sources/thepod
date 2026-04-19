@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.venv/
+venv/
+.Python
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Runtime / per-podcast storage
+podcasts/*/uploads/
+podcasts/*/assets/
+podcasts/*/branding/
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+
+# Logs / pids
+*.log
+*.pid
+
+# Secrets / env
+.env

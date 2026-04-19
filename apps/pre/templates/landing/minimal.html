@@ -1,0 +1,94 @@
+{% include "landing/_base.html" %}
+<body>
+<style>
+  :root {
+    --p: {{ podcast.color_primary or '#5a8bff' }};
+    --s: {{ podcast.color_secondary or '#1e2a54' }};
+    --a: {{ podcast.color_accent or '#f4c770' }};
+    --fh: '{{ podcast.font_heading or "Fraunces" }}', Georgia, serif;
+    --fb: '{{ podcast.font_body or "Bricolage Grotesque" }}', -apple-system, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fafaf7; color: #14110b; font-family: var(--fb); line-height: 1.55; }
+  .page { max-width: 680px; margin: 0 auto; padding: 80px 28px 120px; }
+  header.hero { text-align: center; margin-bottom: 48px; }
+  .logo { width: 120px; height: 120px; border-radius: 24px; background-size: cover; background-position: center; margin: 0 auto 28px; box-shadow: 0 10px 30px -8px rgba(20,17,11,0.2); background-color: var(--s); }
+  h1 { font-family: var(--fh); font-size: 56px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 10px; line-height: 1.02; }
+  .tagline { font-family: var(--fh); font-style: italic; font-size: 20px; color: #5c5240; margin: 0; }
+  .description { font-size: 17px; color: #2a2319; max-width: 540px; margin: 32px auto 0; text-align: center; }
+  .subscribe { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 36px; }
+  .subscribe a { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; background: var(--p); color: #fff; text-decoration: none; font-size: 14px; font-weight: 500; transition: transform .15s ease; border: 0; }
+  .subscribe a:hover { transform: translateY(-1px); }
+  .subscribe a.rss { background: var(--a); color: var(--s); }
+  .section-title { font-family: var(--fh); font-size: 28px; margin: 80px 0 24px; font-weight: 500; letter-spacing: -0.01em; }
+  .rule { border: 0; height: 1px; background: linear-gradient(90deg, transparent, #3a2f22, transparent); margin: 60px 0 20px; opacity: 0.15; }
+  .ep { padding: 22px 0; border-bottom: 1px solid rgba(20,17,11,0.08); }
+  .ep:last-child { border-bottom: 0; }
+  .ep-num { font-family: var(--fb); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--p); }
+  .ep-title { font-family: var(--fh); font-size: 24px; margin: 4px 0 8px; font-weight: 500; letter-spacing: -0.01em; color: #14110b; }
+  .ep-desc { color: #5c5240; font-size: 15px; margin-bottom: 10px; }
+  .ep-links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ep-links a { font-family: var(--fb); font-size: 12px; padding: 4px 12px; border-radius: 999px; background: rgba(20,17,11,0.06); color: #14110b; text-decoration: none; text-transform: capitalize; }
+  .ep-links a:hover { background: var(--p); color: #fff; }
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; }
+  .member { text-align: center; }
+  .member .avatar { width: 100px; height: 100px; border-radius: 50%; background-size: cover; background-position: center; background-color: var(--s); margin: 0 auto 10px; }
+  .member .name { font-family: var(--fh); font-size: 18px; font-weight: 600; }
+  .member .role { font-size: 13px; color: #5c5240; }
+  footer { margin-top: 80px; text-align: center; color: #8a7d65; font-size: 13px; }
+  footer a { color: inherit; }
+  @media (max-width: 520px) { h1 { font-size: 42px; } .tagline { font-size: 17px; } }
+  {% if landing.custom_css %}{{ landing.custom_css | safe }}{% endif %}
+</style>
+
+<div class="page">
+  <header class="hero">
+    {% if logo_url %}<div class="logo" style="background-image: url('{{ logo_url }}');"></div>{% else %}<div class="logo"></div>{% endif %}
+    <h1>{{ podcast.name }}</h1>
+    {% if podcast.tagline %}<p class="tagline">{{ podcast.tagline }}</p>{% endif %}
+    {% if podcast.description %}<p class="description">{{ podcast.description }}</p>{% endif %}
+    <div class="subscribe">
+      {% for s in socials %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.label }}</a>{% endfor %}
+      <a class="rss" href="{{ rss_url }}">RSS feed</a>
+    </div>
+  </header>
+
+  {% if episodes %}
+  <h2 class="section-title">Episodios</h2>
+  <div class="episodes">
+    {% for ep in episodes %}
+    <article class="ep" id="ep{{ ep.id }}">
+      <div class="ep-num">EP · #{{ ep.episode_number }}{% if ep.scheduled_date %} · {{ ep.scheduled_date }}{% endif %}</div>
+      <h3 class="ep-title">{{ ep.title }}</h3>
+      {% if ep.description %}<p class="ep-desc">{{ ep.description }}</p>{% endif %}
+      {% if ep.links %}
+      <div class="ep-links">
+        {% for l in ep.links %}<a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.platform.replace('_', ' ') }}</a>{% endfor %}
+      </div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if team %}
+  <h2 class="section-title">Equipo</h2>
+  <div class="team-grid">
+    {% for m in team %}
+    <div class="member">
+      {% if m.image_filename %}<div class="avatar" style="background-image: url('/media/podcasts/{{ slug }}/branding/{{ m.image_filename }}');"></div>{% else %}<div class="avatar"></div>{% endif %}
+      <div class="name">{{ m.name }}</div>
+      {% if m.role %}<div class="role">{{ m.role }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <hr class="rule">
+  <footer>
+    <div>{{ podcast.name }} © {{ 2026 }}</div>
+    <div style="margin-top: 6px;"><a href="{{ rss_url }}">Subscripción RSS</a></div>
+  </footer>
+</div>
+</body>
+</html>
