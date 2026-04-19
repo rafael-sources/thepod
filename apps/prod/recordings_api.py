@@ -1,0 +1,434 @@
+"""
+Client-side recording upload + listing + download.
+
+The browser records its own tracks with MediaRecorder and uploads the final
+blob(s) here when the host calls /stop. We don't rely on LiveKit Egress so
+no Docker volume mounts are needed.
+"""
+
+import io
+import json
+import mimetypes
+import os
+import re
+import subprocess
+import uuid
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+from flask import Blueprint, Response, abort, jsonify, request
+
+from auth import current_user, require_auth
+from config import INTEGRATION_SECRET, POSTPOD_URL, SESSIONS_DIR
+from db import get_db, session_dir
+
+
+bp = Blueprint("recordings_api", __name__)
+
+
+ALLOWED_KINDS = {"audio", "video", "mixed_output", "soundboard"}
+ALLOWED_EXTS = {".webm", ".mp4", ".mp3", ".wav", ".ogg", ".m4a"}
+
+
+def _remux_webm(path: Path) -> None:
+    """Rewrite a MediaRecorder .webm so the container carries duration metadata.
+
+    MediaRecorder emits streamable webm without a known duration — players show
+    duration=N/A and seeking is broken. `ffmpeg -c copy` re-muxes into a fully
+    indexed Matroska/webm. On any failure we keep the original file.
+    """
+    if path.suffix.lower() != ".webm":
+        return
+    fixed = path.with_name(path.stem + ".fixed" + path.suffix)
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-i", str(path), "-c", "copy", str(fixed)],
+            capture_output=True, timeout=120,
+        )
+        if proc.returncode == 0 and fixed.exists() and fixed.stat().st_size > 0:
+            path.unlink()
+            fixed.rename(path)
+        else:
+            if fixed.exists():
+                fixed.unlink()
+    except (subprocess.SubprocessError, OSError):
+        try:
+            if fixed.exists():
+                fixed.unlink()
+        except OSError:
+            pass
+
+
+def _probe_duration(path: Path) -> float:
+    try:
+        proc = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "json", str(path)],
+            capture_output=True, timeout=30, text=True,
+        )
+        if proc.returncode == 0:
+            data = json.loads(proc.stdout or "{}")
+            d = (data.get("format") or {}).get("duration")
+            if d is not None:
+                return float(d)
+    except (subprocess.SubprocessError, OSError, ValueError, json.JSONDecodeError):
+        pass
+    return 0.0
+
+
+def _serialize_recording(row):
+    d = {
+        "id": row["id"],
+        "session_id": row["session_id"],
+        "participant_id": row["participant_id"],
+        "track_type": row["track_type"],
+        "filename": row["filename"],
+        "duration_seconds": row["duration_seconds"],
+        "size_bytes": row["size_bytes"],
+        "mime_type": row["mime_type"],
+        "created_at": row["created_at"],
+        "url": f"/api/sessions/{row['session_id']}/recordings/{row['filename']}",
+    }
+    try:
+        d["exported_to_postpod_at"] = row["exported_to_postpod_at"]
+    except (KeyError, IndexError):
+        d["exported_to_postpod_at"] = None
+    return d
+
+
+def _is_session_member(db, sid, username):
+    if not username:
+        return False
+    s = db.execute("SELECT created_by FROM sessions WHERE id=?", (sid,)).fetchone()
+    if not s:
+        return False
+    if s["created_by"] == username:
+        return True
+    p = db.execute(
+        "SELECT id FROM participants WHERE session_id=? AND username=?",
+        (sid, username),
+    ).fetchone()
+    return bool(p)
+
+
+@bp.post("/api/sessions/<int:sid>/recordings")
+def upload_recording(sid):
+    """
+    Upload a recording file from a participant's browser.
+    Accepts either session user (host) or invited participant via `?token=...`.
+    multipart/form-data: file, track_type, [duration_seconds], [participant_id]
+    """
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+
+        # Auth: cookie session OR invite token
+        token = request.args.get("token") or request.form.get("token")
+        participant_id = None
+        if token:
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone()
+            if not p:
+                return jsonify({"error": "token inválido"}), 401
+            participant_id = p["id"]
+        else:
+            username = current_user()
+            if not username or not _is_session_member(db, sid, username):
+                return jsonify({"error": "no autorizado"}), 401
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            participant_id = p["id"] if p else None
+
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"error": "archivo requerido en 'file'"}), 400
+
+        track_type = (request.form.get("track_type") or "").strip().lower()
+        if track_type not in ALLOWED_KINDS:
+            return jsonify({"error": f"track_type inválido: {track_type}"}), 400
+
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ALLOWED_EXTS:
+            return jsonify({"error": f"extensión no soportada: {ext}"}), 400
+
+        try:
+            dur = float(request.form.get("duration_seconds") or 0)
+        except ValueError:
+            dur = 0.0
+
+        dest_dir = session_dir(sid) / "recordings"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        fname = f"p{participant_id or 'anon'}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
+        dest = dest_dir / fname
+        f.save(str(dest))
+
+        if ext == ".webm":
+            _remux_webm(dest)
+            probed = _probe_duration(dest)
+            if probed > 0:
+                dur = probed
+
+        size = dest.stat().st_size
+        mime, _ = mimetypes.guess_type(str(dest))
+
+        cur = db.execute(
+            """
+            INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path,
+                                    duration_seconds, size_bytes, mime_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (sid, participant_id, track_type, fname, str(dest), dur, size, mime or "video/webm"),
+        )
+        db.commit()
+
+        row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
+        return jsonify(_serialize_recording(row)), 201
+    finally:
+        db.close()
+
+
+@bp.get("/api/sessions/<int:sid>/recordings")
+@require_auth
+def list_recordings(sid):
+    db = get_db()
+    try:
+        if not _is_session_member(db, sid, current_user()):
+            return jsonify({"error": "no autorizado"}), 401
+        rows = db.execute(
+            "SELECT * FROM recordings WHERE session_id=? ORDER BY created_at", (sid,)
+        ).fetchall()
+        return jsonify([_serialize_recording(r) for r in rows])
+    finally:
+        db.close()
+
+
+@bp.post("/api/sessions/<int:sid>/recordings/export-to-postpod")
+@require_auth
+def export_recordings_to_postpod(sid):
+    """
+    Push every not-yet-exported recording of this session to postPod, where
+    they land as media files of the matching shared_project_id project.
+    Host-only, idempotent per file via exported_to_postpod_at.
+    """
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+        if sess["created_by"] != current_user():
+            return jsonify({"error": "sólo el host puede exportar"}), 403
+        spid = sess["shared_project_id"]
+        if not spid:
+            # Auto-generate and persist a shared_project_id so postPod can
+            # link back. Future exports re-use the same id (idempotent).
+            spid = uuid.uuid4().hex
+            db.execute("UPDATE sessions SET shared_project_id=? WHERE id=?", (spid, sid))
+            db.commit()
+
+        rows = db.execute(
+            """
+            SELECT r.*, COALESCE(p.display_name, p.username, 'anon') AS participant_name
+            FROM recordings r
+            LEFT JOIN participants p ON p.id = r.participant_id
+            WHERE r.session_id=? AND r.exported_to_postpod_at IS NULL
+            ORDER BY r.created_at
+            """,
+            (sid,),
+        ).fetchall()
+        pending = [dict(r) for r in rows]
+    finally:
+        db.close()
+
+    if not pending:
+        return jsonify({"exported": 0, "failed": 0, "project": None, "message": "sin pistas nuevas"}), 200
+
+    endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-track"
+    headers = {"X-PodPod-Secret": INTEGRATION_SECRET}
+    base = (SESSIONS_DIR / str(sid) / "recordings").resolve()
+
+    exported = 0
+    failed = 0
+    errors = []
+    project_info = None
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    # Map prodPod track_type to postPod media type expectations:
+    # video -> keep the .webm (video type). soundboard/audio -> also .webm,
+    # postPod classifies by extension so both land as 'video'. That's OK for
+    # now since .webm isn't in the audio ALLOWED_EXTS; postPod places them as
+    # video and the editor can still use them as audio sources.
+    for r in pending:
+        fpath = (base / r["filename"]).resolve()
+        if not str(fpath).startswith(str(base) + os.sep) or not fpath.is_file():
+            failed += 1
+            errors.append({"recording_id": r["id"], "error": "archivo local no encontrado"})
+            continue
+
+        # Name as sent to postPod (human readable)
+        pname = re.sub(r"[^A-Za-z0-9_-]+", "_", r["participant_name"] or "anon").strip("_") or "anon"
+        original_name = f"{pname}_{r['track_type']}_{r['id']}.webm"
+
+        try:
+            with open(fpath, "rb") as fh:
+                resp = requests.post(
+                    endpoint,
+                    headers=headers,
+                    data={
+                        "shared_project_id": spid,
+                        "original_name": original_name,
+                        "track_type": r["track_type"],
+                        "duration_seconds": str(r["duration_seconds"] or 0),
+                        "participant_name": r["participant_name"] or "anon",
+                        "project_name": sess["title"],
+                    },
+                    files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
+                    timeout=120,
+                )
+            if resp.status_code not in (200, 201):
+                failed += 1
+                errors.append({"recording_id": r["id"], "status": resp.status_code, "body": resp.text[:200]})
+                continue
+            data = resp.json()
+            if not project_info:
+                project_info = data.get("project")
+
+            db = get_db()
+            try:
+                db.execute(
+                    "UPDATE recordings SET exported_to_postpod_at=? WHERE id=?",
+                    (now_iso, r["id"]),
+                )
+                db.commit()
+            finally:
+                db.close()
+            exported += 1
+        except requests.RequestException as e:
+            failed += 1
+            errors.append({"recording_id": r["id"], "error": str(e)})
+
+    return jsonify({
+        "exported": exported,
+        "failed": failed,
+        "errors": errors,
+        "project": project_info,
+        "postpod_url": POSTPOD_URL,
+    }), (200 if failed == 0 else 207)
+
+
+@bp.get("/api/sessions/<int:sid>/recordings/bundle.zip")
+@require_auth
+def download_bundle(sid):
+    """
+    Download every recording of a session as a single ZIP, with filenames
+    rewritten to identify the participant so postPod can import them as
+    separate tracks.
+    """
+    db = get_db()
+    try:
+        if not _is_session_member(db, sid, current_user()):
+            return jsonify({"error": "no autorizado"}), 401
+        sess = db.execute("SELECT title FROM sessions WHERE id=?", (sid,)).fetchone()
+        rows = db.execute(
+            """
+            SELECT r.*, COALESCE(p.display_name, p.username, 'anon') AS participant_name
+            FROM recordings r
+            LEFT JOIN participants p ON p.id = r.participant_id
+            WHERE r.session_id=?
+            ORDER BY r.created_at
+            """,
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+
+    if not rows:
+        return jsonify({"error": "no hay grabaciones"}), 404
+
+    base = (SESSIONS_DIR / str(sid) / "recordings").resolve()
+    title_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", (sess["title"] if sess else f"session_{sid}")).strip("_") or f"session_{sid}"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+        for r in rows:
+            fpath = (base / r["filename"]).resolve()
+            if not str(fpath).startswith(str(base) + os.sep) or not fpath.is_file():
+                continue
+            pname = re.sub(r"[^a-zA-Z0-9_-]+", "_", r["participant_name"] or "anon").strip("_") or "anon"
+            arc = f"{title_slug}/{pname}_{r['track_type']}_{r['id']}{fpath.suffix}"
+            zf.write(str(fpath), arc)
+
+    data = buf.getvalue()
+    resp = Response(data, mimetype="application/zip")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{title_slug}_tracks.zip"'
+    resp.headers["Content-Length"] = str(len(data))
+    return resp
+
+
+@bp.get("/api/sessions/<int:sid>/recordings/<path:filename>")
+@require_auth
+def download_recording(sid, filename):
+    db = get_db()
+    try:
+        if not _is_session_member(db, sid, current_user()):
+            return jsonify({"error": "no autorizado"}), 401
+    finally:
+        db.close()
+
+    base = (SESSIONS_DIR / str(sid) / "recordings").resolve()
+    target = (base / filename).resolve()
+    if not str(target).startswith(str(base) + os.sep):
+        abort(403)
+    if not target.is_file():
+        abort(404)
+
+    # Range support for playback
+    file_size = target.stat().st_size
+    mime, _ = mimetypes.guess_type(str(target))
+    mime = mime or "application/octet-stream"
+    range_header = request.headers.get("Range")
+    if not range_header:
+        def full():
+            with open(target, "rb") as fh:
+                while True:
+                    chunk = fh.read(64 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        resp = Response(full(), mimetype=mime)
+        resp.headers["Content-Length"] = str(file_size)
+        resp.headers["Accept-Ranges"] = "bytes"
+        return resp
+
+    m = re.match(r"bytes=(\d*)-(\d*)", range_header.strip())
+    if not m:
+        abort(416)
+    s, e = m.group(1), m.group(2)
+    start = int(s) if s else 0
+    end = int(e) if e else file_size - 1
+    end = min(end, file_size - 1)
+    length = end - start + 1
+
+    def stream():
+        with open(target, "rb") as fh:
+            fh.seek(start)
+            rem = length
+            while rem > 0:
+                ch = fh.read(min(64 * 1024, rem))
+                if not ch:
+                    break
+                rem -= len(ch)
+                yield ch
+    resp = Response(stream(), status=206, mimetype=mime)
+    resp.headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+    resp.headers["Accept-Ranges"] = "bytes"
+    resp.headers["Content-Length"] = str(length)
+    return resp

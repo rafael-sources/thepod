@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.venv/
+venv/
+.Python
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Runtime data
+sessions/*/recordings/
+sessions/*/sounds/
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+
+# User-uploaded custom soundboard files (keep default pack tracked under static/sounds)
+# but tree's static/sounds holds the shipped defaults, which should be versioned.
+
+# Logs / pids
+*.log
+*.pid
+
+# Secrets / env
+.env
