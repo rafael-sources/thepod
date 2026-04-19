@@ -104,6 +104,21 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     timestamp      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id);
+
+CREATE TABLE IF NOT EXISTS live_streams (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    platform    TEXT,
+    rtmp_url    TEXT NOT NULL,
+    stream_key  TEXT NOT NULL,
+    egress_id   TEXT,
+    status      TEXT NOT NULL DEFAULT 'starting',
+    started_by  TEXT,
+    started_at  TEXT DEFAULT (datetime('now')),
+    stopped_at  TEXT,
+    error       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_live_streams_session ON live_streams(session_id);
 """
 
 

@@ -7,6 +7,7 @@ import auth
 import integrations as integrations_bp
 import recordings_api
 import sessions_api
+import streams_api
 from config import SECRET_KEY, SESSIONS_DIR
 
 
@@ -29,6 +30,7 @@ def create_app():
     app.register_blueprint(sessions_api.bp)
     app.register_blueprint(integrations_bp.bp)
     app.register_blueprint(recordings_api.bp)
+    app.register_blueprint(streams_api.bp)
 
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 

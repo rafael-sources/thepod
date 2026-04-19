@@ -116,3 +116,66 @@ def generate_participant_token(
 
 def room_name_for_session(session_id: int) -> str:
     return f"prodpod_session_{session_id}"
+
+
+def start_rtmp_egress(room_name: str, rtmp_urls: list, layout: str = "grid"):
+    """
+    Start a Room Composite egress that renders a grid of all participants and
+    pushes it to one or more RTMP destinations. Returns the EgressInfo proto
+    (has .egress_id, .status, ...) or None on failure.
+    """
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                req = api.RoomCompositeEgressRequest(
+                    room_name=room_name,
+                    layout=layout,
+                    audio_only=False,
+                    video_only=False,
+                    stream=api.StreamOutput(
+                        protocol=api.StreamProtocol.RTMP,
+                        urls=list(rtmp_urls),
+                    ),
+                )
+                return await lk.egress.start_room_composite_egress(req)
+            finally:
+                await lk.aclose()
+        return _run(_do())
+    except Exception as e:
+        log.warning("LiveKit start_rtmp_egress failed for %s: %s", room_name, e)
+        return None
+
+
+def stop_egress(egress_id: str):
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                return await lk.egress.stop_egress(api.StopEgressRequest(egress_id=egress_id))
+            finally:
+                await lk.aclose()
+        return _run(_do())
+    except Exception as e:
+        log.warning("LiveKit stop_egress failed for %s: %s", egress_id, e)
+        return None
+
+
+def list_egress(room_name: str = None, active_only: bool = True):
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                kwargs = {"active": active_only}
+                if room_name:
+                    kwargs["room_name"] = room_name
+                return await lk.egress.list_egress(api.ListEgressRequest(**kwargs))
+            finally:
+                await lk.aclose()
+        return _run(_do())
+    except Exception as e:
+        log.warning("LiveKit list_egress failed: %s", e)
+        return None

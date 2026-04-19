@@ -334,6 +334,14 @@ var StudioView = {
     var exportStatus = ref("");
     var exporting = ref(false);
 
+    // Live streams (RTMP to YouTube/Twitch via LiveKit Egress)
+    var streams = ref([]);
+    var rtmpPresets = ref([]);
+    var showStream = ref(false);
+    var streamForm = reactive({ platform: "", rtmp_url: "", stream_key: "" });
+    var streamStatus = ref("");
+    var streamBusy = ref(false);
+
     async function loadParticipants() {
       try { participants.value = await api("/api/sessions/" + props.session.id + "/participants"); }
       catch (e) { error.value = e.message; }
@@ -470,6 +478,56 @@ var StudioView = {
       try { finishedRecordings.value = await api("/api/sessions/" + props.session.id + "/recordings"); }
       catch (_) {}
     }
+
+    async function loadStreams() {
+      try { streams.value = await api("/api/sessions/" + props.session.id + "/streams"); }
+      catch (_) {}
+    }
+    async function loadRtmpPresets() {
+      try { rtmpPresets.value = await api("/api/rtmp-presets"); }
+      catch (_) {}
+    }
+    function applyStreamPreset(preset) {
+      streamForm.platform = preset.key;
+      streamForm.rtmp_url = preset.rtmp_url;
+    }
+    async function startStream() {
+      if (streamBusy.value) return;
+      if (!streamForm.rtmp_url || !streamForm.stream_key) {
+        streamStatus.value = "❌ URL RTMP y stream key son obligatorios";
+        return;
+      }
+      streamBusy.value = true;
+      streamStatus.value = "iniciando egress…";
+      try {
+        var body = {
+          platform: streamForm.platform,
+          rtmp_url: streamForm.rtmp_url,
+          stream_key: streamForm.stream_key,
+        };
+        await api("/api/sessions/" + props.session.id + "/streams", {
+          method: "POST", body: body,
+        });
+        streamStatus.value = "✓ en vivo";
+        streamForm.stream_key = "";
+        showStream.value = false;
+        await loadStreams();
+      } catch (e) {
+        streamStatus.value = "❌ " + e.message;
+      } finally {
+        streamBusy.value = false;
+      }
+    }
+    async function stopStream(s) {
+      if (!confirm("¿Detener el stream en " + (s.platform || "plataforma") + "?")) return;
+      try {
+        await api("/api/sessions/" + props.session.id + "/streams/" + s.id, { method: "DELETE" });
+        await loadStreams();
+      } catch (e) { error.value = e.message; }
+    }
+    var activeStreams = computed(function () {
+      return streams.value.filter(function (s) { return s.status === "active" || s.status === "starting"; });
+    });
 
     async function exportToPostpod() {
       if (exporting.value) return;
@@ -828,6 +886,8 @@ var StudioView = {
       loadSounds();
       loadChat();
       loadRecordings();
+      loadStreams();
+      loadRtmpPresets();
       window.addEventListener("keydown", onKey);
     });
     onBeforeUnmount(function () {
@@ -852,6 +912,9 @@ var StudioView = {
       chat: chat, chatInput: chatInput, sendChat: sendChat,
       finishedRecordings: finishedRecordings,
       exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting,
+      streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
+      streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
+      applyStreamPreset: applyStreamPreset, startStream: startStream, stopStream: stopStream,
       isHost: props.user.username === props.session.created_by,
       hasSharedProject: !!props.session.shared_project_id,
     };
@@ -874,6 +937,11 @@ var StudioView = {
                 @click="stopRecording" :disabled="!isHost" :title="isHost ? 'Detener' : 'Sólo el host puede detener'">
           ■ Detener
         </button>
+
+        <span v-if="activeStreams.length" class="tally live" style="margin-left: 8px;" :title="activeStreams.length + ' stream(s) activos'">
+          <span class="dot"></span>EN VIVO
+        </span>
+        <button v-if="isHost && connected" class="ghost" style="margin-left: 8px;" @click="showStream = true" title="Transmitir a RTMP">📡 Stream</button>
       </div>
 
       <div class="studio-main">
@@ -1051,6 +1119,56 @@ var StudioView = {
         <div class="spacer"></div>
         <span v-if="connected" class="join-pill">EN VIVO · {{ (participants.filter(p => p.status === 'connected').length) }} conectado(s)</span>
         <button v-if="connected" class="ghost" @click="disconnect">Salir del estudio</button>
+      </div>
+
+      <div v-if="showStream" class="modal-backdrop" @click.self="showStream = false">
+        <div class="modal" style="width: 480px;">
+          <div class="eyebrow">TRANSMISIÓN EN VIVO</div>
+          <h3>Enviar el estudio a RTMP</h3>
+          <p class="muted" style="margin-bottom: 14px;">
+            El compositor de LiveKit arma una grilla con los participantes y la empuja a YouTube/Twitch/etc.
+            Los participantes deben estar conectados antes de iniciar.
+          </p>
+
+          <div v-if="activeStreams.length" style="margin-bottom: 14px; padding: 10px; border: 1px solid var(--ink-line); border-radius: var(--r-md);">
+            <div class="tiny" style="margin-bottom: 6px;">STREAMS ACTIVOS</div>
+            <div v-for="s in activeStreams" :key="s.id" class="invite-row">
+              <span class="who">{{ s.platform || 'rtmp' }} · {{ s.rtmp_url }}</span>
+              <span class="status-chip connected">{{ s.status }}</span>
+              <button class="icon danger" @click="stopStream(s)" title="Detener">■</button>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-bottom: 10px;">
+            <label>Plataforma</label>
+            <div class="row" style="gap: 6px; flex-wrap: wrap;">
+              <button v-for="p in rtmpPresets" :key="p.key" class="ghost"
+                      :class="{ primary: streamForm.platform === p.key }"
+                      @click="applyStreamPreset(p)"
+                      style="padding: 6px 10px; font-size: 12px;">
+                {{ p.name }}
+              </button>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom: 10px;">
+            <label>URL del ingest RTMP</label>
+            <input type="text" v-model="streamForm.rtmp_url" placeholder="rtmp://a.rtmp.youtube.com/live2/">
+          </div>
+          <div class="form-row">
+            <label>Stream key</label>
+            <input type="password" v-model="streamForm.stream_key" autocomplete="off" placeholder="xxxx-xxxx-xxxx-xxxx">
+          </div>
+
+          <div v-if="streamStatus" class="tiny muted" style="margin-top: 10px;">{{ streamStatus }}</div>
+
+          <div class="row right" style="margin-top: 20px; gap: 8px;">
+            <button class="ghost" @click="showStream = false">Cerrar</button>
+            <button class="primary" @click="startStream"
+                    :disabled="streamBusy || !streamForm.rtmp_url || !streamForm.stream_key">
+              {{ streamBusy ? "Iniciando…" : "● Transmitir" }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div v-if="showInvite" class="modal-backdrop" @click.self="showInvite = false">
