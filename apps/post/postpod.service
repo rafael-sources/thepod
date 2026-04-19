@@ -1,0 +1,33 @@
+[Unit]
+Description=postPod (video/audio editor for podcasts) — Flask via gunicorn
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thepod
+Group=thepod
+WorkingDirectory=/srv/thepod/postpod
+Environment=PATH=/srv/thepod/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/thepod/.local/bin/gunicorn \
+    --workers 1 \
+    --threads 8 \
+    --bind 0.0.0.0:5000 \
+    --timeout 600 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile - \
+    'app:create_app()'
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/srv/thepod/postpod
+
+[Install]
+WantedBy=multi-user.target
