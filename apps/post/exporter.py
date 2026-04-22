@@ -164,6 +164,105 @@ def _escape_drawtext(text: str) -> str:
                 .replace("%", "\\%"))
 
 
+def _compute_final_keep_ranges(flat_ops, moments, total_duration):
+    """
+    Build the list of (start, end) time ranges in the ORIGINAL timeline that
+    should actually reach the final output. Accounts for:
+      - jump_to_moment ops: skip [source..target] when target > source;
+        backward jumps are ignored in export (would create a loop).
+      - cut_before (max tl) and cut_after (min tl): global clamp.
+
+    Returns a list of (start, end) pairs, possibly overlapping-free and sorted.
+    """
+    moment_time = {m["id"]: float(m["timeline_seconds"]) for m in moments}
+    jumps = []
+    for op in flat_ops:
+        if op["type"] != "jump_to_moment":
+            continue
+        src = float(op["tl_start"])
+        tgt_id = (op.get("params") or {}).get("target_moment_id")
+        if tgt_id is None or tgt_id not in moment_time:
+            continue
+        tgt = float(moment_time[tgt_id])
+        if tgt <= src + 0.01:
+            continue  # ignore backward/zero jumps
+        jumps.append((src, tgt))
+    jumps.sort()
+
+    # Build ranges from jumps (forward skip list)
+    ranges = []
+    cursor = 0.0
+    for src, tgt in jumps:
+        if src < cursor:
+            continue  # already past this jump's source in a skipped window
+        if src > cursor + 0.01:
+            ranges.append((cursor, src))
+        cursor = max(cursor, tgt)
+    if cursor < total_duration - 0.01:
+        ranges.append((cursor, total_duration))
+    if not ranges:
+        ranges = [(0.0, total_duration)]
+
+    # Intersect with cut_before / cut_after
+    cut_before_Ts = [o["tl_start"] for o in flat_ops if o["type"] == "cut_before"]
+    cut_before_T = max(cut_before_Ts) if cut_before_Ts else 0.0
+    cut_after_Ts = [o["tl_start"] for o in flat_ops if o["type"] == "cut_after"]
+    cut_after_T = min(cut_after_Ts) if cut_after_Ts else total_duration
+    cut_before_T = max(0.0, min(cut_before_T, total_duration))
+    cut_after_T = max(cut_before_T, min(cut_after_T, total_duration))
+
+    clipped = []
+    for s, e in ranges:
+        if e <= cut_before_T or s >= cut_after_T:
+            continue
+        clipped.append((max(s, cut_before_T), min(e, cut_after_T)))
+    if not clipped:
+        clipped = [(cut_before_T, cut_after_T)]
+    return clipped
+
+
+def _apply_final_ranges(parts, label, ranges, kind, total_duration, out_label):
+    """
+    Reduce `label` to the concatenation of `ranges`, emitting the result as
+    `out_label`. If only one range and it covers everything, simply passes
+    through with null/anull to keep the contract of returning `out_label`.
+    kind: 'v' for video, 'a' for audio.
+    """
+    is_video = (kind == "v")
+    is_single_full = (
+        len(ranges) == 1
+        and ranges[0][0] <= 0.01
+        and ranges[0][1] >= total_duration - 0.01
+    )
+    if is_single_full:
+        parts.append(f"[{label}]{'null' if is_video else 'anull'}[{out_label}]")
+        return out_label
+
+    if len(ranges) == 1:
+        s, e = ranges[0]
+        trim_f = "trim" if is_video else "atrim"
+        pts_f = "setpts=PTS-STARTPTS" if is_video else "asetpts=PTS-STARTPTS"
+        parts.append(f"[{label}]{trim_f}=start={s:.3f}:end={e:.3f},{pts_f}[{out_label}]")
+        return out_label
+
+    n = len(ranges)
+    split_f = "split" if is_video else "asplit"
+    trim_f = "trim" if is_video else "atrim"
+    pts_f = "setpts=PTS-STARTPTS" if is_video else "asetpts=PTS-STARTPTS"
+    split_labels = [f"jmp{kind}s{i}" for i in range(n)]
+    parts.append(f"[{label}]{split_f}={n}[" + "][".join(split_labels) + "]")
+    out_labels = []
+    for i, (s, e) in enumerate(ranges):
+        lbl = f"jmp{kind}r{i}"
+        parts.append(f"[{split_labels[i]}]{trim_f}=start={s:.3f}:end={e:.3f},{pts_f}[{lbl}]")
+        out_labels.append(lbl)
+    concat_in = "".join(f"[{x}]" for x in out_labels)
+    v_n = 1 if is_video else 0
+    a_n = 0 if is_video else 1
+    parts.append(f"{concat_in}concat=n={n}:v={v_n}:a={a_n}[{out_label}]")
+    return out_label
+
+
 def _segment_transform(parts, current_label, T, D, total, transform_filter, uid_prefix):
     """
     Apply `transform_filter` to the [T, T+D] segment of `current_label`
@@ -496,36 +595,22 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
             cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, total_duration,
         )
 
-    # ---- Final trim (cut_before / cut_after) ----
-    cut_before_Ts = [o["tl_start"] for o in flat_ops if o["type"] == "cut_before"]
-    cut_before_T = max(cut_before_Ts) if cut_before_Ts else 0.0
-    cut_after_Ts = [o["tl_start"] for o in flat_ops if o["type"] == "cut_after"]
-    cut_after_T = min(cut_after_Ts) if cut_after_Ts else total_duration
+    # ---- Final timeline reshape: cut_before / cut_after + jump_to_moment ----
+    # All three ops are expressed in original timeline coordinates; we fold
+    # them into a single ordered list of keep-ranges and realize it with one
+    # split/trim/concat per track.
+    keep_ranges = _compute_final_keep_ranges(flat_ops, moments, total_duration)
 
-    cut_before_T = max(0.0, min(cut_before_T, total_duration))
-    cut_after_T = max(cut_before_T, min(cut_after_T, total_duration))
-
-    need_trim = (cut_before_T > 0.01) or (cut_after_T < total_duration - 0.01)
-
-    if video_label and need_trim:
-        parts.append(
-            f"[{video_label}]trim=start={cut_before_T:.3f}:end={cut_after_T:.3f},"
-            f"setpts=PTS-STARTPTS[vout]"
+    if video_label:
+        video_label = _apply_final_ranges(
+            parts, video_label, keep_ranges, "v", total_duration, "vout"
         )
-        video_label = "vout"
-    elif video_label:
-        parts.append(f"[{video_label}]null[vout]")
-        video_label = "vout"
-
-    if audio_label and need_trim:
-        parts.append(
-            f"[{audio_label}]atrim=start={cut_before_T:.3f}:end={cut_after_T:.3f},"
-            f"asetpts=PTS-STARTPTS[aout]"
+    if audio_label:
+        audio_label = _apply_final_ranges(
+            parts, audio_label, keep_ranges, "a", total_duration, "aout"
         )
-        audio_label = "aout"
-    elif audio_label:
-        parts.append(f"[{audio_label}]anull[aout]")
-        audio_label = "aout"
+
+    effective_from_ranges = sum(e - s for s, e in keep_ranges)
 
     filter_complex = ";".join(parts)
     cmd += ["-filter_complex", filter_complex]
@@ -551,7 +636,7 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
             cmd += ["-b:v", preset["bitrate"]]
         cmd += ["-movflags", "+faststart"]
 
-    effective_duration = max(0.001, cut_after_T - cut_before_T)
+    effective_duration = max(0.001, effective_from_ranges)
     cmd += [str(output_path)]
     return cmd, effective_duration
 

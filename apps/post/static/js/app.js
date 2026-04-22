@@ -390,6 +390,7 @@ var VideoPlayer = {
     zoom: Object,
     effects: Object,        // { filter, transform, subtitles[] }
     moments: Array,         // all moments with their operations, used for jump_to_moment
+    selectedRange: Object,  // { start, end } | null — range selected by drag on the timeline
   },
   setup(props) {
     const videoEl = ref(null);
@@ -400,11 +401,59 @@ var VideoPlayer = {
 
     const activeClip = computed(() => clipAtTime(props.clips, props.playerState.currentTime));
 
+    // Preload jump_to_moment targets' media so the jump doesn't lag when it
+    // crosses into a different source clip. We keep one hidden <video> per
+    // distinct target URL; the browser caches the bytes and the real player's
+    // swapTo reuses them instantly.
+    const preloadEls = new Map();  // url -> HTMLVideoElement
+    function syncJumpPreload() {
+      const want = new Set();
+      const ms = props.moments || [];
+      for (const m of ms) {
+        const ops = m.operations || [];
+        const jump = ops.find(o => o.type === "jump_to_moment");
+        if (!jump) continue;
+        const tgt = ms.find(mm => mm.id === jump.params?.target_moment_id);
+        if (!tgt) continue;
+        const tgtClip = clipAtTime(props.clips, tgt.timeline_seconds);
+        if (tgtClip?.source?.url) want.add(tgtClip.source.url);
+      }
+      // Add missing
+      for (const url of want) {
+        if (preloadEls.has(url)) continue;
+        const el = document.createElement("video");
+        el.src = url; el.preload = "auto"; el.muted = true;
+        el.style.position = "absolute"; el.style.width = "1px"; el.style.height = "1px";
+        el.style.opacity = "0"; el.style.pointerEvents = "none";
+        document.body.appendChild(el);
+        preloadEls.set(url, el);
+      }
+      // Remove stale
+      for (const [url, el] of preloadEls) {
+        if (want.has(url)) continue;
+        try { el.remove(); } catch (_) {}
+        preloadEls.delete(url);
+      }
+    }
+    watch(() => [props.moments, props.clips], syncJumpPreload, { deep: true, immediate: true });
+    onBeforeUnmount(() => {
+      for (const [, el] of preloadEls) { try { el.remove(); } catch (_) {} }
+      preloadEls.clear();
+    });
+
     const visibleDuration = computed(() => {
       const end = props.zoom.endSeconds ?? props.playerState.duration;
       return Math.max(0, end - props.zoom.startSeconds);
     });
-    const canSlowPlay = computed(() => visibleDuration.value > 0 && visibleDuration.value <= 10);
+    // Effective range for "Rango" / "Lento" playback: selectedRange wins over zoom.
+    const effectiveRange = computed(() => {
+      const sel = props.selectedRange;
+      if (sel && sel.end > sel.start + 0.01) return { start: sel.start, end: sel.end };
+      return { start: props.zoom.startSeconds || 0,
+               end:   props.zoom.endSeconds ?? props.playerState.duration };
+    });
+    const rangeDuration = computed(() => Math.max(0, effectiveRange.value.end - effectiveRange.value.start));
+    const canSlowPlay = computed(() => rangeDuration.value > 0 && rangeDuration.value <= 10);
 
     function currentSrc() {
       const c = activeClip.value;
@@ -489,12 +538,11 @@ var VideoPlayer = {
     }
 
     async function playVisibleRange() {
-      if (visibleDuration.value <= 0) return;
+      if (rangeDuration.value <= 0) return;
       rangeMode.value = "range";
-      // Kick play() in the user-gesture tick so Firefox doesn't auto-mute.
       const v = videoEl.value;
       if (v) { _unmute(v); v.playbackRate = 1.0; v.play().catch(() => {}); }
-      await seek(props.zoom.startSeconds, false);
+      await seek(effectiveRange.value.start, false);
       if (videoEl.value) {
         videoEl.value.playbackRate = 1.0;
         _unmute(videoEl.value);
@@ -504,10 +552,10 @@ var VideoPlayer = {
     async function playSlow10s() {
       if (!canSlowPlay.value) return;
       rangeMode.value = "slow";
-      const rate = Math.max(0.01, visibleDuration.value / 10.0);
+      const rate = Math.max(0.01, rangeDuration.value / 10.0);
       const v = videoEl.value;
       if (v) { _unmute(v); v.play().catch(() => {}); }
-      await seek(props.zoom.startSeconds, false);
+      await seek(effectiveRange.value.start, false);
       if (videoEl.value) {
         videoEl.value.playbackRate = rate;
         _unmute(videoEl.value);
@@ -560,7 +608,7 @@ var VideoPlayer = {
       }
 
       // Bounded playback modes stop at zoom end
-      const zEnd = props.zoom.endSeconds ?? props.playerState.duration;
+      const zEnd = effectiveRange.value.end;
       if (rangeMode.value !== "free" && timelineT >= zEnd - 0.01) {
         v.pause();
         v.playbackRate = 1.0;
@@ -690,6 +738,7 @@ var Timeline = {
     zoom: Object,
     moments: Array,
     selectedMomentId: Number,
+    selectedRange: Object,  // { start, end } | null
   },
   emits: ["seek", "zoom-to", "select-moment"],
   setup(props, { emit }) {
@@ -809,8 +858,17 @@ var Timeline = {
       return { left: `${(a / rect.width) * 100}%`, width: `${((b - a) / rect.width) * 100}%` };
     });
 
+    const persistedRangeStyle = computed(() => {
+      const r = props.selectedRange;
+      if (!r || r.end <= r.start + 0.01) return null;
+      const a = secToPct(r.start);
+      const b = secToPct(r.end);
+      if (b < 0 || a > 100) return null;
+      return { left: Math.max(0, a) + "%", width: Math.min(100, b) - Math.max(0, a) + "%" };
+    });
+
     return {
-      root, cursorPct, selectRect, ticks, clipStyle, secToPct, onPointerDown,
+      root, cursorPct, selectRect, persistedRangeStyle, ticks, clipStyle, secToPct, onPointerDown,
       visibleStart, visibleEnd, formatShort, momentLinks,
     };
   },
@@ -863,6 +921,7 @@ var Timeline = {
           :style="{left: secToPct(m.timeline_seconds) + '%'}"
           :title="(m.label || '(sin etiqueta)') + ' · ' + formatShort(m.timeline_seconds)"
         ></div>
+        <div v-if="persistedRangeStyle" class="tl-range-select" :style="persistedRangeStyle"></div>
         <div v-if="selectRect" class="tl-zoom-select" :style="selectRect"></div>
       </template>
     </div>
@@ -1816,6 +1875,7 @@ var ProjectView = {
       volume: 1.0,
     });
     const zoom = reactive({ startSeconds: 0, endSeconds: null });
+    const selectedRange = ref(null);  // { start, end } | null — persistent range set when zoomOnSelect is off
     const zoomOnSelect = ref(
       (localStorage.getItem("postpod.zoomOnSelect") ?? "1") === "1"
     );
@@ -2048,12 +2108,15 @@ var ProjectView = {
       const b = Math.max(0, Math.max(start, end));
       if (b - a < 0.05) return;
       if (!zoomOnSelect.value) {
-        // Preserve zoom; just move the playhead to the start of the selection
+        // Toggle OFF: persist the range selection (for "▶ Rango" and ops),
+        // jump playhead to its start, keep current zoom as-is.
+        selectedRange.value = { start: a, end: Math.min(total, b) };
         videoPlayerRef.value?.seek(a, false);
         return;
       }
       zoom.startSeconds = Math.max(0, a);
       zoom.endSeconds = Math.min(total, b);
+      selectedRange.value = null;
     }
     function onUpdateZoom({ start, end }) {
       zoom.startSeconds = start;
@@ -2080,6 +2143,7 @@ var ProjectView = {
       else if (ev.key === "-" || ev.key === "_") { ev.preventDefault(); zoomByShortcut(1.111); }
       else if (ev.key === "ArrowLeft") { ev.preventDefault(); onSeek(Math.max(0, playerState.currentTime - (ev.shiftKey ? 1/30 : 5))); }
       else if (ev.key === "ArrowRight") { ev.preventDefault(); onSeek(Math.min(playerState.duration, playerState.currentTime + (ev.shiftKey ? 1/30 : 5))); }
+      else if (ev.key === "Escape") { if (selectedRange.value) { ev.preventDefault(); selectedRange.value = null; } }
     }
     function zoomByShortcut(factor) {
       const total = playerState.duration || 0;
@@ -2110,7 +2174,7 @@ var ProjectView = {
       createMoment, updateMomentLabel, removeMoment,
       addOperation, removeOperation,
       onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, zoomOnSelect,
-      showFiles, showClips, focusMode,
+      showFiles, showClips, focusMode, selectedRange,
       silenceClip, openSilenceModal, applySilenceRemoval,
       showExport,
       formatShort,
@@ -2152,6 +2216,7 @@ var ProjectView = {
           :zoom="zoom"
           :effects="activeEffects"
           :moments="timeline.moments"
+          :selected-range="selectedRange"
         />
 
         <div class="timeline-section">
@@ -2182,6 +2247,7 @@ var ProjectView = {
             :zoom="zoom"
             :moments="timeline.moments"
             :selected-moment-id="selectedMomentId"
+            :selected-range="selectedRange"
             @seek="onSeek"
             @zoom-to="onZoomTo"
             @select-moment="(id) => selectedMomentId = id"
