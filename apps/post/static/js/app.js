@@ -97,27 +97,60 @@ function niceTickInterval(visibleSeconds, maxTicks = 10) {
   return 3600;
 }
 
-/* Compute cumulative timeline starts for a list of clip objects. Each clip
-   gets { ...clip, start, end } where start is its timeline start second. */
+/* Compute cumulative timeline starts for a list of clip objects. Tracks 1
+   and 2 each stack independently starting from t=0 (multi-cam model). Each
+   returned clip gets {...clip, track, start, end}. */
 function withTimelineStarts(clips) {
-  let t = 0;
+  const cursor = { 1: 0, 2: 0 };
   return clips.map((c) => {
+    const track = c.track || 1;
     const dur = c.duration || 0;
-    const item = { ...c, start: t, end: t + dur };
-    t += dur;
-    return item;
+    const start = cursor[track] || 0;
+    cursor[track] = start + dur;
+    return { ...c, track, start, end: start + dur };
   });
 }
 
-/* Given a timeline time t and a list of clips (withTimelineStarts), return
-   the clip that contains t (half-open interval). Falls back to last clip if
-   t >= total duration. Returns null if there are no clips. */
-function clipAtTime(clips, t) {
-  if (!clips.length) return null;
-  for (const c of clips) {
-    if (t < c.end) return c;
+/* Total timeline duration = max of each track's cumulative end. */
+function totalDurationFromClips(clips) {
+  let m = 0;
+  for (const c of clips) if (c.end > m) m = c.end;
+  return m;
+}
+
+/* Walk switch_track ops in moment order to determine the active track at
+   time `t`. Default is track 1. */
+function activeTrackAtTime(moments, t) {
+  if (!moments || !moments.length) return 1;
+  const sorted = [...moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
+  let active = 1;
+  for (const m of sorted) {
+    if (m.timeline_seconds > t + 1e-6) break;
+    const op = (m.operations || []).find(o => o.type === "switch_track");
+    if (!op) continue;
+    const p = op.params || {};
+    if (p.toggle) active = active === 1 ? 2 : 1;
+    else if (p.track === 1 || p.track === 2) active = p.track;
   }
-  return clips[clips.length - 1];
+  return active;
+}
+
+/* Given a timeline time t and the full clips list (withTimelineStarts),
+   return the clip that should be playing: the clip on the active track (as
+   determined by switch_track ops) that spans t. Falls back gracefully when
+   the active track has no clip at t — returns the other track's clip if
+   present, else the last clip of any track. */
+function clipAtTime(clips, t, moments) {
+  if (!clips.length) return null;
+  const active = activeTrackAtTime(moments || [], t);
+  const onTrack = (trk) => {
+    for (const c of clips) {
+      if ((c.track || 1) !== trk) continue;
+      if (t < c.end) return c;
+    }
+    return null;
+  };
+  return onTrack(active) || onTrack(active === 1 ? 2 : 1) || clips[clips.length - 1];
 }
 
 /* Module-level peaks cache, keyed by peaks_url. Each entry is a Promise. */
@@ -391,6 +424,7 @@ var VideoPlayer = {
     effects: Object,        // { filter, transform, subtitles[] }
     moments: Array,         // all moments with their operations, used for jump_to_moment
     selectedRange: Object,  // { start, end } | null — range selected by drag on the timeline
+    audioLane: Array,       // parallel audio lane clips for preview playback
   },
   setup(props) {
     const videoEl = ref(null);
@@ -399,7 +433,7 @@ var VideoPlayer = {
     const lastTimelineT = ref(0);
     let jumpCooldownUntil = 0;  // epoch ms, suppresses double-jumps after a jump
 
-    const activeClip = computed(() => clipAtTime(props.clips, props.playerState.currentTime));
+    const activeClip = computed(() => clipAtTime(props.clips, props.playerState.currentTime, props.moments));
 
     // Preload jump_to_moment targets' media so the jump doesn't lag when it
     // crosses into a different source clip. We keep one hidden <video> per
@@ -415,7 +449,7 @@ var VideoPlayer = {
         if (!jump) continue;
         const tgt = ms.find(mm => mm.id === jump.params?.target_moment_id);
         if (!tgt) continue;
-        const tgtClip = clipAtTime(props.clips, tgt.timeline_seconds);
+        const tgtClip = clipAtTime(props.clips, tgt.timeline_seconds, props.moments);
         if (tgtClip?.source?.url) want.add(tgtClip.source.url);
       }
       // Add missing
@@ -472,7 +506,9 @@ var VideoPlayer = {
       const total = props.playerState.duration;
       const clamped = Math.max(0, Math.min(t, total || t));
       props.playerState.currentTime = clamped;
-      const c = clipAtTime(props.clips, clamped);
+      // A deliberate seek is a hard discontinuity; force-realign lane audio.
+      laneLastSync.clear();
+      const c = clipAtTime(props.clips, clamped, props.moments);
       if (!c || !videoEl.value) return Promise.resolve();
       if (currentClipId.value !== c.id) {
         return swapTo(c, clamped, autoPlay ? "resume" : null);
@@ -523,9 +559,16 @@ var VideoPlayer = {
 
     function _unmute(v) {
       v.muted = false;
-      const volTarget = props.playerState?.volume ?? 1.0;
-      if (Math.abs(v.volume - volTarget) > 0.001) v.volume = volTarget;
+      const clipVol = activeClip.value?.volume ?? 1.0;
+      const globalVol = props.playerState?.volume ?? 1.0;
+      const target = Math.max(0, Math.min(1, clipVol * globalVol));
+      if (Math.abs(v.volume - target) > 0.001) v.volume = target;
     }
+
+    // When active clip changes or its volume is edited, re-apply volume.
+    watch(() => [activeClip.value?.volume, props.playerState.volume, activeClip.value?.id], () => {
+      if (videoEl.value) _unmute(videoEl.value);
+    });
 
     function togglePlay() {
       const v = videoEl.value;
@@ -574,6 +617,7 @@ var VideoPlayer = {
       const prevT = lastTimelineT.value;
       props.playerState.currentTime = timelineT;
       lastTimelineT.value = timelineT;
+      _syncLaneAudio();
 
       // jump_to_moment: if we just crossed a moment's position and it has a
       // jump op, seek to the target moment. Cooldown prevents immediate
@@ -594,11 +638,14 @@ var VideoPlayer = {
         }
       }
 
-      // Did we cross clip.end? Advance to next clip automatically.
+      // Did we cross clip.end? Advance to the NEXT clip on the same track
+      // (tracks are parallel; a switch_track op may have changed the active
+      // track so let the activeClip computed resolve via clipAtTime).
       const srcEnd = clip.end_offset ?? (clip.source?.duration ?? Infinity);
       if (localT >= srcEnd - 0.02) {
-        const idx = props.clips.findIndex(c => c.id === clip.id);
-        const next = props.clips[idx + 1];
+        const next = (props.clips || [])
+          .filter(x => (x.track || 1) === (clip.track || 1))
+          .find(x => x.start >= clip.end - 1e-6);
         if (next) {
           swapTo(next, next.start, "resume");
         } else {
@@ -616,14 +663,81 @@ var VideoPlayer = {
       }
     }
 
-    function onPlay() { props.playerState.isPlaying = true; }
-    function onPause() { props.playerState.isPlaying = false; }
+    // ---- Audio lane playback (parallel music/SFX) ----
+    const laneAudioEls = new Map();   // clip_id -> HTMLAudioElement
+    function _ensureLaneEl(lc) {
+      let el = laneAudioEls.get(lc.id);
+      if (!el) {
+        el = new Audio();
+        el.preload = "auto";
+        el.src = lc.source?.url || "";
+        laneAudioEls.set(lc.id, el);
+      }
+      return el;
+    }
+    // Track when we last hard-synced each lane element so we only nudge on
+    // meaningful drift (avoid the per-tick currentTime=… that causes audible
+    // stutter every time the video element emits a timeupdate).
+    const laneLastSync = new Map();  // id -> epoch ms
+    function _syncLaneAudio(force) {
+      const t = props.playerState.currentTime || 0;
+      const v = videoEl.value;
+      const videoPlaying = v && !v.paused;
+      const rate = v ? (v.playbackRate || 1) : 1;
+      const lane = props.audioLane || [];
+      const wanted = new Set();
+      const now = Date.now();
+      for (const lc of lane) {
+        wanted.add(lc.id);
+        const el = _ensureLaneEl(lc);
+        el.volume = Math.max(0, Math.min(2, lc.volume || 0));
+        if (Math.abs(el.playbackRate - rate) > 0.01) el.playbackRate = rate;
+
+        const inRange = t >= lc.tl_start - 0.02 && t < lc.tl_end - 0.02;
+        if (!inRange || !videoPlaying) {
+          if (!el.paused) el.pause();
+          laneLastSync.delete(lc.id);
+          continue;
+        }
+
+        const localT = (lc.start_offset || 0) + (t - lc.tl_start);
+        const drift = Math.abs(el.currentTime - localT);
+        const lastSync = laneLastSync.get(lc.id) || 0;
+        const sinceSync = now - lastSync;
+
+        // Hard-sync only when truly needed. Cooldown of 800ms prevents the
+        // burst of timeupdate events that fire around a seek from re-seeking
+        // the audio element multiple times in a row.
+        const firstTouch = !lastSync;
+        const bigDrift = drift > 1.0 && sinceSync > 800;
+        if (firstTouch || bigDrift) {
+          try { el.currentTime = Math.max(0, localT); } catch (_) {}
+          laneLastSync.set(lc.id, now);
+        }
+        if (el.paused) el.play().catch(() => {});
+      }
+      for (const [id, el] of laneAudioEls) {
+        if (!wanted.has(id)) {
+          try { el.pause(); el.src = ""; } catch (_) {}
+          laneAudioEls.delete(id);
+          laneLastSync.delete(id);
+        }
+      }
+    }
+    watch(() => props.audioLane, _syncLaneAudio, { deep: true });
+    onBeforeUnmount(() => {
+      for (const [, el] of laneAudioEls) { try { el.pause(); el.src = ""; } catch (_) {} }
+      laneAudioEls.clear();
+    });
+
+    function onPlay() { props.playerState.isPlaying = true; _syncLaneAudio(); }
+    function onPause() { props.playerState.isPlaying = false; _syncLaneAudio(); }
     function onVolumeChange() {
       if (videoEl.value) props.playerState.volume = videoEl.value.volume;
     }
 
-    watch(() => props.playerState.volume, (v) => {
-      if (videoEl.value && Math.abs(videoEl.value.volume - v) > 0.001) videoEl.value.volume = v;
+    watch(() => props.playerState.volume, () => {
+      if (videoEl.value) _unmute(videoEl.value);
     });
 
     // When active clip changes (e.g., timeline rebuilt), swap src to first clip at currentTime
@@ -739,8 +853,9 @@ var Timeline = {
     moments: Array,
     selectedMomentId: Number,
     selectedRange: Object,  // { start, end } | null
+    audioLane: Array,       // [{id, tl_start, tl_end, duration, volume, source, ...}]
   },
-  emits: ["seek", "zoom-to", "select-moment"],
+  emits: ["seek", "zoom-to", "select-moment", "lane-click", "lane-remove", "clip-click"],
   setup(props, { emit }) {
     const root = ref(null);
     const selecting = ref(false);
@@ -766,8 +881,20 @@ var Timeline = {
       const fullyVisible = clip.start >= visibleStart.value && clip.end <= visibleEnd.value;
       return {
         left: `${left}%`,
-        width: `${Math.max(0, width)}%`,
+        // Subtract ~3px from each clip's right edge to create a visible gap
+        // between adjacent clips without affecting their absolute positions.
+        width: `calc(${Math.max(0, width)}% - 3px)`,
         opacity: width < 0.4 ? 0.3 : (fullyVisible ? 1 : 0.85),
+      };
+    }
+    function laneClipStyle(c) {
+      const clampedStart = Math.max(c.tl_start, visibleStart.value);
+      const clampedEnd = Math.min(c.tl_end, visibleEnd.value);
+      const left = secToPct(clampedStart);
+      const width = secToPct(clampedEnd) - left;
+      return {
+        left: `${left}%`,
+        width: `calc(${Math.max(0, width)}% - 3px)`,
       };
     }
 
@@ -794,6 +921,9 @@ var Timeline = {
           return;
         }
       }
+      // Click on a video clip or audio-lane clip — let its own @click handler
+      // open the editor; don't start a drag-selection.
+      if (ev.target.closest(".tl-clip, .tl-lane-clip")) return;
       const rect = root.value.getBoundingClientRect();
       selecting.value = true;
       selectStartPx.value = ev.clientX - rect.left;
@@ -868,7 +998,7 @@ var Timeline = {
     });
 
     return {
-      root, cursorPct, selectRect, persistedRangeStyle, ticks, clipStyle, secToPct, onPointerDown,
+      root, cursorPct, selectRect, persistedRangeStyle, ticks, clipStyle, laneClipStyle, secToPct, onPointerDown,
       visibleStart, visibleEnd, formatShort, momentLinks,
     };
   },
@@ -886,10 +1016,19 @@ var Timeline = {
           v-for="clip in clips"
           :key="clip.id"
           class="tl-clip"
-          :class="[clip.source ? clip.source.file_type : 'video', { 'has-thumb': clip.source && clip.source.thumbnail_url }]"
-          :style="{ ...clipStyle(clip), ...(clip.source && clip.source.thumbnail_url ? { backgroundImage: 'url(' + clip.source.thumbnail_url + ')' } : {}) }"
+          :class="[
+            clip.source ? clip.source.file_type : 'video',
+            'track-' + (clip.track || 1)
+          ]"
+          :style="clipStyle(clip)"
           :title="clip.label || (clip.source ? clip.source.original_name : '#' + clip.id)"
+          @click.stop="$emit('clip-click', clip)"
         >
+          <img v-if="clip.source && clip.source.thumbnail_url"
+               :src="clip.source.thumbnail_url" class="tl-clip-thumb tl-clip-thumb-start" alt="">
+          <img v-if="clip.source && (clip.source.thumbnail_end_url || clip.source.thumbnail_url)"
+               :src="clip.source.thumbnail_end_url || clip.source.thumbnail_url"
+               class="tl-clip-thumb tl-clip-thumb-end" alt="">
           <ClipWaveform
             v-if="clip.source && clip.source.peaks_url && clip.source.duration"
             :peaks-url="clip.source.peaks_url"
@@ -898,6 +1037,27 @@ var Timeline = {
             :source-duration="clip.source.duration"
           />
           <span class="tl-clip-label">{{ clip.label || (clip.source ? clip.source.original_name : '#' + clip.id) }}</span>
+        </div>
+      </div>
+      <div v-if="audioLane && audioLane.length" class="tl-audio-lane">
+        <div class="tl-lane-label">AUDIO</div>
+        <div
+          v-for="lc in audioLane"
+          :key="'lane-' + lc.id"
+          class="tl-lane-clip"
+          :style="laneClipStyle(lc)"
+          :title="(lc.label || (lc.source && lc.source.original_name) || '') + ' · vol ' + lc.volume.toFixed(2) + ' · @' + lc.tl_start.toFixed(2) + 's'"
+          @click.stop="$emit('lane-click', lc)"
+          @contextmenu.prevent="$emit('lane-remove', lc)"
+        >
+          <ClipWaveform
+            v-if="lc.source && lc.source.peaks_url && lc.source.duration"
+            :peaks-url="lc.source.peaks_url"
+            :source-start="lc.start_offset || 0"
+            :source-end="lc.end_offset != null ? lc.end_offset : lc.source.duration"
+            :source-duration="lc.source.duration"
+          />
+          <span class="tl-lane-clip-name">{{ lc.label || (lc.source && lc.source.original_name) }}</span>
         </div>
       </div>
       <template v-if="clips.length">
@@ -1016,9 +1176,19 @@ var CaptureMomentModal = {
 
 var MomentsList = {
   props: { moments: Array, selectedMomentId: Number },
-  emits: ["goto", "preview", "update-label", "remove", "select"],
+  emits: ["goto", "preview", "update-label", "update-type", "remove", "select",
+          "jump-next", "set-track", "toggle-track"],
   setup(props, { emit }) {
     const sorted = computed(() => [...props.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds));
+
+    function toggleType(m) {
+      const next = m.type === "relative" ? "absolute" : "relative";
+      emit("update-type", { id: m.id, type: next });
+    }
+
+    function hasJumpOp(m) {
+      return (m.operations || []).some(o => o.type === "jump_to_moment");
+    }
 
     function beginEdit(ev) {
       const el = ev.target;
@@ -1045,7 +1215,7 @@ var MomentsList = {
       if (ev.key === "Escape") { ev.target.textContent = m.label || ""; ev.target.blur(); }
     }
 
-    return { sorted, formatTimecode, beginEdit, endEdit, onKey };
+    return { sorted, formatTimecode, beginEdit, endEdit, onKey, toggleType, hasJumpOp };
   },
   template: `
     <div class="moments-section">
@@ -1053,7 +1223,7 @@ var MomentsList = {
         <span class="label">Momentos</span>
         <span class="count">{{ moments.length }}</span>
         <div class="spacer"></div>
-        <span class="muted">Clic para seleccionar · Doble clic edita la etiqueta · <span class="kbd">M</span> captura</span>
+        <span class="muted">Doble clic edita la etiqueta · chip edita el tipo · <span class="kbd">M</span> captura</span>
       </div>
       <div v-if="moments.length === 0" class="moments-empty">Aún no hay momentos marcados.</div>
       <div v-else class="moments-list">
@@ -1064,29 +1234,39 @@ var MomentsList = {
           :class="{selected: m.id === selectedMomentId}"
           @click="$emit('select', m.id)"
         >
-          <span class="time mono">
-            <template v-for="(part, i) in [formatTimecode(m.timeline_seconds)]" :key="i">
-              {{ part.hh }}:{{ part.mm }}:{{ part.ss }}<span style="color:var(--paper-faint);">.{{ part.cs }}</span>
-            </template>
-          </span>
-          <span class="kind" :class="m.type">{{ m.type }}</span>
-          <span
-            class="label"
-            :class="{ empty: !m.label }"
-            @click.stop
-            @dblclick="beginEdit"
-            @blur="(ev) => endEdit(ev, m)"
-            @keydown="(ev) => onKey(ev, m)"
-            spellcheck="false"
-          >{{ m.label }}</span>
-          <span v-if="m.operations && m.operations.length" class="op-count" :title="m.operations.length + ' operación(es)'">
-            {{ m.operations.length }} ops
-          </span>
-          <span class="actions" @click.stop>
-            <button class="icon" @click="$emit('goto', m.timeline_seconds)" title="Saltar al momento (pausado)">⇥</button>
-            <button class="icon primary-subtle" @click="$emit('preview', m)" title="Reproducir desde un poco antes">▶</button>
-            <button class="icon danger" @click="$emit('remove', m.id)" title="Eliminar">✕</button>
-          </span>
+          <div class="moment-row-top">
+            <span class="time mono">
+              <template v-for="(part, i) in [formatTimecode(m.timeline_seconds)]" :key="i">
+                {{ part.hh }}:{{ part.mm }}:{{ part.ss }}<span style="color:var(--paper-faint);">.{{ part.cs }}</span>
+              </template>
+            </span>
+            <span class="kind" :class="m.type" @click.stop="toggleType(m)" title="Cambiar tipo (relativo/absoluto)">{{ m.type }}</span>
+            <span
+              class="label"
+              :class="{ empty: !m.label }"
+              @click.stop
+              @dblclick="beginEdit"
+              @blur="(ev) => endEdit(ev, m)"
+              @keydown="(ev) => onKey(ev, m)"
+              spellcheck="false"
+            >{{ m.label }}</span>
+            <span v-if="m.operations && m.operations.length" class="op-count" :title="m.operations.length + ' operación(es)'">
+              {{ m.operations.length }}
+            </span>
+            <span class="actions" @click.stop>
+              <button class="icon" @click="$emit('goto', m.timeline_seconds)" title="Saltar al momento">⇥</button>
+              <button class="icon primary-subtle" @click="$emit('preview', m)" title="Reproducir desde un poco antes">▶</button>
+              <button class="icon danger" @click="$emit('remove', m.id)" title="Eliminar">✕</button>
+            </span>
+          </div>
+          <div class="moment-row-actions" @click.stop>
+            <button class="qa" :class="{ on: hasJumpOp(m) }"
+                    @click="$emit('jump-next', m)"
+                    title="Al llegar a este momento, saltar al siguiente">⇢ salto</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 1 })" title="Cambiar a Track 1 en este momento">T1</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 2 })" title="Cambiar a Track 2 en este momento">T2</button>
+            <button class="qa" @click="$emit('toggle-track', m)" title="Alternar al otro track">⇋</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1247,7 +1427,7 @@ var FilesPanel = {
 
 var ClipsPanel = {
   props: { clips: Array, totalDuration: Number },
-  emits: ["reorder", "remove", "trim", "seek-to", "remove-silences"],
+  emits: ["reorder", "remove", "trim", "seek-to", "remove-silences", "set-track"],
   setup(props, { emit }) {
     const editing = ref(null);  // clip id being trimmed
     const trimStart = ref(0);
@@ -1297,6 +1477,11 @@ var ClipsPanel = {
               {{ clip.source ? clip.source.original_name : '(archivo borrado)' }}
             </div>
             <div class="clip-actions">
+              <button class="icon ghost clip-track-toggle" :class="'track-' + (clip.track || 1)"
+                      @click="$emit('set-track', { id: clip.id, track: (clip.track || 1) === 1 ? 2 : 1 })"
+                      :title="'Track ' + (clip.track || 1) + ' — click para cambiar'">
+                T{{ clip.track || 1 }}
+              </button>
               <button class="icon ghost" @click="move(clip, -1)" :disabled="idx === 0" title="Mover arriba">▲</button>
               <button class="icon ghost" @click="move(clip, 1)" :disabled="idx === clips.length - 1" title="Mover abajo">▼</button>
               <button class="icon ghost" @click="$emit('seek-to', clip.id)" title="Ir al inicio del clip">⇥</button>
@@ -1864,7 +2049,7 @@ var ProjectView = {
   props: { project: Object, onBack: Function },
   components: { FilesPanel, VideoPlayer, Timeline, ZoomControls, MomentsList, CaptureMomentModal, ClipsPanel, OperationsPanel, SilenceModal, ExportModal },
   setup(props) {
-    const timeline = reactive({ clips: [], moments: [], duration: 0 });
+    const timeline = reactive({ clips: [], moments: [], duration: 0, audioLane: [] });
     const silenceClip = ref(null);
     const showExport = ref(false);
     const localFiles = ref([]);
@@ -1875,13 +2060,7 @@ var ProjectView = {
       volume: 1.0,
     });
     const zoom = reactive({ startSeconds: 0, endSeconds: null });
-    const selectedRange = ref(null);  // { start, end } | null — persistent range set when zoomOnSelect is off
-    const zoomOnSelect = ref(
-      (localStorage.getItem("postpod.zoomOnSelect") ?? "1") === "1"
-    );
-    watch(zoomOnSelect, (v) => {
-      localStorage.setItem("postpod.zoomOnSelect", v ? "1" : "0");
-    });
+    const selectedRange = ref(null);  // { start, end } | null — persistent yellow band from drag-select
 
     // Sidebar visibility toggles (persisted). Operations panel auto-shows
     // when a moment is selected; no explicit toggle.
@@ -1949,7 +2128,13 @@ var ProjectView = {
         const data = await api(`/api/projects/${props.project.slug}/timeline`);
         timeline.clips = data.clips || [];
         timeline.moments = data.moments || [];
-        timeline.duration = data.duration || 0;
+        timeline.audioLane = data.audio_lane || [];
+        // Duration: max of video-track cumulative durations AND any audio
+        // lane clip's end (so music that extends past video is visible).
+        const stacked = withTimelineStarts(timeline.clips);
+        const videoMax = totalDurationFromClips(stacked);
+        const laneMax = timeline.audioLane.reduce((m, c) => Math.max(m, c.tl_end || 0), 0);
+        timeline.duration = Math.max(videoMax, laneMax);
         playerState.duration = timeline.duration;
         // Keep zoom consistent
         if (zoom.endSeconds == null || zoom.endSeconds > timeline.duration) {
@@ -1964,10 +2149,82 @@ var ProjectView = {
 
     async function addClipToTimeline(f) {
       try {
-        await api(`/api/projects/${props.project.slug}/timeline/clips`, {
-          method: "POST",
-          body: { media_file_id: f.id, label: f.original_name },
+        if (f.file_type === "audio") {
+          // Audio files go to the parallel audio lane (mixed with video).
+          await api(`/api/projects/${props.project.slug}/audio-lane`, {
+            method: "POST",
+            body: {
+              media_file_id: f.id,
+              label: f.original_name,
+              tl_start: playerState.currentTime || 0,
+              volume: 0.7,
+            },
+          });
+        } else {
+          await api(`/api/projects/${props.project.slug}/timeline/clips`, {
+            method: "POST",
+            body: { media_file_id: f.id, label: f.original_name },
+          });
+        }
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function updateLaneClip({ id, fields }) {
+      try {
+        await api(`/api/projects/${props.project.slug}/audio-lane/${id}`, {
+          method: "PUT", body: fields,
         });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    const laneEditing = ref(null);  // currently-selected lane clip for edit form
+    function onLaneClipClick(lc) {
+      laneEditing.value = { ...lc };
+      clipEditing.value = null;
+      onSeek(lc.tl_start);
+    }
+    async function saveLaneEdit() {
+      if (!laneEditing.value) return;
+      const e = laneEditing.value;
+      await updateLaneClip({
+        id: e.id,
+        fields: {
+          tl_start: parseFloat(e.tl_start) || 0,
+          volume: parseFloat(e.volume) || 0,
+          label: e.label || "",
+        },
+      });
+      laneEditing.value = null;
+    }
+
+    const clipEditing = ref(null);  // currently-selected video clip for edit form
+    function onClipClick(clip) {
+      clipEditing.value = { ...clip };
+      laneEditing.value = null;
+      onSeek(clip.start);
+    }
+    async function saveClipEdit() {
+      if (!clipEditing.value) return;
+      const e = clipEditing.value;
+      try {
+        await api(`/api/projects/${props.project.slug}/timeline/clips/${e.id}`, {
+          method: "PUT",
+          body: {
+            label: e.label || "",
+            volume: parseFloat(e.volume) || 0,
+          },
+        });
+        await refreshTimeline();
+      } catch (err) { error.value = err.message; }
+      clipEditing.value = null;
+    }
+
+    async function removeLaneClip(id) {
+      if (!confirm("¿Quitar este audio de la pista?")) return;
+      try {
+        await api(`/api/projects/${props.project.slug}/audio-lane/${id}`, { method: "DELETE" });
         await refreshTimeline();
       } catch (e) { error.value = e.message; }
     }
@@ -1993,6 +2250,15 @@ var ProjectView = {
         await api(`/api/projects/${props.project.slug}/timeline/clips/${id}`, {
           method: "PUT",
           body: { start_offset, end_offset },
+        });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function setClipTrack({ id, track }) {
+      try {
+        await api(`/api/projects/${props.project.slug}/timeline/clips/${id}`, {
+          method: "PUT", body: { track },
         });
         await refreshTimeline();
       } catch (e) { error.value = e.message; }
@@ -2024,19 +2290,62 @@ var ProjectView = {
     }
 
     async function createMoment(payload) {
+      payload = payload || {};
       try {
         const m = await api(`/api/projects/${props.project.slug}/moments`, {
           method: "POST",
           body: {
-            type: payload.type,
+            type: payload.type || "relative",
             timeline_seconds: playerState.currentTime,
             label: payload.label || "",
           },
         });
         capture.show = false;
         await refreshTimeline();
-        // Auto-select so the user can immediately add operations on this moment.
+        // Auto-select so the user can immediately edit the label / add ops.
         if (m && m.id) selectedMomentId.value = m.id;
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function updateMomentType({ id, type }) {
+      try {
+        await api(`/api/projects/${props.project.slug}/moments/${id}`, {
+          method: "PUT", body: { type },
+        });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function addJumpToNext(m) {
+      const sorted = [...timeline.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
+      const idx = sorted.findIndex(x => x.id === m.id);
+      const next = sorted[idx + 1];
+      if (!next) { alert("No hay momento posterior para saltar."); return; }
+      try {
+        await api(`/api/projects/${props.project.slug}/moments/${m.id}/operations`, {
+          method: "POST",
+          body: { type: "jump_to_moment", params: { target_moment_id: next.id } },
+        });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function setTrackAtMoment({ m, track }) {
+      try {
+        await api(`/api/projects/${props.project.slug}/moments/${m.id}/operations`, {
+          method: "POST",
+          body: { type: "switch_track", params: { track } },
+        });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+    async function toggleTrackAtMoment(m) {
+      try {
+        await api(`/api/projects/${props.project.slug}/moments/${m.id}/operations`, {
+          method: "POST",
+          body: { type: "switch_track", params: { toggle: true } },
+        });
+        await refreshTimeline();
       } catch (e) { error.value = e.message; }
     }
 
@@ -2092,7 +2401,14 @@ var ProjectView = {
       } catch (e) { error.value = e.message; }
     }
 
-    function onSeek(t) { videoPlayerRef.value?.seek(t); }
+    function onSeek(t) {
+      videoPlayerRef.value?.seek(t);
+      // Click outside the selected range clears it; click inside preserves it.
+      const r = selectedRange.value;
+      if (r && (t < r.start - 0.01 || t > r.end + 0.01)) {
+        selectedRange.value = null;
+      }
+    }
 
     function previewMoment(m) {
       // Seek a touch before the moment so the user can see the effect enter, then play.
@@ -2107,15 +2423,17 @@ var ProjectView = {
       const a = Math.max(0, Math.min(start, end));
       const b = Math.max(0, Math.max(start, end));
       if (b - a < 0.05) return;
-      if (!zoomOnSelect.value) {
-        // Toggle OFF: persist the range selection (for "▶ Rango" and ops),
-        // jump playhead to its start, keep current zoom as-is.
-        selectedRange.value = { start: a, end: Math.min(total, b) };
-        videoPlayerRef.value?.seek(a, false);
-        return;
-      }
-      zoom.startSeconds = Math.max(0, a);
-      zoom.endSeconds = Math.min(total, b);
+      // Drag-select always persists as a yellow range selection. Zoom is a
+      // separate, explicit action (button or "Z" shortcut).
+      selectedRange.value = { start: a, end: Math.min(total, b) };
+      videoPlayerRef.value?.seek(a, false);
+    }
+
+    function applyRangeAsZoom() {
+      const r = selectedRange.value;
+      if (!r || r.end <= r.start + 0.01) return;
+      zoom.startSeconds = Math.max(0, r.start);
+      zoom.endSeconds = Math.min(playerState.duration || r.end, r.end);
       selectedRange.value = null;
     }
     function onUpdateZoom({ start, end }) {
@@ -2138,12 +2456,13 @@ var ProjectView = {
       if (timeline.clips.length === 0) return;
 
       if (ev.code === "Space") { ev.preventDefault(); videoPlayerRef.value?.togglePlay(); }
-      else if (ev.key === "m" || ev.key === "M") { ev.preventDefault(); capture.show = true; }
+      else if (ev.key === "m" || ev.key === "M") { ev.preventDefault(); createMoment({}); }
       else if (ev.key === "+" || ev.key === "=") { ev.preventDefault(); zoomByShortcut(0.9); }
       else if (ev.key === "-" || ev.key === "_") { ev.preventDefault(); zoomByShortcut(1.111); }
       else if (ev.key === "ArrowLeft") { ev.preventDefault(); onSeek(Math.max(0, playerState.currentTime - (ev.shiftKey ? 1/30 : 5))); }
       else if (ev.key === "ArrowRight") { ev.preventDefault(); onSeek(Math.min(playerState.duration, playerState.currentTime + (ev.shiftKey ? 1/30 : 5))); }
       else if (ev.key === "Escape") { if (selectedRange.value) { ev.preventDefault(); selectedRange.value = null; } }
+      else if (ev.key === "z" || ev.key === "Z") { if (selectedRange.value) { ev.preventDefault(); applyRangeAsZoom(); } }
     }
     function zoomByShortcut(factor) {
       const total = playerState.duration || 0;
@@ -2171,9 +2490,13 @@ var ProjectView = {
       timeline, localFiles, playerState, zoom, selectedMomentId, selectedMoment,
       capture, clipsWithStarts, activeEffects, videoPlayerRef, error,
       refreshTimeline, addClipToTimeline, removeClip, reorderClip, trimClip, seekToClip,
-      createMoment, updateMomentLabel, removeMoment,
+      createMoment, updateMomentLabel, updateMomentType, removeMoment,
+      addJumpToNext, setTrackAtMoment, toggleTrackAtMoment, applyRangeAsZoom,
+      setClipTrack, updateLaneClip, removeLaneClip,
+      laneEditing, onLaneClipClick, saveLaneEdit,
+      clipEditing, onClipClick, saveClipEdit,
       addOperation, removeOperation,
-      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, zoomOnSelect,
+      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment,
       showFiles, showClips, focusMode, selectedRange,
       silenceClip, openSilenceModal, applySilenceRemoval,
       showExport,
@@ -2202,6 +2525,10 @@ var ProjectView = {
           @preview="previewMoment"
           @remove="removeMoment"
           @update-label="updateMomentLabel"
+          @update-type="updateMomentType"
+          @jump-next="addJumpToNext"
+          @set-track="setTrackAtMoment"
+          @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
         />
       </aside>
@@ -2217,6 +2544,7 @@ var ProjectView = {
           :effects="activeEffects"
           :moments="timeline.moments"
           :selected-range="selectedRange"
+          :audio-lane="timeline.audioLane"
         />
 
         <div class="timeline-section">
@@ -2229,12 +2557,12 @@ var ProjectView = {
               <button :class="{on: showClips}" @click="showClips = !showClips" title="Clips">📋</button>
             </div>
             <ZoomControls :zoom="zoom" :player-state="playerState" @update-zoom="onUpdateZoom" />
-            <label class="zoom-toggle" :title="'Si está activo, al hacer drag-select se hace zoom al rango. Si no, sólo reposiciona el cursor.'">
-              <input type="checkbox" v-model="zoomOnSelect">
-              <span>zoom al seleccionar</span>
-            </label>
-            <button class="primary" :disabled="timeline.clips.length === 0" @click="capture.show = true" style="margin-left:8px;">
+            <button class="primary" :disabled="timeline.clips.length === 0" @click="createMoment({})" style="margin-left:8px;">
               ◉ Capturar momento <span class="kbd" style="margin-left:6px;">M</span>
+            </button>
+            <button v-if="selectedRange" :disabled="timeline.clips.length === 0" @click="applyRangeAsZoom"
+                    class="ghost" style="margin-left:8px;" title="Zoom al rango seleccionado (Z)">
+              🔍 Zoom selección <span class="kbd" style="margin-left:6px;">Z</span>
             </button>
             <button :disabled="timeline.clips.length === 0" @click="showExport = true" style="margin-left:8px;">
               ⇪ Exportar
@@ -2248,10 +2576,50 @@ var ProjectView = {
             :moments="timeline.moments"
             :selected-moment-id="selectedMomentId"
             :selected-range="selectedRange"
+            :audio-lane="timeline.audioLane"
             @seek="onSeek"
             @zoom-to="onZoomTo"
             @select-moment="(id) => selectedMomentId = id"
+            @lane-click="onLaneClipClick"
+            @lane-remove="(lc) => removeLaneClip(lc.id)"
+            @clip-click="onClipClick"
           />
+        </div>
+
+        <div v-if="clipEditing" class="lane-editor">
+          <div class="eyebrow">
+            Video · T{{ clipEditing.track || 1 }} · {{ clipEditing.label || (clipEditing.source && clipEditing.source.original_name) }}
+          </div>
+          <div class="row" style="gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+            <label style="margin: 0;">Volumen
+              <input type="range" min="0" max="2" step="0.05" v-model.number="clipEditing.volume" style="width: 160px;">
+              <span class="mono tiny">{{ (clipEditing.volume ?? 1).toFixed(2) }}</span>
+            </label>
+            <label style="margin: 0; flex: 1; min-width: 200px;">Label
+              <input type="text" v-model="clipEditing.label" style="width: 100%;">
+            </label>
+            <button class="primary" @click="saveClipEdit">Guardar</button>
+            <button class="ghost" @click="clipEditing = null">Cancelar</button>
+          </div>
+        </div>
+
+        <div v-if="laneEditing" class="lane-editor">
+          <div class="eyebrow">Audio · {{ laneEditing.label || (laneEditing.source && laneEditing.source.original_name) }}</div>
+          <div class="row" style="gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 6px;">
+            <label style="margin: 0;">Start (s)
+              <input type="number" step="0.1" min="0" v-model.number="laneEditing.tl_start" style="width: 90px;">
+            </label>
+            <label style="margin: 0;">Volume
+              <input type="range" min="0" max="2" step="0.05" v-model.number="laneEditing.volume" style="width: 140px;">
+              <span class="mono tiny">{{ (laneEditing.volume || 0).toFixed(2) }}</span>
+            </label>
+            <label style="margin: 0; flex: 1; min-width: 200px;">Label
+              <input type="text" v-model="laneEditing.label" style="width: 100%;">
+            </label>
+            <button class="primary" @click="saveLaneEdit">Guardar</button>
+            <button class="ghost" @click="laneEditing = null">Cancelar</button>
+            <button class="danger" @click="removeLaneClip(laneEditing.id); laneEditing = null;">✕ Eliminar</button>
+          </div>
         </div>
 
         <MomentsList
@@ -2262,6 +2630,10 @@ var ProjectView = {
           @preview="previewMoment"
           @remove="removeMoment"
           @update-label="updateMomentLabel"
+          @update-type="updateMomentType"
+          @jump-next="addJumpToNext"
+          @set-track="setTrackAtMoment"
+          @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
         />
 
@@ -2282,6 +2654,7 @@ var ProjectView = {
           @remove="removeClip"
           @trim="trimClip"
           @seek-to="seekToClip"
+          @set-track="setClipTrack"
           @remove-silences="openSilenceModal"
         />
         <SilenceModal

@@ -12,12 +12,14 @@ from config import GLOBAL_DIR, PROJECTS_DIR
 def _scan_missing_sidecars():
     """Ensure every video has a thumbnail, and every audio/video has waveform peaks."""
     from files import (
-        _generate_thumbnail, _generate_waveform, _peaks_path,
-        _probe_duration, _thumbnail_path,
+        _generate_end_thumbnail, _generate_thumbnail, _generate_waveform,
+        _peaks_path, _probe_duration, _thumbnail_end_path, _thumbnail_path,
     )
 
     def _is_sidecar(name: str) -> bool:
-        return name.endswith(".thumb.jpg") or name.endswith(".peaks.json")
+        return (name.endswith(".thumb.jpg")
+                or name.endswith(".thumb_end.jpg")
+                or name.endswith(".peaks.json"))
 
     def _process(path: Path, kind: str):
         if not path.is_file() or _is_sidecar(path.name):
@@ -26,6 +28,11 @@ def _scan_missing_sidecars():
         if kind == "video" and not _thumbnail_path(path).exists():
             duration = _probe_duration(path)
             _generate_thumbnail(path, duration)
+        if kind == "video" and not _thumbnail_end_path(path).exists():
+            if duration is None:
+                duration = _probe_duration(path)
+            if duration:
+                _generate_end_thumbnail(path, duration)
         if kind in ("video", "audio") and not _peaks_path(path).exists():
             if duration is None:
                 duration = _probe_duration(path)

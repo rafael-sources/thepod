@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS timeline_clips (
     label         TEXT,
     start_offset  REAL NOT NULL DEFAULT 0,
     end_offset    REAL,
+    track         INTEGER NOT NULL DEFAULT 1,
+    volume        REAL NOT NULL DEFAULT 1.0,
     created_at    TEXT DEFAULT (datetime('now'))
 );
 
@@ -49,6 +51,18 @@ CREATE TABLE IF NOT EXISTS operations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_operations_moment_id ON operations(moment_id);
+
+CREATE TABLE IF NOT EXISTS audio_lane_clips (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_file_id INTEGER NOT NULL REFERENCES media_files(id) ON DELETE CASCADE,
+    label         TEXT,
+    tl_start      REAL NOT NULL DEFAULT 0,
+    start_offset  REAL NOT NULL DEFAULT 0,
+    end_offset    REAL,
+    volume        REAL NOT NULL DEFAULT 0.7,
+    created_at    TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_audio_lane_clips_start ON audio_lane_clips(tl_start);
 
 CREATE TABLE IF NOT EXISTS export_jobs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,4 +91,17 @@ def get_db(slug: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate_in_place(conn)
     return conn
+
+
+def _migrate_in_place(conn: sqlite3.Connection) -> None:
+    """Apply idempotent ALTER TABLE migrations for schema fields added after
+    a project's DB was first created. CREATE TABLE IF NOT EXISTS won't update
+    pre-existing tables."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(timeline_clips)")}
+    if "track" not in cols:
+        conn.execute("ALTER TABLE timeline_clips ADD COLUMN track INTEGER NOT NULL DEFAULT 1")
+    if "volume" not in cols:
+        conn.execute("ALTER TABLE timeline_clips ADD COLUMN volume REAL NOT NULL DEFAULT 1.0")
+    conn.commit()

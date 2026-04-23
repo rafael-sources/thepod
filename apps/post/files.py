@@ -38,6 +38,10 @@ def _thumbnail_path(video_path: Path) -> Path:
     return video_path.with_suffix(video_path.suffix + ".thumb.jpg")
 
 
+def _thumbnail_end_path(video_path: Path) -> Path:
+    return video_path.with_suffix(video_path.suffix + ".thumb_end.jpg")
+
+
 def _peaks_path(media_path: Path) -> Path:
     return media_path.with_suffix(media_path.suffix + ".peaks.json")
 
@@ -118,6 +122,30 @@ def _generate_thumbnail(video_path: Path, duration: float | None) -> bool:
         return False
 
 
+def _generate_end_thumbnail(video_path: Path, duration: float | None) -> bool:
+    """Generate a 320-wide JPG thumbnail at ~the last frame of the video."""
+    try:
+        if not duration or duration <= 0.3:
+            return False
+        # Seek to a bit before the end to avoid empty frames at EOF
+        t = max(0.0, float(duration) - 0.2)
+        out = _thumbnail_end_path(video_path)
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                "-ss", f"{t:.2f}", "-i", str(video_path),
+                "-vframes", "1",
+                "-vf", "scale=320:-2",
+                "-q:v", "4",
+                str(out),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        return proc.returncode == 0 and out.exists()
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
 def _project_file_url(slug, file_type, filename):
     return f"/media/projects/{slug}/{file_type}/{filename}"
 
@@ -128,6 +156,10 @@ def _global_file_url(file_type, filename):
 
 def _project_thumb_url(slug, file_type, filename):
     return f"/media/projects/{slug}/{file_type}/{filename}.thumb.jpg"
+
+
+def _project_thumb_end_url(slug, file_type, filename):
+    return f"/media/projects/{slug}/{file_type}/{filename}.thumb_end.jpg"
 
 
 def _global_thumb_url(file_type, filename):
@@ -164,6 +196,8 @@ def list_files(slug):
         if r["file_type"] == "video":
             if (src_dir / f"{r['filename']}.thumb.jpg").is_file():
                 entry["thumbnail_url"] = _project_thumb_url(slug, r["file_type"], r["filename"])
+            if (src_dir / f"{r['filename']}.thumb_end.jpg").is_file():
+                entry["thumbnail_end_url"] = _project_thumb_end_url(slug, r["file_type"], r["filename"])
         if r["file_type"] in ("video", "audio"):
             if (src_dir / f"{r['filename']}.peaks.json").is_file():
                 entry["peaks_url"] = _project_peaks_url(slug, r["file_type"], r["filename"])
@@ -198,9 +232,12 @@ def upload_file(slug):
     duration = _probe_duration(dest) if file_type in ("video", "audio") else None
 
     thumbnail_url = None
+    thumbnail_end_url = None
     if file_type == "video":
         if _generate_thumbnail(dest, duration):
             thumbnail_url = _project_thumb_url(slug, file_type, filename)
+        if _generate_end_thumbnail(dest, duration):
+            thumbnail_end_url = _project_thumb_end_url(slug, file_type, filename)
 
     peaks_url = None
     if file_type in ("video", "audio"):
@@ -226,6 +263,7 @@ def upload_file(slug):
         "size_bytes": size_bytes,
         "url": _project_file_url(slug, file_type, filename),
         "thumbnail_url": thumbnail_url,
+        "thumbnail_end_url": thumbnail_end_url,
         "peaks_url": peaks_url,
     }), 201
 

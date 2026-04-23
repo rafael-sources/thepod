@@ -91,14 +91,14 @@ def _load_timeline_state(slug: str):
     db = get_db(slug)
     try:
         clip_rows = db.execute("""
-            SELECT tc.id, tc.position, tc.start_offset, tc.end_offset,
+            SELECT tc.id, tc.position, tc.start_offset, tc.end_offset, tc.track, tc.volume,
                    mf.filename, mf.file_type, mf.duration AS media_duration
             FROM timeline_clips tc
             LEFT JOIN media_files mf ON mf.id = tc.media_file_id
             ORDER BY tc.position, tc.id
         """).fetchall()
         clips = []
-        cursor = 0.0
+        cursor = {1: 0.0, 2: 0.0}  # per-track cumulative start
         for r in clip_rows:
             if not r["filename"]:
                 continue
@@ -106,18 +106,28 @@ def _load_timeline_state(slug: str):
             dur = _clip_duration(r["start_offset"], r["end_offset"], r["media_duration"])
             if dur <= 0:
                 continue
+            track = int(r["track"] or 1)
+            if track not in (1, 2):
+                track = 1
+            tl_start = cursor[track]
+            try:
+                clip_vol = float(r["volume"]) if r["volume"] is not None else 1.0
+            except (KeyError, IndexError, TypeError):
+                clip_vol = 1.0
             clips.append({
                 "id": r["id"],
                 "path": path,
                 "file_type": r["file_type"],
+                "track": track,
+                "volume": max(0.0, min(4.0, clip_vol)),
                 "start_offset": float(r["start_offset"] or 0),
                 "end_offset": float(r["end_offset"]) if r["end_offset"] is not None else float(r["media_duration"] or 0),
                 "duration": dur,
-                "tl_start": cursor,
-                "tl_end": cursor + dur,
+                "tl_start": tl_start,
+                "tl_end": tl_start + dur,
                 "has_audio": _has_audio_stream(path),
             })
-            cursor += dur
+            cursor[track] = tl_start + dur
 
         moment_rows = db.execute(
             "SELECT id, type, timeline_seconds, label FROM moments ORDER BY timeline_seconds, id"
@@ -147,8 +157,39 @@ def _load_timeline_state(slug: str):
                 })
 
         all_have_audio = bool(clips) and all(c["has_audio"] for c in clips)
-        total = clips[-1]["tl_end"] if clips else 0.0
-        return clips, flat_ops, all_have_audio, total, moments
+
+        lane_rows = db.execute("""
+            SELECT al.id, al.tl_start, al.start_offset, al.end_offset, al.volume,
+                   mf.filename, mf.file_type, mf.duration AS media_duration
+            FROM audio_lane_clips al
+            LEFT JOIN media_files mf ON mf.id = al.media_file_id
+            ORDER BY al.tl_start, al.id
+        """).fetchall()
+        audio_lane = []
+        for r in lane_rows:
+            if not r["filename"]:
+                continue
+            path = PROJECTS_DIR / slug / "media" / "audio" / r["filename"]
+            s = float(r["start_offset"] or 0)
+            e = float(r["end_offset"]) if r["end_offset"] is not None else float(r["media_duration"] or 0)
+            dur = max(0.0, e - s)
+            if dur <= 0:
+                continue
+            audio_lane.append({
+                "id": r["id"],
+                "path": path,
+                "tl_start": float(r["tl_start"] or 0),
+                "tl_end": float(r["tl_start"] or 0) + dur,
+                "start_offset": s,
+                "end_offset": e,
+                "duration": dur,
+                "volume": float(r["volume"] or 0.7),
+            })
+
+        video_total = max((c["tl_end"] for c in clips), default=0.0)
+        lane_total = max((l["tl_end"] for l in audio_lane), default=0.0)
+        total = max(video_total, lane_total)
+        return clips, flat_ops, all_have_audio, total, moments, audio_lane
     finally:
         db.close()
 
@@ -162,6 +203,80 @@ def _escape_drawtext(text: str) -> str:
                 .replace(":", "\\:")
                 .replace("'", "\u2019")
                 .replace("%", "\\%"))
+
+
+def _compute_track_segments(clips, moments, flat_ops, total_duration):
+    """
+    Walk the timeline from 0 to total_duration, following switch_track ops to
+    determine the active track at each instant, and emit a list of segments
+    that describe which source clip (and which sub-range of it) should play
+    during each [tl_start, tl_end] window. Segments never overlap.
+    """
+    if not clips:
+        return []
+
+    # Boundaries: clip starts/ends on either track + switch_track moments + 0/total
+    bounds = {0.0, float(total_duration)}
+    for c in clips:
+        bounds.add(float(c["tl_start"]))
+        bounds.add(float(c["tl_end"]))
+    moment_by_id = {m["id"]: m for m in moments}
+    sw_events = []
+    for op in flat_ops:
+        if op["type"] != "switch_track":
+            continue
+        m = moment_by_id.get(op.get("moment_id")) or None
+        t = op.get("tl_start")
+        if t is None and m is not None:
+            t = float(m["timeline_seconds"])
+        if t is None:
+            continue
+        t = float(t)
+        bounds.add(t)
+        sw_events.append((t, op.get("params") or {}))
+    sw_events.sort(key=lambda x: x[0])
+
+    times = sorted(x for x in bounds if -1e-6 <= x <= total_duration + 1e-6)
+
+    def active_at(t):
+        a = 1
+        for (st, p) in sw_events:
+            if st > t + 1e-6:
+                break
+            if p.get("toggle"):
+                a = 1 if a == 2 else 2
+            elif p.get("track") in (1, 2):
+                a = int(p["track"])
+        return a
+
+    def clip_on_track_at(track, t):
+        for c in clips:
+            if int(c.get("track", 1)) != track:
+                continue
+            if c["tl_start"] - 1e-6 <= t < c["tl_end"] - 1e-6:
+                return c
+        return None
+
+    segments = []
+    for i in range(len(times) - 1):
+        t0, t1 = times[i], times[i + 1]
+        if t1 - t0 < 0.001:
+            continue
+        at = active_at(t0)
+        c = clip_on_track_at(at, t0) or clip_on_track_at(2 if at == 1 else 1, t0)
+        if not c:
+            continue
+        local_start = float(c["start_offset"]) + (t0 - c["tl_start"])
+        local_end = float(c["start_offset"]) + (t1 - c["tl_start"])
+        segments.append({
+            "clip": c,
+            "src_start": local_start,
+            "src_end": local_end,
+            "tl_start": t0,
+            "tl_end": t1,
+            "duration": t1 - t0,
+        })
+    return segments
 
 
 def _compute_final_keep_ranges(flat_ops, moments, total_duration):
@@ -489,7 +604,7 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
     if not preset:
         raise ValueError(f"preset desconocido: {preset_id}")
 
-    clips, flat_ops, all_have_audio, total_duration, moments = _load_timeline_state(slug)
+    clips, flat_ops, all_have_audio, total_duration, moments, audio_lane = _load_timeline_state(slug)
     if not clips:
         raise ValueError("el timeline está vacío")
     if total_duration <= 0.01:
@@ -532,17 +647,81 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
 
     parts = []
 
-    # ---- Per-clip preprocessing: trim + scale + pad + uniform fps ----
-    for i, c in enumerate(clips):
-        s = c["start_offset"]
-        e = c["end_offset"]
+    # ---- Per-segment preprocessing ----
+    # Segments reflect the active track at each instant (based on switch_track
+    # ops). For single-track projects this is 1:1 with clips; for multi-cam
+    # projects the same source clip may appear in several non-contiguous
+    # segments.
+    segments = _compute_track_segments(clips, moments, flat_ops, total_duration)
+    if not segments:
+        # Fall back to clips as segments (should not normally happen since
+        # we have clips and total_duration > 0).
+        segments = [
+            {"clip": c, "src_start": c["start_offset"], "src_end": c["end_offset"],
+             "tl_start": c["tl_start"], "tl_end": c["tl_end"], "duration": c["duration"]}
+            for c in clips
+        ]
+
+    clip_idx_by_id = {c["id"]: i for i, c in enumerate(clips)}
+    # Count segment uses per source input so we can pre-split shared streams
+    # (ffmpeg forbids referencing the same source more than once).
+    use_counts_v = {}  # clip_id -> count
+    use_counts_a = {}
+    use_counts_b = {}  # black input idx -> count (for audio-only-clip-in-video mode)
+    for seg in segments:
+        c = seg["clip"]
         if is_audio_only:
             if c["has_audio"]:
-                parts.append(
-                    f"[{i}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{i}]"
-                )
+                use_counts_a[c["id"]] = use_counts_a.get(c["id"], 0) + 1
         else:
             if c["file_type"] == "video":
+                use_counts_v[c["id"]] = use_counts_v.get(c["id"], 0) + 1
+            else:
+                bi = black_idx_map[clip_idx_by_id[c["id"]]]
+                use_counts_b[bi] = use_counts_b.get(bi, 0) + 1
+            if all_have_audio:
+                use_counts_a[c["id"]] = use_counts_a.get(c["id"], 0) + 1
+
+    # Emit split/asplit up front so each segment gets its own labelled copy.
+    split_v = {}  # clip_id -> list of labels to pop
+    split_a = {}
+    split_b = {}  # black idx -> list of labels
+    for cid, n in use_counts_v.items():
+        i = clip_idx_by_id[cid]
+        labels = [f"v{cid}_{j}" for j in range(n)]
+        parts.append(f"[{i}:v]split={n}[" + "][".join(labels) + "]")
+        split_v[cid] = labels
+    for cid, n in use_counts_a.items():
+        i = clip_idx_by_id[cid]
+        labels = [f"a{cid}_{j}" for j in range(n)]
+        parts.append(f"[{i}:a]asplit={n}[" + "][".join(labels) + "]")
+        split_a[cid] = labels
+    for bi, n in use_counts_b.items():
+        labels = [f"b{bi}_{j}" for j in range(n)]
+        parts.append(f"[{bi}:v]split={n}[" + "][".join(labels) + "]")
+        split_b[bi] = labels
+
+    for k, seg in enumerate(segments):
+        c = seg["clip"]
+        i = clip_idx_by_id[c["id"]]
+        s = float(seg["src_start"])
+        e = float(seg["src_end"])
+        if is_audio_only:
+            if c["has_audio"]:
+                src = split_a[c["id"]].pop(0)
+                vol = float(c.get("volume", 1.0))
+                if abs(vol - 1.0) > 1e-3:
+                    parts.append(
+                        f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,"
+                        f"volume={vol:.3f}[a{k}]"
+                    )
+                else:
+                    parts.append(
+                        f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{k}]"
+                    )
+        else:
+            if c["file_type"] == "video":
+                src = split_v[c["id"]].pop(0)
                 v_chain = (
                     f"trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS,"
                     f"fps={target_fps},"
@@ -550,36 +729,46 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
                     f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
                     f"setsar=1,format=yuv420p"
                 )
-                parts.append(f"[{i}:v]{v_chain}[v{i}]")
+                parts.append(f"[{src}]{v_chain}[v{k}]")
             else:
-                # Audio (or other non-video) clip: use the black placeholder as the video stream.
                 bidx = black_idx_map[i]
+                src = split_b[bidx].pop(0)
+                seg_dur = seg["duration"]
                 parts.append(
-                    f"[{bidx}:v]setpts=PTS-STARTPTS,fps={target_fps},"
-                    f"scale={W}:{H},setsar=1,format=yuv420p[v{i}]"
+                    f"[{src}]trim=start=0:end={seg_dur:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},scale={W}:{H},setsar=1,format=yuv420p[v{k}]"
                 )
             if all_have_audio:
-                parts.append(
-                    f"[{i}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{i}]"
-                )
+                src = split_a[c["id"]].pop(0)
+                vol = float(c.get("volume", 1.0))
+                if abs(vol - 1.0) > 1e-3:
+                    parts.append(
+                        f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,"
+                        f"volume={vol:.3f}[a{k}]"
+                    )
+                else:
+                    parts.append(
+                        f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{k}]"
+                    )
 
     # ---- Concat ----
+    n_segs = len(segments)
     if is_audio_only:
         if all_have_audio:
-            concat_in = "".join(f"[a{i}]" for i in range(len(clips)))
-            parts.append(f"{concat_in}concat=n={len(clips)}:v=0:a=1[aconcat]")
+            concat_in = "".join(f"[a{k}]" for k in range(n_segs))
+            parts.append(f"{concat_in}concat=n={n_segs}:v=0:a=1[aconcat]")
             audio_label = "aconcat"
         else:
             audio_label = None
         video_label = None
     else:
         if all_have_audio:
-            concat_in = "".join(f"[v{i}][a{i}]" for i in range(len(clips)))
-            parts.append(f"{concat_in}concat=n={len(clips)}:v=1:a=1[vconcat][aconcat]")
+            concat_in = "".join(f"[v{k}][a{k}]" for k in range(n_segs))
+            parts.append(f"{concat_in}concat=n={n_segs}:v=1:a=1[vconcat][aconcat]")
             audio_label = "aconcat"
         else:
-            concat_in = "".join(f"[v{i}]" for i in range(len(clips)))
-            parts.append(f"{concat_in}concat=n={len(clips)}:v=1:a=0[vconcat]")
+            concat_in = "".join(f"[v{k}]" for k in range(n_segs))
+            parts.append(f"{concat_in}concat=n={n_segs}:v=1:a=0[vconcat]")
             audio_label = None
         video_label = "vconcat"
 
@@ -594,6 +783,40 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
         audio_label, inputs_added = _apply_audio_ops(
             cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, total_duration,
         )
+        next_idx_audio = n_clip_inputs + inputs_added
+    else:
+        next_idx_audio = n_clip_inputs
+
+    # ---- Audio lane (parallel music/SFX mixed in) ----
+    if audio_lane:
+        lane_labels = []
+        for j, lc in enumerate(audio_lane):
+            cmd += ["-i", str(lc["path"])]
+            input_idx = next_idx_audio
+            next_idx_audio += 1
+            delay_ms = int(round(float(lc["tl_start"]) * 1000))
+            vol = max(0.0, min(2.0, float(lc["volume"] or 0.7)))
+            lbl = f"lane{j}"
+            parts.append(
+                f"[{input_idx}:a]atrim=start={lc['start_offset']:.3f}:end={lc['end_offset']:.3f},"
+                f"asetpts=PTS-STARTPTS,"
+                f"adelay={delay_ms}|{delay_ms},"
+                f"volume={vol}[{lbl}]"
+            )
+            lane_labels.append(lbl)
+        # Mix lane into the existing audio stream (silence bed if none).
+        if not audio_label:
+            silence_lbl = "asilbed"
+            parts.append(
+                f"anullsrc=channel_layout=stereo:sample_rate=44100,"
+                f"atrim=0:{total_duration:.3f}[{silence_lbl}]"
+            )
+            audio_label = silence_lbl
+        mix_inputs = "[" + audio_label + "]" + "".join(f"[{l}]" for l in lane_labels)
+        parts.append(
+            f"{mix_inputs}amix=inputs={1 + len(lane_labels)}:duration=first:normalize=0[aout_mix]"
+        )
+        audio_label = "aout_mix"
 
     # ---- Final timeline reshape: cut_before / cut_after + jump_to_moment ----
     # All three ops are expressed in original timeline coordinates; we fold

@@ -22,9 +22,10 @@ VALID_OP_TYPES = {
     "cut_before", "cut_after", "insert_clip", "switch_video",
     "zoom_in", "zoom_out", "color_effect", "audio_replace",
     "audio_mix", "subtitle", "to_vertical", "remove_silences",
-    "jump_to_moment",
+    "jump_to_moment", "switch_track",
 }
-ABSOLUTE_ALLOWED = {"zoom_in", "zoom_out", "color_effect", "subtitle", "to_vertical", "jump_to_moment"}
+ABSOLUTE_ALLOWED = {"zoom_in", "zoom_out", "color_effect", "subtitle", "to_vertical",
+                    "jump_to_moment", "switch_track"}
 
 
 def _ensure_project(slug):
@@ -259,11 +260,14 @@ def _serialize_clip(slug, row):
     src = None
     if row["filename"]:
         thumb_url = None
+        thumb_end_url = None
         peaks_url = None
         media_dir = PROJECTS_DIR / slug / "media" / row["file_type"]
         if row["file_type"] == "video":
             if (media_dir / f"{row['filename']}.thumb.jpg").is_file():
                 thumb_url = f"/media/projects/{slug}/{row['file_type']}/{row['filename']}.thumb.jpg"
+            if (media_dir / f"{row['filename']}.thumb_end.jpg").is_file():
+                thumb_end_url = f"/media/projects/{slug}/{row['file_type']}/{row['filename']}.thumb_end.jpg"
         if row["file_type"] in ("video", "audio"):
             if (media_dir / f"{row['filename']}.peaks.json").is_file():
                 peaks_url = f"/media/projects/{slug}/{row['file_type']}/{row['filename']}.peaks.json"
@@ -275,9 +279,10 @@ def _serialize_clip(slug, row):
             "duration": row["media_duration"],
             "url": _project_file_url(slug, row["file_type"], row["filename"]),
             "thumbnail_url": thumb_url,
+            "thumbnail_end_url": thumb_end_url,
             "peaks_url": peaks_url,
         }
-    return {
+    d = {
         "id": row["id"],
         "position": row["position"],
         "media_file_id": row["media_file_id"],
@@ -287,12 +292,17 @@ def _serialize_clip(slug, row):
         "duration": _clip_duration(row["start_offset"], row["end_offset"], row["media_duration"]),
         "source": src,
     }
+    try: d["track"] = int(row["track"] or 1)
+    except (KeyError, IndexError, TypeError): d["track"] = 1
+    try: d["volume"] = float(row["volume"] if row["volume"] is not None else 1.0)
+    except (KeyError, IndexError, TypeError): d["volume"] = 1.0
+    return d
 
 
 def _load_clips(slug, db):
     rows = db.execute("""
         SELECT tc.id, tc.position, tc.media_file_id, tc.label,
-               tc.start_offset, tc.end_offset,
+               tc.start_offset, tc.end_offset, tc.track, tc.volume,
                mf.filename, mf.original_name, mf.file_type,
                mf.duration AS media_duration
         FROM timeline_clips tc
@@ -344,7 +354,160 @@ def get_timeline(slug):
                 "operations": ops_by_moment.get(r["id"], []),
             })
         total = sum(c["duration"] for c in clips)
-        return jsonify({"clips": clips, "moments": moments, "duration": total})
+        lane = _load_audio_lane(slug, db)
+        return jsonify({
+            "clips": clips,
+            "moments": moments,
+            "duration": total,
+            "audio_lane": lane,
+        })
+    finally:
+        db.close()
+
+
+def _serialize_lane_clip(slug, row):
+    src = None
+    if row["filename"]:
+        media_dir = PROJECTS_DIR / slug / "media" / "audio"
+        peaks_url = None
+        if (media_dir / f"{row['filename']}.peaks.json").is_file():
+            peaks_url = f"/media/projects/{slug}/audio/{row['filename']}.peaks.json"
+        src = {
+            "id": row["media_file_id"],
+            "filename": row["filename"],
+            "original_name": row["original_name"],
+            "duration": row["media_duration"],
+            "url": _project_file_url(slug, "audio", row["filename"]),
+            "peaks_url": peaks_url,
+        }
+    end_offset = row["end_offset"] if row["end_offset"] is not None else row["media_duration"]
+    dur = max(0.0, float(end_offset or 0) - float(row["start_offset"] or 0))
+    return {
+        "id": row["id"],
+        "media_file_id": row["media_file_id"],
+        "label": row["label"] or (row["original_name"] if row["filename"] else ""),
+        "tl_start": float(row["tl_start"] or 0),
+        "tl_end": float(row["tl_start"] or 0) + dur,
+        "start_offset": float(row["start_offset"] or 0),
+        "end_offset": float(end_offset) if end_offset is not None else None,
+        "duration": dur,
+        "volume": float(row["volume"] or 0.7),
+        "source": src,
+    }
+
+
+def _load_audio_lane(slug, db):
+    rows = db.execute("""
+        SELECT al.id, al.media_file_id, al.label, al.tl_start,
+               al.start_offset, al.end_offset, al.volume,
+               mf.filename, mf.original_name,
+               mf.duration AS media_duration
+        FROM audio_lane_clips al
+        LEFT JOIN media_files mf ON mf.id = al.media_file_id
+        ORDER BY al.tl_start, al.id
+    """).fetchall()
+    return [_serialize_lane_clip(slug, r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Audio lane CRUD
+# ---------------------------------------------------------------------------
+
+@bp.post("/api/projects/<slug>/audio-lane")
+@require_auth
+def add_lane_clip(slug):
+    _ensure_project(slug)
+    data = request.get_json(silent=True) or {}
+    mfid = data.get("media_file_id")
+    if mfid is None:
+        return jsonify({"error": "media_file_id requerido"}), 400
+    db = get_db(slug)
+    try:
+        mf = db.execute(
+            "SELECT id, file_type, duration FROM media_files WHERE id=?", (mfid,),
+        ).fetchone()
+        if not mf:
+            return jsonify({"error": "media_file no encontrado"}), 404
+        if mf["file_type"] != "audio":
+            return jsonify({"error": "sólo archivos de audio en la pista de audio"}), 400
+
+        tl_start = float(data.get("tl_start") or 0)
+        start_offset = float(data.get("start_offset") or 0)
+        end_offset = data.get("end_offset")
+        if end_offset is not None:
+            end_offset = float(end_offset)
+        volume = float(data.get("volume", 0.7))
+        volume = max(0.0, min(2.0, volume))
+
+        cur = db.execute(
+            """INSERT INTO audio_lane_clips
+               (media_file_id, label, tl_start, start_offset, end_offset, volume)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (mfid, data.get("label"), tl_start, start_offset, end_offset, volume),
+        )
+        db.commit()
+        row = db.execute("""
+            SELECT al.id, al.media_file_id, al.label, al.tl_start,
+                   al.start_offset, al.end_offset, al.volume,
+                   mf.filename, mf.original_name, mf.duration AS media_duration
+            FROM audio_lane_clips al
+            LEFT JOIN media_files mf ON mf.id = al.media_file_id
+            WHERE al.id = ?
+        """, (cur.lastrowid,)).fetchone()
+        return jsonify(_serialize_lane_clip(slug, row)), 201
+    finally:
+        db.close()
+
+
+@bp.put("/api/projects/<slug>/audio-lane/<int:clip_id>")
+@require_auth
+def update_lane_clip(slug, clip_id):
+    _ensure_project(slug)
+    data = request.get_json(silent=True) or {}
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT id FROM audio_lane_clips WHERE id=?", (clip_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "clip no encontrado"}), 404
+        updates, params = [], []
+        for field in ("label",):
+            if field in data:
+                updates.append(f"{field}=?")
+                params.append(data[field])
+        for field in ("tl_start", "start_offset", "volume"):
+            if field in data:
+                updates.append(f"{field}=?")
+                params.append(float(data[field] or 0))
+        if "end_offset" in data:
+            val = data["end_offset"]
+            updates.append("end_offset=?")
+            params.append(float(val) if val is not None else None)
+        if updates:
+            params.append(clip_id)
+            db.execute(f"UPDATE audio_lane_clips SET {', '.join(updates)} WHERE id=?", params)
+            db.commit()
+        row = db.execute("""
+            SELECT al.id, al.media_file_id, al.label, al.tl_start,
+                   al.start_offset, al.end_offset, al.volume,
+                   mf.filename, mf.original_name, mf.duration AS media_duration
+            FROM audio_lane_clips al
+            LEFT JOIN media_files mf ON mf.id = al.media_file_id
+            WHERE al.id = ?
+        """, (clip_id,)).fetchone()
+        return jsonify(_serialize_lane_clip(slug, row))
+    finally:
+        db.close()
+
+
+@bp.delete("/api/projects/<slug>/audio-lane/<int:clip_id>")
+@require_auth
+def delete_lane_clip(slug, clip_id):
+    _ensure_project(slug)
+    db = get_db(slug)
+    try:
+        db.execute("DELETE FROM audio_lane_clips WHERE id=?", (clip_id,))
+        db.commit()
+        return jsonify({"ok": True})
     finally:
         db.close()
 
@@ -380,6 +543,9 @@ def add_clip(slug):
         end_offset = data.get("end_offset")
         if end_offset is not None:
             end_offset = float(end_offset)
+        track = int(data.get("track") or 1)
+        if track not in (1, 2):
+            track = 1
 
         old_clips = _load_clip_list_for_recalc(db)
         moments = _load_moments(db)
@@ -390,9 +556,9 @@ def add_clip(slug):
             (position,),
         )
         cur = db.execute(
-            "INSERT INTO timeline_clips (position, media_file_id, label, start_offset, end_offset) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (position, mfid, data.get("label"), start_offset, end_offset),
+            "INSERT INTO timeline_clips (position, media_file_id, label, start_offset, end_offset, track) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (position, mfid, data.get("label"), start_offset, end_offset, track),
         )
         new_id = cur.lastrowid
         _normalize_positions(db)
@@ -404,7 +570,7 @@ def add_clip(slug):
 
         clip_row = db.execute("""
             SELECT tc.id, tc.position, tc.media_file_id, tc.label,
-                   tc.start_offset, tc.end_offset,
+                   tc.start_offset, tc.end_offset, tc.track, tc.volume,
                    mf.filename, mf.original_name, mf.file_type,
                    mf.duration AS media_duration
             FROM timeline_clips tc
@@ -447,6 +613,17 @@ def update_clip(slug, clip_id):
             val = data["end_offset"]
             updates_sql.append("end_offset=?")
             params.append(float(val) if val is not None else None)
+        if "track" in data:
+            t = int(data["track"] or 1)
+            if t not in (1, 2):
+                return jsonify({"error": "track debe ser 1 o 2"}), 400
+            updates_sql.append("track=?")
+            params.append(t)
+        if "volume" in data:
+            v = float(data["volume"] or 0)
+            v = max(0.0, min(4.0, v))
+            updates_sql.append("volume=?")
+            params.append(v)
 
         if updates_sql:
             params.append(clip_id)
@@ -486,7 +663,7 @@ def update_clip(slug, clip_id):
 
         updated = db.execute("""
             SELECT tc.id, tc.position, tc.media_file_id, tc.label,
-                   tc.start_offset, tc.end_offset,
+                   tc.start_offset, tc.end_offset, tc.track, tc.volume,
                    mf.filename, mf.original_name, mf.file_type,
                    mf.duration AS media_duration
             FROM timeline_clips tc
@@ -574,6 +751,12 @@ def update_moment(slug, moment_id):
         if "timeline_seconds" in data:
             updates_sql.append("timeline_seconds=?")
             params.append(float(data["timeline_seconds"]))
+        if "type" in data:
+            t = data["type"]
+            if t not in ("relative", "absolute"):
+                return jsonify({"error": "type debe ser 'relative' o 'absolute'"}), 400
+            updates_sql.append("type=?")
+            params.append(t)
         if updates_sql:
             params.append(moment_id)
             db.execute(
