@@ -250,6 +250,14 @@ var OP_TYPES = [
   { value: "audio_mix",    label: "Mezclar audio extra",         kinds: ["relative"] },
   { value: "subtitle",     label: "Mostrar subtítulo",           kinds: ["relative", "absolute"] },
   { value: "jump_to_moment", label: "Saltar al siguiente momento", kinds: ["relative", "absolute"] },
+  { value: "text_overlay",   label: "Texto cómic (PUM/BANG/custom)",  kinds: ["relative", "absolute"] },
+];
+
+var COMIC_FONTS = [
+  { key: "bangers",          label: "Bangers (Batman TV)",  family: "Bangers" },
+  { key: "titan_one",        label: "Titan One",            family: "Titan One" },
+  { key: "luckiest_guy",     label: "Luckiest Guy",         family: "Luckiest Guy" },
+  { key: "permanent_marker", label: "Permanent Marker",     family: "Permanent Marker" },
 ];
 
 /* ==========================================================================
@@ -425,6 +433,7 @@ var VideoPlayer = {
     moments: Array,         // all moments with their operations, used for jump_to_moment
     selectedRange: Object,  // { start, end } | null — range selected by drag on the timeline
     audioLane: Array,       // parallel audio lane clips for preview playback
+    editingOverlay: Object, // shared ref with OpForm for WYSIWYG text_overlay editing
   },
   setup(props) {
     const videoEl = ref(null);
@@ -773,10 +782,72 @@ var VideoPlayer = {
     });
     const isVertical = computed(() => !!props.effects?.vertical);
 
+    function textOverlayFontFamily(key) {
+      const map = {
+        bangers: "Bangers, sans-serif",
+        titan_one: "'Titan One', sans-serif",
+        luckiest_guy: "'Luckiest Guy', sans-serif",
+        permanent_marker: "'Permanent Marker', sans-serif",
+      };
+      return map[key] || map.bangers;
+    }
+    function textOverlayShadow(ov) {
+      if (!ov.shadow) return "none";
+      return "4px 6px 0 rgba(0,0,0,0.6), 0 0 10px rgba(0,0,0,0.3)";
+    }
+
+    // WYSIWYG drag/resize/rotate for the overlay currently being edited.
+    function _frameBox() {
+      const host = videoEl.value?.closest?.(".video-frame");
+      if (!host) return null;
+      return host.getBoundingClientRect();
+    }
+    function onEditOverlayPointerDown(ev, handle) {
+      const ov = props.editingOverlay;
+      if (!ov) return;
+      const box = _frameBox();
+      if (!box) return;
+      ev.preventDefault(); ev.stopPropagation();
+      const startX = ev.clientX, startY = ev.clientY;
+      const startParams = { x_pct: ov.x_pct, y_pct: ov.y_pct,
+                            size_pct: ov.size_pct, rotation_deg: ov.rotation_deg };
+      const cx = box.left + box.width * ov.x_pct;
+      const cy = box.top  + box.height * ov.y_pct;
+
+      function move(e) {
+        if (handle === "move") {
+          const dx = (e.clientX - startX) / box.width;
+          const dy = (e.clientY - startY) / box.height;
+          ov.x_pct = Math.max(0, Math.min(1, startParams.x_pct + dx));
+          ov.y_pct = Math.max(0, Math.min(1, startParams.y_pct + dy));
+        } else if (handle === "resize") {
+          const distStart = Math.hypot(startX - cx, startY - cy);
+          const distNow   = Math.hypot(e.clientX - cx, e.clientY - cy);
+          const factor = distNow / Math.max(1, distStart);
+          ov.size_pct = Math.max(3, Math.min(60, startParams.size_pct * factor));
+        } else if (handle === "rotate") {
+          const a0 = Math.atan2(startY - cy, startX - cx);
+          const a1 = Math.atan2(e.clientY - cy, e.clientX - cx);
+          const delta = (a1 - a0) * 180 / Math.PI;
+          let next = startParams.rotation_deg + delta;
+          while (next > 180) next -= 360;
+          while (next < -180) next += 360;
+          ov.rotation_deg = Math.round(next);
+        }
+      }
+      function up() {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      }
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    }
+
     return {
       videoEl, rangeMode, canSlowPlay, seek, togglePlay, playVisibleRange, playSlow10s,
       onTimeUpdate, onPlay, onPause, onVolumeChange,
       tc, tcTotal, activeClip, frameStyle, isVertical, verticalStyle,
+      textOverlayFontFamily, textOverlayShadow, onEditOverlayPointerDown,
     };
   },
   template: `
@@ -805,6 +876,45 @@ var VideoPlayer = {
             :class="'pos-' + (s.position || 'bottom')"
           >{{ s.text }}</div>
         </template>
+        <template v-if="effects && effects.textOverlays && effects.textOverlays.length">
+          <div
+            v-for="(ov, i) in effects.textOverlays"
+            :key="'txt-' + i"
+            class="text-overlay"
+            :style="{
+              left: (ov.x_pct * 100) + '%',
+              top:  (ov.y_pct * 100) + '%',
+              fontSize: ov.size_pct + 'cqmin',
+              color: ov.color,
+              fontFamily: textOverlayFontFamily(ov.font),
+              transform: 'translate(-50%, -50%) rotate(' + ov.rotation_deg + 'deg)',
+              textShadow: textOverlayShadow(ov),
+              WebkitTextStroke: ov.outline ? '2px #000' : 'none',
+            }"
+          >{{ ov.text }}</div>
+        </template>
+        <div v-if="editingOverlay" class="text-overlay-edit"
+             :style="{
+               left: (editingOverlay.x_pct * 100) + '%',
+               top:  (editingOverlay.y_pct * 100) + '%',
+               transform: 'translate(-50%, -50%) rotate(' + editingOverlay.rotation_deg + 'deg)',
+             }"
+             @pointerdown="onEditOverlayPointerDown($event, 'move')">
+          <div class="text-overlay"
+               style="position: static; left: auto; top: auto; transform: none;"
+               :style="{
+                 fontSize: editingOverlay.size_pct + 'cqmin',
+                 color: editingOverlay.color,
+                 fontFamily: textOverlayFontFamily(editingOverlay.font),
+                 textShadow: textOverlayShadow(editingOverlay),
+                 WebkitTextStroke: editingOverlay.outline ? '2px #000' : 'none',
+               }">{{ editingOverlay.text || '…' }}</div>
+          <div class="text-overlay-box"></div>
+          <div class="text-overlay-handle handle-rotate"
+               @pointerdown.stop="onEditOverlayPointerDown($event, 'rotate')" title="Rotar">⟳</div>
+          <div class="text-overlay-handle handle-resize"
+               @pointerdown.stop="onEditOverlayPointerDown($event, 'resize')" title="Redimensionar">⇲</div>
+        </div>
         <div v-if="!activeClip" class="video-placeholder">
           <div class="mark">◉</div>
           <div class="msg">Timeline vacío</div>
@@ -1521,8 +1631,9 @@ var ClipsPanel = {
    ========================================================================== */
 
 var OpForm = {
-  props: { type: String, clips: Array, localFiles: Array, moments: Array, currentMomentId: Number },
-  emits: ["submit", "cancel"],
+  props: { type: String, clips: Array, localFiles: Array, moments: Array, currentMomentId: Number,
+           initialParams: { type: Object, default: null } },
+  emits: ["submit", "cancel", "editing-overlay"],
   setup(props, { emit }) {
     const params = reactive({});
 
@@ -1539,7 +1650,31 @@ var OpForm = {
       else if (t === "to_vertical") Object.assign(params, { crop_x: 0.5, duration_seconds: null });
       else if (t === "remove_silences") Object.assign(params, { threshold_db: -40, min_silence_seconds: 0.5, duration_seconds: 30 });
       else if (t === "jump_to_moment") Object.assign(params, { target_moment_id: null });
+      else if (t === "text_overlay") Object.assign(params, {
+        text: "POW!",
+        font: "bangers",
+        color: "#ffde59",
+        size_pct: 18,
+        x_pct: 0.5,
+        y_pct: 0.5,
+        rotation_deg: -8,
+        duration_seconds: 0.8,
+        outline: true,
+        shadow: true,
+        sound_file_id: null,
+        sound_volume: 1.0,
+      });
+      // If editing an existing op, overlay initialParams onto the defaults.
+      if (props.initialParams) Object.assign(params, props.initialParams);
     }, { immediate: true });
+
+    // Keep the video-frame WYSIWYG overlay in sync with the form params.
+    watch(() => [props.type, params.text, params.font, params.color, params.size_pct,
+                 params.x_pct, params.y_pct, params.rotation_deg, params.outline, params.shadow], () => {
+      if (props.type === "text_overlay") emit("editing-overlay", params);
+      else emit("editing-overlay", null);
+    }, { immediate: true, deep: true });
+    onBeforeUnmount(() => emit("editing-overlay", null));
 
     const audioFiles = computed(() => (props.localFiles || []).filter(f => f.file_type === "audio"));
     const videoFiles = computed(() => (props.localFiles || []).filter(f => f.file_type === "video"));
@@ -1551,7 +1686,7 @@ var OpForm = {
 
     function submit() { emit("submit", { ...params }); }
 
-    return { params, audioFiles, videoFiles, otherMoments, submit };
+    return { params, audioFiles, videoFiles, otherMoments, COMIC_FONTS, submit };
   },
   template: `
     <div class="op-form">
@@ -1648,6 +1783,55 @@ var OpForm = {
           para eliminar los silencios en ese rango. El resto del timeline no se toca.
         </div>
       </template>
+      <template v-else-if="type === 'text_overlay'">
+        <div class="op-field"><label>Texto</label>
+          <input type="text" v-model="params.text" placeholder="POW! BANG! WHAM!">
+        </div>
+        <div class="op-field"><label>Fuente</label>
+          <select v-model="params.font">
+            <option v-for="f in COMIC_FONTS" :key="f.key" :value="f.key">{{ f.label }}</option>
+          </select>
+        </div>
+        <div class="op-field"><label>Color</label>
+          <input type="color" v-model="params.color" style="width: 60px; height: 32px; padding: 0; border: 1px solid var(--ink-line);">
+        </div>
+        <div class="op-field"><label>Tamaño (% del frame) = {{ params.size_pct }}%</label>
+          <input type="range" min="5" max="50" step="1" v-model.number="params.size_pct">
+        </div>
+        <div class="op-field"><label>Posición X = {{ Math.round(params.x_pct * 100) }}%</label>
+          <input type="range" min="0" max="1" step="0.01" v-model.number="params.x_pct">
+        </div>
+        <div class="op-field"><label>Posición Y = {{ Math.round(params.y_pct * 100) }}%</label>
+          <input type="range" min="0" max="1" step="0.01" v-model.number="params.y_pct">
+        </div>
+        <div class="op-field"><label>Rotación = {{ params.rotation_deg }}°</label>
+          <input type="range" min="-90" max="90" step="1" v-model.number="params.rotation_deg">
+        </div>
+        <div class="op-field"><label>Duración (s)</label>
+          <input type="number" step="0.1" min="0.1" v-model.number="params.duration_seconds">
+        </div>
+        <div class="op-field" style="display: flex; gap: 14px;">
+          <label style="display: inline-flex; align-items: center; gap: 6px; text-transform: none;">
+            <input type="checkbox" v-model="params.outline"> Borde negro
+          </label>
+          <label style="display: inline-flex; align-items: center; gap: 6px; text-transform: none;">
+            <input type="checkbox" v-model="params.shadow"> Sombra
+          </label>
+        </div>
+        <div class="op-field"><label>Sonido (opcional — archivo de audio del proyecto)</label>
+          <select v-model.number="params.sound_file_id">
+            <option :value="null">— sin sonido —</option>
+            <option v-for="f in audioFiles" :key="f.id" :value="f.id">{{ f.original_name }}</option>
+          </select>
+        </div>
+        <div v-if="params.sound_file_id" class="op-field"><label>Volumen sonido</label>
+          <input type="range" min="0" max="2" step="0.05" v-model.number="params.sound_volume">
+          <span class="mono tiny">{{ (params.sound_volume || 0).toFixed(2) }}</span>
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5;">
+          Preview: overlay en vivo sobre el video. En export: drawtext + rotate + overlay.
+        </div>
+      </template>
       <template v-else-if="type === 'jump_to_moment'">
         <div class="op-field">
           <label>Momento destino</label>
@@ -1678,10 +1862,11 @@ var OpForm = {
 var OperationsPanel = {
   components: { OpForm },
   props: { moment: Object, clips: Array, localFiles: Array, moments: Array },
-  emits: ["add", "remove"],
+  emits: ["add", "update", "remove", "editing-overlay"],
   setup(props, { emit }) {
     const adding = ref(false);
     const newType = ref("color_effect");
+    const editingOp = ref(null);   // { id, type, params } when editing existing op
 
     const availableTypes = computed(() => {
       const kind = props.moment?.type;
@@ -1689,17 +1874,37 @@ var OperationsPanel = {
       return OP_TYPES.filter(t => t.kinds.includes(kind));
     });
 
-    watch(() => props.moment?.id, () => { adding.value = false; });
+    watch(() => props.moment?.id, () => {
+      adding.value = false;
+      editingOp.value = null;
+      emit("editing-overlay", null);
+    });
 
     function startAdd() {
       adding.value = true;
-      // pick a default valid type
+      editingOp.value = null;
       const first = availableTypes.value[0];
       if (first) newType.value = first.value;
     }
-    function submitOp(params) {
-      emit("add", { type: newType.value, params });
+    function startEdit(op) {
+      editingOp.value = { id: op.id, type: op.type, params: { ...(op.params || {}) } };
       adding.value = false;
+      newType.value = op.type;
+    }
+    function cancelForm() {
+      adding.value = false;
+      editingOp.value = null;
+      emit("editing-overlay", null);
+    }
+    function submitOp(params) {
+      if (editingOp.value) {
+        emit("update", { id: editingOp.value.id, type: editingOp.value.type, params });
+        editingOp.value = null;
+      } else {
+        emit("add", { type: newType.value, params });
+        adding.value = false;
+      }
+      emit("editing-overlay", null);
     }
 
     function opSummary(op) {
@@ -1720,10 +1925,13 @@ var OperationsPanel = {
         if (tgt) return `→ "${tgt.label || '(sin etiqueta)'}" @ ${tgt.timeline_seconds.toFixed(2)}s`;
         return `→ momento #${p.target_moment_id ?? "?"}`;
       }
+      if (op.type === "text_overlay") {
+        return `"${(p.text || "").slice(0, 16)}" · ${p.font || "?"} · ${p.size_pct ?? "?"}% × ${p.duration_seconds ?? "?"}s`;
+      }
       return JSON.stringify(p);
     }
 
-    return { adding, newType, availableTypes, startAdd, submitOp, opSummary };
+    return { adding, editingOp, newType, availableTypes, startAdd, startEdit, cancelForm, submitOp, opSummary };
   },
   template: `
     <div class="ops-panel">
@@ -1744,21 +1952,26 @@ var OperationsPanel = {
           Sin operaciones todavía.
         </div>
         <div v-else class="op-list">
-          <div v-for="op in moment.operations" :key="op.id" class="op-row">
+          <div v-for="op in moment.operations" :key="op.id" class="op-row"
+               :class="{ editing: editingOp && editingOp.id === op.id }">
             <span class="op-type">{{ op.type }}</span>
             <span class="op-summary mono">{{ opSummary(op) }}</span>
+            <button class="icon ghost" @click="startEdit(op)" title="Editar">✎</button>
             <button class="icon danger" @click="$emit('remove', op.id)" title="Eliminar">✕</button>
           </div>
         </div>
 
-        <div v-if="adding" class="op-add">
-          <label>Tipo de operación</label>
-          <select v-model="newType">
+        <div v-if="adding || editingOp" class="op-add">
+          <label v-if="!editingOp">Tipo de operación</label>
+          <select v-if="!editingOp" v-model="newType">
             <option v-for="opt in availableTypes" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <OpForm :type="newType" :clips="clips" :local-files="localFiles"
+          <OpForm :type="editingOp ? editingOp.type : newType"
+                  :clips="clips" :local-files="localFiles"
                   :moments="moments" :current-moment-id="moment ? moment.id : null"
-                  @submit="submitOp" @cancel="adding = false" />
+                  :initial-params="editingOp ? editingOp.params : null"
+                  @submit="submitOp" @cancel="cancelForm"
+                  @editing-overlay="(p) => $emit('editing-overlay', p)" />
         </div>
         <div v-else class="row right" style="margin-top:10px;">
           <button class="primary" @click="startAdd">＋ Agregar operación</button>
@@ -2084,7 +2297,7 @@ var ProjectView = {
     // Effects at current time
     const activeEffects = computed(() => {
       const t = playerState.currentTime;
-      const out = { filter: null, transform: null, subtitles: [], vertical: null };
+      const out = { filter: null, transform: null, subtitles: [], vertical: null, textOverlays: [] };
       const sortedMoments = [...timeline.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
       for (const m of sortedMoments) {
         for (const op of (m.operations || [])) {
@@ -2115,6 +2328,18 @@ var ProjectView = {
               out.subtitles.push({ text: p.text || "", position: p.position || "bottom" });
             } else if (op.type === "to_vertical") {
               out.vertical = { cropX: p.crop_x ?? 0.5 };
+            } else if (op.type === "text_overlay") {
+              out.textOverlays.push({
+                text: p.text || "",
+                font: p.font || "bangers",
+                color: p.color || "#ffde59",
+                size_pct: p.size_pct ?? 18,
+                x_pct: p.x_pct ?? 0.5,
+                y_pct: p.y_pct ?? 0.5,
+                rotation_deg: p.rotation_deg ?? 0,
+                outline: p.outline !== false,
+                shadow: p.shadow !== false,
+              });
             }
           }
         }
@@ -2401,6 +2626,18 @@ var ProjectView = {
       } catch (e) { error.value = e.message; }
     }
 
+    async function updateOperation({ id, type, params }) {
+      try {
+        await api(`/api/projects/${props.project.slug}/operations/${id}`, {
+          method: "PUT", body: { params },
+        });
+        await refreshTimeline();
+      } catch (e) { error.value = e.message; }
+    }
+
+    const editingOverlay = ref(null);
+    function setEditingOverlay(p) { editingOverlay.value = p; }
+
     function onSeek(t) {
       videoPlayerRef.value?.seek(t);
       // Click outside the selected range clears it; click inside preserves it.
@@ -2495,6 +2732,7 @@ var ProjectView = {
       setClipTrack, updateLaneClip, removeLaneClip,
       laneEditing, onLaneClipClick, saveLaneEdit,
       clipEditing, onClipClick, saveClipEdit,
+      updateOperation, editingOverlay, setEditingOverlay,
       addOperation, removeOperation,
       onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment,
       showFiles, showClips, focusMode, selectedRange,
@@ -2545,6 +2783,7 @@ var ProjectView = {
           :moments="timeline.moments"
           :selected-range="selectedRange"
           :audio-lane="timeline.audioLane"
+          :editing-overlay="editingOverlay"
         />
 
         <div class="timeline-section">
@@ -2670,7 +2909,9 @@ var ProjectView = {
           :local-files="localFiles"
           :moments="timeline.moments"
           @add="addOperation"
+          @update="updateOperation"
           @remove="removeOperation"
+          @editing-overlay="setEditingOverlay"
         />
       </aside>
 

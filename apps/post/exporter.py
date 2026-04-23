@@ -518,15 +518,121 @@ def _apply_video_ops(parts, current_label, flat_ops, total_duration, next_moment
                 parts, current_label, t, t_end - t, total_duration, transform, f"vrt{uid}"
             )
 
+        elif op_type == "text_overlay":
+            current_label = _apply_text_overlay(parts, current_label, p, t, t_end, W, H, uid)
+
     return current_label
+
+
+def _apply_text_overlay(parts, current_label, p, t, t_end, W, H, uid):
+    """
+    Render a comic text sticker onto a transparent canvas, rotate it, then
+    overlay on the main video only during [t, t_end].
+    params: text, font, color (#rrggbb), size_pct (0..100 of min(W,H)),
+            x_pct, y_pct (0..1, overlay center position),
+            rotation_deg (-180..180), outline (bool), shadow (bool),
+            animation ("pop" | "shake" | null)
+    """
+    from config import COMIC_FONTS, DEFAULT_COMIC_FONT
+    import math
+
+    text = _escape_drawtext((p.get("text") or "").strip())
+    if not text:
+        return current_label
+    font_key = (p.get("font") or DEFAULT_COMIC_FONT).lower()
+    fontfile = COMIC_FONTS.get(font_key) or COMIC_FONTS.get(DEFAULT_COMIC_FONT)
+    if not fontfile:
+        return current_label
+
+    color = _validate_hex(p.get("color"), "#ffde59")
+    try:
+        size_pct = float(p.get("size_pct", 18))
+    except (TypeError, ValueError):
+        size_pct = 18.0
+    size_pct = max(2.0, min(60.0, size_pct))
+    fontsize = max(12, int(round(min(W, H) * size_pct / 100.0)))
+    try:
+        x_pct = float(p.get("x_pct", 0.5))
+        y_pct = float(p.get("y_pct", 0.5))
+    except (TypeError, ValueError):
+        x_pct = y_pct = 0.5
+    x_pct = max(0.0, min(1.0, x_pct))
+    y_pct = max(0.0, min(1.0, y_pct))
+    try:
+        rot_deg = float(p.get("rotation_deg", 0))
+    except (TypeError, ValueError):
+        rot_deg = 0.0
+    rot_deg = max(-180.0, min(180.0, rot_deg))
+    rot_rad = rot_deg * math.pi / 180.0
+    outline = bool(p.get("outline", True))
+    shadow = bool(p.get("shadow", True))
+
+    # Approximate text-box size (canvas must be big enough for rotation).
+    # Conservative: width = len(text)*fontsize*0.7, height = fontsize*1.6.
+    approx_w = max(fontsize, int(len(text) * fontsize * 0.75) + 2 * fontsize)
+    approx_h = int(fontsize * 2.2)
+    diag = int(math.hypot(approx_w, approx_h)) + 16  # square canvas for rotate
+
+    # 1. Transparent canvas with drawtext centered
+    canvas_dur = t_end - t
+    border_part = ":borderw=6:bordercolor=black" if outline else ""
+    shadow_part = ":shadowcolor=black@0.6:shadowx=6:shadowy=8" if shadow else ""
+    txt_label = f"txt{uid}"
+    parts.append(
+        f"color=c=black@0:s={diag}x{diag}:d={canvas_dur:.3f}:r=30,"
+        f"format=rgba,"
+        f"drawtext=fontfile='{fontfile}':text='{text}'"
+        f":fontsize={fontsize}:fontcolor={color}"
+        f"{border_part}{shadow_part}"
+        f":x=(w-text_w)/2:y=(h-text_h)/2"
+        f"[{txt_label}]"
+    )
+
+    # 2. Rotate (fillcolor=none keeps transparency)
+    rot_label = f"txtR{uid}"
+    if abs(rot_deg) > 0.1:
+        parts.append(
+            f"[{txt_label}]rotate={rot_rad:.4f}:c=none:ow={diag}:oh={diag}[{rot_label}]"
+        )
+    else:
+        parts.append(f"[{txt_label}]null[{rot_label}]")
+
+    # 3. Overlay at (x_pct, y_pct) centered, enabled only in [t, t_end]
+    new_label = f"vop{uid}"
+    enable = f"between(t,{t:.3f},{t_end:.3f})"
+    # overlay x/y position the top-left of the small canvas
+    ox = f"(main_w*{x_pct:.4f}-overlay_w/2)"
+    oy = f"(main_h*{y_pct:.4f}-overlay_h/2)"
+    parts.append(
+        f"[{current_label}][{rot_label}]overlay={ox}:{oy}:"
+        f"enable='{enable}':format=auto[{new_label}]"
+    )
+    return new_label
+
+
+def _validate_hex(s, default):
+    import re as _re
+    if not s:
+        return default
+    s = str(s).strip()
+    if _re.fullmatch(r"#[0-9a-fA-F]{6}", s):
+        return s
+    return default
 
 
 def _apply_audio_ops(cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, total_duration):
     """
-    Apply audio_mix and audio_replace. Extra media files become additional
-    inputs appended to `cmd`. Returns (new_audio_label, inputs_added_count).
+    Apply audio_mix, audio_replace, and text_overlay sound. Extra media files
+    become additional inputs appended to `cmd`. Returns
+    (new_audio_label, inputs_added_count).
     """
-    ops = [o for o in flat_ops if o["type"] in ("audio_mix", "audio_replace")]
+    def _is_audio_op(o):
+        if o["type"] in ("audio_mix", "audio_replace"):
+            return True
+        if o["type"] == "text_overlay":
+            return bool((o.get("params") or {}).get("sound_file_id"))
+        return False
+    ops = [o for o in flat_ops if _is_audio_op(o)]
     if not ops or not audio_label:
         return audio_label, 0
 
@@ -536,7 +642,10 @@ def _apply_audio_ops(cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, tot
 
     for op in sorted(ops, key=lambda o: o["tl_start"]):
         p = op.get("params", {}) or {}
-        mfid = p.get("media_file_id")
+        if op["type"] == "text_overlay":
+            mfid = p.get("sound_file_id")
+        else:
+            mfid = p.get("media_file_id")
         if not mfid:
             continue
         path = _resolve_media_file_path(slug, mfid)
@@ -590,6 +699,20 @@ def _apply_audio_ops(cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, tot
                 f"[{muted}][{extra_prepped}]amix=inputs=2:duration=first:normalize=0[{combined}]"
             )
             audio_label = combined
+
+        elif op["type"] == "text_overlay":
+            try:
+                svol = float(p.get("sound_volume", 1.0))
+            except (TypeError, ValueError):
+                svol = 1.0
+            svol = max(0.0, min(2.0, svol))
+            gained = f"aex{uid}g"
+            parts.append(f"[{extra_prepped}]volume={svol}[{gained}]")
+            mixed = f"atxt{uid}"
+            parts.append(
+                f"[{audio_label}][{gained}]amix=inputs=2:duration=first:normalize=0[{mixed}]"
+            )
+            audio_label = mixed
 
     return audio_label, inputs_added
 

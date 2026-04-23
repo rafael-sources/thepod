@@ -22,10 +22,10 @@ VALID_OP_TYPES = {
     "cut_before", "cut_after", "insert_clip", "switch_video",
     "zoom_in", "zoom_out", "color_effect", "audio_replace",
     "audio_mix", "subtitle", "to_vertical", "remove_silences",
-    "jump_to_moment", "switch_track",
+    "jump_to_moment", "switch_track", "text_overlay",
 }
 ABSOLUTE_ALLOWED = {"zoom_in", "zoom_out", "color_effect", "subtitle", "to_vertical",
-                    "jump_to_moment", "switch_track"}
+                    "jump_to_moment", "switch_track", "text_overlay"}
 
 
 def _ensure_project(slug):
@@ -995,6 +995,35 @@ def remove_silences_from_clip(slug, clip_id):
             "silences_detected": len(silences),
             "removed_seconds": round(removed, 2),
             "kept_seconds": round(kept, 2),
+        })
+    finally:
+        db.close()
+
+
+@bp.put("/api/projects/<slug>/operations/<int:op_id>")
+@require_auth
+def update_operation(slug, op_id):
+    _ensure_project(slug)
+    data = request.get_json(silent=True) or {}
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        return jsonify({"error": "params debe ser un objeto"}), 400
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT id FROM operations WHERE id=?", (op_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "operación no encontrada"}), 404
+        db.execute(
+            "UPDATE operations SET params=? WHERE id=?",
+            (json.dumps(params), op_id),
+        )
+        db.commit()
+        r = db.execute(
+            "SELECT id, moment_id, type, params FROM operations WHERE id=?", (op_id,),
+        ).fetchone()
+        return jsonify({
+            "id": r["id"], "moment_id": r["moment_id"], "type": r["type"],
+            "params": json.loads(r["params"]) if r["params"] else {},
         })
     finally:
         db.close()

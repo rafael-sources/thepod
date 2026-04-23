@@ -48,6 +48,16 @@ DRAWTEXT_FONT_CANDIDATES = [
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
 ]
 
+# Comic-style fonts shipped with postpod (in static/fonts/). Keys match the
+# frontend's font picker. All are OFL/Apache-licensed (redistributable).
+COMIC_FONTS = {
+    "bangers":          str(BASE_DIR / "static" / "fonts" / "Bangers-Regular.ttf"),
+    "titan_one":        str(BASE_DIR / "static" / "fonts" / "TitanOne-Regular.ttf"),
+    "luckiest_guy":     str(BASE_DIR / "static" / "fonts" / "LuckiestGuy-Regular.ttf"),
+    "permanent_marker": str(BASE_DIR / "static" / "fonts" / "PermanentMarker-Regular.ttf"),
+}
+DEFAULT_COMIC_FONT = "bangers"
+
 
 EXPORT_PRESETS = [
     {"id": "yt_1080p_30",  "name": "YouTube 1080p 30fps",       "width": 1920, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "YouTube"},

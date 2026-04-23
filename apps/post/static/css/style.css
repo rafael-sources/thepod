@@ -3,6 +3,28 @@
    Warm dark palette, serif display, mono timecodes, signal-light accents.
    ========================================================================== */
 
+/* Comic-style fonts used by the text_overlay operation (shipped locally). */
+@font-face {
+  font-family: "Bangers";
+  src: url("/static/fonts/Bangers-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titan One";
+  src: url("/static/fonts/TitanOne-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Luckiest Guy";
+  src: url("/static/fonts/LuckiestGuy-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Permanent Marker";
+  src: url("/static/fonts/PermanentMarker-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
 :root {
   /* Surfaces — brightness bumped so panels, borders and raised chrome
      detach clearly from the base ink background in dark mode. */
@@ -770,6 +792,7 @@ label { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: 
   display: flex;
   align-items: center;
   justify-content: center;
+  container-type: size;        /* enables cqmin unit for text-overlay sizing */
   box-shadow:
     inset 0 0 0 1px rgba(244,199,112,0.06),
     0 20px 60px -20px rgba(0,0,0,0.9);
@@ -807,6 +830,53 @@ label { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: 
 }
 .clip-indicator .tiny { color: var(--signal); }
 .clip-indicator .mono { font-size: 11px; letter-spacing: 0.03em; }
+
+.text-overlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 7;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.text-overlay-edit {
+  position: absolute;
+  z-index: 9;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.text-overlay-box {
+  position: absolute;
+  inset: -10px;
+  border: 1.5px dashed var(--signal);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.text-overlay-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: var(--signal);
+  color: var(--ink-deep);
+  border: 1.5px solid var(--ink-deep);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  cursor: pointer;
+}
+.handle-rotate { top: -34px; left: 50%; transform: translateX(-50%); cursor: grab; }
+.handle-rotate:active { cursor: grabbing; }
+.handle-resize { bottom: -18px; right: -18px; cursor: nwse-resize; }
 
 .subtitle-overlay {
   position: absolute;
