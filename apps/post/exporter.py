@@ -721,7 +721,7 @@ def _apply_audio_ops(cmd, parts, audio_label, flat_ops, n_clip_inputs, slug, tot
 # Command builder
 # ---------------------------------------------------------------------------
 
-def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
+def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path, burn_captions=None):
     """Returns (cmd_list, effective_duration_seconds)."""
     preset = find_preset(preset_id)
     if not preset:
@@ -956,6 +956,33 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path):
             parts, audio_label, keep_ranges, "a", total_duration, "aout"
         )
 
+    # Burn-in captions: append a `subtitles=` filter on the final video stream
+    # using the SRT sidecar of the requested media file.
+    if video_label and burn_captions:
+        from db import get_db as _get_db
+        db = _get_db(slug)
+        try:
+            mf = db.execute(
+                "SELECT filename, file_type FROM media_files WHERE id=?",
+                (burn_captions.get("media_file_id"),),
+            ).fetchone()
+        finally:
+            db.close()
+        if mf:
+            srt_path = (
+                PROJECTS_DIR / slug / "media" / mf["file_type"]
+                / f"{mf['filename']}.{burn_captions.get('language')}.srt"
+            )
+            if srt_path.is_file():
+                # Single-quote-escape the path for the filter expression.
+                srt_arg = str(srt_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+                parts.append(
+                    f"[{video_label}]subtitles='{srt_arg}'"
+                    f":force_style='Fontsize=22,PrimaryColour=&Hffffff&,OutlineColour=&H000000&,BorderStyle=3,Outline=2'"
+                    f"[vsub]"
+                )
+                video_label = "vsub"
+
     effective_from_ranges = sum(e - s for s, e in keep_ranges)
 
     filter_complex = ";".join(parts)
@@ -1016,7 +1043,10 @@ def run_export(slug: str, job_id: int):
             (job_id,),
         )
         db.commit()
-        job = db.execute("SELECT preset_id FROM export_jobs WHERE id=?", (job_id,)).fetchone()
+        job = db.execute(
+            "SELECT preset_id, burn_captions_json FROM export_jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
     finally:
         db.close()
     preset_id = job["preset_id"]
@@ -1025,6 +1055,13 @@ def run_export(slug: str, job_id: int):
         _update_job(slug, job_id, status="error", error_msg=f"preset desconocido: {preset_id}")
         return
 
+    burn_captions = None
+    if job["burn_captions_json"]:
+        try:
+            burn_captions = json.loads(job["burn_captions_json"])
+        except (TypeError, ValueError):
+            burn_captions = None
+
     ext = preset["format"]
     exports_dir = PROJECTS_DIR / slug / "exports"
     exports_dir.mkdir(parents=True, exist_ok=True)
@@ -1032,7 +1069,7 @@ def run_export(slug: str, job_id: int):
     out_path = exports_dir / out_rel
 
     try:
-        cmd, total_duration = build_ffmpeg_command(slug, preset_id, out_path)
+        cmd, total_duration = build_ffmpeg_command(slug, preset_id, out_path, burn_captions=burn_captions)
     except Exception as e:
         _update_job(slug, job_id, status="error", error_msg=f"no se pudo construir el comando: {e}")
         return

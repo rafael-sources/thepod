@@ -7,6 +7,7 @@ from pathlib import Path
 from flask import Flask, Response, abort, render_template, send_from_directory
 
 import auth
+import captions
 import export_api
 import files as files_bp
 import integrations
@@ -99,6 +100,7 @@ def create_app():
     app.register_blueprint(timeline_api.bp)
     app.register_blueprint(export_api.bp)
     app.register_blueprint(integrations.bp)
+    app.register_blueprint(captions.bp)
 
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
     GLOBAL_DIR.mkdir(parents=True, exist_ok=True)

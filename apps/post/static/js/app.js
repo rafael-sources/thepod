@@ -433,8 +433,12 @@ var VideoPlayer = {
     moments: Array,         // all moments with their operations, used for jump_to_moment
     selectedRange: Object,  // { start, end } | null — range selected by drag on the timeline
     audioLane: Array,       // parallel audio lane clips for preview playback
+    textOverlaySounds: Array, // one-shot sounds bound to text_overlay ops
     editingOverlay: Object, // shared ref with OpForm for WYSIWYG text_overlay editing
+    liveCaption: String,    // current SRT segment text or null
+    captionsEnabled: Boolean,
   },
+  emits: ["toggle-captions"],
   setup(props) {
     const videoEl = ref(null);
     const rangeMode = ref("free");
@@ -627,6 +631,7 @@ var VideoPlayer = {
       props.playerState.currentTime = timelineT;
       lastTimelineT.value = timelineT;
       _syncLaneAudio();
+      _syncOverlaySounds();
 
       // jump_to_moment: if we just crossed a moment's position and it has a
       // jump op, seek to the target moment. Cooldown prevents immediate
@@ -734,13 +739,68 @@ var VideoPlayer = {
       }
     }
     watch(() => props.audioLane, _syncLaneAudio, { deep: true });
+
+    // One-shot text_overlay sounds: keep one HTMLAudioElement per op id.
+    // Keyed by `${op.id}|${url}` so url changes replace the element cleanly.
+    const overlaySoundEls = new Map();     // key -> HTMLAudioElement
+    const overlayLastFired = new Map();    // op.id -> last tl_start that fired
+    function _soundKey(s) { return s.id + "|" + s.url; }
+    const DBG = new URLSearchParams(location.search).has("dbg");
+    function _syncOverlaySounds() {
+      const t = props.playerState.currentTime || 0;
+      const v = videoEl.value;
+      const videoPlaying = v && !v.paused;
+      const list = props.textOverlaySounds || [];
+      if (DBG) console.log("[overlay-sync] t=", t.toFixed(3), "playing=", videoPlaying, "sounds=", list.length, list);
+      const wantedKeys = new Set();
+      for (const s of list) {
+        const key = _soundKey(s);
+        wantedKeys.add(key);
+        let el = overlaySoundEls.get(key);
+        if (!el) {
+          el = new Audio();
+          el.preload = "auto";
+          el.src = s.url;
+          overlaySoundEls.set(key, el);
+        }
+        el.volume = Math.max(0, Math.min(2, s.volume || 1));
+        const inRange = t >= s.tl_start - 0.02 && t < s.tl_end - 0.02;
+        if (inRange && videoPlaying) {
+          if (overlayLastFired.get(s.id) !== s.tl_start) {
+            overlayLastFired.set(s.id, s.tl_start);
+            if (DBG) console.log("[overlay-fire]", s.id, "url=", s.url, "vol=", el.volume);
+            try {
+              el.currentTime = Math.max(0, t - s.tl_start);
+              el.play().then(() => { if (DBG) console.log("[overlay-fire OK]", s.id); })
+                       .catch(err => { if (DBG) console.warn("[overlay-fire FAIL]", s.id, err); });
+            } catch (err) { if (DBG) console.warn("[overlay-fire EXC]", err); }
+          }
+        } else {
+          if (!el.paused && t < s.tl_start - 0.02) {
+            try { el.pause(); } catch (_) {}
+            overlayLastFired.delete(s.id);
+          }
+          if (t >= s.tl_end - 0.02) overlayLastFired.delete(s.id);
+        }
+      }
+      for (const [key, el] of overlaySoundEls) {
+        if (!wantedKeys.has(key)) {
+          try { el.pause(); el.src = ""; } catch (_) {}
+          overlaySoundEls.delete(key);
+        }
+      }
+    }
+    watch(() => props.textOverlaySounds, _syncOverlaySounds, { deep: true, immediate: true });
+
     onBeforeUnmount(() => {
       for (const [, el] of laneAudioEls) { try { el.pause(); el.src = ""; } catch (_) {} }
       laneAudioEls.clear();
+      for (const [, el] of overlaySoundEls) { try { el.pause(); el.src = ""; } catch (_) {} }
+      overlaySoundEls.clear();
     });
 
-    function onPlay() { props.playerState.isPlaying = true; _syncLaneAudio(); }
-    function onPause() { props.playerState.isPlaying = false; _syncLaneAudio(); }
+    function onPlay() { props.playerState.isPlaying = true; _syncLaneAudio(); _syncOverlaySounds(); }
+    function onPause() { props.playerState.isPlaying = false; _syncLaneAudio(); _syncOverlaySounds(); }
     function onVolumeChange() {
       if (videoEl.value) props.playerState.volume = videoEl.value.volume;
     }
@@ -876,6 +936,7 @@ var VideoPlayer = {
             :class="'pos-' + (s.position || 'bottom')"
           >{{ s.text }}</div>
         </template>
+        <div v-if="liveCaption" class="caption-overlay">{{ liveCaption }}</div>
         <template v-if="effects && effects.textOverlays && effects.textOverlays.length">
           <div
             v-for="(ov, i) in effects.textOverlays"
@@ -940,6 +1001,9 @@ var VideoPlayer = {
         </div>
 
         <div class="spacer"></div>
+
+        <button class="btn-range" :class="{primary: captionsEnabled}"
+                @click="$emit('toggle-captions')" title="Mostrar/ocultar captions">CC</button>
 
         <div class="volume">
           <span>VOL</span>
@@ -1389,7 +1453,7 @@ var MomentsList = {
 
 var FilesPanel = {
   props: { project: Object },
-  emits: ["add-to-timeline", "refresh"],
+  emits: ["add-to-timeline", "refresh", "captions-changed"],
   setup(props, { emit }) {
     const tab = ref("local");
     const localFiles = ref([]);
@@ -1399,6 +1463,79 @@ var FilesPanel = {
     const uploadProgress = ref(0);
     const uploadName = ref("");
     const fileInput = ref(null);
+
+    // Captions state
+    const captionsModalFor = ref(null);   // file row or null
+    const captionLanguages = ref([]);
+    const captionForm = reactive({ language: "es", model: "small" });
+    const captionJob = ref(null);          // current job for the open file
+    const captionList = ref([]);           // existing SRT sidecars for the open file
+    let captionPoll = null;
+
+    async function openCaptionsModal(f, ev) {
+      ev.stopPropagation();
+      captionsModalFor.value = f;
+      captionJob.value = null;
+      captionList.value = [];
+      if (!captionLanguages.value.length) {
+        try { captionLanguages.value = await api("/api/captions/languages"); } catch (_) {}
+      }
+      await refreshCaptionList();
+    }
+    function closeCaptionsModal() {
+      captionsModalFor.value = null;
+      if (captionPoll) { clearInterval(captionPoll); captionPoll = null; }
+    }
+    async function refreshCaptionList() {
+      const f = captionsModalFor.value;
+      if (!f) return;
+      try {
+        const data = await api(`/api/projects/${props.project.slug}/files/${f.id}/captions`);
+        captionList.value = data.captions || [];
+        const running = (data.jobs || []).find(j => j.status === "pending" || j.status === "running");
+        if (running) {
+          captionJob.value = running;
+          startPollingJob(running.id);
+        }
+      } catch (_) {}
+    }
+    function startPollingJob(jobId) {
+      if (captionPoll) clearInterval(captionPoll);
+      captionPoll = setInterval(async () => {
+        try {
+          const j = await api(`/api/projects/${props.project.slug}/caption-jobs/${jobId}`);
+          captionJob.value = j;
+          if (j.status === "done" || j.status === "error") {
+            clearInterval(captionPoll); captionPoll = null;
+            await refreshCaptionList();
+            emit("captions-changed");
+          }
+        } catch (_) {}
+      }, 2000);
+    }
+    async function generateCaptions() {
+      const f = captionsModalFor.value;
+      if (!f) return;
+      try {
+        const j = await api(`/api/projects/${props.project.slug}/files/${f.id}/captions`, {
+          method: "POST", body: { language: captionForm.language, model: captionForm.model },
+        });
+        captionJob.value = j;
+        if (j.id) startPollingJob(j.id);
+      } catch (e) { error.value = e.message; }
+    }
+    async function deleteCaption(lang) {
+      const f = captionsModalFor.value;
+      if (!f) return;
+      if (!confirm(`¿Eliminar las captions en ${lang}?`)) return;
+      try {
+        await api(`/api/projects/${props.project.slug}/files/${f.id}/captions/${lang}`, { method: "DELETE" });
+        await refreshCaptionList();
+        emit("captions-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    onBeforeUnmount(() => { if (captionPoll) clearInterval(captionPoll); });
 
     async function load() {
       try {
@@ -1470,6 +1607,8 @@ var FilesPanel = {
     return {
       tab, localFiles, globalFiles, error, uploading, uploadProgress, uploadName, fileInput,
       upload, removeFile, makeGlobal, addToTimeline, formatSize, formatDurationCompact, load,
+      captionsModalFor, captionLanguages, captionForm, captionJob, captionList,
+      openCaptionsModal, closeCaptionsModal, generateCaptions, deleteCaption,
     };
   },
   template: `
@@ -1506,6 +1645,7 @@ var FilesPanel = {
               </div>
             </div>
             <div class="actions">
+              <button v-if="f.file_type !== 'image'" class="icon ghost" @click="openCaptionsModal(f, $event)" title="Generar captions con Whisper">🎙</button>
               <button class="icon ghost" @click="makeGlobal(f, $event)" title="Mover a globales">⇪</button>
               <button class="icon danger" @click="removeFile(f, $event)" title="Eliminar">✕</button>
             </div>
@@ -1524,6 +1664,58 @@ var FilesPanel = {
                 {{ formatSize(f.size_bytes) }}<span v-if="f.duration"> · {{ formatDurationCompact(f.duration) }}</span>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="captionsModalFor" class="modal-backdrop" @click.self="closeCaptionsModal">
+        <div class="modal" style="width: 460px;">
+          <div class="eyebrow">CAPTIONS · WHISPER</div>
+          <h3 style="margin: 4px 0 12px;">Generar subtítulos</h3>
+          <p class="muted" style="margin-bottom: 14px; font-size: 12px;">
+            Para <span class="mono">{{ captionsModalFor.original_name }}</span>.
+            Whisper corre en CPU — esperá ~0.5-1× la duración del clip.
+          </p>
+
+          <div v-if="captionList.length" style="margin-bottom: 14px;">
+            <div class="tiny" style="margin-bottom: 6px;">EXISTENTES</div>
+            <div v-for="c in captionList" :key="c.language" class="invite-row" style="padding: 4px 0;">
+              <span class="who mono">{{ c.language }} · {{ c.filename }}</span>
+              <a :href="c.url" target="_blank" class="join-pill">↓ srt</a>
+              <button class="icon danger" @click="deleteCaption(c.language)">✕</button>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-bottom: 12px;">
+            <label>Idioma</label>
+            <select v-model="captionForm.language">
+              <option v-for="l in captionLanguages" :key="l.code" :value="l.code">{{ l.label }}</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom: 14px;">
+            <label>Modelo (más grande = mejor calidad, más lento)</label>
+            <select v-model="captionForm.model">
+              <option value="tiny">tiny (más rápido)</option>
+              <option value="base">base</option>
+              <option value="small">small (recomendado)</option>
+              <option value="medium">medium</option>
+              <option value="large-v3">large-v3 (mejor)</option>
+            </select>
+          </div>
+
+          <div v-if="captionJob" class="tiny muted" style="margin-bottom: 10px;">
+            <span v-if="captionJob.status === 'pending'">⏳ Encolado…</span>
+            <span v-else-if="captionJob.status === 'running'">🔄 Procesando ({{ captionJob.progress || 0 }}%)…</span>
+            <span v-else-if="captionJob.status === 'done'" style="color: var(--signal-cool);">✓ Listo</span>
+            <span v-else-if="captionJob.status === 'error'" style="color: var(--signal-hot);">❌ {{ captionJob.error_msg }}</span>
+          </div>
+
+          <div class="row right" style="gap: 8px;">
+            <button class="ghost" @click="closeCaptionsModal">Cerrar</button>
+            <button class="primary" @click="generateCaptions"
+                    :disabled="captionJob && (captionJob.status === 'pending' || captionJob.status === 'running')">
+              Generar
+            </button>
           </div>
         </div>
       </div>
@@ -1563,7 +1755,40 @@ var ClipsPanel = {
       emit("reorder", { id: clip.id, position: newPos });
     }
 
-    return { editing, trimStart, trimEnd, openTrim, applyTrim, move, formatDurationCompact, formatShort };
+    // ---- Drag-to-reorder ----
+    const draggingId = ref(null);
+    const dragOverId = ref(null);
+    function onDragStart(ev, clip) {
+      draggingId.value = clip.id;
+      ev.dataTransfer.effectAllowed = "move";
+      // Some browsers require setData to make the drag actually start.
+      try { ev.dataTransfer.setData("text/plain", String(clip.id)); } catch (_) {}
+    }
+    function onDragOver(ev, clip) {
+      if (draggingId.value == null || draggingId.value === clip.id) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      dragOverId.value = clip.id;
+    }
+    function onDragLeave(clip) {
+      if (dragOverId.value === clip.id) dragOverId.value = null;
+    }
+    function onDrop(ev, targetClip) {
+      ev.preventDefault();
+      const sourceId = draggingId.value;
+      draggingId.value = null;
+      dragOverId.value = null;
+      if (sourceId == null || sourceId === targetClip.id) return;
+      const targetPos = targetClip.position;
+      emit("reorder", { id: sourceId, position: targetPos });
+    }
+    function onDragEnd() {
+      draggingId.value = null;
+      dragOverId.value = null;
+    }
+
+    return { editing, trimStart, trimEnd, openTrim, applyTrim, move, formatDurationCompact, formatShort,
+             draggingId, dragOverId, onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd };
   },
   template: `
     <aside class="clips-panel">
@@ -1579,9 +1804,16 @@ var ClipsPanel = {
       </div>
 
       <div v-else class="clip-stack">
-        <div v-for="(clip, idx) in clips" :key="clip.id" class="clip-card">
+        <div v-for="(clip, idx) in clips" :key="clip.id" class="clip-card"
+             :class="{ dragging: draggingId === clip.id, 'drag-over': dragOverId === clip.id }"
+             draggable="true"
+             @dragstart="onDragStart($event, clip)"
+             @dragover="onDragOver($event, clip)"
+             @dragleave="onDragLeave(clip)"
+             @drop="onDrop($event, clip)"
+             @dragend="onDragEnd">
           <div class="clip-card-head">
-            <span class="pos">#{{ idx + 1 }}</span>
+            <span class="pos drag-handle" title="Arrastrar para reordenar">⋮⋮ #{{ idx + 1 }}</span>
             <div v-if="clip.source && clip.source.thumbnail_url" class="thumb-small" :style="{ backgroundImage: 'url(' + clip.source.thumbnail_url + ')' }"></div>
             <div class="clip-name" :title="clip.source ? clip.source.original_name : ''">
               {{ clip.source ? clip.source.original_name : '(archivo borrado)' }}
@@ -1631,7 +1863,7 @@ var ClipsPanel = {
    ========================================================================== */
 
 var OpForm = {
-  props: { type: String, clips: Array, localFiles: Array, moments: Array, currentMomentId: Number,
+  props: { type: String, clips: Array, localFiles: Array, globalFiles: Array, moments: Array, currentMomentId: Number,
            initialParams: { type: Object, default: null } },
   emits: ["submit", "cancel", "editing-overlay"],
   setup(props, { emit }) {
@@ -1663,9 +1895,15 @@ var OpForm = {
         shadow: true,
         sound_file_id: null,
         sound_volume: 1.0,
+        _sound_selector: "",
       });
       // If editing an existing op, overlay initialParams onto the defaults.
       if (props.initialParams) Object.assign(params, props.initialParams);
+      // Seed the sound dropdown from existing sound_file_id
+      if (t === "text_overlay") {
+        if (params.sound_file_id) params._sound_selector = "local:" + params.sound_file_id;
+        else params._sound_selector = "";
+      }
     }, { immediate: true });
 
     // Keep the video-frame WYSIWYG overlay in sync with the form params.
@@ -1677,6 +1915,10 @@ var OpForm = {
     onBeforeUnmount(() => emit("editing-overlay", null));
 
     const audioFiles = computed(() => (props.localFiles || []).filter(f => f.file_type === "audio"));
+    // Global audio (shared library) exposed so the user can pick one without
+    // importing first. When a global is chosen, the caller silently imports
+    // it into the project before saving the op.
+    const globalAudio = computed(() => (props.globalFiles || []).filter(f => f.file_type === "audio"));
     const videoFiles = computed(() => (props.localFiles || []).filter(f => f.file_type === "video"));
     const otherMoments = computed(() =>
       [...(props.moments || [])]
@@ -1684,9 +1926,26 @@ var OpForm = {
         .sort((a, b) => a.timeline_seconds - b.timeline_seconds)
     );
 
-    function submit() { emit("submit", { ...params }); }
+    function onSoundPick() {
+      const v = params._sound_selector || "";
+      if (!v) { params.sound_file_id = null; params._sound_global = null; return; }
+      if (v.startsWith("local:")) {
+        params.sound_file_id = parseInt(v.slice(6), 10);
+        params._sound_global = null;
+      } else if (v.startsWith("global:")) {
+        params.sound_file_id = null;
+        params._sound_global = v.slice(7);  // filename; parent resolves to local id on submit
+      }
+    }
 
-    return { params, audioFiles, videoFiles, otherMoments, COMIC_FONTS, submit };
+    function submit() {
+      const out = { ...params };
+      delete out._sound_selector;
+      // Keep _sound_global so parent can import before saving.
+      emit("submit", out);
+    }
+
+    return { params, audioFiles, videoFiles, globalAudio, otherMoments, COMIC_FONTS, submit, onSoundPick };
   },
   template: `
     <div class="op-form">
@@ -1818,10 +2077,17 @@ var OpForm = {
             <input type="checkbox" v-model="params.shadow"> Sombra
           </label>
         </div>
-        <div class="op-field"><label>Sonido (opcional — archivo de audio del proyecto)</label>
-          <select v-model.number="params.sound_file_id">
-            <option :value="null">— sin sonido —</option>
-            <option v-for="f in audioFiles" :key="f.id" :value="f.id">{{ f.original_name }}</option>
+        <div class="op-field"><label>Sonido (opcional)</label>
+          <select v-model="params._sound_selector" @change="onSoundPick">
+            <option value="">— sin sonido —</option>
+            <optgroup label="Locales del proyecto">
+              <option v-for="f in audioFiles" :key="'l-' + f.id" :value="'local:' + f.id">{{ f.original_name }}</option>
+            </optgroup>
+            <optgroup label="Librería global">
+              <option v-for="f in globalAudio" :key="'g-' + f.filename" :value="'global:' + f.filename">
+                {{ f.original_name || f.filename }}
+              </option>
+            </optgroup>
           </select>
         </div>
         <div v-if="params.sound_file_id" class="op-field"><label>Volumen sonido</label>
@@ -1861,7 +2127,7 @@ var OpForm = {
 
 var OperationsPanel = {
   components: { OpForm },
-  props: { moment: Object, clips: Array, localFiles: Array, moments: Array },
+  props: { moment: Object, clips: Array, localFiles: Array, globalFiles: Array, moments: Array },
   emits: ["add", "update", "remove", "editing-overlay"],
   setup(props, { emit }) {
     const adding = ref(false);
@@ -1967,7 +2233,7 @@ var OperationsPanel = {
             <option v-for="opt in availableTypes" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
           <OpForm :type="editingOp ? editingOp.type : newType"
-                  :clips="clips" :local-files="localFiles"
+                  :clips="clips" :local-files="localFiles" :global-files="globalFiles"
                   :moments="moments" :current-moment-id="moment ? moment.id : null"
                   :initial-params="editingOp ? editingOp.params : null"
                   @submit="submitOp" @cancel="cancelForm"
@@ -1992,11 +2258,32 @@ var ExportModal = {
   setup(props, { emit }) {
     const presets = ref([]);
     const selectedId = ref(null);
-    const job = ref(null);       // current running/done job
+    const job = ref(null);
     const history = ref([]);
     const busy = ref(false);
     const error = ref("");
     let pollHandle = null;
+
+    // Burn-in captions: language + which clip's source the SRT comes from.
+    const burnCaptions = ref(false);
+    const burnCaptionLang = ref(localStorage.getItem("postpod.captionsLanguage") || "es");
+    const availableCaptions = ref([]); // [{media_file_id, original_name, languages:[]}]
+
+    async function loadAvailableCaptions() {
+      try {
+        const files = await api(`/api/projects/${props.slug}/files`);
+        const videos = files.filter(f => f.file_type === "video" || f.file_type === "audio");
+        const out = [];
+        for (const f of videos) {
+          try {
+            const data = await api(`/api/projects/${props.slug}/files/${f.id}/captions`);
+            const langs = (data.captions || []).map(c => c.language);
+            if (langs.length) out.push({ media_file_id: f.id, original_name: f.original_name, languages: langs });
+          } catch (_) {}
+        }
+        availableCaptions.value = out;
+      } catch (_) {}
+    }
 
     async function loadPresets() {
       try { presets.value = await api("/api/export/presets"); }
@@ -2013,9 +2300,17 @@ var ExportModal = {
       error.value = "";
       job.value = null;
       try {
+        const body = { preset_id: selectedId.value };
+        if (burnCaptions.value && burnCaptionLang.value && availableCaptions.value.length) {
+          // Use the first clip's source as the captions origin (matches the
+          // composite layout). Server resolves the SRT path.
+          body.burn_captions = {
+            media_file_id: availableCaptions.value[0].media_file_id,
+            language: burnCaptionLang.value,
+          };
+        }
         const r = await api(`/api/projects/${props.slug}/export`, {
-          method: "POST",
-          body: { preset_id: selectedId.value },
+          method: "POST", body,
         });
         job.value = { id: r.job_id, status: r.status, progress: 0 };
         poll();
@@ -2081,10 +2376,11 @@ var ExportModal = {
         : null
     );
 
-    onMounted(() => { loadPresets(); loadHistory(); });
+    onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); });
     onBeforeUnmount(() => { if (pollHandle) clearTimeout(pollHandle); });
 
-    return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, start, cancel, reset, loadHistory };
+    return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, start, cancel, reset, loadHistory,
+             burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
@@ -2162,6 +2458,18 @@ var ExportModal = {
               <a v-if="h.status === 'done' && h.output_file" :href="'/api/projects/' + slug + '/export/' + h.id + '/download'" class="kbd" style="text-decoration: none; font-size: 10px; padding: 3px 8px;">↓</a>
             </div>
           </div>
+        </div>
+
+        <div v-if="availableCaptions.length" class="form-row" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ink-line);">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; letter-spacing: 0;">
+            <input type="checkbox" v-model="burnCaptions">
+            Quemar captions en el video
+          </label>
+          <select v-if="burnCaptions" v-model="burnCaptionLang" style="margin-top: 8px;">
+            <option v-for="lang in availableCaptions[0].languages" :key="lang" :value="lang">
+              {{ lang }} — {{ availableCaptions[0].original_name }}
+            </option>
+          </select>
         </div>
 
         <div v-if="error" class="error">{{ error }}</div>
@@ -2266,6 +2574,7 @@ var ProjectView = {
     const silenceClip = ref(null);
     const showExport = ref(false);
     const localFiles = ref([]);
+    const globalFiles = ref([]);
     const playerState = reactive({
       currentTime: 0,
       duration: 0,
@@ -2342,6 +2651,30 @@ var ProjectView = {
               });
             }
           }
+        }
+      }
+      return out;
+    });
+
+    // Flat list of text_overlay sound cues: VideoPlayer plays each when the
+    // playhead enters the op's [tl_start, tl_end] window.
+    const textOverlaySounds = computed(() => {
+      const out = [];
+      for (const m of (timeline.moments || [])) {
+        for (const op of (m.operations || [])) {
+          if (op.type !== "text_overlay") continue;
+          const p = op.params || {};
+          if (!p.sound_file_id) continue;
+          const mf = (localFiles.value || []).find(f => f.id === p.sound_file_id);
+          if (!mf) continue;
+          const dur = Number(p.duration_seconds) || 0.8;
+          out.push({
+            id: op.id,
+            url: mf.url,
+            tl_start: Number(m.timeline_seconds),
+            tl_end: Number(m.timeline_seconds) + dur,
+            volume: Number(p.sound_volume ?? 1.0),
+          });
         }
       }
       return out;
@@ -2594,12 +2927,37 @@ var ProjectView = {
       } catch (e) { error.value = e.message; }
     }
 
+    async function _resolveGlobalSound(params) {
+      if (!params || !params._sound_global) {
+        if (params) { delete params._sound_selector; delete params._sound_global; }
+        return params;
+      }
+      try {
+        const imported = await api(`/api/projects/${props.project.slug}/files/import-global`, {
+          method: "POST",
+          body: { filename: params._sound_global, file_type: "audio" },
+        });
+        params.sound_file_id = imported.id;
+        // Keep local file list in sync so textOverlaySounds can find the URL
+        // for preview playback right away (no full reload needed).
+        if (!localFiles.value.some(f => f.id === imported.id)) {
+          localFiles.value = [...localFiles.value, imported];
+        }
+      } catch (e) {
+        error.value = "No se pudo importar el sonido global: " + e.message;
+      }
+      delete params._sound_global;
+      delete params._sound_selector;
+      return params;
+    }
+
     async function addOperation(op) {
       if (!selectedMoment.value) return;
       try {
+        const params = await _resolveGlobalSound({ ...(op.params || {}) });
         const r = await api(`/api/projects/${props.project.slug}/moments/${selectedMoment.value.id}/operations`, {
           method: "POST",
-          body: { type: op.type, params: op.params },
+          body: { type: op.type, params },
         });
         await refreshTimeline();
         if (r && r.silence_result) {
@@ -2628,8 +2986,9 @@ var ProjectView = {
 
     async function updateOperation({ id, type, params }) {
       try {
+        const resolved = await _resolveGlobalSound({ ...(params || {}) });
         await api(`/api/projects/${props.project.slug}/operations/${id}`, {
-          method: "PUT", body: { params },
+          method: "PUT", body: { params: resolved },
         });
         await refreshTimeline();
       } catch (e) { error.value = e.message; }
@@ -2637,6 +2996,92 @@ var ProjectView = {
 
     const editingOverlay = ref(null);
     function setEditingOverlay(p) { editingOverlay.value = p; }
+
+    // ---- Captions display in preview ----
+    const captionsEnabled = ref(localStorage.getItem("postpod.captionsEnabled") === "1");
+    const captionsLanguage = ref(localStorage.getItem("postpod.captionsLanguage") || "");
+    const captionsByMedia = reactive({});  // mediaId -> { lang -> { segments, languages: [] } }
+    watch(captionsEnabled, (v) => {
+      localStorage.setItem("postpod.captionsEnabled", v ? "1" : "0");
+      if (v) ensureCaptionsForActiveClip();
+    });
+    watch(captionsLanguage, (v) => {
+      if (v) localStorage.setItem("postpod.captionsLanguage", v);
+    });
+
+    function _parseSrt(text) {
+      // Minimal SRT parser → [{start, end, text}] in seconds.
+      const out = [];
+      const blocks = text.split(/\r?\n\r?\n/);
+      for (const block of blocks) {
+        const lines = block.split(/\r?\n/).filter(Boolean);
+        if (lines.length < 2) continue;
+        // First line may be a numeric index
+        const tlLineIdx = /-->/.test(lines[0]) ? 0 : 1;
+        const tl = lines[tlLineIdx];
+        const m = tl.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
+        if (!m) continue;
+        const s = (+m[1])*3600 + (+m[2])*60 + (+m[3]) + (+m[4])/1000;
+        const e = (+m[5])*3600 + (+m[6])*60 + (+m[7]) + (+m[8])/1000;
+        const txt = lines.slice(tlLineIdx + 1).join("\n").trim();
+        if (txt) out.push({ start: s, end: e, text: txt });
+      }
+      return out;
+    }
+
+    async function ensureCaptionsForActiveClip() {
+      if (!captionsEnabled.value) return;
+      const clip = clipsWithStarts.value.find(c =>
+        playerState.currentTime >= c.start - 0.01 &&
+        playerState.currentTime <  c.end   + 0.01);
+      if (!clip || !clip.source) return;
+      const mid = clip.source.id;
+      if (captionsByMedia[mid] && captionsByMedia[mid][captionsLanguage.value]) return;
+      try {
+        const data = await api(`/api/projects/${props.project.slug}/files/${mid}/captions`);
+        const langs = (data.captions || []).map(c => c.language);
+        if (!captionsByMedia[mid]) captionsByMedia[mid] = { _languages: langs };
+        else captionsByMedia[mid]._languages = langs;
+        if (!captionsLanguage.value && langs.length) {
+          captionsLanguage.value = langs.find(l => l !== "auto") || langs[0];
+        }
+        const wantLang = captionsLanguage.value;
+        const found = (data.captions || []).find(c => c.language === wantLang);
+        if (found) {
+          const r = await fetch(found.url, { credentials: "same-origin" });
+          if (r.ok) {
+            const text = await r.text();
+            captionsByMedia[mid][wantLang] = _parseSrt(text);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Live caption text for the current playhead position.
+    const liveCaption = computed(() => {
+      if (!captionsEnabled.value) return null;
+      const clip = clipsWithStarts.value.find(c =>
+        playerState.currentTime >= c.start - 0.01 &&
+        playerState.currentTime <  c.end   + 0.01);
+      if (!clip || !clip.source) return null;
+      const track = captionsByMedia[clip.source.id];
+      if (!track) return null;
+      const segs = track[captionsLanguage.value];
+      if (!segs) return null;
+      const localT = (clip.start_offset || 0) + (playerState.currentTime - clip.start);
+      const seg = segs.find(s => s.start <= localT && localT < s.end);
+      return seg ? seg.text : null;
+    });
+
+    // Refresh caption track when clip changes (lazy fetch on demand).
+    watch(() => playerState.currentTime, () => {
+      if (captionsEnabled.value) ensureCaptionsForActiveClip();
+    });
+    function onCaptionsChanged() {
+      // Drop cache so next play re-fetches the (possibly new) SRT.
+      for (const k of Object.keys(captionsByMedia)) delete captionsByMedia[k];
+      if (captionsEnabled.value) ensureCaptionsForActiveClip();
+    }
 
     function onSeek(t) {
       videoPlayerRef.value?.seek(t);
@@ -2680,6 +3125,7 @@ var ProjectView = {
 
     function onFilesRefresh(payload) {
       if (payload?.local) localFiles.value = payload.local;
+      if (payload?.global) globalFiles.value = payload.global;
       if (payload?.fileDeleted !== undefined) {
         // A file was deleted or made global — cascade may have removed clips
         refreshTimeline();
@@ -2717,8 +3163,20 @@ var ProjectView = {
       zoom.endSeconds = end;
     }
 
+    async function loadAllFiles() {
+      try {
+        const [local, glob] = await Promise.all([
+          api(`/api/projects/${props.project.slug}/files`),
+          api(`/api/global/files`),
+        ]);
+        localFiles.value = local;
+        globalFiles.value = glob;
+      } catch (_) { /* silent */ }
+    }
+
     onMounted(() => {
       refreshTimeline();
+      loadAllFiles();    // populate local+global regardless of FilesPanel visibility
       window.addEventListener("keydown", onKey);
     });
     onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
@@ -2732,7 +3190,9 @@ var ProjectView = {
       setClipTrack, updateLaneClip, removeLaneClip,
       laneEditing, onLaneClipClick, saveLaneEdit,
       clipEditing, onClipClick, saveClipEdit,
-      updateOperation, editingOverlay, setEditingOverlay,
+      updateOperation, editingOverlay, setEditingOverlay, globalFiles,
+      captionsEnabled, captionsLanguage, liveCaption, onCaptionsChanged,
+      captionsByMedia,
       addOperation, removeOperation,
       onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment,
       showFiles, showClips, focusMode, selectedRange,
@@ -2754,6 +3214,7 @@ var ProjectView = {
         :project="project"
         @add-to-timeline="addClipToTimeline"
         @refresh="onFilesRefresh"
+        @captions-changed="onCaptionsChanged"
       />
       <aside v-else-if="focusMode" class="moments-sidebar">
         <MomentsList
@@ -2783,7 +3244,11 @@ var ProjectView = {
           :moments="timeline.moments"
           :selected-range="selectedRange"
           :audio-lane="timeline.audioLane"
+          :text-overlay-sounds="textOverlaySounds"
           :editing-overlay="editingOverlay"
+          :live-caption="liveCaption"
+          :captions-enabled="captionsEnabled"
+          @toggle-captions="captionsEnabled = !captionsEnabled"
         />
 
         <div class="timeline-section">
@@ -2907,6 +3372,7 @@ var ProjectView = {
           :moment="selectedMoment"
           :clips="clipsWithStarts"
           :local-files="localFiles"
+          :global-files="globalFiles"
           :moments="timeline.moments"
           @add="addOperation"
           @update="updateOperation"

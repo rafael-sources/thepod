@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS export_jobs (
     progress    INTEGER DEFAULT 0,
     started_at  TEXT,
     finished_at TEXT,
+    burn_captions_json TEXT,
     created_at  TEXT DEFAULT (datetime('now'))
 );
 
@@ -104,4 +105,7 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE timeline_clips ADD COLUMN track INTEGER NOT NULL DEFAULT 1")
     if "volume" not in cols:
         conn.execute("ALTER TABLE timeline_clips ADD COLUMN volume REAL NOT NULL DEFAULT 1.0")
+    ej_cols = {r["name"] for r in conn.execute("PRAGMA table_info(export_jobs)")}
+    if "burn_captions_json" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN burn_captions_json TEXT")
     conn.commit()

@@ -48,6 +48,18 @@ def create_export(slug):
     if not preset_id or not find_preset(preset_id):
         return jsonify({"error": "preset_id inválido"}), 400
 
+    burn = data.get("burn_captions") or None
+    burn_json = None
+    if burn:
+        import json as _json
+        try:
+            mfid = int(burn.get("media_file_id"))
+            lang = (burn.get("language") or "").strip().lower()
+            if mfid and lang:
+                burn_json = _json.dumps({"media_file_id": mfid, "language": lang})
+        except (TypeError, ValueError):
+            pass
+
     db = get_db(slug)
     try:
         # Quick sanity — reject if timeline is empty
@@ -58,8 +70,8 @@ def create_export(slug):
             return jsonify({"error": "el timeline está vacío — añade al menos un clip"}), 400
 
         cur = db.execute(
-            "INSERT INTO export_jobs (preset_id, status) VALUES (?, 'pending')",
-            (preset_id,),
+            "INSERT INTO export_jobs (preset_id, status, burn_captions_json) VALUES (?, 'pending', ?)",
+            (preset_id, burn_json),
         )
         db.commit()
         job_id = cur.lastrowid

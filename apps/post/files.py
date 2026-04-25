@@ -293,6 +293,82 @@ def delete_file(slug, file_id):
     return jsonify({"ok": True})
 
 
+@bp.post("/api/projects/<slug>/files/import-global")
+@require_auth
+def import_global(slug):
+    """
+    Copy a file from the global library into this project's local media
+    folder so it becomes a regular media_file with an ID usable by ops
+    (text_overlay sounds, audio_mix, etc). Idempotent on (filename, file_type):
+    returns the existing row if the filename was already imported.
+    """
+    _ensure_project(slug)
+    data = request.get_json(silent=True) or {}
+    filename = (data.get("filename") or "").strip()
+    file_type = (data.get("file_type") or "").strip()
+    if not filename or file_type not in MEDIA_TYPES:
+        return jsonify({"error": "filename y file_type (video|audio|image) requeridos"}), 400
+
+    src = GLOBAL_DIR / file_type / filename
+    if not src.is_file():
+        return jsonify({"error": "archivo global no encontrado"}), 404
+
+    dest_dir = PROJECTS_DIR / slug / "media" / file_type
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    db = get_db(slug)
+    try:
+        existing = db.execute(
+            "SELECT id, filename, original_name, file_type, duration, size_bytes "
+            "FROM media_files WHERE filename=? AND file_type=?",
+            (filename, file_type),
+        ).fetchone()
+        if existing:
+            return jsonify({
+                "id": existing["id"],
+                "filename": existing["filename"],
+                "original_name": existing["original_name"],
+                "file_type": existing["file_type"],
+                "duration": existing["duration"],
+                "size_bytes": existing["size_bytes"],
+                "url": _project_file_url(slug, existing["file_type"], existing["filename"]),
+                "imported": False,
+            })
+
+        dest = dest_dir / filename
+        if not dest.exists():
+            shutil.copy2(str(src), str(dest))
+            # Copy sidecars if present (peaks, thumb)
+            for side_src, side_dest in (
+                (_thumbnail_path(src), _thumbnail_path(dest)),
+                (_peaks_path(src), _peaks_path(dest)),
+            ):
+                if side_src.exists():
+                    try: shutil.copy2(str(side_src), str(side_dest))
+                    except OSError: pass
+
+        size_bytes = dest.stat().st_size
+        duration = _probe_duration(dest) if file_type in ("video", "audio") else None
+        cur = db.execute(
+            "INSERT INTO media_files (filename, original_name, file_type, duration, size_bytes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (filename, filename, file_type, duration, size_bytes),
+        )
+        db.commit()
+        return jsonify({
+            "id": cur.lastrowid,
+            "filename": filename,
+            "original_name": filename,
+            "file_type": file_type,
+            "duration": duration,
+            "size_bytes": size_bytes,
+            "url": _project_file_url(slug, file_type, filename),
+            "imported": True,
+        }), 201
+    finally:
+        db.close()
+
+
 @bp.post("/api/projects/<slug>/files/<int:file_id>/make-global")
 @require_auth
 def make_global(slug, file_id):
@@ -416,6 +492,9 @@ def list_global_files():
                 continue
             if entry.name.endswith(".thumb.jpg") or entry.name.endswith(".peaks.json"):
                 continue  # sidecar
+            ext = entry.suffix.lower()
+            if ext not in ALLOWED_EXTS.get(file_type, set()):
+                continue  # skip LICENSES.md / readmes / anything non-media
             stat = entry.stat()
             thumb = None
             peaks = None
