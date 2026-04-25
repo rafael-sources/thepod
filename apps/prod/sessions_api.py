@@ -105,7 +105,20 @@ def list_sessions():
                OR s.is_public   = 1
             ORDER BY s.created_at DESC
         """, (username, username)).fetchall()
-        return jsonify([_serialize_session(r) for r in rows])
+
+        # Ask LiveKit who is actually connected right now, so the UI can
+        # show "Admin está dentro" instead of guessing from DB state.
+        from livekit_service import list_participants
+        out = []
+        for r in rows:
+            data = _serialize_session(r)
+            try:
+                live = list_participants(r["livekit_room_name"]) if r["livekit_room_name"] else []
+                data["live_participants"] = [p.name or p.identity for p in live]
+            except Exception:
+                data["live_participants"] = []
+            out.append(data)
+        return jsonify(out)
     finally:
         db.close()
 
@@ -119,7 +132,13 @@ def create_session_endpoint():
         return jsonify({"error": "title requerido"}), 400
 
     username = current_user()
-    max_parts = min(int(data.get("max_participants", MAX_SESSION_PARTICIPANTS)), MAX_SESSION_PARTICIPANTS)
+    # Floor the max so there's always room for all known users + 2 invited
+    # guests — otherwise the invite endpoint returns 409 "sesión llena".
+    min_capacity = len(USER_PROFILES) + 2
+    max_parts = max(
+        min_capacity,
+        min(int(data.get("max_participants", MAX_SESSION_PARTICIPANTS)), MAX_SESSION_PARTICIPANTS),
+    )
 
     db = get_db()
     try:
@@ -145,6 +164,21 @@ def create_session_endpoint():
             """,
             (sid, username, host_profile.get("display_name", username), host_token),
         )
+        # Every other known user gets auto-added as co-host so they can see
+        # the session in their list and join without invite link friction.
+        for other_user, profile in USER_PROFILES.items():
+            if other_user == username:
+                continue
+            db.execute(
+                """
+                INSERT INTO participants
+                    (session_id, username, display_name, invite_token, role, status)
+                VALUES (?, ?, ?, ?, 'co-host', 'invited')
+                """,
+                (sid, other_user,
+                 profile.get("display_name", other_user),
+                 secrets.token_urlsafe(32)),
+            )
 
         # Default soundboard
         for s in DEFAULT_SOUNDS:

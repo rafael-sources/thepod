@@ -113,6 +113,131 @@ def _is_session_member(db, sid, username):
     return bool(p)
 
 
+@bp.post("/api/sessions/<int:sid>/chapter-markers")
+def save_chapter_marker(sid):
+    """Append a single chapter marker captured during recording."""
+    db = get_db()
+    try:
+        sess = db.execute("SELECT id FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+
+        body = request.get_json(silent=True) or {}
+        token = request.args.get("token") or body.get("token")
+        participant_id = None
+        if token:
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone()
+            if not p:
+                return jsonify({"error": "token inválido"}), 401
+            participant_id = p["id"]
+        else:
+            username = current_user()
+            if not username or not _is_session_member(db, sid, username):
+                return jsonify({"error": "no autorizado"}), 401
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            participant_id = p["id"] if p else None
+
+        try:
+            off = float(body.get("tl_offset_seconds") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "tl_offset_seconds inválido"}), 400
+        label = (body.get("label") or "").strip()[:200]
+        if off < 0:
+            return jsonify({"error": "tl_offset_seconds < 0"}), 400
+
+        cur = db.execute(
+            "INSERT INTO chapter_markers (session_id, participant_id, label, tl_offset_seconds) "
+            "VALUES (?, ?, ?, ?)",
+            (sid, participant_id, label, off),
+        )
+        db.commit()
+        return jsonify({"id": cur.lastrowid, "label": label, "tl_offset_seconds": off}), 201
+    finally:
+        db.close()
+
+
+@bp.get("/api/sessions/<int:sid>/chapter-markers")
+@require_auth
+def list_chapter_markers(sid):
+    db = get_db()
+    try:
+        if not _is_session_member(db, sid, current_user()):
+            return jsonify({"error": "no autorizado"}), 401
+        rows = db.execute(
+            "SELECT id, label, tl_offset_seconds, created_at "
+            "FROM chapter_markers WHERE session_id=? ORDER BY tl_offset_seconds",
+            (sid,),
+        ).fetchall()
+        return jsonify([dict(r) for r in rows])
+    finally:
+        db.close()
+
+
+@bp.post("/api/sessions/<int:sid>/sound-triggers")
+def save_sound_triggers(sid):
+    """
+    Append one batch of soundboard trigger events captured client-side during
+    a recording. Each trigger is {filename, tl_offset_seconds}. Auth: cookie
+    session OR invite token.
+    """
+    db = get_db()
+    try:
+        sess = db.execute("SELECT id FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+
+        body = request.get_json(silent=True) or {}
+        token = request.args.get("token") or body.get("token")
+        participant_id = None
+        if token:
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone()
+            if not p:
+                return jsonify({"error": "token inválido"}), 401
+            participant_id = p["id"]
+        else:
+            username = current_user()
+            if not username or not _is_session_member(db, sid, username):
+                return jsonify({"error": "no autorizado"}), 401
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            participant_id = p["id"] if p else None
+
+        triggers = body.get("triggers") or []
+        if not isinstance(triggers, list):
+            return jsonify({"error": "triggers debe ser una lista"}), 400
+
+        inserted = 0
+        for t in triggers:
+            try:
+                fname = (t.get("filename") or "").strip()
+                off = float(t.get("tl_offset_seconds") or 0)
+            except (ValueError, AttributeError):
+                continue
+            if not fname or off < 0:
+                continue
+            db.execute(
+                "INSERT INTO sound_triggers (session_id, participant_id, sound_filename, tl_offset_seconds) "
+                "VALUES (?, ?, ?, ?)",
+                (sid, participant_id, fname, off),
+            )
+            inserted += 1
+        db.commit()
+        return jsonify({"inserted": inserted})
+    finally:
+        db.close()
+
+
 @bp.post("/api/sessions/<int:sid>/recordings")
 def upload_recording(sid):
     """
@@ -315,12 +440,79 @@ def export_recordings_to_postpod(sid):
             failed += 1
             errors.append({"recording_id": r["id"], "error": str(e)})
 
+    # Ship chapter markers as postPod moments
+    chapters_sent = 0
+    chapters_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-chapters"
+    db = get_db()
+    try:
+        ch_rows = db.execute(
+            "SELECT label, tl_offset_seconds FROM chapter_markers "
+            "WHERE session_id=? ORDER BY tl_offset_seconds",
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+    if ch_rows:
+        try:
+            payload = {
+                "shared_project_id": spid,
+                "project_name": sess["title"],
+                "chapters": [{"label": r["label"], "tl_offset_seconds": r["tl_offset_seconds"]}
+                             for r in ch_rows],
+            }
+            resp = requests.post(chapters_endpoint, headers=headers, json=payload, timeout=60)
+            if resp.status_code in (200, 201):
+                chapters_sent = (resp.json() or {}).get("created_moments", 0)
+            else:
+                errors.append({"chapters_status": resp.status_code, "body": resp.text[:200]})
+        except requests.RequestException as e:
+            errors.append({"chapters_error": str(e)})
+
+    # Ship the soundboard trigger log so postPod places each sound on its
+    # audio lane at the exact session offset (vs the legacy "record audio
+    # stream" approach).
+    triggers_sent = 0
+    triggers_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-sound-triggers"
+    db = get_db()
+    try:
+        trig_rows = db.execute(
+            """SELECT t.sound_filename, t.tl_offset_seconds,
+                      COALESCE(p.display_name, p.username, 'anon') AS participant_name
+               FROM sound_triggers t
+               LEFT JOIN participants p ON p.id = t.participant_id
+               WHERE t.session_id=? ORDER BY t.tl_offset_seconds""",
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+    if trig_rows:
+        try:
+            payload = {
+                "shared_project_id": spid,
+                "project_name": sess["title"],
+                "triggers": [
+                    {"filename": r["sound_filename"],
+                     "tl_offset_seconds": r["tl_offset_seconds"],
+                     "participant_name": r["participant_name"]}
+                    for r in trig_rows
+                ],
+            }
+            resp = requests.post(triggers_endpoint, headers=headers, json=payload, timeout=60)
+            if resp.status_code in (200, 201):
+                triggers_sent = (resp.json() or {}).get("created_clips", 0)
+            else:
+                errors.append({"triggers_status": resp.status_code, "body": resp.text[:200]})
+        except requests.RequestException as e:
+            errors.append({"triggers_error": str(e)})
+
     return jsonify({
         "exported": exported,
         "failed": failed,
         "errors": errors,
         "project": project_info,
         "postpod_url": POSTPOD_URL,
+        "triggers_sent": triggers_sent,
+        "chapters_sent": chapters_sent,
     }), (200 if failed == 0 else 207)
 
 

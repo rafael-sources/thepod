@@ -105,6 +105,26 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id);
 
+CREATE TABLE IF NOT EXISTS chapter_markers (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id        INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    participant_id    INTEGER REFERENCES participants(id) ON DELETE SET NULL,
+    label             TEXT,
+    tl_offset_seconds REAL NOT NULL,
+    created_at        TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chapter_markers_session ON chapter_markers(session_id);
+
+CREATE TABLE IF NOT EXISTS sound_triggers (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id        INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    participant_id    INTEGER REFERENCES participants(id) ON DELETE SET NULL,
+    sound_filename    TEXT NOT NULL,
+    tl_offset_seconds REAL NOT NULL,
+    triggered_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_sound_triggers_session ON sound_triggers(session_id);
+
 CREATE TABLE IF NOT EXISTS live_streams (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,

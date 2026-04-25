@@ -83,33 +83,52 @@ def create_stream(sid):
             return jsonify({"error": "sólo el host puede iniciar streams"}), 403
 
         data = request.get_json(silent=True) or {}
-        platform = (data.get("platform") or "").strip().lower() or None
-        rtmp_url = (data.get("rtmp_url") or "").strip()
-        stream_key = (data.get("stream_key") or "").strip()
         layout = (data.get("layout") or "grid").strip()
 
-        if not rtmp_url or not stream_key:
-            return jsonify({"error": "rtmp_url y stream_key requeridos"}), 400
-        if not rtmp_url.startswith(("rtmp://", "rtmps://")):
-            return jsonify({"error": "rtmp_url debe empezar con rtmp:// o rtmps://"}), 400
+        # Accept either a single {rtmp_url, stream_key, platform} OR a list
+        # of `destinations: [{rtmp_url, stream_key, platform}, ...]` for
+        # multi-platform simultaneous streaming (YouTube + Twitch + …).
+        raw_dests = data.get("destinations")
+        if not raw_dests:
+            raw_dests = [{
+                "rtmp_url":   data.get("rtmp_url"),
+                "stream_key": data.get("stream_key"),
+                "platform":   data.get("platform"),
+            }]
+        if not isinstance(raw_dests, list) or not raw_dests:
+            return jsonify({"error": "destinations debe ser una lista no vacía"}), 400
 
-        destination = _rtmp_destination(rtmp_url, stream_key)
+        full_urls = []
+        normalized = []
+        for d in raw_dests:
+            url = (d.get("rtmp_url") or "").strip()
+            key = (d.get("stream_key") or "").strip()
+            plat = (d.get("platform") or "").strip().lower() or None
+            if not url or not key:
+                return jsonify({"error": "cada destination necesita rtmp_url y stream_key"}), 400
+            if not url.startswith(("rtmp://", "rtmps://")):
+                return jsonify({"error": "rtmp_url debe empezar con rtmp:// o rtmps://"}), 400
+            full_urls.append(_rtmp_destination(url, key))
+            normalized.append({"rtmp_url": url, "stream_key": key, "platform": plat})
+
         room_name = sess["livekit_room_name"]
+        primary = normalized[0]
 
-        # Persist as "starting" first so we have a DB row even if the egress
-        # call fails. Update on return.
+        # Persist one "primary" row + reference to all destinations so we can
+        # show them in the UI; backend egress is a single multi-output egress.
+        import json as _json
         cur = db.execute(
             """
             INSERT INTO live_streams (session_id, platform, rtmp_url, stream_key,
                                       status, started_by)
             VALUES (?, ?, ?, ?, 'starting', ?)
             """,
-            (sid, platform, rtmp_url, stream_key, current_user()),
+            (sid, primary["platform"], primary["rtmp_url"], primary["stream_key"], current_user()),
         )
         db.commit()
         stream_id = cur.lastrowid
 
-        info = start_rtmp_egress(room_name, [destination], layout=layout)
+        info = start_rtmp_egress(room_name, full_urls, layout=layout)
         if info is None:
             db.execute(
                 "UPDATE live_streams SET status='failed', error=?, stopped_at=datetime('now') WHERE id=?",
