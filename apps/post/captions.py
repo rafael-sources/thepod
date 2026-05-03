@@ -1,21 +1,21 @@
 """
-Auto-generated captions (subtitles) using OpenAI Whisper (CPU). Each job
-runs ffmpeg to extract a mono 16kHz wav from the source media, then
-spawns `whisper` with the chosen language and writes an SRT sidecar next
-to the media file (`<filename>.<lang>.srt`).
+Auto-generated captions (subtitles) using faster-whisper (CTranslate2).
+Each job runs ffmpeg to extract a mono 16kHz wav from the source media,
+then uses faster-whisper's Python API for transcription (~4x faster than
+openai-whisper on CPU with int8 quantization).
 
-Whisper CPU is slow (~0.5-1x realtime) so jobs run in a background thread
-and the frontend polls a job row for status.
+Jobs run in a background thread and the frontend polls a job row for status.
 """
+
+from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import threading
-from pathlib import Path
+from typing import Any
 
-from flask import Blueprint, abort, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file
 
 from auth import require_auth
 from config import PROJECTS_DIR
@@ -38,7 +38,7 @@ SUPPORTED_LANGUAGES = [
     {"code": "auto", "label": "Auto-detectar"},
 ]
 
-DEFAULT_MODEL = "small"  # turbo is the new default but small is more portable
+DEFAULT_MODEL = "small"
 
 
 def _ensure_caption_jobs_table(conn):
@@ -101,39 +101,38 @@ def _words_filename_for(mf_row, language):
     return f"{base}.{lang}.words.json"
 
 
-def _extract_words_from_whisper_json(whisper_json: dict) -> list[dict]:
-    """Whisper's JSON output (with --word_timestamps True) shape:
-        {"text": "...", "segments": [{"id": 0, "start": 0.0, "end": 3.2,
-                                       "text": "...",
-                                       "words": [{"word": " hola", "start": 0.0,
-                                                  "end": 0.4, "probability": 0.9}, ...]}, ...]}
-    We flatten to a single list, normalize whitespace on the word, drop empty
-    entries, and round timestamps to 3 decimals to keep the sidecar small.
-    """
+def _format_srt_timestamp(seconds: float) -> str:
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - int(seconds)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def _segments_to_srt(segments: list) -> str:
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        lines.append(str(i))
+        lines.append(f"{_format_srt_timestamp(seg['start'])} --> {_format_srt_timestamp(seg['end'])}")
+        lines.append(seg["text"].strip())
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _segments_to_words(segments: list) -> list[dict]:
     out: list[dict] = []
-    for seg in whisper_json.get("segments") or []:
-        for w in (seg.get("words") or []):
-            text = (w.get("word") or "").strip()
+    for seg in segments:
+        for w in seg.get("words", []):
+            text = w["word"].strip()
             if not text:
                 continue
-            try:
-                start = float(w.get("start") or 0)
-                end = float(w.get("end") or start)
-            except (TypeError, ValueError):
-                continue
-            if end < start:
-                end = start
             entry = {
                 "w": text,
-                "s": round(start, 3),
-                "e": round(end, 3),
+                "s": round(w["start"], 3),
+                "e": round(w["end"], 3),
             }
-            prob = w.get("probability")
-            if prob is not None:
-                try:
-                    entry["p"] = round(float(prob), 2)
-                except (TypeError, ValueError):
-                    pass
+            if w.get("probability") is not None:
+                entry["p"] = round(w["probability"], 2)
             out.append(entry)
     return out
 
@@ -150,6 +149,26 @@ def _update_job(slug, job_id, **fields):
         db.commit()
     finally:
         db.close()
+
+
+_fw_model_cache: dict[str, Any] = {}
+_fw_model_lock = threading.Lock()
+
+
+def _get_fw_model(model_name: str):
+    from faster_whisper import WhisperModel
+    from config import BASE_DIR
+    whisper_cache = str(BASE_DIR / ".whisper_models")
+    with _fw_model_lock:
+        if model_name not in _fw_model_cache:
+            _fw_model_cache[model_name] = WhisperModel(
+                model_name,
+                device="cpu",
+                compute_type="int8",
+                download_root=whisper_cache,
+                cpu_threads=os.cpu_count() or 4,
+            )
+        return _fw_model_cache[model_name]
 
 
 def _run_caption_job(slug, job_id, file_id, language, model):
@@ -178,7 +197,6 @@ def _run_caption_job(slug, job_id, file_id, language, model):
     final_srt = work_dir / srt_filename
 
     try:
-        # Extract 16kHz mono wav so Whisper avoids extra resampling on CPU.
         proc = subprocess.run(
             ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
              "-i", str(media_path),
@@ -193,105 +211,80 @@ def _run_caption_job(slug, job_id, file_id, language, model):
             return
         _update_job(slug, job_id, progress=20)
 
-        # Use a postPod-owned cache for the Whisper model checkpoints. The
-        # container's $HOME/.cache may be read-only, so the default download
-        # location fails with EROFS. Fixed location => downloaded once, reused
-        # for all subsequent jobs.
-        from config import BASE_DIR
-        whisper_cache = BASE_DIR / ".whisper_models"
-        whisper_cache.mkdir(parents=True, exist_ok=True)
+        fw_model = _get_fw_model(model or DEFAULT_MODEL)
+        lang_arg = language if language and language != "auto" else None
+        segments_iter, info = fw_model.transcribe(
+            str(wav_path),
+            language=lang_arg,
+            beam_size=5,
+            word_timestamps=True,
+            vad_filter=True,
+        )
 
-        # `--output_format all` writes srt + vtt + txt + json + tsv at once.
-        # `--word_timestamps True` includes per-word `start`/`end` inside the
-        # JSON output, which is what powers the transcript editor.
-        cmd = [
-            "whisper", str(wav_path),
-            "--model", model or DEFAULT_MODEL,
-            "--model_dir", str(whisper_cache),
-            "--output_format", "all",
-            "--output_dir", str(work_dir),
-            "--device", "cpu",
-            "--fp16", "False",
-            "--word_timestamps", "True",
-        ]
-        if language and language != "auto":
-            cmd += ["--language", language]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-        if proc.returncode != 0:
-            err = (proc.stderr or "").strip()
-            tail = err.splitlines()[-6:] if err else ["(sin stderr)"]
-            _update_job(slug, job_id, status="error",
-                        error_msg="whisper: " + " | ".join(tail)[:1200])
-            return
+        segments = []
+        for seg in segments_iter:
+            words = []
+            for w in seg.words or []:
+                words.append({
+                    "word": w.word,
+                    "start": w.start,
+                    "end": w.end,
+                    "probability": w.probability,
+                })
+            segments.append({
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text,
+                "words": words,
+            })
+        _update_job(slug, job_id, progress=90)
 
-        # whisper writes <wavstem>.srt — rename to our convention
-        whisper_out = work_dir / (wav_path.stem + ".srt")
-        if not whisper_out.is_file():
-            _update_job(slug, job_id, status="error",
-                        error_msg="whisper no produjo SRT")
-            return
+        srt_content = _segments_to_srt(segments)
         if final_srt.exists():
             final_srt.unlink()
-        whisper_out.rename(final_srt)
+        final_srt.write_text(srt_content, encoding="utf-8")
 
-        # Parse the JSON sibling and write a slim word-level sidecar.
-        # Best-effort: a missing/broken JSON should not fail the whole job —
-        # the SRT is still valid for the caption viewer.
         words_filename = _words_filename_for(mf, language)
         final_words = work_dir / words_filename
-        whisper_json = work_dir / (wav_path.stem + ".json")
-        if whisper_json.is_file():
-            try:
-                raw = json.loads(whisper_json.read_text(encoding="utf-8"))
-                words = _extract_words_from_whisper_json(raw)
-                payload = {
-                    "language": (raw.get("language") or language or "").lower() or None,
-                    "duration": raw.get("duration"),
-                    "words": words,
-                }
-                if final_words.exists():
-                    final_words.unlink()
-                final_words.write_text(
-                    json.dumps(payload, ensure_ascii=False), encoding="utf-8",
-                )
-            except (OSError, ValueError):
-                pass
-            try:
-                whisper_json.unlink()
-            except OSError:
-                pass
-
-        # Clean up the other sidecars whisper writes that we don't need
-        # (txt, vtt, tsv) so the media folder doesn't accumulate noise.
-        for ext in ("txt", "vtt", "tsv"):
-            extra = work_dir / f"{wav_path.stem}.{ext}"
-            try:
-                if extra.is_file():
-                    extra.unlink()
-            except OSError:
-                pass
+        try:
+            word_list = _segments_to_words(segments)
+            detected_lang = info.language if info.language else (language or None)
+            duration = info.duration if info.duration else (
+                segments[-1]["end"] if segments else 0
+            )
+            payload = {
+                "language": (detected_lang or "").lower() or None,
+                "duration": round(duration, 3) if duration else None,
+                "words": word_list,
+            }
+            if final_words.exists():
+                final_words.unlink()
+            final_words.write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8",
+            )
+        except (OSError, ValueError):
+            pass
 
         _update_job(slug, job_id, status="done", progress=100,
                     srt_filename=srt_filename,
                     finished_at_marker=None)
-        # After done, fix the finished_at via SQL since UPDATE with =? doesn't
-        # accept SQL functions.
         db = get_db(slug)
         try:
             db.execute("UPDATE caption_jobs SET finished_at=datetime('now') WHERE id=?", (job_id,))
             db.commit()
         finally:
             db.close()
-    except subprocess.TimeoutExpired:
-        _update_job(slug, job_id, status="error", error_msg="timeout")
     except Exception as e:
         _update_job(slug, job_id, status="error", error_msg=str(e)[:200])
     finally:
         try:
-            if wav_path.exists(): wav_path.unlink()
+            if wav_path.exists():
+                wav_path.unlink()
             for stale in work_dir.glob(f".{job_id}_audio.*"):
-                try: stale.unlink()
-                except OSError: pass
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass
         except OSError:
             pass
 
@@ -337,15 +330,11 @@ def start_caption_job(slug, file_id):
     finally:
         db.close()
 
-    if not shutil.which("whisper"):
-        _update_job(slug, job_id, status="error",
-                    error_msg="whisper no está instalado en el server")
-    else:
-        t = threading.Thread(
-            target=_run_caption_job, args=(slug, job_id, file_id, language, model),
-            daemon=True, name=f"captions-{job_id}",
-        )
-        t.start()
+    t = threading.Thread(
+        target=_run_caption_job, args=(slug, job_id, file_id, language, model),
+        daemon=True, name=f"captions-{job_id}",
+    )
+    t.start()
 
     db = get_db(slug)
     try:
@@ -436,7 +425,7 @@ def upload_caption(slug, file_id, lang):
     f = request.files.get("srt")
     if not f:
         return jsonify({"error": "no se recibió archivo SRT"}), 400
-    if not f.filename.lower().endswith(".srt"):
+    if not (f.filename or "").lower().endswith(".srt"):
         return jsonify({"error": "el archivo debe ser .srt"}), 400
 
     content = f.read()

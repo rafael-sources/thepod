@@ -2374,6 +2374,11 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             cmd += ["-map", f"[{audio_label}]"]
         if preset.get("vcodec"):
             cmd += ["-c:v", preset["vcodec"], "-pix_fmt", "yuv420p"]
+            if preset.get("crf"):
+                cmd += ["-crf", preset["crf"]]
+            if preset.get("x264_preset"):
+                cmd += ["-preset", preset["x264_preset"]]
+            cmd += ["-threads", "0"]
         if audio_label and preset.get("acodec"):
             cmd += ["-c:a", preset["acodec"]]
         if preset.get("bitrate"):

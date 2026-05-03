@@ -83,14 +83,14 @@ DEFAULT_COMIC_FONT = "bangers"
 
 
 EXPORT_PRESETS = [
-    {"id": "yt_1080p_30",  "name": "YouTube 1080p 30fps",       "width": 1920, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "YouTube"},
-    {"id": "yt_1080p_60",  "name": "YouTube 1080p 60fps",       "width": 1920, "height": 1080, "fps": 60, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "YouTube"},
-    {"id": "yt_4k_30",     "name": "YouTube 4K 30fps",          "width": 3840, "height": 2160, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "YouTube"},
-    {"id": "yt_4k_60",     "name": "YouTube 4K 60fps",          "width": 3840, "height": 2160, "fps": 60, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "YouTube"},
-    {"id": "std_hd_24",    "name": "HD 720p 24fps",             "width": 1280, "height": 720,  "fps": 24, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "General"},
-    {"id": "tiktok_v",     "name": "TikTok / Reels vertical",   "width": 1080, "height": 1920, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "TikTok / Reels"},
-    {"id": "instagram_sq", "name": "Instagram cuadrado",        "width": 1080, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "platform": "Instagram"},
-    {"id": "whatsapp",     "name": "WhatsApp",                  "width": 1280, "height": 720,  "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac", "bitrate": "2M", "platform": "WhatsApp"},
+    {"id": "yt_1080p_30",  "name": "YouTube 1080p 30fps",       "width": 1920, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "20", "x264_preset": "fast",     "platform": "YouTube"},
+    {"id": "yt_1080p_60",  "name": "YouTube 1080p 60fps",       "width": 1920, "height": 1080, "fps": 60, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "20", "x264_preset": "fast",     "platform": "YouTube"},
+    {"id": "yt_4k_30",     "name": "YouTube 4K 30fps",          "width": 3840, "height": 2160, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "20", "x264_preset": "fast",     "platform": "YouTube"},
+    {"id": "yt_4k_60",     "name": "YouTube 4K 60fps",          "width": 3840, "height": 2160, "fps": 60, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "20", "x264_preset": "fast",     "platform": "YouTube"},
+    {"id": "std_hd_24",    "name": "HD 720p 24fps",             "width": 1280, "height": 720,  "fps": 24, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "22", "x264_preset": "fast",     "platform": "General"},
+    {"id": "tiktok_v",     "name": "TikTok / Reels vertical",   "width": 1080, "height": 1920, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "22", "x264_preset": "veryfast", "platform": "TikTok / Reels"},
+    {"id": "instagram_sq", "name": "Instagram cuadrado",        "width": 1080, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "22", "x264_preset": "veryfast", "platform": "Instagram"},
+    {"id": "whatsapp",     "name": "WhatsApp",                  "width": 1280, "height": 720,  "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac", "bitrate": "2M", "x264_preset": "veryfast", "platform": "WhatsApp"},
     {"id": "podcast_mp3",  "name": "Podcast MP3",               "width": None, "height": None, "fps": None, "format": "mp3", "vcodec": None,     "acodec": "libmp3lame", "platform": "Podcast"},
     {"id": "podcast_m4a",  "name": "Podcast M4A (AAC)",         "width": None, "height": None, "fps": None, "format": "m4a", "vcodec": None,     "acodec": "aac",        "platform": "Podcast"},
 ]
