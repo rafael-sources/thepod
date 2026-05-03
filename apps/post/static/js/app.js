@@ -1569,7 +1569,11 @@ var MomentsList = {
     function onChangeStart(m, ev) {
       const f = parseFloat(ev.target.value);
       if (!isFinite(f) || f < 0) { ev.target.value = m.timeline_seconds.toFixed(2); return; }
-      emit("update-time", { id: m.id, patch: { timeline_seconds: f } });
+      const patch = { timeline_seconds: f };
+      if (m.duration_seconds && m.duration_seconds > 0) {
+        patch.duration_seconds = m.duration_seconds;
+      }
+      emit("update-time", { id: m.id, patch });
     }
     function onChangeEnd(m, ev) {
       const raw = ev.target.value;
@@ -1584,6 +1588,20 @@ var MomentsList = {
         id: m.id,
         patch: { duration_seconds: dur > 0 ? dur : null },
       });
+    }
+    function durationValueFor(m) {
+      if (!m || !m.duration_seconds || m.duration_seconds <= 0) return "";
+      return m.duration_seconds.toFixed(2);
+    }
+    function onChangeDuration(m, ev) {
+      const raw = ev.target.value;
+      if (raw === "" || raw === null) {
+        emit("update-time", { id: m.id, patch: { duration_seconds: null } });
+        return;
+      }
+      const f = parseFloat(raw);
+      if (!isFinite(f) || f < 0) return;
+      emit("update-time", { id: m.id, patch: { duration_seconds: f > 0 ? f : null } });
     }
 
     function beginEdit(ev) {
@@ -1612,7 +1630,7 @@ var MomentsList = {
     }
 
     return { sorted, formatTimecode, beginEdit, endEdit, onKey, toggleType, hasJumpOp,
-             endValueFor, onChangeStart, onChangeEnd };
+             endValueFor, onChangeStart, onChangeEnd, durationValueFor, onChangeDuration };
   },
   template: `
     <div class="moments-section">
@@ -1684,13 +1702,13 @@ var MomentsList = {
                      @change="onChangeEnd(m, $event)"
                      @keydown.enter="$event.target.blur()">
             </div>
-            <div class="mte-summary mono">
-              <template v-if="m.duration_seconds && m.duration_seconds > 0">
-                <strong>{{ m.duration_seconds.toFixed(2) }}s</strong>
-              </template>
-              <template v-else>
-                <span class="muted">punto</span>
-              </template>
+            <div class="mte-arrow">⇔</div>
+            <div class="mte-field">
+              <label>Duración (s)</label>
+              <input type="number" step="0.01" min="0"
+                     :value="durationValueFor(m)" placeholder="(punto)"
+                     @change="onChangeDuration(m, $event)"
+                     @keydown.enter="$event.target.blur()">
             </div>
           </div>
         </div>
