@@ -1909,11 +1909,11 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             if chosen is None:
                 chosen = mc[0]
 
-            # Consume split labels for tracks we're NOT rendering
             for entry in mc:
                 if entry is not chosen:
                     ec_skip = entry["clip"]
-                    _ = split_v[ec_skip["id"]].pop(0)
+                    skipped = split_v[ec_skip["id"]].pop(0)
+                    parts.append(f"[{skipped}]nullsink")
 
             ec = chosen["clip"]
             es = float(chosen["src_start"]) - seek_offset
