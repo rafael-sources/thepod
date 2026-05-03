@@ -1671,17 +1671,19 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
     is_landscape = not is_audio_only and W is not None and H is not None and W >= H
     if is_landscape:
         banner_position = "bottom"
+    if vertical_center_spotlight:
+        banner_position = "bottom"
     tracks_used = sorted(set(int(c.get("track", 1)) for c in clips))
     is_multitrack = len(tracks_used) >= 2
 
     spotlight_events = None
-    if spotlight and is_landscape and is_multitrack:
+    if spotlight and (is_landscape or vertical_center_spotlight) and is_multitrack:
         spotlight_events = _analyze_speaker_activity(clips, total_duration,
                                                        range_start=range_start, range_end=range_end)
 
     segments = _compute_track_segments(
         clips, moments, flat_ops, total_duration,
-        compose_multitrack=(is_landscape or is_multitrack),
+        compose_multitrack=(is_landscape or is_multitrack or vertical_center_spotlight),
         spotlight_events=spotlight_events,
     )
     if not segments:
@@ -1894,6 +1896,79 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     parts.append(
                         f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{k}]"
                     )
+        elif vertical_center_spotlight and mc and W and H:
+            # VERTICAL CENTER SPOTLIGHT: render only the active speaker's
+            # track filling the entire frame. Each segment shows one track.
+            spotlight_track = seg.get("spotlight_active_track")
+            chosen = None
+            for entry in mc:
+                t_num = int(entry["clip"].get("track", 1))
+                if t_num == spotlight_track:
+                    chosen = entry
+                    break
+            if chosen is None:
+                chosen = mc[0]
+
+            # Consume split labels for tracks we're NOT rendering
+            for entry in mc:
+                if entry is not chosen:
+                    ec_skip = entry["clip"]
+                    _ = split_v[ec_skip["id"]].pop(0)
+
+            ec = chosen["clip"]
+            es = float(chosen["src_start"]) - seek_offset
+            ee = float(chosen["src_end"]) - seek_offset
+            src = split_v[ec["id"]].pop(0)
+
+            if has_bg:
+                v_chain = (
+                    f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},"
+                    f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                    f"format=yuva420p,"
+                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,"
+                    f"setsar=1"
+                )
+            else:
+                v_chain = (
+                    f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},"
+                    f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
+                    f"setsar=1,format=yuv420p"
+                )
+            parts.append(f"[{src}]{v_chain}[v{k}]")
+
+            # Audio: mix all tracks (even though only one is shown visually)
+            if all_have_audio:
+                a_labels = []
+                for j, entry in enumerate(mc):
+                    ec2 = entry["clip"]
+                    es2 = float(entry["src_start"]) - seek_offset
+                    ee2 = float(entry["src_end"]) - seek_offset
+                    src_a = split_a[ec2["id"]].pop(0)
+                    vol = float(ec2.get("volume", 1.0))
+                    al = f"ma{k}_{j}"
+                    if abs(vol - 1.0) > 1e-3:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es2:.3f}:end={ee2:.3f},asetpts=PTS-STARTPTS,"
+                            f"volume={vol:.3f}[{al}]"
+                        )
+                    else:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es2:.3f}:end={ee2:.3f},asetpts=PTS-STARTPTS[{al}]"
+                        )
+                    a_labels.append(f"[{al}]")
+                if len(a_labels) == 1:
+                    parts.append(f"{a_labels[0]}anull[a{k}]")
+                else:
+                    parts.append(f"{''.join(a_labels)}amix=inputs={len(a_labels)}:normalize=0[a{k}]")
+            else:
+                src_a = split_a[mc[0]["clip"]["id"]].pop(0)
+                s_a = float(mc[0]["src_start"]) - seek_offset
+                e_a = float(mc[0]["src_end"]) - seek_offset
+                parts.append(f"[{src_a}]atrim=start={s_a:.3f}:end={e_a:.3f},asetpts=PTS-STARTPTS[a{k}]")
+
         elif mc and W and H:
             # Multitrack composition: vstack for vertical_split (9:16),
             # hstack side-by-side for standard presets (16:9).
