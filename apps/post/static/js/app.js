@@ -372,8 +372,27 @@ var ProjectListView = {
       } catch (_) { return s; }
     }
 
+    async function importProject(ev) {
+      const file = ev.target.files?.[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const r = await fetch("/api/projects/import", {
+          method: "POST",
+          body: form,
+        });
+        const data = await r.json();
+        if (!r.ok) { error.value = data.error || "Error al importar"; return; }
+        if (data.warning) alert(data.warning);
+        await load();
+      } catch (e) {
+        error.value = "Error al importar: " + e.message;
+      }
+    }
+
     onMounted(load);
-    return { projects, loading, error, showCreate, newName, creating, create, remove, fmtDate };
+    return { projects, loading, error, showCreate, newName, creating, create, remove, fmtDate, importProject };
   },
   template: `
     <div class="container">
@@ -384,6 +403,8 @@ var ProjectListView = {
         </div>
         <div class="spacer"></div>
         <button class="primary" @click="showCreate = true">＋ Nuevo proyecto</button>
+        <button class="ghost" @click="$refs.importInput.click()" title="Importar proyecto desde .zip">⇧ Importar</button>
+        <input ref="importInput" type="file" accept=".zip" style="display:none" @change="importProject">
       </div>
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="loading" class="muted">Cargando sesiones…</div>
@@ -4453,6 +4474,9 @@ var ProjectView = {
             <button :disabled="timeline.clips.length === 0" @click="showExport = true" style="margin-left:8px;">
               ⇪ Exportar
             </button>
+            <a :href="'/api/projects/' + slug + '/export-bundle'" class="ghost" style="margin-left:8px; text-decoration:none; display:inline-flex; align-items:center; padding:4px 10px; font-size:12px;" title="Descargar proyecto como .zip">
+              📦 Proyecto
+            </a>
             <button @click="checkMultiTrack(true)" class="ghost" style="margin-left:8px;"
                     title="Colocar cada archivo de video en su propia pista">
               ⊞ Pistas
