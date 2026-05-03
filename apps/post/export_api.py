@@ -19,6 +19,7 @@ def _ensure_project(slug):
 
 
 def _serialize_job(row):
+    keys = row.keys()
     return {
         "id": row["id"],
         "preset_id": row["preset_id"],
@@ -29,6 +30,15 @@ def _serialize_job(row):
         "started_at": row["started_at"],
         "finished_at": row["finished_at"],
         "created_at": row["created_at"],
+        "generate_notes": bool(row["generate_notes"]) if "generate_notes" in keys else False,
+        "notes_file": row["notes_file"] if "notes_file" in keys else None,
+        "enhance_speech": bool(row["enhance_speech"]) if "enhance_speech" in keys else False,
+        "range_start": row["range_start"] if "range_start" in keys else None,
+        "range_end":   row["range_end"]   if "range_end"   in keys else None,
+        "spotlight": bool(row["spotlight"]) if "spotlight" in keys else False,
+        "use_background": bool(row["use_background"]) if "use_background" in keys else False,
+        "moment_banner": bool(row["moment_banner"]) if "moment_banner" in keys else False,
+        "banner_position": row["banner_position"] if "banner_position" in keys else "bottom",
     }
 
 
@@ -60,6 +70,34 @@ def create_export(slug):
         except (TypeError, ValueError):
             pass
 
+    generate_notes = 1 if data.get("generate_notes") else 0
+    enhance_speech = 1 if data.get("enhance_speech") else 0
+    spotlight = 1 if data.get("spotlight") else 0
+    use_background = 1 if data.get("use_background") else 0
+    moment_banner = 1 if data.get("moment_banner") else 0
+    banner_position = (data.get("banner_position") or "bottom").strip().lower()
+    if banner_position not in ("top", "middle", "bottom"):
+        banner_position = "bottom"
+
+    # Optional partial-range export: render only the segment [range_start,
+    # range_end] of the final timeline. Internal cuts/transcript_cuts/zooms
+    # within the range are preserved — only material outside the range is
+    # discarded.
+    def _range_seconds(key):
+        v = data.get(key)
+        if v is None or v == "":
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if f >= 0 else None
+
+    range_start = _range_seconds("range_start")
+    range_end   = _range_seconds("range_end")
+    if range_start is not None and range_end is not None and range_end <= range_start:
+        return jsonify({"error": "range_end debe ser mayor que range_start"}), 400
+
     db = get_db(slug)
     try:
         # Quick sanity — reject if timeline is empty
@@ -70,8 +108,10 @@ def create_export(slug):
             return jsonify({"error": "el timeline está vacío — añade al menos un clip"}), 400
 
         cur = db.execute(
-            "INSERT INTO export_jobs (preset_id, status, burn_captions_json) VALUES (?, 'pending', ?)",
-            (preset_id, burn_json),
+            "INSERT INTO export_jobs (preset_id, status, burn_captions_json, "
+            "generate_notes, enhance_speech, range_start, range_end, spotlight, use_background, moment_banner, banner_position) "
+            "VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (preset_id, burn_json, generate_notes, enhance_speech, range_start, range_end, spotlight, use_background, moment_banner, banner_position),
         )
         db.commit()
         job_id = cur.lastrowid
@@ -142,6 +182,36 @@ def cancel_export_job(slug, job_id):
     return jsonify({"ok": True})
 
 
+@bp.delete("/api/projects/<slug>/export/<int:job_id>")
+@require_auth
+def delete_export(slug, job_id):
+    _ensure_project(slug)
+    db = get_db(slug)
+    try:
+        row = db.execute(
+            "SELECT * FROM export_jobs WHERE id=?", (job_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "job no encontrado"}), 404
+        if row["status"] in ("pending", "running"):
+            return jsonify({"error": "no se puede borrar un job en curso"}), 409
+        exports_dir = PROJECTS_DIR / slug / "exports"
+        for fname in (row["output_file"], row["notes_file"]):
+            if fname:
+                fp = exports_dir / fname
+                if fp.is_file():
+                    fp.unlink()
+        log_name = f"{job_id}_{row['preset_id']}.log"
+        log_path = exports_dir / log_name
+        if log_path.is_file():
+            log_path.unlink()
+        db.execute("DELETE FROM export_jobs WHERE id=?", (job_id,))
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"ok": True})
+
+
 @bp.get("/api/projects/<slug>/export/<int:job_id>/download")
 @require_auth
 def download_export(slug, job_id):
@@ -161,6 +231,31 @@ def download_export(slug, job_id):
             str(out_path),
             as_attachment=as_attach,
             download_name=row["output_file"],
+        )
+    finally:
+        db.close()
+
+
+@bp.get("/api/projects/<slug>/export/<int:job_id>/notes")
+@require_auth
+def download_export_notes(slug, job_id):
+    _ensure_project(slug)
+    db = get_db(slug)
+    try:
+        row = db.execute(
+            "SELECT notes_file, status FROM export_jobs WHERE id=?", (job_id,)
+        ).fetchone()
+        if not row or not row["notes_file"]:
+            return jsonify({"error": "notas no disponibles"}), 404
+        notes_path = PROJECTS_DIR / slug / "exports" / row["notes_file"]
+        if not notes_path.is_file():
+            return jsonify({"error": "archivo de notas no encontrado"}), 410
+        as_attach = request.args.get("attachment", "1") != "0"
+        return send_file(
+            str(notes_path),
+            mimetype="text/plain; charset=utf-8",
+            as_attachment=as_attach,
+            download_name=row["notes_file"],
         )
     finally:
         db.close()

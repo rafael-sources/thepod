@@ -112,12 +112,131 @@ def import_from_prepod():
         },
     }
 
+    owner = (data.get("owner_username") or "admin").strip().lower() or "admin"
+    extra_hosts = data.get("extra_hosts") or []
+    if not isinstance(extra_hosts, list):
+        extra_hosts = []
+    extra_hosts = [str(h).strip().lower() for h in extra_hosts if str(h).strip()]
     meta = _create_project_internal(
         name=project_name,
         shared_project_id=spid,
         source_info=source_info,
+        owner_username=owner,
     )
+    if extra_hosts:
+        from projects import _read_meta as _rm, _write_meta as _wm
+        m2 = _rm(meta["slug"]) or {}
+        m2["extra_hosts"] = extra_hosts
+        _wm(meta["slug"], m2)
+        meta = m2
+
+    _import_participants_sponsors_segments(meta["slug"], episode)
+    _download_branding_assets(meta["slug"], podcast.get("branding") or {})
     return jsonify({"project": _summarize_project(meta), "created": True}), 201
+
+
+def _import_participants_sponsors_segments(slug, episode):
+    """Extract guests, sponsors and blocks from prePod episode payload into
+    dedicated postPod tables. Idempotent: clears old data on re-import."""
+    guests = episode.get("guests") or []
+    sponsors = episode.get("sponsors") or []
+    blocks = episode.get("blocks") or []
+    if not guests and not sponsors and not blocks:
+        return
+
+    db = get_db(slug)
+    try:
+        db.execute("DELETE FROM project_participants")
+        for g in guests:
+            if not isinstance(g, dict):
+                continue
+            db.execute(
+                "INSERT INTO project_participants "
+                "(name, role, social_instagram, social_twitter, social_youtube, social_tiktok) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    g.get("name") or "Participante",
+                    g.get("role") or "guest",
+                    g.get("social_instagram"),
+                    g.get("social_twitter"),
+                    g.get("social_youtube"),
+                    g.get("social_tiktok"),
+                ),
+            )
+
+        db.execute("DELETE FROM project_sponsors")
+        sponsor_id_map = {}
+        for s in sponsors:
+            if not isinstance(s, dict):
+                continue
+            cur = db.execute(
+                "INSERT INTO project_sponsors (name, copy, url, logo_filename, position) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    s.get("name") or "Sponsor",
+                    s.get("copy"),
+                    s.get("url"),
+                    s.get("logo_filename"),
+                    s.get("position") or 0,
+                ),
+            )
+            old_id = s.get("id")
+            if old_id is not None:
+                sponsor_id_map[old_id] = cur.lastrowid
+
+        db.execute("DELETE FROM project_segments")
+        for b in blocks:
+            if not isinstance(b, dict):
+                continue
+            local_sponsor_id = None
+            old_sid = b.get("sponsor_id")
+            if old_sid is not None:
+                local_sponsor_id = sponsor_id_map.get(old_sid)
+            db.execute(
+                "INSERT INTO project_segments "
+                "(position, kind, title, duration_estimate, sponsor_id, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    b.get("position") or 0,
+                    b.get("kind") or "segment",
+                    b.get("title") or "",
+                    b.get("duration_estimate"),
+                    local_sponsor_id,
+                    b.get("notes"),
+                ),
+            )
+        db.commit()
+    finally:
+        db.close()
+
+
+def _download_branding_assets(slug, branding):
+    """Download branding images (background, logo) from prePod into the project."""
+    import urllib.request
+    dest_dir = PROJECTS_DIR / slug / "branding"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    from projects import _read_meta, _write_meta
+    meta = _read_meta(slug) or {}
+    changed = False
+
+    for key, prefix in [("background_url", "background"), ("logo_url", "logo")]:
+        url = branding.get(key)
+        if not url:
+            continue
+        ext = Path(url).suffix.lower() or ".png"
+        dest = dest_dir / f"{prefix}{ext}"
+        try:
+            urllib.request.urlretrieve(url, str(dest))
+            if dest.stat().st_size < 500:
+                dest.unlink(missing_ok=True)
+                continue
+            meta[f"{prefix}_filename"] = dest.name
+            changed = True
+        except Exception:
+            dest.unlink(missing_ok=True)
+
+    if changed:
+        _write_meta(slug, meta)
 
 
 COMPOSITE_MARKER = "[composite_podcast_hstack]"
@@ -281,11 +400,15 @@ def _compose_hstack_side_by_side(slug: str) -> dict | None:
     """
     db = get_db(slug)
     try:
-        # Source videos: everything except the previous composite itself.
+        # Source videos for the side-by-side: everything except the previous
+        # composite AND except screen shares (their aspect ratio differs from
+        # cameras, so they're handled as separate clips by the editor).
         sources = db.execute(
             """SELECT id, filename, original_name, duration
                FROM media_files
-               WHERE file_type='video' AND (original_name IS NULL OR original_name NOT LIKE ?)
+               WHERE file_type='video'
+                 AND (original_name IS NULL OR original_name NOT LIKE ?)
+                 AND (original_name IS NULL OR original_name NOT LIKE '%_screen_%')
                ORDER BY original_name""",
             (COMPOSITE_MARKER + "%",),
         ).fetchall()
@@ -362,21 +485,6 @@ def _compose_hstack_side_by_side(slug: str) -> dict | None:
         )
         composite_id = cur.lastrowid
 
-        # Auto-place composite on the timeline at position 0 (replacing any
-        # previous composite placement so the user sees it ready to play).
-        db.execute(
-            "DELETE FROM timeline_clips WHERE label LIKE ?",
-            (COMPOSITE_MARKER + "%",),
-        )
-        db.execute(
-            "UPDATE timeline_clips SET position = position + 1"
-        )
-        db.execute(
-            """INSERT INTO timeline_clips
-               (position, media_file_id, label, start_offset, end_offset, track, volume)
-               VALUES (0, ?, ?, 0, NULL, 1, 1.0)""",
-            (composite_id, label),
-        )
         db.commit()
         return {
             "id": composite_id,
@@ -613,6 +721,11 @@ def import_track_from_prodpod():
     meta = find_project_by_shared_id(spid)
     if not meta:
         project_name = (request.form.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+        # Owner + extra hosts forwarded by prodPod (originally from prePod's
+        # podcast settings). Defaults to "admin" if not provided.
+        owner = (request.form.get("owner_username") or "admin").strip().lower()
+        extra_hosts_raw = (request.form.get("extra_hosts") or "").strip()
+        extra_hosts = [h.strip().lower() for h in extra_hosts_raw.split(",") if h.strip()]
         meta = _create_project_internal(
             name=project_name,
             shared_project_id=spid,
@@ -621,7 +734,15 @@ def import_track_from_prodpod():
                 "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "auto_created_by": "prodpod_track_import",
             },
+            owner_username=owner,
         )
+        # Patch in extra_hosts (the helper doesn't accept it directly).
+        if extra_hosts:
+            from projects import _read_meta as _rm, _write_meta as _wm
+            m2 = _rm(meta["slug"]) or {}
+            m2["extra_hosts"] = extra_hosts
+            _wm(meta["slug"], m2)
+            meta = m2
     slug = meta["slug"]
 
     # Save under the project's media folder
@@ -706,3 +827,120 @@ def import_track_from_prodpod():
         },
         "composite": composite_info,
     }), 201
+
+
+# ---------------------------------------------------------------------------
+# Exports — list / download / delete (for prePod file browser)
+# ---------------------------------------------------------------------------
+
+@bp.get("/api/integrations/exports")
+def list_exports_by_spid():
+    err = _require_shared_secret()
+    if err:
+        return err
+    spid = request.args.get("shared_project_id")
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+    meta = find_project_by_shared_id(spid)
+    if not meta:
+        return jsonify({"error": "proyecto no encontrado"}), 404
+    slug = meta["slug"]
+    db = get_db(slug)
+    try:
+        rows = db.execute(
+            "SELECT * FROM export_jobs ORDER BY created_at DESC"
+        ).fetchall()
+        exports_dir = PROJECTS_DIR / slug / "exports"
+        result = []
+        for r in rows:
+            size = None
+            if r["output_file"]:
+                fp = exports_dir / r["output_file"]
+                if fp.is_file():
+                    size = fp.stat().st_size
+            result.append({
+                "id": r["id"],
+                "preset_id": r["preset_id"],
+                "status": r["status"],
+                "progress": r["progress"] or 0,
+                "output_file": r["output_file"],
+                "notes_file": r["notes_file"] if "notes_file" in r.keys() else None,
+                "error_msg": r["error_msg"],
+                "started_at": r["started_at"],
+                "finished_at": r["finished_at"],
+                "created_at": r["created_at"],
+                "size_bytes": size,
+            })
+        return jsonify(result)
+    finally:
+        db.close()
+
+
+@bp.get("/api/integrations/exports/<int:job_id>/download")
+def download_export_by_spid(job_id):
+    from flask import send_file
+    err = _require_shared_secret()
+    if err:
+        return err
+    spid = request.args.get("shared_project_id")
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+    meta = find_project_by_shared_id(spid)
+    if not meta:
+        return jsonify({"error": "proyecto no encontrado"}), 404
+    slug = meta["slug"]
+    db = get_db(slug)
+    try:
+        row = db.execute(
+            "SELECT output_file, status FROM export_jobs WHERE id=?", (job_id,)
+        ).fetchone()
+        if not row or row["status"] != "done" or not row["output_file"]:
+            return jsonify({"error": "archivo no disponible"}), 404
+        out_path = PROJECTS_DIR / slug / "exports" / row["output_file"]
+        if not out_path.is_file():
+            return jsonify({"error": "archivo no encontrado en disco"}), 410
+        return send_file(
+            str(out_path),
+            as_attachment=True,
+            download_name=row["output_file"],
+        )
+    finally:
+        db.close()
+
+
+@bp.delete("/api/integrations/exports/<int:job_id>")
+def delete_export_by_spid(job_id):
+    err = _require_shared_secret()
+    if err:
+        return err
+    spid = request.args.get("shared_project_id")
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+    meta = find_project_by_shared_id(spid)
+    if not meta:
+        return jsonify({"error": "proyecto no encontrado"}), 404
+    slug = meta["slug"]
+    db = get_db(slug)
+    try:
+        row = db.execute(
+            "SELECT * FROM export_jobs WHERE id=?", (job_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "job no encontrado"}), 404
+        if row["status"] in ("pending", "running"):
+            return jsonify({"error": "no se puede borrar un job en curso"}), 409
+        exports_dir = PROJECTS_DIR / slug / "exports"
+        for fname in (row["output_file"], row["notes_file"] if "notes_file" in row.keys() else None):
+            if fname:
+                fp = exports_dir / fname
+                if fp.is_file():
+                    fp.unlink()
+        log_name = f"{job_id}_{row['preset_id']}.log"
+        log_path = exports_dir / log_name
+        if log_path.is_file():
+            log_path.unlink()
+        db.execute("DELETE FROM export_jobs WHERE id=?", (job_id,))
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"ok": True})

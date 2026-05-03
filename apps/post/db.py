@@ -64,6 +64,15 @@ CREATE TABLE IF NOT EXISTS audio_lane_clips (
 );
 CREATE INDEX IF NOT EXISTS idx_audio_lane_clips_start ON audio_lane_clips(tl_start);
 
+CREATE TABLE IF NOT EXISTS transcript_cuts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    start_seconds   REAL NOT NULL,
+    end_seconds     REAL NOT NULL,
+    label           TEXT,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_transcript_cuts_start ON transcript_cuts(start_seconds);
+
 CREATE TABLE IF NOT EXISTS export_jobs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     preset_id   TEXT NOT NULL,
@@ -78,6 +87,42 @@ CREATE TABLE IF NOT EXISTS export_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_export_jobs_status ON export_jobs(status);
+
+CREATE TABLE IF NOT EXISTS project_participants (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name              TEXT NOT NULL,
+    role              TEXT NOT NULL DEFAULT 'guest',
+    track             INTEGER,
+    social_instagram  TEXT,
+    social_twitter    TEXT,
+    social_youtube    TEXT,
+    social_tiktok     TEXT,
+    photo_filename    TEXT,
+    banner_shown_at   TEXT,
+    created_at        TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS project_sponsors (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,
+    copy            TEXT,
+    url             TEXT,
+    logo_filename   TEXT,
+    position        INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS project_segments (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    position          INTEGER NOT NULL,
+    kind              TEXT NOT NULL DEFAULT 'segment',
+    title             TEXT NOT NULL DEFAULT '',
+    duration_estimate REAL,
+    sponsor_id        INTEGER REFERENCES project_sponsors(id) ON DELETE SET NULL,
+    notes             TEXT,
+    created_at        TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_project_segments_pos ON project_segments(position);
 """
 
 
@@ -108,4 +153,31 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
     ej_cols = {r["name"] for r in conn.execute("PRAGMA table_info(export_jobs)")}
     if "burn_captions_json" not in ej_cols:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN burn_captions_json TEXT")
+    if "generate_notes" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN generate_notes INTEGER NOT NULL DEFAULT 0")
+    if "notes_file" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN notes_file TEXT")
+    if "enhance_speech" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN enhance_speech INTEGER NOT NULL DEFAULT 0")
+    # range_start/range_end let an export render only a sub-segment of the
+    # timeline (e.g. a TikTok clip from 10s to 70s) without losing internal
+    # cuts/zooms applied within that range.
+    if "range_start" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN range_start REAL")
+    if "range_end" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN range_end REAL")
+    if "spotlight" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN spotlight INTEGER NOT NULL DEFAULT 0")
+    if "use_background" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN use_background INTEGER NOT NULL DEFAULT 0")
+    if "moment_banner" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN moment_banner INTEGER NOT NULL DEFAULT 0")
+    if "banner_position" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN banner_position TEXT DEFAULT 'bottom'")
+    # Moment duration: lets the user define a moment as a range
+    # [timeline_seconds .. timeline_seconds + duration_seconds] instead of
+    # a point. Old rows stay NULL and are treated as point-in-time.
+    m_cols = {r["name"] for r in conn.execute("PRAGMA table_info(moments)")}
+    if "duration_seconds" not in m_cols:
+        conn.execute("ALTER TABLE moments ADD COLUMN duration_seconds REAL")
     conn.commit()

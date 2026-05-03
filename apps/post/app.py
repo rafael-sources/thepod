@@ -1,6 +1,7 @@
 import mimetypes
 import os
 import re
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import integrations
 import projects
 import startup
 import timeline_api
+import transcript_api
 from auth import require_auth
 from config import GLOBAL_DIR, MEDIA_TYPES, PROJECTS_DIR, SECRET_KEY
 
@@ -101,6 +103,37 @@ def create_app():
     app.register_blueprint(export_api.bp)
     app.register_blueprint(integrations.bp)
     app.register_blueprint(captions.bp)
+    app.register_blueprint(transcript_api.bp)
+
+    # Per-project access guard for restricted users.
+    import re as _re
+    from flask import request as _req, session as _sess, jsonify as _json
+    _SLUG_RE = _re.compile(r"^/api/projects/([A-Za-z0-9_-]+)(?:/|$)")
+
+    @app.before_request
+    def _enforce_project_access():
+        path = _req.path or ""
+        if path in ("/api/projects", "/api/projects/"):
+            return None
+        m = _SLUG_RE.match(path)
+        if not m:
+            return None
+        username = _sess.get("username")
+        if not username:
+            return None
+        from config import policy_for as _pol
+        if _pol(username).get("see_all"):
+            return None
+        slug = m.group(1)
+        from projects import _read_meta as _rm, LEGACY_OWNER as _LO
+        meta = _rm(slug)
+        if not meta:
+            return None
+        owner = meta.get("owner_username") or _LO
+        extras = meta.get("extra_hosts") or []
+        if username != owner and username not in extras:
+            return _json({"error": "no autorizado para este proyecto"}), 403
+        return None
 
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
     GLOBAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,16 +165,33 @@ def create_app():
         from flask import request
         return _serve_with_range(target, request)
 
+    @app.get("/api/config/apps")
+    def list_apps():
+        from shared_config import load_shared_config
+        cfg = load_shared_config()
+        return {
+            "current": "postpod",
+            "thepod_url": cfg.get("thepod_url") or "",
+            "apps": [
+                {"key": "prepod",  "name": "prePod",  "icon": "🎙",
+                 "url": cfg.get("prepod_url") or ""},
+                {"key": "prodpod", "name": "prodPod", "icon": "🔴",
+                 "url": cfg.get("prodpod_url") or ""},
+                {"key": "postpod", "name": "postPod", "icon": "🎬",
+                 "url": cfg.get("postpod_url") or ""},
+            ],
+        }
+
     @app.get("/")
     def index():
-        return render_template("index.html")
+        return render_template("index.html", cache_bust=int(time.time()))
 
     # SPA catch-all for any client-side route that isn't an API or media URL
     @app.get("/<path:path>")
     def spa(path):
         if path.startswith(("api/", "media/", "static/")):
             abort(404)
-        return render_template("index.html")
+        return render_template("index.html", cache_bust=int(time.time()))
 
     return app
 

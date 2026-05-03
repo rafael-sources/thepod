@@ -8,13 +8,14 @@ Whisper CPU is slow (~0.5-1x realtime) so jobs run in a background thread
 and the frontend polls a job row for status.
 """
 
+import json
 import os
 import shutil
 import subprocess
 import threading
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, abort, jsonify, request, send_file
 
 from auth import require_auth
 from config import PROJECTS_DIR
@@ -94,6 +95,49 @@ def _srt_filename_for(mf_row, language):
     return f"{base}.{lang}.srt"
 
 
+def _words_filename_for(mf_row, language):
+    base = mf_row["filename"]
+    lang = (language or "auto").lower()
+    return f"{base}.{lang}.words.json"
+
+
+def _extract_words_from_whisper_json(whisper_json: dict) -> list[dict]:
+    """Whisper's JSON output (with --word_timestamps True) shape:
+        {"text": "...", "segments": [{"id": 0, "start": 0.0, "end": 3.2,
+                                       "text": "...",
+                                       "words": [{"word": " hola", "start": 0.0,
+                                                  "end": 0.4, "probability": 0.9}, ...]}, ...]}
+    We flatten to a single list, normalize whitespace on the word, drop empty
+    entries, and round timestamps to 3 decimals to keep the sidecar small.
+    """
+    out: list[dict] = []
+    for seg in whisper_json.get("segments") or []:
+        for w in (seg.get("words") or []):
+            text = (w.get("word") or "").strip()
+            if not text:
+                continue
+            try:
+                start = float(w.get("start") or 0)
+                end = float(w.get("end") or start)
+            except (TypeError, ValueError):
+                continue
+            if end < start:
+                end = start
+            entry = {
+                "w": text,
+                "s": round(start, 3),
+                "e": round(end, 3),
+            }
+            prob = w.get("probability")
+            if prob is not None:
+                try:
+                    entry["p"] = round(float(prob), 2)
+                except (TypeError, ValueError):
+                    pass
+            out.append(entry)
+    return out
+
+
 def _update_job(slug, job_id, **fields):
     fields.pop("finished_at_marker", None)
     if not fields:
@@ -149,20 +193,35 @@ def _run_caption_job(slug, job_id, file_id, language, model):
             return
         _update_job(slug, job_id, progress=20)
 
+        # Use a postPod-owned cache for the Whisper model checkpoints. The
+        # container's $HOME/.cache may be read-only, so the default download
+        # location fails with EROFS. Fixed location => downloaded once, reused
+        # for all subsequent jobs.
+        from config import BASE_DIR
+        whisper_cache = BASE_DIR / ".whisper_models"
+        whisper_cache.mkdir(parents=True, exist_ok=True)
+
+        # `--output_format all` writes srt + vtt + txt + json + tsv at once.
+        # `--word_timestamps True` includes per-word `start`/`end` inside the
+        # JSON output, which is what powers the transcript editor.
         cmd = [
             "whisper", str(wav_path),
             "--model", model or DEFAULT_MODEL,
-            "--output_format", "srt",
+            "--model_dir", str(whisper_cache),
+            "--output_format", "all",
             "--output_dir", str(work_dir),
             "--device", "cpu",
             "--fp16", "False",
+            "--word_timestamps", "True",
         ]
         if language and language != "auto":
             cmd += ["--language", language]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
         if proc.returncode != 0:
+            err = (proc.stderr or "").strip()
+            tail = err.splitlines()[-6:] if err else ["(sin stderr)"]
             _update_job(slug, job_id, status="error",
-                        error_msg=f"whisper: {proc.stderr[:300]}")
+                        error_msg="whisper: " + " | ".join(tail)[:1200])
             return
 
         # whisper writes <wavstem>.srt — rename to our convention
@@ -174,6 +233,43 @@ def _run_caption_job(slug, job_id, file_id, language, model):
         if final_srt.exists():
             final_srt.unlink()
         whisper_out.rename(final_srt)
+
+        # Parse the JSON sibling and write a slim word-level sidecar.
+        # Best-effort: a missing/broken JSON should not fail the whole job —
+        # the SRT is still valid for the caption viewer.
+        words_filename = _words_filename_for(mf, language)
+        final_words = work_dir / words_filename
+        whisper_json = work_dir / (wav_path.stem + ".json")
+        if whisper_json.is_file():
+            try:
+                raw = json.loads(whisper_json.read_text(encoding="utf-8"))
+                words = _extract_words_from_whisper_json(raw)
+                payload = {
+                    "language": (raw.get("language") or language or "").lower() or None,
+                    "duration": raw.get("duration"),
+                    "words": words,
+                }
+                if final_words.exists():
+                    final_words.unlink()
+                final_words.write_text(
+                    json.dumps(payload, ensure_ascii=False), encoding="utf-8",
+                )
+            except (OSError, ValueError):
+                pass
+            try:
+                whisper_json.unlink()
+            except OSError:
+                pass
+
+        # Clean up the other sidecars whisper writes that we don't need
+        # (txt, vtt, tsv) so the media folder doesn't accumulate noise.
+        for ext in ("txt", "vtt", "tsv"):
+            extra = work_dir / f"{wav_path.stem}.{ext}"
+            try:
+                if extra.is_file():
+                    extra.unlink()
+            except OSError:
+                pass
 
         _update_job(slug, job_id, status="done", progress=100,
                     srt_filename=srt_filename,
@@ -320,4 +416,108 @@ def delete_caption(slug, file_id, lang):
     target = media_dir / _srt_filename_for(mf, lang)
     if target.is_file():
         target.unlink()
+    # Also remove the word-level sidecar so future regenerations don't read
+    # stale word data when the user re-runs Whisper with different settings.
+    words = media_dir / _words_filename_for(mf, lang)
+    if words.is_file():
+        try: words.unlink()
+        except OSError: pass
     return jsonify({"ok": True})
+
+
+@bp.put("/api/projects/<slug>/files/<int:file_id>/captions/<lang>/upload")
+@require_auth
+def upload_caption(slug, file_id, lang):
+    """Replace an existing SRT with a user-edited version."""
+    mf = _media_file_row(slug, file_id)
+    if not mf:
+        return jsonify({"error": "archivo no encontrado"}), 404
+
+    f = request.files.get("srt")
+    if not f:
+        return jsonify({"error": "no se recibió archivo SRT"}), 400
+    if not f.filename.lower().endswith(".srt"):
+        return jsonify({"error": "el archivo debe ser .srt"}), 400
+
+    content = f.read()
+    if len(content) > 5 * 1024 * 1024:
+        return jsonify({"error": "archivo demasiado grande (máx 5 MB)"}), 400
+
+    media_dir = _media_path(slug, mf).parent
+    target = media_dir / _srt_filename_for(mf, lang)
+    target.write_bytes(content)
+
+    _rebuild_words_json_from_srt(target, media_dir / _words_filename_for(mf, lang), lang)
+
+    return jsonify({"ok": True, "filename": target.name})
+
+
+def _rebuild_words_json_from_srt(srt_path, words_path, language):
+    """Parse an SRT file and regenerate the .words.json sidecar so the
+    transcript editor stays in sync with manual SRT edits."""
+    import re
+    try:
+        text = srt_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+    blocks = re.split(r"\n\s*\n", text.strip())
+    words = []
+    ts_re = re.compile(
+        r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})"
+    )
+    duration = 0.0
+    for block in blocks:
+        lines = block.strip().splitlines()
+        if len(lines) < 3:
+            continue
+        m = ts_re.search(lines[1])
+        if not m:
+            continue
+        g = [int(x) for x in m.groups()]
+        start = g[0]*3600 + g[1]*60 + g[2] + g[3]/1000
+        end = g[4]*3600 + g[5]*60 + g[6] + g[7]/1000
+        if end > duration:
+            duration = end
+        segment_text = " ".join(lines[2:]).strip()
+        segment_words = segment_text.split()
+        if not segment_words:
+            continue
+        span = (end - start) / len(segment_words) if len(segment_words) > 1 else end - start
+        for i, w in enumerate(segment_words):
+            ws = round(start + i * span, 3)
+            we = round(start + (i + 1) * span, 3)
+            words.append({"w": w, "s": ws, "e": we})
+    payload = {"language": language, "duration": round(duration, 3), "words": words}
+    try:
+        words_path.write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
+@bp.get("/api/projects/<slug>/files/<int:file_id>/transcript")
+@require_auth
+def get_transcript(slug, file_id):
+    """Returns the word-level transcript JSON for a given file + language.
+
+    Response shape: {"language": "es", "duration": 123.4,
+                     "words": [{"w": "hola", "s": 0.0, "e": 0.4, "p": 0.93}, ...]}
+    Returns 404 if the .words.json sidecar doesn't exist (e.g. the file was
+    captioned before word_timestamps was enabled — re-run captions to fix).
+    """
+    mf = _media_file_row(slug, file_id)
+    if not mf:
+        return jsonify({"error": "archivo no encontrado"}), 404
+    language = (request.args.get("language") or "auto").strip().lower()
+    media_dir = _media_path(slug, mf).parent
+    target = media_dir / _words_filename_for(mf, language)
+    if not target.is_file():
+        return jsonify({
+            "error": "transcript word-level no disponible",
+            "hint": "regenera los captions para obtener timestamps por palabra",
+        }), 404
+    try:
+        return send_file(str(target), mimetype="application/json")
+    except OSError:
+        return jsonify({"error": "no se pudo leer el transcript"}), 500

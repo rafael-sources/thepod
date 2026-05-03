@@ -97,11 +97,11 @@ function niceTickInterval(visibleSeconds, maxTicks = 10) {
   return 3600;
 }
 
-/* Compute cumulative timeline starts for a list of clip objects. Tracks 1
-   and 2 each stack independently starting from t=0 (multi-cam model). Each
+/* Compute cumulative timeline starts for a list of clip objects. Tracks 1-4
+   each stack independently starting from t=0 (multi-cam model). Each
    returned clip gets {...clip, track, start, end}. */
 function withTimelineStarts(clips) {
-  const cursor = { 1: 0, 2: 0 };
+  const cursor = { 1: 0, 2: 0, 3: 0, 4: 0 };
   return clips.map((c) => {
     const track = c.track || 1;
     const dur = c.duration || 0;
@@ -129,8 +129,8 @@ function activeTrackAtTime(moments, t) {
     const op = (m.operations || []).find(o => o.type === "switch_track");
     if (!op) continue;
     const p = op.params || {};
-    if (p.toggle) active = active === 1 ? 2 : 1;
-    else if (p.track === 1 || p.track === 2) active = p.track;
+    if (p.toggle) active = (active % 4) + 1;
+    else if (p.track >= 1 && p.track <= 4) active = p.track;
   }
   return active;
 }
@@ -150,7 +150,12 @@ function clipAtTime(clips, t, moments) {
     }
     return null;
   };
-  return onTrack(active) || onTrack(active === 1 ? 2 : 1) || clips[clips.length - 1];
+  for (let t = 0; t < 4; t++) {
+    const trk = ((active - 1 + t) % 4) + 1;
+    const found = onTrack(trk);
+    if (found) return found;
+  }
+  return clips[clips.length - 1];
 }
 
 /* Module-level peaks cache, keyed by peaks_url. Each entry is a Promise. */
@@ -239,6 +244,7 @@ var ClipWaveform = {
 var OP_TYPES = [
   { value: "remove_silences", label: "Quitar silencios del rango",  kinds: ["relative"] },
   { value: "to_vertical",  label: "Formato vertical 9:16",       kinds: ["relative", "absolute"] },
+  { value: "vertical_split", label: "Vertical 9:16 apilado (TikTok)", kinds: ["relative", "absolute"] },
   { value: "cut_before",   label: "Cortar todo lo anterior",     kinds: ["relative"] },
   { value: "cut_after",    label: "Cortar todo lo posterior",    kinds: ["relative"] },
   { value: "insert_clip",  label: "Insertar clip",               kinds: ["relative"] },
@@ -354,7 +360,7 @@ var ProjectListView = {
 
     async function remove(p, ev) {
       ev.stopPropagation();
-      if (!confirm(`¿Eliminar proyecto "${p.name}"?\nSe borrarán TODOS los archivos del proyecto.`)) return;
+      if (!await podSwal.confirm(`¿Eliminar proyecto "${p.name}"?\nSe borrarán TODOS los archivos del proyecto.`)) return;
       try { await api(`/api/projects/${p.slug}`, { method: "DELETE" }); await load(); }
       catch (e) { error.value = e.message; }
     }
@@ -432,6 +438,9 @@ var VideoPlayer = {
     effects: Object,        // { filter, transform, subtitles[] }
     moments: Array,         // all moments with their operations, used for jump_to_moment
     selectedRange: Object,  // { start, end } | null — range selected by drag on the timeline
+    liveSelection: Object,  // { start, end } | null — in-flight drag, updated every pointermove
+    verticalSplitSources: Array, // [{url, localTime, cropX, track}] | null — feeds the stacked preview when a vertical_split op is active
+    multitrackPreview: Boolean,  // true when auto-multitrack (side-by-side 16:9), false for vertical_split (9:16)
     audioLane: Array,       // parallel audio lane clips for preview playback
     textOverlaySounds: Array, // one-shot sounds bound to text_overlay ops
     editingOverlay: Object, // shared ref with OpForm for WYSIWYG text_overlay editing
@@ -571,6 +580,7 @@ var VideoPlayer = {
     }
 
     function _unmute(v) {
+      if (isMultitrackSplit.value) { v.muted = true; return; }
       v.muted = false;
       const clipVol = activeClip.value?.volume ?? 1.0;
       const globalVol = props.playerState?.volume ?? 1.0;
@@ -578,8 +588,8 @@ var VideoPlayer = {
       if (Math.abs(v.volume - target) > 0.001) v.volume = target;
     }
 
-    // When active clip changes or its volume is edited, re-apply volume.
-    watch(() => [activeClip.value?.volume, props.playerState.volume, activeClip.value?.id], () => {
+    // When active clip changes, volume is edited, or multitrack state changes, re-apply.
+    watch(() => [activeClip.value?.volume, props.playerState.volume, activeClip.value?.id, isMultitrackSplit.value], () => {
       if (videoEl.value) _unmute(videoEl.value);
     });
 
@@ -820,6 +830,22 @@ var VideoPlayer = {
     const tc = computed(() => formatTimecode(props.playerState.currentTime));
     const tcTotal = computed(() => formatTimecode(props.playerState.duration));
 
+    // Range readout: while the user is drag-selecting (liveSelection) OR
+    // after they commit (selectedRange), the big clock at the top of the
+    // player swaps from "currentTime / total" to "start → end · duration"
+    // so they get instant feedback without looking at the timeline.
+    const rangeReadout = computed(() => {
+      const r = props.liveSelection || props.selectedRange;
+      if (!r) return null;
+      const dur = Math.max(0, (r.end || 0) - (r.start || 0));
+      return {
+        start: formatTimecode(r.start || 0),
+        end: formatTimecode(r.end || 0),
+        durationSec: dur,
+        live: !!props.liveSelection,
+      };
+    });
+
     const frameStyle = computed(() => {
       const eff = props.effects || {};
       const out = {};
@@ -840,7 +866,14 @@ var VideoPlayer = {
       // Shift object-position horizontally based on cropX (0..1 → 0%..100%)
       return { objectPosition: `${(v.cropX ?? 0.5) * 100}% 50%` };
     });
-    const isVertical = computed(() => !!props.effects?.vertical);
+    const isVerticalSplit = computed(() => {
+      const srcs = props.verticalSplitSources || [];
+      return srcs.some(s => s && s.url);
+    });
+    const isMultitrackSplit = computed(() => isVerticalSplit.value && !!props.multitrackPreview);
+    const isVertical = computed(() =>
+      !!props.effects?.vertical || (isVerticalSplit.value && !isMultitrackSplit.value)
+    );
 
     function textOverlayFontFamily(key) {
       const map = {
@@ -903,10 +936,59 @@ var VideoPlayer = {
       window.addEventListener("pointerup", up);
     }
 
+    // ---- Vertical-split preview: keep panel <video>s in sync ----
+    // Each panel is a thin wrapper around an HTMLVideoElement that we drive
+    // manually via the playerState. We don't try for frame-perfect sync —
+    // the goal is "show the user what TikTok will look like", which a
+    // two-frame drift doesn't break.
+    const splitPanelEls = ref([]);  // Vue refs for the <video> elements
+    function setSplitPanelEl(el, idx) {
+      if (!el) return;
+      splitPanelEls.value[idx] = el;
+    }
+    function _syncSplitPanels() {
+      const sources = props.verticalSplitSources || [];
+      const playing = !!props.playerState.isPlaying;
+      const mt = isMultitrackSplit.value;
+      const globalVol = props.playerState?.volume ?? 1.0;
+      for (let i = 0; i < sources.length; i++) {
+        const el = splitPanelEls.value[i];
+        const src = sources[i];
+        if (!el || !src || !src.url) continue;
+        if (el.dataset.url !== src.url) {
+          el.src = src.url;
+          el.dataset.url = src.url;
+        }
+        const want = Math.max(0, src.localTime || 0);
+        if (Math.abs((el.currentTime || 0) - want) > 0.25) {
+          try { el.currentTime = want; } catch (_) {}
+        }
+        if (mt) {
+          el.muted = false;
+          el.volume = Math.max(0, Math.min(1, (src.volume ?? 1.0) * globalVol));
+        } else {
+          el.muted = true;
+        }
+        if (playing) {
+          if (el.paused) { el.play().catch(() => {}); }
+        } else {
+          if (!el.paused) el.pause();
+        }
+      }
+      // In multitrack mode, mute the main video to avoid doubling audio.
+      if (mt && videoEl.value) videoEl.value.muted = true;
+    }
+    watch(
+      () => [props.playerState.currentTime, props.playerState.isPlaying, props.verticalSplitSources, isVerticalSplit.value],
+      _syncSplitPanels,
+      { flush: "post" },
+    );
+
     return {
       videoEl, rangeMode, canSlowPlay, seek, togglePlay, playVisibleRange, playSlow10s,
       onTimeUpdate, onPlay, onPause, onVolumeChange,
-      tc, tcTotal, activeClip, frameStyle, isVertical, verticalStyle,
+      tc, tcTotal, rangeReadout, activeClip, frameStyle, isVertical, verticalStyle,
+      isVerticalSplit, isMultitrackSplit, setSplitPanelEl,
       textOverlayFontFamily, textOverlayShadow, onEditOverlayPointerDown,
     };
   },
@@ -915,7 +997,7 @@ var VideoPlayer = {
       <div class="video-frame" :class="{ 'vertical-preview': isVertical }">
         <div class="video-inner" :style="frameStyle">
           <video
-            v-show="activeClip"
+            v-show="activeClip && !isVerticalSplit"
             ref="videoEl"
             :style="verticalStyle"
             :class="{ vertical: isVertical }"
@@ -926,6 +1008,26 @@ var VideoPlayer = {
             @click="togglePlay"
             preload="metadata"
           ></video>
+
+          <div v-if="isVerticalSplit" :class="isMultitrackSplit ? 'multitrack-frame' : 'vsplit-frame'"
+               @click="togglePlay">
+            <div
+              v-for="(src, i) in (verticalSplitSources || [])"
+              :key="'vsplit-' + i"
+              class="vsplit-panel"
+            >
+              <video
+                v-if="src && src.url"
+                :ref="(el) => setSplitPanelEl(el, i)"
+                :style="{ objectPosition: ((src.cropX || 0.5) * 100) + '% 50%' }"
+                preload="metadata"
+                :muted="!isMultitrackSplit"
+                playsinline
+              ></video>
+              <div v-else class="vsplit-empty">sin clip en track {{ i + 1 }}</div>
+              <div class="vsplit-track-tag">T{{ i + 1 }}</div>
+            </div>
+          </div>
         </div>
         <div v-if="isVertical" class="vertical-badge">9:16</div>
         <template v-if="effects && effects.subtitles">
@@ -995,15 +1097,28 @@ var VideoPlayer = {
         <button class="btn-range" @click="playVisibleRange" :class="{primary: rangeMode === 'range'}" title="Reproducir rango visible a 1×">▶ Rango</button>
         <button class="btn-range" @click="playSlow10s" :disabled="!canSlowPlay" :class="{primary: rangeMode === 'slow'}" title="Estirar rango a 10s">◐ Lento</button>
 
-        <div class="time-readout">
-          <span>{{ tc.hh }}</span><span class="sep">:</span><span>{{ tc.mm }}</span><span class="sep">:</span><span>{{ tc.ss }}</span><span class="ms">.{{ tc.cs }}</span>
-          <span class="total">/ {{ tcTotal.hh }}:{{ tcTotal.mm }}:{{ tcTotal.ss }}</span>
+        <div class="time-readout" :class="{ 'range-mode': rangeReadout, 'live': rangeReadout && rangeReadout.live }">
+          <template v-if="rangeReadout">
+            <span class="rr-prefix">RANGO</span>
+            <span class="rr-time">{{ rangeReadout.start.mm }}:{{ rangeReadout.start.ss }}<span class="ms">.{{ rangeReadout.start.cs }}</span></span>
+            <span class="rr-sep">→</span>
+            <span class="rr-time">{{ rangeReadout.end.mm }}:{{ rangeReadout.end.ss }}<span class="ms">.{{ rangeReadout.end.cs }}</span></span>
+            <span class="rr-dur">· {{ rangeReadout.durationSec.toFixed(2) }}s</span>
+          </template>
+          <template v-else>
+            <span>{{ tc.hh }}</span><span class="sep">:</span><span>{{ tc.mm }}</span><span class="sep">:</span><span>{{ tc.ss }}</span><span class="ms">.{{ tc.cs }}</span>
+            <span class="total">/ {{ tcTotal.hh }}:{{ tcTotal.mm }}:{{ tcTotal.ss }}</span>
+          </template>
         </div>
 
         <div class="spacer"></div>
 
         <button class="btn-range" :class="{primary: captionsEnabled}"
-                @click="$emit('toggle-captions')" title="Mostrar/ocultar captions">CC</button>
+                @click="$emit('toggle-captions')"
+                :title="captionsEnabled ? (liveCaption ? 'Captions ON — segmento actual visible' : 'Captions ON, pero este clip no tiene SRT generado. Generalo con 🎙 desde el panel de archivos.') : 'Mostrar captions'">
+          CC
+          <span v-if="captionsEnabled && !liveCaption" style="font-size: 9px; margin-left: 4px; opacity: 0.85;">(sin SRT)</span>
+        </button>
 
         <div class="volume">
           <span>VOL</span>
@@ -1029,12 +1144,13 @@ var Timeline = {
     selectedRange: Object,  // { start, end } | null
     audioLane: Array,       // [{id, tl_start, tl_end, duration, volume, source, ...}]
   },
-  emits: ["seek", "zoom-to", "select-moment", "lane-click", "lane-remove", "clip-click"],
+  emits: ["seek", "zoom-to", "select-moment", "lane-click", "lane-remove", "clip-click", "live-select"],
   setup(props, { emit }) {
     const root = ref(null);
     const selecting = ref(false);
     const selectStartPx = ref(0);
     const selectCurPx = ref(0);
+    const playheadDragging = ref(false);
     const DRAG_THRESHOLD_PX = 4;
 
     const visibleStart = computed(() => props.zoom.startSeconds || 0);
@@ -1095,6 +1211,16 @@ var Timeline = {
           return;
         }
       }
+      // Mousedown on the playhead → scrubbing. Continuous seek while
+      // dragging gives the user a "find the exact frame" affordance that
+      // a one-shot click doesn't.
+      if (ev.target.classList.contains("tl-cursor")) {
+        playheadDragging.value = true;
+        ev.preventDefault();
+        window.addEventListener("pointermove", onPlayheadMove);
+        window.addEventListener("pointerup", onPlayheadUp);
+        return;
+      }
       // Click on a video clip or audio-lane clip — let its own @click handler
       // open the editor; don't start a drag-selection.
       if (ev.target.closest(".tl-clip, .tl-lane-clip")) return;
@@ -1105,16 +1231,38 @@ var Timeline = {
       window.addEventListener("pointermove", onPointerMove);
       window.addEventListener("pointerup", onPointerUp);
     }
+    function onPlayheadMove(ev) {
+      if (!playheadDragging.value || !root.value) return;
+      const rect = root.value.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+      const t = visibleStart.value + (x / rect.width) * visibleDur.value;
+      emit("seek", t);
+    }
+    function onPlayheadUp() {
+      playheadDragging.value = false;
+      window.removeEventListener("pointermove", onPlayheadMove);
+      window.removeEventListener("pointerup", onPlayheadUp);
+    }
     function onPointerMove(ev) {
       if (!selecting.value || !root.value) return;
       const rect = root.value.getBoundingClientRect();
       selectCurPx.value = Math.max(0, Math.min(rect.width, ev.clientX - rect.left));
+      // Push the in-flight range up to ProjectView so the big time-readout
+      // in the player can mirror what the user is selecting in real time.
+      const a = Math.min(selectStartPx.value, selectCurPx.value);
+      const b = Math.max(selectStartPx.value, selectCurPx.value);
+      const t0 = visibleStart.value + (a / rect.width) * visibleDur.value;
+      const t1 = visibleStart.value + (b / rect.width) * visibleDur.value;
+      emit("live-select", { start: t0, end: t1 });
     }
     function onPointerUp(ev) {
       if (!selecting.value) return;
       selecting.value = false;
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      // Drop the live-select preview now that we've committed (or
+      // discarded as a click).
+      emit("live-select", null);
       const delta = Math.abs(selectCurPx.value - selectStartPx.value);
       const rect = root.value.getBoundingClientRect();
       if (delta < DRAG_THRESHOLD_PX) {
@@ -1131,6 +1279,8 @@ var Timeline = {
     onBeforeUnmount(() => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointermove", onPlayheadMove);
+      window.removeEventListener("pointerup", onPlayheadUp);
     });
 
     const cursorPct = computed(() => secToPct(props.playerState.currentTime));
@@ -1171,9 +1321,46 @@ var Timeline = {
       return { left: Math.max(0, a) + "%", width: Math.min(100, b) - Math.max(0, a) + "%" };
     });
 
+    // Floating time label — visible while drag-selecting OR while
+    // scrubbing the playhead. During selection it follows the cursor;
+    // during scrub it sits at the current play position.
+    const timeTooltip = computed(() => {
+      if (playheadDragging.value) {
+        const t = props.playerState.currentTime || 0;
+        return { leftPct: secToPct(t), label: formatShort(t), variant: "scrub" };
+      }
+      if (selecting.value && root.value) {
+        const rect = root.value.getBoundingClientRect();
+        if (rect.width <= 0) return null;
+        const a = Math.min(selectStartPx.value, selectCurPx.value);
+        const b = Math.max(selectStartPx.value, selectCurPx.value);
+        const t0 = visibleStart.value + (a / rect.width) * visibleDur.value;
+        const t1 = visibleStart.value + (b / rect.width) * visibleDur.value;
+        const dur = Math.max(0, t1 - t0);
+        const leftPct = ((selectCurPx.value / rect.width) * 100);
+        return {
+          leftPct: Math.max(0, Math.min(100, leftPct)),
+          label: `${formatShort(t1)}`,
+          rangeLabel: dur > 0.05
+            ? `${formatShort(t0)} → ${formatShort(t1)}  ·  ${dur.toFixed(2)}s`
+            : null,
+          variant: "select",
+        };
+      }
+      return null;
+    });
+
+    const maxTrack = computed(() => {
+      let m = 1;
+      for (const c of props.clips) { const t = c.track || 1; if (t > m) m = t; }
+      return m;
+    });
+    const clipsHeight = computed(() => (maxTrack.value * 20) + 'px');
+
     return {
       root, cursorPct, selectRect, persistedRangeStyle, ticks, clipStyle, laneClipStyle, secToPct, onPointerDown,
       visibleStart, visibleEnd, formatShort, momentLinks,
+      playheadDragging, timeTooltip, clipsHeight,
     };
   },
   template: `
@@ -1185,7 +1372,28 @@ var Timeline = {
       </div>
       <div v-if="clips.length" class="tl-edge tl-edge-start">{{ formatShort(visibleStart) }}</div>
       <div v-if="clips.length" class="tl-edge tl-edge-end">{{ formatShort(visibleEnd) }}</div>
-      <div class="tl-clips">
+      <div v-if="audioLane && audioLane.length" class="tl-audio-lane">
+        <div class="tl-lane-label">AUDIO</div>
+        <div
+          v-for="lc in audioLane"
+          :key="'lane-' + lc.id"
+          class="tl-lane-clip"
+          :style="laneClipStyle(lc)"
+          :title="(lc.label || (lc.source && lc.source.original_name) || '') + ' · vol ' + lc.volume.toFixed(2) + ' · @' + lc.tl_start.toFixed(2) + 's'"
+          @click.stop="$emit('lane-click', lc)"
+          @contextmenu.prevent="$emit('lane-remove', lc)"
+        >
+          <ClipWaveform
+            v-if="lc.source && lc.source.peaks_url && lc.source.duration"
+            :peaks-url="lc.source.peaks_url"
+            :source-start="lc.start_offset || 0"
+            :source-end="lc.end_offset != null ? lc.end_offset : lc.source.duration"
+            :source-duration="lc.source.duration"
+          />
+          <span class="tl-lane-clip-name">{{ lc.label || (lc.source && lc.source.original_name) }}</span>
+        </div>
+      </div>
+      <div class="tl-clips" :style="{height: clipsHeight}">
         <div
           v-for="clip in clips"
           :key="clip.id"
@@ -1213,27 +1421,6 @@ var Timeline = {
           <span class="tl-clip-label">{{ clip.label || (clip.source ? clip.source.original_name : '#' + clip.id) }}</span>
         </div>
       </div>
-      <div v-if="audioLane && audioLane.length" class="tl-audio-lane">
-        <div class="tl-lane-label">AUDIO</div>
-        <div
-          v-for="lc in audioLane"
-          :key="'lane-' + lc.id"
-          class="tl-lane-clip"
-          :style="laneClipStyle(lc)"
-          :title="(lc.label || (lc.source && lc.source.original_name) || '') + ' · vol ' + lc.volume.toFixed(2) + ' · @' + lc.tl_start.toFixed(2) + 's'"
-          @click.stop="$emit('lane-click', lc)"
-          @contextmenu.prevent="$emit('lane-remove', lc)"
-        >
-          <ClipWaveform
-            v-if="lc.source && lc.source.peaks_url && lc.source.duration"
-            :peaks-url="lc.source.peaks_url"
-            :source-start="lc.start_offset || 0"
-            :source-end="lc.end_offset != null ? lc.end_offset : lc.source.duration"
-            :source-duration="lc.source.duration"
-          />
-          <span class="tl-lane-clip-name">{{ lc.label || (lc.source && lc.source.original_name) }}</span>
-        </div>
-      </div>
       <template v-if="clips.length">
         <svg v-if="momentLinks.length" class="tl-links" preserveAspectRatio="none" viewBox="0 0 100 100">
           <path
@@ -1244,7 +1431,15 @@ var Timeline = {
           <circle v-for="l in momentLinks" :key="l.id + '-arrow'"
                   :cx="l.x2" cy="100" r="1.8" />
         </svg>
-        <div v-if="playerState.duration > 0" class="tl-cursor" :style="{left: cursorPct + '%'}"></div>
+        <div v-if="playerState.duration > 0" class="tl-cursor"
+             :class="{ scrubbing: playheadDragging }"
+             :style="{left: cursorPct + '%'}"
+             title="Arrastra para buscar (scrub)"></div>
+        <div v-if="timeTooltip" class="tl-time-tip" :class="['variant-' + timeTooltip.variant]"
+             :style="{left: timeTooltip.leftPct + '%'}">
+          <span class="tip-time">{{ timeTooltip.label }}</span>
+          <span v-if="timeTooltip.rangeLabel" class="tip-range">{{ timeTooltip.rangeLabel }}</span>
+        </div>
         <div
           v-for="m in moments"
           :key="m.id"
@@ -1351,7 +1546,7 @@ var CaptureMomentModal = {
 var MomentsList = {
   props: { moments: Array, selectedMomentId: Number },
   emits: ["goto", "preview", "update-label", "update-type", "remove", "select",
-          "jump-next", "set-track", "toggle-track"],
+          "jump-next", "set-track", "toggle-track", "update-time", "export-moment"],
   setup(props, { emit }) {
     const sorted = computed(() => [...props.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds));
 
@@ -1362,6 +1557,33 @@ var MomentsList = {
 
     function hasJumpOp(m) {
       return (m.operations || []).some(o => o.type === "jump_to_moment");
+    }
+
+    // Inline numeric edit of a moment's start / end. The "end" field is
+    // really `timeline_seconds + duration_seconds`; we recompute the
+    // duration on save.
+    function endValueFor(m) {
+      if (!m || !m.duration_seconds || m.duration_seconds <= 0) return "";
+      return ((m.timeline_seconds || 0) + m.duration_seconds).toFixed(2);
+    }
+    function onChangeStart(m, ev) {
+      const f = parseFloat(ev.target.value);
+      if (!isFinite(f) || f < 0) { ev.target.value = m.timeline_seconds.toFixed(2); return; }
+      emit("update-time", { id: m.id, patch: { timeline_seconds: f } });
+    }
+    function onChangeEnd(m, ev) {
+      const raw = ev.target.value;
+      if (raw === "" || raw === null) {
+        emit("update-time", { id: m.id, patch: { duration_seconds: null } });
+        return;
+      }
+      const f = parseFloat(raw);
+      if (!isFinite(f)) return;
+      const dur = f - (m.timeline_seconds || 0);
+      emit("update-time", {
+        id: m.id,
+        patch: { duration_seconds: dur > 0 ? dur : null },
+      });
     }
 
     function beginEdit(ev) {
@@ -1389,7 +1611,8 @@ var MomentsList = {
       if (ev.key === "Escape") { ev.target.textContent = m.label || ""; ev.target.blur(); }
     }
 
-    return { sorted, formatTimecode, beginEdit, endEdit, onKey, toggleType, hasJumpOp };
+    return { sorted, formatTimecode, beginEdit, endEdit, onKey, toggleType, hasJumpOp,
+             endValueFor, onChangeStart, onChangeEnd };
   },
   template: `
     <div class="moments-section">
@@ -1430,6 +1653,7 @@ var MomentsList = {
             <span class="actions" @click.stop>
               <button class="icon" @click="$emit('goto', m.timeline_seconds)" title="Saltar al momento">⇥</button>
               <button class="icon primary-subtle" @click="$emit('preview', m)" title="Reproducir desde un poco antes">▶</button>
+              <button class="icon" @click="$emit('export-moment', m)" title="Exportar este momento">⇪</button>
               <button class="icon danger" @click="$emit('remove', m.id)" title="Eliminar">✕</button>
             </span>
           </div>
@@ -1437,9 +1661,37 @@ var MomentsList = {
             <button class="qa" :class="{ on: hasJumpOp(m) }"
                     @click="$emit('jump-next', m)"
                     title="Al llegar a este momento, saltar al siguiente">⇢ salto</button>
-            <button class="qa" @click="$emit('set-track', { m, track: 1 })" title="Cambiar a Track 1 en este momento">T1</button>
-            <button class="qa" @click="$emit('set-track', { m, track: 2 })" title="Cambiar a Track 2 en este momento">T2</button>
-            <button class="qa" @click="$emit('toggle-track', m)" title="Alternar al otro track">⇋</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 1 })" title="Cambiar a Track 1">T1</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 2 })" title="Cambiar a Track 2">T2</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 3 })" title="Cambiar a Track 3">T3</button>
+            <button class="qa" @click="$emit('set-track', { m, track: 4 })" title="Cambiar a Track 4">T4</button>
+            <button class="qa" @click="$emit('toggle-track', m)" title="Rotar al siguiente track">⇋</button>
+          </div>
+
+          <div v-if="m.id === selectedMomentId" class="moment-time-edit" @click.stop>
+            <div class="mte-field">
+              <label>Empieza (s)</label>
+              <input type="number" step="0.01" min="0"
+                     :value="m.timeline_seconds.toFixed(2)"
+                     @change="onChangeStart(m, $event)"
+                     @keydown.enter="$event.target.blur()">
+            </div>
+            <div class="mte-arrow">→</div>
+            <div class="mte-field">
+              <label>Termina (s)</label>
+              <input type="number" step="0.01" min="0"
+                     :value="endValueFor(m)" placeholder="(sin rango)"
+                     @change="onChangeEnd(m, $event)"
+                     @keydown.enter="$event.target.blur()">
+            </div>
+            <div class="mte-summary mono">
+              <template v-if="m.duration_seconds && m.duration_seconds > 0">
+                <strong>{{ m.duration_seconds.toFixed(2) }}s</strong>
+              </template>
+              <template v-else>
+                <span class="muted">punto</span>
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -1527,11 +1779,35 @@ var FilesPanel = {
     async function deleteCaption(lang) {
       const f = captionsModalFor.value;
       if (!f) return;
-      if (!confirm(`¿Eliminar las captions en ${lang}?`)) return;
+      if (!await podSwal.confirm(`¿Eliminar las captions en ${lang}?`)) return;
       try {
         await api(`/api/projects/${props.project.slug}/files/${f.id}/captions/${lang}`, { method: "DELETE" });
         await refreshCaptionList();
         emit("captions-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    const captionUploadRef = ref(null);
+    let captionUploadLang = null;
+    function triggerCaptionUpload(lang) {
+      captionUploadLang = lang;
+      if (captionUploadRef.value) captionUploadRef.value.click();
+    }
+    async function handleCaptionUpload(ev) {
+      const file = ev.target.files?.[0];
+      ev.target.value = "";
+      if (!file || !captionsModalFor.value || !captionUploadLang) return;
+      const fd = new FormData();
+      fd.append("srt", file);
+      try {
+        const slug = props.project.slug;
+        const fid = captionsModalFor.value.id;
+        await fetch(`/api/projects/${slug}/files/${fid}/captions/${captionUploadLang}/upload`, {
+          method: "PUT", body: fd,
+        }).then(r => { if (!r.ok) throw new Error("Error al subir SRT"); return r.json(); });
+        await refreshCaptionList();
+        emit("captions-changed");
+        podSwal.toast("SRT actualizado");
       } catch (e) { error.value = e.message; }
     }
 
@@ -1576,7 +1852,7 @@ var FilesPanel = {
 
     async function removeFile(f, ev) {
       ev.stopPropagation();
-      if (!confirm(`¿Eliminar "${f.original_name}"?\nSi está en el timeline, se quitará automáticamente.`)) return;
+      if (!await podSwal.confirm(`¿Eliminar "${f.original_name}"?\nSi está en el timeline, se quitará automáticamente.`)) return;
       try {
         await api(`/api/projects/${props.project.slug}/files/${f.id}`, { method: "DELETE" });
         await load();
@@ -1586,7 +1862,7 @@ var FilesPanel = {
 
     async function makeGlobal(f, ev) {
       ev.stopPropagation();
-      if (!confirm(`Mover "${f.original_name}" a archivos globales?\nSi está en el timeline, se quitará. Esta acción no se puede deshacer.`)) return;
+      if (!await podSwal.confirm(`Mover "${f.original_name}" a archivos globales?\nSi está en el timeline, se quitará. Esta acción no se puede deshacer.`)) return;
       try {
         await api(`/api/projects/${props.project.slug}/files/${f.id}/make-global`, { method: "POST" });
         await load();
@@ -1594,21 +1870,27 @@ var FilesPanel = {
       } catch (e) { error.value = e.message; }
     }
 
+    const nextTrack = ref(1);
+    function cycleTrack(ev) {
+      ev.stopPropagation();
+      nextTrack.value = (nextTrack.value % 4) + 1;
+    }
     function addToTimeline(f) {
       if (f.file_type === "image") {
-        alert("Las imágenes no se pueden usar como clip del timeline. Usa un archivo de video o de audio.");
+        podSwal.toast("Las imágenes no se pueden usar como clip del timeline. Usa un archivo de video o de audio.");
         return;
       }
-      emit("add-to-timeline", f);
+      emit("add-to-timeline", { ...f, _track: f.file_type === "video" ? nextTrack.value : 1 });
     }
 
     onMounted(load);
 
     return {
       tab, localFiles, globalFiles, error, uploading, uploadProgress, uploadName, fileInput,
-      upload, removeFile, makeGlobal, addToTimeline, formatSize, formatDurationCompact, load,
+      upload, removeFile, makeGlobal, addToTimeline, nextTrack, cycleTrack, formatSize, formatDurationCompact, load,
       captionsModalFor, captionLanguages, captionForm, captionJob, captionList,
       openCaptionsModal, closeCaptionsModal, generateCaptions, deleteCaption,
+      captionUploadRef, triggerCaptionUpload, handleCaptionUpload,
     };
   },
   template: `
@@ -1645,6 +1927,8 @@ var FilesPanel = {
               </div>
             </div>
             <div class="actions">
+              <button v-if="f.file_type === 'video'" class="track-btn" :class="'track-' + nextTrack"
+                      @click="cycleTrack" :title="'Pista destino: T' + nextTrack + ' (click para cambiar)'">T{{ nextTrack }}</button>
               <button v-if="f.file_type !== 'image'" class="icon ghost" @click="openCaptionsModal(f, $event)" title="Generar captions con Whisper">🎙</button>
               <button class="icon ghost" @click="makeGlobal(f, $event)" title="Mover a globales">⇪</button>
               <button class="icon danger" @click="removeFile(f, $event)" title="Eliminar">✕</button>
@@ -1674,7 +1958,7 @@ var FilesPanel = {
           <h3 style="margin: 4px 0 12px;">Generar subtítulos</h3>
           <p class="muted" style="margin-bottom: 14px; font-size: 12px;">
             Para <span class="mono">{{ captionsModalFor.original_name }}</span>.
-            Whisper corre en CPU — esperá ~0.5-1× la duración del clip.
+            Whisper corre en CPU — espera ~0.5-1× la duración del clip.
           </p>
 
           <div v-if="captionList.length" style="margin-bottom: 14px;">
@@ -1682,8 +1966,10 @@ var FilesPanel = {
             <div v-for="c in captionList" :key="c.language" class="invite-row" style="padding: 4px 0;">
               <span class="who mono">{{ c.language }} · {{ c.filename }}</span>
               <a :href="c.url" target="_blank" class="join-pill">↓ srt</a>
+              <button class="join-pill" @click="triggerCaptionUpload(c.language)">↑ subir</button>
               <button class="icon danger" @click="deleteCaption(c.language)">✕</button>
             </div>
+            <input type="file" ref="captionUploadRef" accept=".srt" @change="handleCaptionUpload" style="display:none;">
           </div>
 
           <div class="form-row" style="margin-bottom: 12px;">
@@ -1820,7 +2106,7 @@ var ClipsPanel = {
             </div>
             <div class="clip-actions">
               <button class="icon ghost clip-track-toggle" :class="'track-' + (clip.track || 1)"
-                      @click="$emit('set-track', { id: clip.id, track: (clip.track || 1) === 1 ? 2 : 1 })"
+                      @click="$emit('set-track', { id: clip.id, track: ((clip.track || 1) % 4) + 1 })"
                       :title="'Track ' + (clip.track || 1) + ' — click para cambiar'">
                 T{{ clip.track || 1 }}
               </button>
@@ -1880,6 +2166,7 @@ var OpForm = {
       else if (t === "insert_clip") Object.assign(params, { timeline_clip_id: null });
       else if (t === "switch_video") Object.assign(params, { media_file_id: null });
       else if (t === "to_vertical") Object.assign(params, { crop_x: 0.5, duration_seconds: null });
+      else if (t === "vertical_split") Object.assign(params, { n: 2, crop_xs: [0.5, 0.5], duration_seconds: null });
       else if (t === "remove_silences") Object.assign(params, { threshold_db: -40, min_silence_seconds: 0.5, duration_seconds: 30 });
       else if (t === "jump_to_moment") Object.assign(params, { target_moment_id: null });
       else if (t === "text_overlay") Object.assign(params, {
@@ -1945,7 +2232,24 @@ var OpForm = {
       emit("submit", out);
     }
 
-    return { params, audioFiles, videoFiles, globalAudio, otherMoments, COMIC_FONTS, submit, onSoundPick };
+    // Mirror of params.crop_xs as a plain reactive array so v-model on each
+    // slider works without index-out-of-range issues.
+    const vsCropXs = reactive([0.5, 0.5, 0.5, 0.5]);
+    watch(() => props.type, (t) => {
+      if (t === "vertical_split") {
+        const init = (props.initialParams && props.initialParams.crop_xs) || [];
+        for (let i = 0; i < 4; i++) vsCropXs[i] = init[i] != null ? init[i] : 0.5;
+      }
+    }, { immediate: true });
+    watch(() => [vsCropXs[0], vsCropXs[1], vsCropXs[2], vsCropXs[3], params.n],
+      () => {
+        if (props.type === "vertical_split") {
+          const n = params.n || 2;
+          params.crop_xs = vsCropXs.slice(0, n).map(v => Number(v) || 0.5);
+        }
+      }, { immediate: true });
+
+    return { params, audioFiles, videoFiles, globalAudio, otherMoments, COMIC_FONTS, submit, onSoundPick, vsCropXs };
   },
   template: `
     <div class="op-form">
@@ -2022,6 +2326,29 @@ var OpForm = {
         </div>
         <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5;">
           Preview: recorta un slice 9:16 del frame 16:9. En el export se re-encodea a 1080×1920.
+        </div>
+      </template>
+      <template v-else-if="type === 'vertical_split'">
+        <div class="op-field">
+          <label>Cantidad de cámaras apiladas</label>
+          <select v-model.number="params.n">
+            <option :value="2">2 (host + invitado)</option>
+            <option :value="3">3 cámaras</option>
+            <option :value="4">4 cámaras</option>
+          </select>
+        </div>
+        <div class="op-field" v-for="i in [1,2,3,4]" :key="'vsx' + i" v-show="i <= (params.n || 2)">
+          <label>Centro horizontal panel {{ i }}</label>
+          <input type="range" step="0.01" min="0" max="1"
+                 v-model.number="vsCropXs[i-1]" style="width: 100%;">
+          <div class="mono" style="font-size: 10px; color: var(--paper-dim);">{{ (vsCropXs[i-1] || 0).toFixed(2) }}</div>
+        </div>
+        <div class="op-field">
+          <label>Duración (s, vacío = hasta el próximo momento o fin)</label>
+          <input type="number" step="0.1" min="0" v-model.number="params.duration_seconds">
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:6px; line-height:1.5;">
+          Toma el composite (cámaras lado a lado) y las apila vertical para 9:16. Exportá con preset <strong>TikTok / Reels vertical</strong>.
         </div>
       </template>
       <template v-else-if="type === 'remove_silences'">
@@ -2125,10 +2452,133 @@ var OpForm = {
   `,
 };
 
+var ParticipantsPanel = {
+  props: { slug: String },
+  emits: ["close"],
+  setup(props) {
+    const participants = ref([]);
+    const editing = ref(null);
+    const busy = ref(false);
+
+    async function load() {
+      try { participants.value = await api(`/api/projects/${props.slug}/participants`); }
+      catch (_) {}
+    }
+
+    async function save(p) {
+      busy.value = true;
+      try {
+        const updated = await api(`/api/projects/${props.slug}/participants/${p.id}`, {
+          method: "PUT",
+          body: {
+            name: p.name, role: p.role, track: p.track,
+            social_instagram: p.social_instagram, social_twitter: p.social_twitter,
+            social_youtube: p.social_youtube, social_tiktok: p.social_tiktok,
+          },
+        });
+        const idx = participants.value.findIndex(x => x.id === p.id);
+        if (idx >= 0) participants.value[idx] = updated;
+        editing.value = null;
+      } catch (e) { alert(e.message); }
+      finally { busy.value = false; }
+    }
+
+    async function add() {
+      busy.value = true;
+      try {
+        const p = await api(`/api/projects/${props.slug}/participants`, {
+          method: "POST", body: { name: "Nuevo participante" },
+        });
+        participants.value.push(p);
+        editing.value = p.id;
+      } catch (e) { alert(e.message); }
+      finally { busy.value = false; }
+    }
+
+    async function remove(id) {
+      try {
+        await api(`/api/projects/${props.slug}/participants/${id}`, { method: "DELETE" });
+        participants.value = participants.value.filter(p => p.id !== id);
+      } catch (_) {}
+    }
+
+    function startEdit(p) {
+      editing.value = p.id;
+    }
+
+    onMounted(load);
+    return { participants, editing, busy, save, add, remove, startEdit };
+  },
+  template: `
+    <div class="participants-panel">
+      <div class="eyebrow" style="display: flex; align-items: center; gap: 8px;">
+        PARTICIPANTES
+        <div class="spacer"></div>
+        <button class="ghost" style="font-size: 11px;" @click="add" :disabled="busy">+ Agregar</button>
+        <button class="ghost" style="font-size: 11px;" @click="$emit('close')">✕</button>
+      </div>
+      <div class="muted" style="font-size: 11px; margin: 6px 0;">
+        Asigna cada participante a una pista (track) para que sus banners aparezcan en el export con spotlight.
+      </div>
+      <div v-if="participants.length === 0" class="muted" style="padding: 20px; text-align: center;">
+        Sin participantes. Importa desde prePod o agrega manualmente.
+      </div>
+      <div v-for="p in participants" :key="p.id" class="participant-card">
+        <template v-if="editing !== p.id">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="participant-track" :class="'t' + (p.track || 0)">T{{ p.track || '?' }}</span>
+            <strong>{{ p.name }}</strong>
+            <span class="muted" style="font-size: 10px;">{{ p.role }}</span>
+            <div class="spacer"></div>
+            <button class="ghost" style="font-size: 10px; padding: 2px 6px;" @click="startEdit(p)">✎</button>
+            <button class="ghost" style="font-size: 10px; padding: 2px 6px; color: var(--danger, #e55);" @click="remove(p.id)">✕</button>
+          </div>
+          <div v-if="p.social_instagram || p.social_twitter || p.social_tiktok" class="muted" style="font-size: 10px; margin-top: 2px;">
+            <span v-if="p.social_instagram">IG: @{{ p.social_instagram }}</span>
+            <span v-if="p.social_twitter" style="margin-left: 8px;">X: @{{ p.social_twitter }}</span>
+            <span v-if="p.social_tiktok" style="margin-left: 8px;">TK: @{{ p.social_tiktok }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <div class="participant-edit">
+            <div class="row" style="gap: 6px; flex-wrap: wrap;">
+              <input v-model="p.name" placeholder="Nombre" style="flex: 1; min-width: 120px;">
+              <select v-model="p.role" style="width: 90px;">
+                <option value="host">Host</option>
+                <option value="co-host">Co-host</option>
+                <option value="guest">Invitado</option>
+              </select>
+              <select v-model.number="p.track" style="width: 70px;">
+                <option :value="null">—</option>
+                <option :value="1">T1</option>
+                <option :value="2">T2</option>
+                <option :value="3">T3</option>
+                <option :value="4">T4</option>
+              </select>
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+              <input v-model="p.social_instagram" placeholder="Instagram" style="flex: 1; min-width: 100px; font-size: 11px;">
+              <input v-model="p.social_twitter" placeholder="X / Twitter" style="flex: 1; min-width: 100px; font-size: 11px;">
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+              <input v-model="p.social_youtube" placeholder="YouTube" style="flex: 1; min-width: 100px; font-size: 11px;">
+              <input v-model="p.social_tiktok" placeholder="TikTok" style="flex: 1; min-width: 100px; font-size: 11px;">
+            </div>
+            <div class="row right" style="margin-top: 6px; gap: 6px;">
+              <button class="ghost" style="font-size: 11px;" @click="editing = null">Cancelar</button>
+              <button class="primary" style="font-size: 11px; padding: 4px 12px;" @click="save(p)" :disabled="busy">Guardar</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  `,
+};
+
 var OperationsPanel = {
   components: { OpForm },
   props: { moment: Object, clips: Array, localFiles: Array, globalFiles: Array, moments: Array },
-  emits: ["add", "update", "remove", "editing-overlay"],
+  emits: ["add", "update", "remove", "editing-overlay", "update-moment"],
   setup(props, { emit }) {
     const adding = ref(false);
     const newType = ref("color_effect");
@@ -2185,6 +2635,7 @@ var OperationsPanel = {
       if (op.type === "insert_clip") return `clip #${p.timeline_clip_id ?? "?"}`;
       if (op.type === "switch_video") return `media #${p.media_file_id ?? "?"}`;
       if (op.type === "to_vertical") return `9:16 · crop x=${p.crop_x ?? 0.5} × ${p.duration_seconds ?? "∞"}s`;
+      if (op.type === "vertical_split") return `9:16 apilado · ${p.n || 2} cámaras × ${p.duration_seconds ?? "∞"}s`;
       if (op.type === "remove_silences") return `${p.duration_seconds ?? "?"}s @ ${p.threshold_db ?? -40}dB`;
       if (op.type === "jump_to_moment") {
         const tgt = (props.moments || []).find(m => m.id === p.target_moment_id);
@@ -2197,7 +2648,62 @@ var OperationsPanel = {
       return JSON.stringify(p);
     }
 
-    return { adding, editingOp, newType, availableTypes, startAdd, startEdit, cancelForm, submitOp, opSummary };
+    // Per-moment debounced save for inline numeric edits (start + end).
+    // Holds one timer per moment.id so switching moments doesn't carry the
+    // previous timer over.
+    const _momentSaveTimers = new Map();
+    function saveMomentField(field, value) {
+      const m = props.moment;
+      if (!m) return;
+      const id = m.id;
+      const prev = _momentSaveTimers.get(id);
+      if (prev) clearTimeout(prev);
+      const t = setTimeout(() => {
+        _momentSaveTimers.delete(id);
+        emit("update-moment", { id, patch: { [field]: value } });
+      }, 350);
+      _momentSaveTimers.set(id, t);
+    }
+    function setStart(v) {
+      const f = parseFloat(v);
+      if (!isFinite(f) || f < 0) return;
+      saveMomentField("timeline_seconds", f);
+    }
+    function setEnd(v) {
+      const m = props.moment;
+      if (!m) return;
+      // "End" is stored as duration relative to start; null/empty clears it.
+      if (v === "" || v === null || v === undefined) {
+        saveMomentField("duration_seconds", null);
+        return;
+      }
+      const f = parseFloat(v);
+      if (!isFinite(f)) return;
+      const start = parseFloat(m.timeline_seconds) || 0;
+      const dur = f - start;
+      if (dur <= 0) {
+        saveMomentField("duration_seconds", null);
+        return;
+      }
+      saveMomentField("duration_seconds", dur);
+    }
+    function setLabel(v) {
+      saveMomentField("label", v || "");
+    }
+
+    // The "end" input shows start + duration; if duration is null, leave blank.
+    const endValue = computed(() => {
+      const m = props.moment;
+      if (!m) return "";
+      const d = m.duration_seconds;
+      if (d == null || d <= 0) return "";
+      return ((m.timeline_seconds || 0) + d).toFixed(2);
+    });
+
+    return {
+      adding, editingOp, newType, availableTypes, startAdd, startEdit, cancelForm, submitOp, opSummary,
+      setStart, setEnd, setLabel, endValue,
+    };
   },
   template: `
     <div class="ops-panel">
@@ -2210,8 +2716,37 @@ var OperationsPanel = {
       <div v-else>
         <div class="moment-summary">
           <span class="kind" :class="moment.type">{{ moment.type }}</span>
-          <span class="mono">{{ formatShort(moment.timeline_seconds) }}</span>
           <span class="label">{{ moment.label || '—' }}</span>
+        </div>
+
+        <div class="moment-edit">
+          <div class="me-row">
+            <label>Etiqueta</label>
+            <input type="text" :value="moment.label" @input="setLabel($event.target.value)"
+                   placeholder="Sin etiqueta">
+          </div>
+          <div class="me-row two">
+            <div>
+              <label>Empieza en (s)</label>
+              <input type="number" step="0.01" min="0"
+                     :value="moment.timeline_seconds.toFixed(2)"
+                     @change="setStart($event.target.value)">
+            </div>
+            <div>
+              <label>Termina en (s)</label>
+              <input type="number" step="0.01" min="0"
+                     :value="endValue" :placeholder="moment.timeline_seconds.toFixed(2)"
+                     @change="setEnd($event.target.value)">
+            </div>
+          </div>
+          <div class="me-hint mono">
+            <span>{{ formatShort(moment.timeline_seconds) }}</span>
+            <span v-if="moment.duration_seconds && moment.duration_seconds > 0">
+              → {{ formatShort(moment.timeline_seconds + moment.duration_seconds) }}
+              · <strong>{{ moment.duration_seconds.toFixed(2) }}s</strong>
+            </span>
+            <span v-else class="muted">(punto sin rango)</span>
+          </div>
         </div>
 
         <div v-if="moment.operations.length === 0" class="panel-empty" style="margin-top:10px;">
@@ -2252,8 +2787,343 @@ var OperationsPanel = {
    Project view (editor) — backend-synced
    ========================================================================== */
 
+/* ==========================================================================
+   Transcript editor — Phase A:
+   - Single-file at a time (drop-down to switch)
+   - Loads the .words.json sidecar produced by Whisper word-level
+   - Click word → seek the project player
+   - Drag-select word range → press Delete (or click "Eliminar selección")
+     creates a transcript_cut on the server. Deleted words render
+     struck-through but stay visible so the user can restore them.
+   - "Filler words" filter: highlights muletillas + batch-delete
+   ========================================================================== */
+
+var FILLER_WORDS = new Set([
+  "eh", "ehh", "ehm", "uhm", "uhmm", "umm", "uh", "ah",
+  "este", "estee", "esteee",
+  "osea", "o-sea",
+  "como", "tipo",
+  "bueno",
+  "digamos",
+  "verdad", "viste", "viste?",
+]);
+
+function _normalizeFillerWord(w) {
+  return (w || "")
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:()"…]/g, "")
+    .trim();
+}
+
+var TranscriptEditor = {
+  props: { show: Boolean, slug: String },
+  emits: ["close", "seek", "cuts-changed"],
+  setup(props, { emit }) {
+    const files = ref([]);                    // [{id, original_name, file_type, languages: ["es"]}]
+    const selectedFileId = ref(null);
+    const selectedLanguage = ref("");
+    const transcript = ref(null);             // {language, duration, words}
+    const cuts = ref([]);                     // server-truth transcript_cuts
+    const loading = ref(false);
+    const error = ref("");
+
+    // Selection (range of word indices, [start, end] inclusive).
+    const selStart = ref(null);
+    const selEnd = ref(null);
+    const dragging = ref(false);
+
+    // Filter state
+    const showFillersOnly = ref(false);
+
+    /* ---------- loading ---------- */
+
+    async function loadFiles() {
+      try {
+        const all = await api(`/api/projects/${props.slug}/files`);
+        const usable = all.filter(f => f.file_type === "video" || f.file_type === "audio");
+        // For each file, ask captions endpoint to know which langs are available.
+        const out = [];
+        for (const f of usable) {
+          try {
+            const r = await api(`/api/projects/${props.slug}/files/${f.id}/captions`);
+            const langs = (r.captions || []).map(c => c.language);
+            if (langs.length) out.push({ ...f, languages: langs });
+          } catch (_) {}
+        }
+        files.value = out;
+        if (!selectedFileId.value && out.length) {
+          selectedFileId.value = out[0].id;
+          selectedLanguage.value = out[0].languages[0];
+        }
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function loadTranscript() {
+      if (!selectedFileId.value || !selectedLanguage.value) return;
+      loading.value = true;
+      transcript.value = null;
+      try {
+        transcript.value = await api(
+          `/api/projects/${props.slug}/files/${selectedFileId.value}/transcript?language=${encodeURIComponent(selectedLanguage.value)}`
+        );
+      } catch (e) {
+        error.value = e.message + " — regenera los captions con la versión actual para tener timestamps por palabra.";
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    async function loadCuts() {
+      try { cuts.value = await api(`/api/projects/${props.slug}/transcript-cuts`); }
+      catch (_) {}
+    }
+
+    watch(() => [props.show, selectedFileId.value, selectedLanguage.value],
+          ([s]) => { if (s) { loadTranscript(); loadCuts(); } });
+    watch(() => props.show, (s) => { if (s) loadFiles(); });
+
+    /* ---------- helpers ---------- */
+
+    // A word is "deleted" if any cut covers its [s, e]. Cheap O(N*C) — fine
+    // for transcripts up to ~10k words and a few hundred cuts.
+    function isWordDeleted(word) {
+      for (const c of cuts.value) {
+        if (word.s >= c.start_seconds - 0.01 && word.e <= c.end_seconds + 0.01) return true;
+      }
+      return false;
+    }
+
+    function isFiller(word) {
+      return FILLER_WORDS.has(_normalizeFillerWord(word.w));
+    }
+
+    const visibleWords = computed(() => transcript.value ? transcript.value.words : []);
+
+    const fillerWords = computed(() =>
+      visibleWords.value.map((w, i) => ({ w, i })).filter(x => isFiller(x.w) && !isWordDeleted(x.w))
+    );
+
+    const cutsCount = computed(() => cuts.value.length);
+    const hasSelection = computed(() => selStart.value != null && selEnd.value != null);
+    const selectionLabel = computed(() => {
+      if (!hasSelection.value) return "";
+      const a = Math.min(selStart.value, selEnd.value);
+      const b = Math.max(selStart.value, selEnd.value);
+      return `${b - a + 1} palabra(s)`;
+    });
+
+    /* ---------- selection ---------- */
+
+    function onWordMouseDown(idx, ev) {
+      // Plain click → seek + start selection at this idx
+      ev.preventDefault();
+      dragging.value = true;
+      selStart.value = idx;
+      selEnd.value = idx;
+      const w = visibleWords.value[idx];
+      if (w) emit("seek", w.s);
+    }
+    function onWordMouseEnter(idx) {
+      if (dragging.value && selStart.value != null) selEnd.value = idx;
+    }
+    function onMouseUp() { dragging.value = false; }
+    function clearSelection() { selStart.value = null; selEnd.value = null; }
+
+    /* ---------- delete / restore ---------- */
+
+    async function deleteSelection() {
+      if (!hasSelection.value) return;
+      const a = Math.min(selStart.value, selEnd.value);
+      const b = Math.max(selStart.value, selEnd.value);
+      const first = visibleWords.value[a];
+      const last  = visibleWords.value[b];
+      if (!first || !last) return;
+      try {
+        const created = await api(`/api/projects/${props.slug}/transcript-cuts`, {
+          method: "POST",
+          body: { start_seconds: first.s, end_seconds: last.e, label: `${b - a + 1} palabra(s)` },
+        });
+        cuts.value.push(created);
+        clearSelection();
+        emit("cuts-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function deleteAllFillers() {
+      const words = fillerWords.value;
+      if (!words.length) return;
+      if (!confirm(`Eliminar ${words.length} muletilla(s)?`)) return;
+      // Build cuts in batch — server accepts {cuts: [...]}
+      const payload = words.map(x => ({
+        start_seconds: x.w.s, end_seconds: x.w.e, label: `muletilla "${x.w.w.trim()}"`,
+      }));
+      try {
+        const created = await api(`/api/projects/${props.slug}/transcript-cuts`, {
+          method: "POST", body: { cuts: payload },
+        });
+        cuts.value = cuts.value.concat(Array.isArray(created) ? created : [created]);
+        emit("cuts-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function restoreCut(cutId) {
+      try {
+        await api(`/api/projects/${props.slug}/transcript-cuts/${cutId}`, { method: "DELETE" });
+        cuts.value = cuts.value.filter(c => c.id !== cutId);
+        emit("cuts-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function restoreAll() {
+      if (!cuts.value.length) return;
+      if (!confirm(`Restaurar ${cuts.value.length} corte(s)?`)) return;
+      try {
+        await api(`/api/projects/${props.slug}/transcript-cuts`, { method: "DELETE" });
+        cuts.value = [];
+        emit("cuts-changed");
+      } catch (e) { error.value = e.message; }
+    }
+
+    /* ---------- keyboard ---------- */
+
+    function onKey(ev) {
+      if (!props.show) return;
+      // Delete or Backspace removes selection
+      if ((ev.key === "Delete" || ev.key === "Backspace") && hasSelection.value) {
+        ev.preventDefault();
+        deleteSelection();
+      } else if (ev.key === "Escape") {
+        clearSelection();
+      }
+    }
+    onMounted(() => {
+      window.addEventListener("keydown", onKey);
+      window.addEventListener("mouseup", onMouseUp);
+    });
+    onBeforeUnmount(() => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onMouseUp);
+    });
+
+    /* ---------- UI helpers ---------- */
+
+    function fmtTs(s) {
+      if (!isFinite(s)) return "—";
+      const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+      return `${m}:${String(sec).padStart(2, "0")}`;
+    }
+
+    function fileChanged(ev) {
+      const id = parseInt(ev.target.value, 10);
+      selectedFileId.value = id;
+      const f = files.value.find(x => x.id === id);
+      if (f && f.languages.length) selectedLanguage.value = f.languages[0];
+    }
+
+    return {
+      files, selectedFileId, selectedLanguage,
+      transcript, cuts, loading, error,
+      selStart, selEnd, hasSelection, selectionLabel,
+      visibleWords, fillerWords, cutsCount, showFillersOnly,
+      isWordDeleted, isFiller, fmtTs, fileChanged,
+      onWordMouseDown, onWordMouseEnter, clearSelection,
+      deleteSelection, deleteAllFillers, restoreCut, restoreAll, loadTranscript,
+    };
+  },
+  template: `
+    <div v-if="show" class="modal-backdrop" @click.self="$emit('close')">
+      <div class="modal" style="width: min(960px, 96vw); max-height: 92vh; display: flex; flex-direction: column;">
+        <div class="eyebrow">TRANSCRIPT</div>
+        <h3>Editar por palabras</h3>
+        <p class="muted" style="margin: 0 0 12px; font-size: 12px;">
+          Selecciona palabras y bórralas — los rangos se cortan en el render final. No es destructivo: puedes restaurar.
+        </p>
+
+        <div v-if="error" class="error">{{ error }}</div>
+
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
+          <select :value="selectedFileId || ''" @change="fileChanged" :disabled="!files.length">
+            <option v-if="!files.length" value="">— sin transcripts —</option>
+            <option v-for="f in files" :key="f.id" :value="f.id">{{ f.original_name }}</option>
+          </select>
+          <select v-model="selectedLanguage" :disabled="!selectedFileId">
+            <option v-for="l in (files.find(f => f.id === selectedFileId) || {languages:[]}).languages" :key="l" :value="l">{{ l }}</option>
+          </select>
+          <button class="ghost" @click="loadTranscript" title="Recargar">⟲</button>
+          <div class="spacer"></div>
+          <span class="mono muted" style="font-size: 12px;">{{ cutsCount }} corte(s)</span>
+          <button v-if="cutsCount" class="ghost" style="font-size: 12px;" @click="restoreAll">↶ Restaurar todo</button>
+        </div>
+
+        <div v-if="loading" class="muted">Cargando transcript…</div>
+
+        <template v-else-if="transcript">
+          <div class="transcript-toolbar" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+            <span v-if="hasSelection" class="role-chip" style="background: var(--signal); color: #fff;">{{ selectionLabel }}</span>
+            <button v-if="hasSelection" class="primary" style="font-size: 12px; padding: 4px 10px;" @click="deleteSelection">✕ Eliminar selección (Del)</button>
+            <button v-if="hasSelection" class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="clearSelection">Cancelar</button>
+
+            <div class="spacer"></div>
+
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
+              <input type="checkbox" v-model="showFillersOnly">
+              Resaltar muletillas
+            </label>
+            <button v-if="fillerWords.length" class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="deleteAllFillers">
+              ✂ Eliminar {{ fillerWords.length }} muletilla(s)
+            </button>
+          </div>
+
+          <div class="transcript-words"
+               style="flex: 1; overflow-y: auto; line-height: 1.9; font-size: 15px; user-select: none; padding: 8px; border: 1px solid var(--ink-line); border-radius: 6px; background: var(--ink-sunken);">
+            <span v-for="(w, i) in visibleWords" :key="i"
+                  class="t-word"
+                  :class="{
+                    'is-deleted': isWordDeleted(w),
+                    'is-filler': showFillersOnly && isFiller(w) && !isWordDeleted(w),
+                    'is-selected':
+                      selStart != null && selEnd != null &&
+                      i >= Math.min(selStart, selEnd) && i <= Math.max(selStart, selEnd),
+                  }"
+                  :title="fmtTs(w.s)"
+                  @mousedown="onWordMouseDown(i, $event)"
+                  @mouseenter="onWordMouseEnter(i)"
+                  style="cursor: pointer; padding: 1px 2px; border-radius: 3px;">
+              {{ w.w }}<span> </span>
+            </span>
+          </div>
+
+          <div v-if="cuts.length" class="muted" style="margin-top: 10px; max-height: 120px; overflow-y: auto; font-size: 12px;">
+            <div style="margin-bottom: 4px;"><span class="eyebrow">CORTES ACTIVOS</span></div>
+            <div v-for="c in cuts" :key="c.id" style="display: flex; align-items: center; gap: 8px; padding: 2px 0;">
+              <span class="mono">{{ fmtTs(c.start_seconds) }} → {{ fmtTs(c.end_seconds) }}</span>
+              <span style="opacity: 0.7;">{{ c.label || "—" }}</span>
+              <div class="spacer"></div>
+              <button class="ghost" style="font-size: 11px; padding: 2px 8px;" @click="restoreCut(c.id)">↶ Restaurar</button>
+            </div>
+          </div>
+        </template>
+
+        <div v-else-if="!files.length" class="empty-pill" style="margin-top: 10px;">
+          Genera captions de algún archivo primero (con la versión actual de la app, que ya guarda timestamps por palabra).
+        </div>
+
+        <div class="row right" style="margin-top: 14px; gap: 8px;">
+          <button class="primary" @click="$emit('close')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  `,
+};
+
 var ExportModal = {
-  props: { slug: String },
+  props: {
+    slug: String,
+    // selectedRange comes from ProjectView's drag-select. When present, the
+    // user can opt into "exportar sólo este rango" (range_start/range_end).
+    selectedRange: { type: Object, default: null },
+    hasMultitrack: { type: Boolean, default: false },
+  },
   emits: ["close"],
   setup(props, { emit }) {
     const presets = ref([]);
@@ -2268,6 +3138,43 @@ var ExportModal = {
     const burnCaptions = ref(false);
     const burnCaptionLang = ref(localStorage.getItem("postpod.captionsLanguage") || "es");
     const availableCaptions = ref([]); // [{media_file_id, original_name, languages:[]}]
+
+    // Optional sidecar .txt with title + chapters + credits.
+    const generateNotes = ref(localStorage.getItem("postpod.generateNotes") === "1");
+    watch(generateNotes, (v) => localStorage.setItem("postpod.generateNotes", v ? "1" : "0"));
+
+    // One-click "studio" audio enhancement (denoise + EQ + compression +
+    // loudnorm). Off by default — irreversible operations make some users
+    // nervous; let them opt in per export.
+    const enhanceSpeech = ref(localStorage.getItem("postpod.enhanceSpeech") === "1");
+    watch(enhanceSpeech, (v) => localStorage.setItem("postpod.enhanceSpeech", v ? "1" : "0"));
+
+    const spotlight = ref(localStorage.getItem("postpod.spotlight") === "1");
+    watch(spotlight, (v) => localStorage.setItem("postpod.spotlight", v ? "1" : "0"));
+
+    const useBackground = ref(localStorage.getItem("postpod.useBackground") === "1");
+    watch(useBackground, (v) => localStorage.setItem("postpod.useBackground", v ? "1" : "0"));
+
+    const momentBanner = ref(localStorage.getItem("postpod.momentBanner") === "1");
+    watch(momentBanner, (v) => localStorage.setItem("postpod.momentBanner", v ? "1" : "0"));
+
+    const bannerPosition = ref(localStorage.getItem("postpod.bannerPosition") || "bottom");
+    watch(bannerPosition, (v) => localStorage.setItem("postpod.bannerPosition", v));
+
+    const isVerticalPreset = computed(() => {
+      if (!selectedId.value) return false;
+      const p = presets.value.find(x => x.id === selectedId.value);
+      return p && p.height > p.width;
+    });
+
+    // "Exportar sólo el rango seleccionado": defaults to ON whenever the
+    // user opens the modal with a drag-selection active. They can untick it
+    // to fall back to a full-timeline export.
+    const useSelectedRange = ref(false);
+    watch(() => props.selectedRange, (v) => {
+      // Auto-tick when a range becomes available; auto-untick when it's gone.
+      useSelectedRange.value = !!v;
+    }, { immediate: true });
 
     async function loadAvailableCaptions() {
       try {
@@ -2308,6 +3215,18 @@ var ExportModal = {
             media_file_id: availableCaptions.value[0].media_file_id,
             language: burnCaptionLang.value,
           };
+        }
+        if (generateNotes.value) body.generate_notes = true;
+        if (enhanceSpeech.value) body.enhance_speech = true;
+        if (spotlight.value) body.spotlight = true;
+        if (useBackground.value) body.use_background = true;
+        if (momentBanner.value) {
+          body.moment_banner = true;
+          body.banner_position = bannerPosition.value;
+        }
+        if (useSelectedRange.value && props.selectedRange) {
+          body.range_start = props.selectedRange.start;
+          body.range_end   = props.selectedRange.end;
         }
         const r = await api(`/api/projects/${props.slug}/export`, {
           method: "POST", body,
@@ -2375,23 +3294,37 @@ var ExportModal = {
         ? `/api/projects/${props.slug}/export/${job.value.id}/download?attachment=0`
         : null
     );
+    const notesUrl = computed(() =>
+      job.value && job.value.status === "done" && job.value.notes_file
+        ? `/api/projects/${props.slug}/export/${job.value.id}/notes`
+        : null
+    );
 
     onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); });
     onBeforeUnmount(() => { if (pollHandle) clearTimeout(pollHandle); });
 
-    return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, start, cancel, reset, loadHistory,
-             burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions };
+    function fmtRangeSec(s) {
+      if (!isFinite(s)) return "—";
+      const m = Math.floor(s / 60);
+      const sec = (s - m * 60).toFixed(1);
+      return `${m}:${sec.padStart(4, "0")}`;
+    }
+
+    const showAllHistory = ref(false);
+
+    return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, notesUrl,
+             start, cancel, reset, loadHistory, showAllHistory,
+             burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions,
+             generateNotes, enhanceSpeech, spotlight, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
-      <div class="modal" style="width: 560px; max-height: calc(100vh - 40px); display: flex; flex-direction: column;">
-        <div class="eyebrow">EXPORTAR · RENDER FFmpeg</div>
-        <h3>Generar archivo final</h3>
+      <div class="modal" style="width: 520px; max-height: calc(100vh - 40px); display: flex; flex-direction: column;">
+        <div class="eyebrow">EXPORTAR</div>
 
-        <div v-if="!job" style="margin-top: 14px; overflow-y:auto; flex: 1;">
-          <label style="margin-bottom:6px;">Elige un preset</label>
-          <div v-for="(items, plat) in grouped" :key="plat" style="margin-bottom:10px;">
-            <div class="tiny" style="margin: 8px 0 4px; color: var(--signal);">{{ plat }}</div>
+        <div v-if="!job" style="margin-top: 10px; overflow-y:auto; flex: 1;">
+          <div v-for="(items, plat) in grouped" :key="plat" style="margin-bottom:6px;">
+            <div class="tiny" style="margin: 4px 0 2px; color: var(--signal);">{{ plat }}</div>
             <div class="preset-list">
               <div
                 v-for="p in items"
@@ -2403,14 +3336,83 @@ var ExportModal = {
                 <div class="preset-name">{{ p.name }}</div>
                 <div class="preset-meta mono">
                   <template v-if="p.width">{{ p.width }}×{{ p.height }} · {{ p.fps }}fps · {{ p.format }}</template>
-                  <template v-else>{{ p.format }} · audio sólo</template>
+                  <template v-else>{{ p.format }} · audio</template>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Options -->
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ink-line); display: flex; flex-direction: column; gap: 4px;">
+            <label v-if="availableCaptions.length" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="burnCaptions">
+              Quemar captions
+              <select v-if="burnCaptions" v-model="burnCaptionLang" style="margin-left: 4px; font-size: 11px; padding: 1px 4px;" @click.stop>
+                <option v-for="lang in availableCaptions[0].languages" :key="lang" :value="lang">{{ lang }}</option>
+              </select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="generateNotes">
+              Generar notas y capítulos (.txt)
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="enhanceSpeech">
+              Audio profesional (denoise + EQ + normalize)
+            </label>
+            <label v-if="hasMultitrack" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="spotlight">
+              Spotlight (speaker activo 70/30)
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="useBackground">
+              Fondo de marca (sin barras negras)
+            </label>
+            <label v-if="useSelectedRange && selectedRange" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="momentBanner">
+              Banner de momento (estilo CNN)
+              <select v-if="momentBanner && isVerticalPreset" v-model="bannerPosition" style="margin-left: 4px; font-size: 11px; padding: 1px 4px;" @click.stop>
+                <option value="top">Arriba</option>
+                <option value="middle">Medio</option>
+                <option value="bottom">Abajo</option>
+              </select>
+            </label>
+          </div>
+
+          <!-- Range selection -->
+          <div v-if="selectedRange" style="margin-top: 6px; padding: 6px 10px; background: rgba(244,199,112,0.08); border: 1px solid rgba(244,199,112,0.3); border-radius: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
+              <input type="checkbox" v-model="useSelectedRange">
+              Exportar sólo el rango seleccionado
+            </label>
+            <div class="muted mono" style="font-size: 10px; margin-top: 2px;">
+              {{ fmtRangeSec(selectedRange.start) }} → {{ fmtRangeSec(selectedRange.end) }}
+              · {{ (selectedRange.end - selectedRange.start).toFixed(2) }}s
+            </div>
+          </div>
+
+          <!-- History (collapsed) -->
+          <div v-if="history.length > 0" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ink-line);">
+            <div class="tiny" style="margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              Recientes
+              <span v-if="history.length > 3" style="cursor: pointer; color: var(--signal-dim); font-size: 10px;" @click="showAllHistory = !showAllHistory">
+                {{ showAllHistory ? '(menos)' : '(ver ' + history.length + ')' }}
+              </span>
+            </div>
+            <div class="history-list">
+              <div v-for="h in (showAllHistory ? history : history.slice(0, 3))" :key="h.id" class="history-row">
+                <span class="mono" style="color: var(--signal-dim);">#{{ h.id }}</span>
+                <span class="mono">{{ h.preset_id }}</span>
+                <span class="kind mono" :class="h.status">{{ h.status }}</span>
+                <div class="spacer"></div>
+                <a v-if="h.status === 'done' && h.output_file" :href="'/api/projects/' + slug + '/export/' + h.id + '/download'" class="kbd" style="text-decoration: none; font-size: 10px; padding: 2px 6px;" title="Descargar">↓</a>
+                <a v-if="h.status === 'done' && h.notes_file" :href="'/api/projects/' + slug + '/export/' + h.id + '/notes'" class="kbd" style="text-decoration: none; font-size: 10px; padding: 2px 6px;" title="Notas">N</a>
               </div>
             </div>
           </div>
         </div>
 
-        <div v-else style="margin-top: 18px;">
+        <!-- Job progress view -->
+        <div v-else style="margin-top: 14px;">
           <div class="muted" style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;">
             Job #{{ job.id }} · {{ job.preset_id }}
           </div>
@@ -2418,63 +3420,38 @@ var ExportModal = {
             <div class="progress-fill" :style="{ width: (job.progress || 0) + '%' }"></div>
             <div class="progress-text mono">
               <template v-if="job.status === 'running' || job.status === 'pending'">{{ job.progress || 0 }}%</template>
-              <template v-else-if="job.status === 'done'">✓ listo</template>
-              <template v-else-if="job.status === 'cancelled'">⊘ cancelado</template>
-              <template v-else-if="job.status === 'error'">◆ error</template>
+              <template v-else-if="job.status === 'done'">listo</template>
+              <template v-else-if="job.status === 'cancelled'">cancelado</template>
+              <template v-else-if="job.status === 'error'">error</template>
             </div>
           </div>
           <div v-if="job.status === 'running' || job.status === 'pending'" class="row right" style="margin-top: 10px;">
-            <button class="danger" @click="cancel">⊘ Cancelar</button>
+            <button class="danger" @click="cancel">Cancelar</button>
           </div>
-          <div v-if="job.status === 'cancelled'" class="muted" style="margin-top: 12px; padding: 10px; border: 1px dashed var(--ink-line); border-radius: var(--r-md); text-align: center;">
+          <div v-if="job.status === 'cancelled'" class="muted" style="margin-top: 10px; padding: 8px; border: 1px dashed var(--ink-line); border-radius: var(--r-md); text-align: center;">
             Export cancelado.
-            <div style="margin-top: 8px;"><button class="ghost" @click="reset">Intentar otra vez</button></div>
+            <div style="margin-top: 6px;"><button class="ghost" @click="reset">Intentar otra vez</button></div>
           </div>
 
-          <div v-if="job.status === 'done'" class="card" style="margin-top: 14px; padding: 12px;">
-            <div class="row" style="gap: 8px;">
-              <a :href="downloadUrl" class="kbd" style="text-decoration: none; padding: 8px 14px; font-size: 12px; background: var(--signal); color: var(--ink-deep); border: 0; font-weight: 600;">↓ Descargar</a>
-              <a :href="streamUrl" target="_blank" class="kbd" style="text-decoration: none; padding: 8px 14px; font-size: 12px;">▶ Reproducir en pestaña</a>
+          <div v-if="job.status === 'done'" class="card" style="margin-top: 12px; padding: 10px;">
+            <div class="row" style="gap: 8px; flex-wrap: wrap;">
+              <a :href="downloadUrl" class="kbd" style="text-decoration: none; padding: 6px 12px; font-size: 12px; background: var(--signal); color: var(--ink-deep); border: 0; font-weight: 600;">Descargar</a>
+              <a :href="streamUrl" target="_blank" class="kbd" style="text-decoration: none; padding: 6px 12px; font-size: 12px;">Reproducir</a>
+              <a v-if="notesUrl" :href="notesUrl" class="kbd" style="text-decoration: none; padding: 6px 12px; font-size: 12px;">Notas</a>
               <div class="spacer"></div>
               <button class="ghost" @click="reset">Otra exportación</button>
             </div>
           </div>
 
-          <div v-if="job.status === 'error'" class="error" style="margin-top: 14px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; font-size: 11px;">
+          <div v-if="job.status === 'error'" class="error" style="margin-top: 12px; white-space: pre-wrap; max-height: 180px; overflow-y: auto; font-size: 11px;">
             {{ job.error_msg || 'error sin detalles' }}
-            <div style="margin-top: 8px;"><button class="ghost" @click="reset">Intentar de nuevo</button></div>
+            <div style="margin-top: 6px;"><button class="ghost" @click="reset">Intentar de nuevo</button></div>
           </div>
         </div>
 
-        <div v-if="history.length > 0 && !job" style="margin-top: 14px; border-top: 1px solid var(--ink-line); padding-top: 12px;">
-          <div class="tiny" style="margin-bottom: 6px;">Historial reciente</div>
-          <div class="history-list">
-            <div v-for="h in history.slice(0, 5)" :key="h.id" class="history-row">
-              <span class="mono" style="color: var(--signal-dim);">#{{ h.id }}</span>
-              <span class="mono" style="font-size: 11px;">{{ h.preset_id }}</span>
-              <span class="kind mono" :class="h.status">{{ h.status }}</span>
-              <span v-if="h.status === 'done'" class="progress-tail mono">{{ h.progress }}%</span>
-              <div class="spacer"></div>
-              <a v-if="h.status === 'done' && h.output_file" :href="'/api/projects/' + slug + '/export/' + h.id + '/download'" class="kbd" style="text-decoration: none; font-size: 10px; padding: 3px 8px;">↓</a>
-            </div>
-          </div>
-        </div>
+        <div v-if="error" class="error" style="margin-top: 6px;">{{ error }}</div>
 
-        <div v-if="availableCaptions.length" class="form-row" style="margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ink-line);">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; letter-spacing: 0;">
-            <input type="checkbox" v-model="burnCaptions">
-            Quemar captions en el video
-          </label>
-          <select v-if="burnCaptions" v-model="burnCaptionLang" style="margin-top: 8px;">
-            <option v-for="lang in availableCaptions[0].languages" :key="lang" :value="lang">
-              {{ lang }} — {{ availableCaptions[0].original_name }}
-            </option>
-          </select>
-        </div>
-
-        <div v-if="error" class="error">{{ error }}</div>
-
-        <div class="row right" style="margin-top: 18px; gap: 8px;">
+        <div class="row right" style="margin-top: 12px; gap: 8px;">
           <button class="ghost" @click="$emit('close')">Cerrar</button>
           <button v-if="!job" class="primary" :disabled="!selectedId || busy" @click="start">
             {{ busy ? 'Lanzando…' : 'Exportar' }}
@@ -2568,11 +3545,13 @@ var SilenceModal = {
 
 var ProjectView = {
   props: { project: Object, onBack: Function },
-  components: { FilesPanel, VideoPlayer, Timeline, ZoomControls, MomentsList, CaptureMomentModal, ClipsPanel, OperationsPanel, SilenceModal, ExportModal },
+  components: { FilesPanel, VideoPlayer, Timeline, ZoomControls, MomentsList, CaptureMomentModal, ClipsPanel, OperationsPanel, SilenceModal, ExportModal, TranscriptEditor, ParticipantsPanel },
   setup(props) {
     const timeline = reactive({ clips: [], moments: [], duration: 0, audioLane: [] });
     const silenceClip = ref(null);
     const showExport = ref(false);
+    const showTranscript = ref(false);
+    const showParticipants = ref(false);
     const localFiles = ref([]);
     const globalFiles = ref([]);
     const playerState = reactive({
@@ -2583,6 +3562,7 @@ var ProjectView = {
     });
     const zoom = reactive({ startSeconds: 0, endSeconds: null });
     const selectedRange = ref(null);  // { start, end } | null — persistent yellow band from drag-select
+    const liveSelection = ref(null);  // { start, end } | null — in-flight drag, updates every pointermove
 
     // Sidebar visibility toggles (persisted). Operations panel auto-shows
     // when a moment is selected; no explicit toggle.
@@ -2606,7 +3586,7 @@ var ProjectView = {
     // Effects at current time
     const activeEffects = computed(() => {
       const t = playerState.currentTime;
-      const out = { filter: null, transform: null, subtitles: [], vertical: null, textOverlays: [] };
+      const out = { filter: null, transform: null, subtitles: [], vertical: null, verticalSplit: null, textOverlays: [] };
       const sortedMoments = [...timeline.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
       for (const m of sortedMoments) {
         for (const op of (m.operations || [])) {
@@ -2637,6 +3617,19 @@ var ProjectView = {
               out.subtitles.push({ text: p.text || "", position: p.position || "bottom" });
             } else if (op.type === "to_vertical") {
               out.vertical = { cropX: p.crop_x ?? 0.5 };
+            } else if (op.type === "vertical_split") {
+              // Live preview of the "two cámaras apiladas" layout. The
+              // exporter assumes a side-by-side composite as input; here
+              // we don't have one, so we synthesize the stack by picking
+              // the active clip on each track at the playhead. cropXs are
+              // forwarded so the user sees their face-centering choices.
+              const n = Math.max(2, Math.min(4, parseInt(p.n, 10) || 2));
+              const cropXs = [];
+              for (let i = 0; i < n; i++) {
+                const v = (p.crop_xs && p.crop_xs[i] != null) ? Number(p.crop_xs[i]) : 0.5;
+                cropXs.push(Math.max(0, Math.min(1, isFinite(v) ? v : 0.5)));
+              }
+              out.verticalSplit = { n, cropXs };
             } else if (op.type === "text_overlay") {
               out.textOverlays.push({
                 text: p.text || "",
@@ -2652,6 +3645,43 @@ var ProjectView = {
             }
           }
         }
+      }
+      return out;
+    });
+
+    const usedTracks = computed(() => {
+      const set = new Set();
+      for (const c of (timeline.clips || [])) set.add(c.track || 1);
+      return set;
+    });
+    const autoMultitrack = computed(() => usedTracks.value.size > 1);
+
+    const verticalSplitSources = computed(() => {
+      const eff = activeEffects.value;
+      const hasVsplit = eff && eff.verticalSplit;
+      const isAuto = autoMultitrack.value && !hasVsplit;
+      if (!hasVsplit && !isAuto) return null;
+      const n = hasVsplit ? eff.verticalSplit.n : Math.max(...usedTracks.value);
+      const cropXs = hasVsplit ? eff.verticalSplit.cropXs : [];
+      const t = playerState.currentTime;
+      const clips = clipsWithStarts.value || [];
+      const out = [];
+      for (let track = 1; track <= n; track++) {
+        const c = clips.find(cl =>
+          (Number(cl.track) || 1) === track &&
+          cl.start <= t + 0.001 &&
+          cl.end > t - 0.001
+        );
+        if (!c) { out.push(null); continue; }
+        const localT = (c.start_offset || 0) + Math.max(0, t - c.start);
+        out.push({
+          clipId: c.id,
+          url: c.source && c.source.url,
+          localTime: localT,
+          track,
+          cropX: cropXs[track - 1] ?? 0.5,
+          volume: c.volume ?? 1.0,
+        });
       }
       return out;
     });
@@ -2708,7 +3738,6 @@ var ProjectView = {
     async function addClipToTimeline(f) {
       try {
         if (f.file_type === "audio") {
-          // Audio files go to the parallel audio lane (mixed with video).
           await api(`/api/projects/${props.project.slug}/audio-lane`, {
             method: "POST",
             body: {
@@ -2721,7 +3750,7 @@ var ProjectView = {
         } else {
           await api(`/api/projects/${props.project.slug}/timeline/clips`, {
             method: "POST",
-            body: { media_file_id: f.id, label: f.original_name },
+            body: { media_file_id: f.id, label: f.original_name, track: f._track || 1 },
           });
         }
         await refreshTimeline();
@@ -2763,6 +3792,12 @@ var ProjectView = {
       laneEditing.value = null;
       onSeek(clip.start);
     }
+    // Live-preview volume while the slider moves (before saving).
+    watch(() => clipEditing.value?.volume, (vol) => {
+      if (vol == null || !clipEditing.value) return;
+      const c = timeline.clips.find(x => x.id === clipEditing.value.id);
+      if (c) c.volume = vol;
+    });
     async function saveClipEdit() {
       if (!clipEditing.value) return;
       const e = clipEditing.value;
@@ -2780,7 +3815,7 @@ var ProjectView = {
     }
 
     async function removeLaneClip(id) {
-      if (!confirm("¿Quitar este audio de la pista?")) return;
+      if (!await podSwal.confirm("¿Quitar este audio de la pista?")) return;
       try {
         await api(`/api/projects/${props.project.slug}/audio-lane/${id}`, { method: "DELETE" });
         await refreshTimeline();
@@ -2788,7 +3823,7 @@ var ProjectView = {
     }
 
     async function removeClip(clipId) {
-      if (!confirm("¿Quitar este clip del timeline?")) return;
+      if (!await podSwal.confirm("¿Quitar este clip del timeline?")) return;
       try {
         await api(`/api/projects/${props.project.slug}/timeline/clips/${clipId}`, { method: "DELETE" });
         await refreshTimeline();
@@ -2878,7 +3913,7 @@ var ProjectView = {
       const sorted = [...timeline.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
       const idx = sorted.findIndex(x => x.id === m.id);
       const next = sorted[idx + 1];
-      if (!next) { alert("No hay momento posterior para saltar."); return; }
+      if (!next) { podSwal.toast("No hay momento posterior para saltar."); return; }
       try {
         await api(`/api/projects/${props.project.slug}/moments/${m.id}/operations`, {
           method: "POST",
@@ -2918,8 +3953,24 @@ var ProjectView = {
       } catch (e) { error.value = e.message; }
     }
 
+    // Used by OperationsPanel for inline numeric edits (start, end, label).
+    // patch is a {field: value} dict — sent as-is to PUT /moments/<id>.
+    async function patchMoment({ id, patch }) {
+      try {
+        const updated = await api(`/api/projects/${props.project.slug}/moments/${id}`, {
+          method: "PUT", body: patch,
+        });
+        const m = timeline.moments.find(x => x.id === id);
+        if (m) {
+          if (updated.timeline_seconds != null) m.timeline_seconds = updated.timeline_seconds;
+          if ("duration_seconds" in updated) m.duration_seconds = updated.duration_seconds;
+          if (updated.label != null) m.label = updated.label;
+        }
+      } catch (e) { error.value = e.message; }
+    }
+
     async function removeMoment(id) {
-      if (!confirm("¿Eliminar momento?")) return;
+      if (!await podSwal.confirm("¿Eliminar momento?")) return;
       try {
         await api(`/api/projects/${props.project.slug}/moments/${id}`, { method: "DELETE" });
         if (selectedMomentId.value === id) selectedMomentId.value = null;
@@ -2963,18 +4014,18 @@ var ProjectView = {
         if (r && r.silence_result) {
           const s = r.silence_result;
           if (s.silences_detected === 0) {
-            alert("No se detectaron silencios en ese rango.");
+            podSwal.info("No se detectaron silencios en ese rango.");
           } else {
-            alert(
-              `Silencios removidos:\n` +
-              `• ${s.silences_detected} silencio(s) detectado(s)\n` +
-              `• ${s.removed_seconds}s eliminados\n` +
-              `• ${s.splits} segmento(s) generado(s)` +
-              (s.skipped_no_audio ? `\n• ${s.skipped_no_audio} clip(s) sin audio fueron saltados` : "")
+            podSwal.success(
+              `${s.silences_detected} silencio(s) detectado(s) · ` +
+              `${s.removed_seconds}s eliminados · ` +
+              `${s.splits} segmento(s) generado(s)` +
+              (s.skipped_no_audio ? ` · ${s.skipped_no_audio} clip(s) sin audio saltados` : ""),
+              "Silencios removidos"
             );
           }
         }
-      } catch (e) { error.value = e.message; alert(e.message); }
+      } catch (e) { error.value = e.message; podSwal.error(e.message); }
     }
 
     async function removeOperation(opId) {
@@ -3093,11 +4144,26 @@ var ProjectView = {
     }
 
     function previewMoment(m) {
-      // Seek a touch before the moment so the user can see the effect enter, then play.
-      const lead = 0.4; // seconds
+      const lead = 0.4;
       const start = Math.max(0, m.timeline_seconds - lead);
-      // seek(..., autoPlay=true) handles src swap + starts playback once loaded.
       videoPlayerRef.value?.seek(start, true);
+    }
+
+    function exportMoment(m) {
+      const total = playerState.duration || 0;
+      const start = m.timeline_seconds || 0;
+      let end;
+      if (m.duration_seconds && m.duration_seconds > 0) {
+        end = start + m.duration_seconds;
+      } else {
+        const sortedMs = [...timeline.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds);
+        const next = sortedMs.find(x => x.timeline_seconds > start + 0.01);
+        end = next ? next.timeline_seconds : total;
+      }
+      end = Math.min(end, total);
+      if (end <= start + 0.01) return;
+      selectedRange.value = { start, end };
+      showExport.value = true;
     }
     function onZoomTo({ start, end }) {
       const total = playerState.duration || 0;
@@ -3118,6 +4184,38 @@ var ProjectView = {
       zoom.endSeconds = Math.min(playerState.duration || r.end, r.end);
       selectedRange.value = null;
     }
+
+    // Range-loop preview. While `rangeLoopActive` is on, the player loops
+    // between selectedRange.start and selectedRange.end so you can audition
+    // the clip with all live effects (color, zoom, text overlays — those
+    // already follow `playerState.currentTime` via `activeEffects`) before
+    // committing to an export. Cuts/transcript_cuts are NOT skipped during
+    // preview — they're a render-time concern.
+    const rangeLoopActive = ref(false);
+    function playRange() {
+      const r = selectedRange.value;
+      if (!r || r.end <= r.start + 0.05) return;
+      rangeLoopActive.value = true;
+      videoPlayerRef.value?.seek(r.start, true);
+    }
+    function stopRangeLoop() {
+      rangeLoopActive.value = false;
+    }
+    // Watch for the loop boundary. Triggers on every playerState.currentTime
+    // tick (which fires on the video element's `timeupdate`) — cheap.
+    watch(() => playerState.currentTime, (t) => {
+      if (!rangeLoopActive.value) return;
+      const r = selectedRange.value;
+      if (!r) { rangeLoopActive.value = false; return; }
+      // If the user seeked manually outside the loop window, give up.
+      if (t < r.start - 0.5) { rangeLoopActive.value = false; return; }
+      // Loop back when we cross the end.
+      if (t >= r.end - 0.02) {
+        videoPlayerRef.value?.seek(r.start, true);
+      }
+    });
+    // If the selection is cleared (Esc, click outside, etc.), kill the loop.
+    watch(selectedRange, (v) => { if (!v) rangeLoopActive.value = false; });
     function onUpdateZoom({ start, end }) {
       zoom.startSeconds = start;
       zoom.endSeconds = end;
@@ -3174,9 +4272,43 @@ var ProjectView = {
       } catch (_) { /* silent */ }
     }
 
+    const prodpodPrompt = ref(null);
+
+    async function checkMultiTrack(force) {
+      try {
+        const data = await api(`/api/projects/${props.project.slug}/timeline/prodpod-tracks`);
+        if (data.individual.length < 2) {
+          if (force) podSwal.toast("Se necesitan al menos 2 archivos de video para organizar pistas.");
+          return;
+        }
+        if (force || data.timeline_empty) {
+          prodpodPrompt.value = data;
+        }
+      } catch (_) {}
+    }
+
+    async function placeProdpod(mode) {
+      if (mode === "composite" && !prodpodPrompt.value?.composite) {
+        try {
+          const r = await api(`/api/projects/${props.project.slug}/timeline/rebuild-composite`, { method: "POST" });
+          if (r.ok) await checkMultiTrack();
+          else { error.value = r.error || "No se pudo regenerar el composite"; return; }
+        } catch (e) { error.value = e.message; return; }
+      }
+      try {
+        await api(`/api/projects/${props.project.slug}/timeline/place-prodpod`, {
+          method: "POST", body: { mode },
+        });
+        await refreshTimeline();
+        await loadAllFiles();
+      } catch (e) { error.value = e.message; }
+      prodpodPrompt.value = null;
+    }
+
     onMounted(() => {
       refreshTimeline();
-      loadAllFiles();    // populate local+global regardless of FilesPanel visibility
+      loadAllFiles();
+      checkMultiTrack();
       window.addEventListener("keydown", onKey);
     });
     onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
@@ -3185,8 +4317,9 @@ var ProjectView = {
       timeline, localFiles, playerState, zoom, selectedMomentId, selectedMoment,
       capture, clipsWithStarts, activeEffects, videoPlayerRef, error,
       refreshTimeline, addClipToTimeline, removeClip, reorderClip, trimClip, seekToClip,
-      createMoment, updateMomentLabel, updateMomentType, removeMoment,
+      createMoment, updateMomentLabel, updateMomentType, removeMoment, patchMoment,
       addJumpToNext, setTrackAtMoment, toggleTrackAtMoment, applyRangeAsZoom,
+      rangeLoopActive, playRange, stopRangeLoop,
       setClipTrack, updateLaneClip, removeLaneClip,
       laneEditing, onLaneClipClick, saveLaneEdit,
       clipEditing, onClipClick, saveClipEdit,
@@ -3194,18 +4327,21 @@ var ProjectView = {
       captionsEnabled, captionsLanguage, liveCaption, onCaptionsChanged,
       captionsByMedia,
       addOperation, removeOperation,
-      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment,
+      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, exportMoment,
       showFiles, showClips, focusMode, selectedRange,
       silenceClip, openSilenceModal, applySilenceRemoval,
-      showExport,
+      showExport, showParticipants,
+      showTranscript,
       formatShort,
+      prodpodPrompt, placeProdpod, checkMultiTrack,
+      verticalSplitSources, autoMultitrack, textOverlaySounds, liveSelection,
     };
   },
   template: `
     <div class="editor-wide"
          :class="{
            'no-left':   !showFiles && !focusMode,
-           'no-right':  !showClips && !selectedMoment,
+           'no-right':  !showClips && !selectedMoment && !showParticipants,
            'focus-mode': focusMode,
            'has-ops':    focusMode && selectedMoment != null
          }">
@@ -3225,10 +4361,12 @@ var ProjectView = {
           @remove="removeMoment"
           @update-label="updateMomentLabel"
           @update-type="updateMomentType"
+          @update-time="patchMoment"
           @jump-next="addJumpToNext"
           @set-track="setTrackAtMoment"
           @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
+          @export-moment="exportMoment"
         />
       </aside>
 
@@ -3243,6 +4381,9 @@ var ProjectView = {
           :effects="activeEffects"
           :moments="timeline.moments"
           :selected-range="selectedRange"
+          :live-selection="liveSelection"
+          :vertical-split-sources="verticalSplitSources"
+          :multitrack-preview="autoMultitrack"
           :audio-lane="timeline.audioLane"
           :text-overlay-sounds="textOverlaySounds"
           :editing-overlay="editingOverlay"
@@ -3264,12 +4405,31 @@ var ProjectView = {
             <button class="primary" :disabled="timeline.clips.length === 0" @click="createMoment({})" style="margin-left:8px;">
               ◉ Capturar momento <span class="kbd" style="margin-left:6px;">M</span>
             </button>
+            <button v-if="selectedRange && !rangeLoopActive" :disabled="timeline.clips.length === 0" @click="playRange"
+                    class="ghost" style="margin-left:8px;" title="Reproducir el rango seleccionado en loop">
+              ▶ Reproducir rango
+            </button>
+            <button v-if="selectedRange && rangeLoopActive" :disabled="timeline.clips.length === 0" @click="stopRangeLoop"
+                    class="ghost" style="margin-left:8px; background: var(--signal-soft, rgba(244,199,112,0.18)); border-color: var(--signal, #f4c770); color: var(--signal, #f4c770);"
+                    title="Detener loop">
+              ⏹ Stop loop
+            </button>
             <button v-if="selectedRange" :disabled="timeline.clips.length === 0" @click="applyRangeAsZoom"
                     class="ghost" style="margin-left:8px;" title="Zoom al rango seleccionado (Z)">
               🔍 Zoom selección <span class="kbd" style="margin-left:6px;">Z</span>
             </button>
+            <button :disabled="timeline.clips.length === 0" @click="showTranscript = true" class="ghost" style="margin-left:8px;" title="Editar por transcripción">
+              ✍ Transcript
+            </button>
+            <button @click="showParticipants = !showParticipants" :class="{on: showParticipants}" class="ghost" style="margin-left:8px;" title="Participantes y banners">
+              👤 Participantes
+            </button>
             <button :disabled="timeline.clips.length === 0" @click="showExport = true" style="margin-left:8px;">
               ⇪ Exportar
+            </button>
+            <button @click="checkMultiTrack(true)" class="ghost" style="margin-left:8px;"
+                    title="Colocar cada archivo de video en su propia pista">
+              ⊞ Pistas
             </button>
           </div>
 
@@ -3283,6 +4443,7 @@ var ProjectView = {
             :audio-lane="timeline.audioLane"
             @seek="onSeek"
             @zoom-to="onZoomTo"
+            @live-select="(r) => liveSelection = r"
             @select-moment="(id) => selectedMomentId = id"
             @lane-click="onLaneClipClick"
             @lane-remove="(lc) => removeLaneClip(lc.id)"
@@ -3335,10 +4496,12 @@ var ProjectView = {
           @remove="removeMoment"
           @update-label="updateMomentLabel"
           @update-type="updateMomentType"
+          @update-time="patchMoment"
           @jump-next="addJumpToNext"
           @set-track="setTrackAtMoment"
           @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
+          @export-moment="exportMoment"
         />
 
         <CaptureMomentModal
@@ -3349,7 +4512,7 @@ var ProjectView = {
         />
       </div>
 
-      <aside v-if="showClips || selectedMoment" class="right-col">
+      <aside v-if="showClips || selectedMoment || showParticipants" class="right-col">
         <ClipsPanel
           v-if="showClips"
           :clips="clipsWithStarts"
@@ -3378,10 +4541,46 @@ var ProjectView = {
           @update="updateOperation"
           @remove="removeOperation"
           @editing-overlay="setEditingOverlay"
+          @update-moment="patchMoment"
+        />
+        <ParticipantsPanel
+          v-if="showParticipants"
+          :slug="project.slug"
+          @close="showParticipants = false"
         />
       </aside>
 
-      <ExportModal v-if="showExport" :slug="project.slug" @close="showExport = false" />
+      <ExportModal v-if="showExport" :slug="project.slug" :selected-range="selectedRange" :has-multitrack="autoMultitrack" @close="showExport = false" />
+      <TranscriptEditor :show="showTranscript" :slug="project.slug"
+                        @close="showTranscript = false"
+                        @seek="onSeek"
+                        @cuts-changed="() => {}" />
+
+      <div v-if="prodpodPrompt" class="modal-backdrop" @click.self="prodpodPrompt = null">
+        <div class="modal" style="width: 460px;">
+          <div class="eyebrow">ORGANIZAR PISTAS</div>
+          <h3 style="margin: 4px 0 12px;">¿Cómo quieres armar la timeline?</h3>
+          <p class="muted" style="margin-bottom: 14px; font-size: 12px;">
+            Tienes {{ prodpodPrompt.individual.length }} archivo(s) de video disponible(s)
+            <span v-if="prodpodPrompt.composite">y un video compuesto lado a lado</span>.
+            <br><strong>Esto reemplaza todos los clips actuales del timeline.</strong>
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button v-if="prodpodPrompt.individual.length" class="primary" style="padding: 12px;"
+                    @click="placeProdpod('individual')">
+              Pistas separadas — cada archivo en su propio track ({{ prodpodPrompt.individual.length }} tracks simultáneos)
+            </button>
+            <button v-if="prodpodPrompt.individual.length >= 2" class="primary" style="padding: 12px; background: var(--signal-cyan);"
+                    @click="placeProdpod('composite')">
+              Video compuesto — todos lado a lado en un solo track
+              <span v-if="!prodpodPrompt.composite" style="display:block; font-size:10px; opacity:0.8; margin-top:2px;">(se generará automáticamente)</span>
+            </button>
+            <button class="ghost" style="padding: 10px;" @click="prodpodPrompt = null">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
 };
@@ -3395,12 +4594,21 @@ var App = {
   setup() {
     const state = reactive({ username: null, currentProject: null, loading: true });
     const isPlaying = ref(false);
+    const siblingApps = ref(null);
+    const thepodUrl = ref("");
 
     async function checkAuth() {
       state.loading = true;
       try { const d = await api("/api/auth/me"); state.username = d.username; }
       catch (_) { state.username = null; }
       finally { state.loading = false; }
+    }
+    async function loadApps() {
+      try {
+        const d = await api("/api/config/apps");
+        siblingApps.value = d.apps.filter(function (a) { return a.key !== d.current; });
+        thepodUrl.value = d.thepod_url || "";
+      } catch (_) {}
     }
     async function logout() {
       try { await api("/api/auth/logout", { method: "POST" }); } catch (_) {}
@@ -3415,9 +4623,9 @@ var App = {
       const v = document.querySelector(".video-frame video");
       isPlaying.value = !!(v && !v.paused && !v.ended);
     }
-    onMounted(() => { checkAuth(); setInterval(syncTally, 250); });
+    onMounted(() => { checkAuth(); loadApps(); setInterval(syncTally, 250); });
 
-    return { state, isPlaying, onLoggedIn, onOpen, onBack, logout };
+    return { state, isPlaying, siblingApps, thepodUrl, onLoggedIn, onOpen, onBack, logout };
   },
   template: `
     <template v-if="state.loading">
@@ -3429,8 +4637,14 @@ var App = {
     <template v-else>
       <header class="app-header">
         <div class="brand">
-          <span class="mark">post<em>Pod</em></span>
+          <a :href="thepodUrl || '#'" class="mark" title="Ir a thePod">post<em>Pod</em></a>
           <span class="tag">studio · v0.3</span>
+        </div>
+        <div class="sibling-apps" v-if="siblingApps">
+          <a v-for="a in siblingApps" :key="a.key" :href="a.url" class="sibling-link" :title="'Ir a ' + a.name">
+            <span class="ico">{{ a.icon }}</span>
+            <span>{{ a.name }}</span>
+          </a>
         </div>
         <div class="tally-light" :class="{on: isPlaying}">
           <span class="dot"></span>

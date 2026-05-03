@@ -24,6 +24,10 @@ def require_auth(f):
     return wrapper
 
 
+def current_user():
+    return session.get("username")
+
+
 @bp.post("/login")
 def login():
     data = request.get_json(silent=True) or {}

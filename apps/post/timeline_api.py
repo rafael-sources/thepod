@@ -21,10 +21,11 @@ bp = Blueprint("timeline_api", __name__)
 VALID_OP_TYPES = {
     "cut_before", "cut_after", "insert_clip", "switch_video",
     "zoom_in", "zoom_out", "color_effect", "audio_replace",
-    "audio_mix", "subtitle", "to_vertical", "remove_silences",
+    "audio_mix", "subtitle", "to_vertical", "vertical_split", "remove_silences",
     "jump_to_moment", "switch_track", "text_overlay",
 }
 ABSOLUTE_ALLOWED = {"zoom_in", "zoom_out", "color_effect", "subtitle", "to_vertical",
+                    "vertical_split",
                     "jump_to_moment", "switch_track", "text_overlay"}
 
 
@@ -342,14 +343,17 @@ def get_timeline(slug):
         clips = _load_clips(slug, db)
         ops_by_moment = _load_ops_by_moment(db)
         moments_rows = db.execute(
-            "SELECT id, type, timeline_seconds, label FROM moments ORDER BY timeline_seconds"
+            "SELECT id, type, timeline_seconds, duration_seconds, label "
+            "FROM moments ORDER BY timeline_seconds"
         ).fetchall()
         moments = []
         for r in moments_rows:
+            keys = r.keys()
             moments.append({
                 "id": r["id"],
                 "type": r["type"],
                 "timeline_seconds": r["timeline_seconds"],
+                "duration_seconds": r["duration_seconds"] if "duration_seconds" in keys else None,
                 "label": r["label"] or "",
                 "operations": ops_by_moment.get(r["id"], []),
             })
@@ -544,7 +548,7 @@ def add_clip(slug):
         if end_offset is not None:
             end_offset = float(end_offset)
         track = int(data.get("track") or 1)
-        if track not in (1, 2):
+        if track not in (1, 2, 3, 4):
             track = 1
 
         old_clips = _load_clip_list_for_recalc(db)
@@ -615,8 +619,8 @@ def update_clip(slug, clip_id):
             params.append(float(val) if val is not None else None)
         if "track" in data:
             t = int(data["track"] or 1)
-            if t not in (1, 2):
-                return jsonify({"error": "track debe ser 1 o 2"}), 400
+            if t not in (1, 2, 3, 4):
+                return jsonify({"error": "track debe ser 1, 2, 3 o 4"}), 400
             updates_sql.append("track=?")
             params.append(t)
         if "volume" in data:
@@ -757,6 +761,21 @@ def update_moment(slug, moment_id):
                 return jsonify({"error": "type debe ser 'relative' o 'absolute'"}), 400
             updates_sql.append("type=?")
             params.append(t)
+        if "duration_seconds" in data:
+            v = data["duration_seconds"]
+            # null clears the range, otherwise positive float.
+            if v is None or (isinstance(v, str) and not v.strip()):
+                updates_sql.append("duration_seconds=?")
+                params.append(None)
+            else:
+                try:
+                    fv = float(v)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "duration_seconds inválido"}), 400
+                if fv < 0:
+                    return jsonify({"error": "duration_seconds no puede ser negativo"}), 400
+                updates_sql.append("duration_seconds=?")
+                params.append(fv if fv > 0 else None)
         if updates_sql:
             params.append(moment_id)
             db.execute(
@@ -765,7 +784,8 @@ def update_moment(slug, moment_id):
             )
             db.commit()
         updated = db.execute(
-            "SELECT id, type, timeline_seconds, label FROM moments WHERE id=?",
+            "SELECT id, type, timeline_seconds, duration_seconds, label "
+            "FROM moments WHERE id=?",
             (moment_id,),
         ).fetchone()
         return jsonify({
@@ -1041,5 +1061,117 @@ def delete_operation(slug, op_id):
         db.execute("DELETE FROM operations WHERE id=?", (op_id,))
         db.commit()
         return jsonify({"ok": True})
+    finally:
+        db.close()
+
+
+COMPOSITE_MARKER = "[composite_podcast_hstack]"
+
+
+@bp.post("/api/projects/<slug>/timeline/rebuild-composite")
+@require_auth
+def rebuild_composite(slug):
+    """Regenerate the side-by-side composite from individual tracks."""
+    _ensure_project(slug)
+    try:
+        from integrations import _compose_hstack_side_by_side
+        result = _compose_hstack_side_by_side(slug)
+        if not result:
+            return jsonify({"error": "se necesitan al menos 2 pistas de video individuales"}), 400
+        if "error" in result:
+            return jsonify(result), 500
+        return jsonify({"ok": True, "composite": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.get("/api/projects/<slug>/timeline/prodpod-tracks")
+@require_auth
+def get_prodpod_tracks(slug):
+    """Return prodPod-imported tracks available for timeline placement."""
+    _ensure_project(slug)
+    db = get_db(slug)
+    try:
+        individual = db.execute(
+            """SELECT id, filename, original_name, duration, file_type
+               FROM media_files
+               WHERE file_type='video'
+                 AND original_name IS NOT NULL
+                 AND original_name NOT LIKE ?
+                 AND original_name NOT LIKE '%\\_screen\\_%' ESCAPE '\\'
+               ORDER BY original_name""",
+            (COMPOSITE_MARKER + "%",),
+        ).fetchall()
+        composite = db.execute(
+            """SELECT id, filename, original_name, duration, file_type
+               FROM media_files
+               WHERE original_name LIKE ?""",
+            (COMPOSITE_MARKER + "%",),
+        ).fetchone()
+        on_timeline = db.execute(
+            "SELECT COUNT(*) AS n FROM timeline_clips"
+        ).fetchone()["n"]
+        return jsonify({
+            "individual": [dict(r) for r in individual],
+            "composite": dict(composite) if composite else None,
+            "timeline_empty": on_timeline == 0,
+        })
+    finally:
+        db.close()
+
+
+@bp.post("/api/projects/<slug>/timeline/place-prodpod")
+@require_auth
+def place_prodpod_tracks(slug):
+    """Place prodPod tracks on the timeline: 'composite' or 'individual'."""
+    _ensure_project(slug)
+    data = request.get_json(force=True)
+    mode = data.get("mode")  # "composite" | "individual"
+    if mode not in ("composite", "individual"):
+        return jsonify({"error": "mode debe ser 'composite' o 'individual'"}), 400
+
+    db = get_db(slug)
+    try:
+        if mode == "composite":
+            comp = db.execute(
+                "SELECT id, original_name, duration FROM media_files WHERE original_name LIKE ?",
+                (COMPOSITE_MARKER + "%",),
+            ).fetchone()
+            if not comp:
+                return jsonify({"error": "no hay composite disponible"}), 404
+            db.execute("DELETE FROM timeline_clips")
+            db.execute(
+                """INSERT INTO timeline_clips
+                   (position, media_file_id, label, start_offset, end_offset, track, volume)
+                   VALUES (0, ?, ?, 0, NULL, 1, 1.0)""",
+                (comp["id"], comp["original_name"]),
+            )
+            db.commit()
+            return jsonify({"ok": True, "placed": 1})
+
+        # mode == "individual"
+        sources = db.execute(
+            """SELECT id, original_name, duration
+               FROM media_files
+               WHERE file_type='video'
+                 AND original_name IS NOT NULL
+                 AND original_name NOT LIKE ?
+                 AND original_name NOT LIKE '%\\_screen\\_%' ESCAPE '\\'
+               ORDER BY original_name
+               LIMIT 4""",
+            (COMPOSITE_MARKER + "%",),
+        ).fetchall()
+        if not sources:
+            return jsonify({"error": "no hay pistas individuales"}), 404
+        db.execute("DELETE FROM timeline_clips")
+        for i, s in enumerate(sources):
+            db.execute(
+                """INSERT INTO timeline_clips
+                   (position, media_file_id, label, start_offset, end_offset, track, volume)
+                   VALUES (?, ?, ?, 0, NULL, ?, 1.0)""",
+                (i, s["id"], s["original_name"], i + 1),
+            )
+        db.commit()
+        return jsonify({"ok": True, "placed": len(sources)})
     finally:
         db.close()
