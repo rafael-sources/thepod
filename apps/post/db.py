@@ -135,6 +135,8 @@ def get_db(slug: str) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
     _migrate_in_place(conn)
@@ -174,6 +176,8 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN moment_banner INTEGER NOT NULL DEFAULT 0")
     if "banner_position" not in ej_cols:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN banner_position TEXT DEFAULT 'bottom'")
+    if "vertical_center_spotlight" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN vertical_center_spotlight INTEGER NOT NULL DEFAULT 0")
     # Moment duration: lets the user define a moment as a range
     # [timeline_seconds .. timeline_seconds + duration_seconds] instead of
     # a point. Old rows stay NULL and are treated as point-in-time.

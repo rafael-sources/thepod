@@ -1560,7 +1560,8 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                          spotlight: bool = False,
                          use_background: bool = False,
                          moment_banner: bool = False,
-                         banner_position: str = "bottom"):
+                         banner_position: str = "bottom",
+                         vertical_center_spotlight: bool = False):
     """Returns (cmd_list, effective_duration_seconds).
 
     `enhance_speech`: when True, runs the speech track through a small
@@ -1692,16 +1693,50 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             for c in clips
         ]
 
-    # Pre-filter segments by keep_ranges: drop any segment entirely outside
-    # the export window. This avoids the split=N deadlock where FFmpeg
-    # buffers the whole source while concat reads sequentially.
-    filtered = [s for s in segments if _overlaps_keep(s["tl_start"], s["tl_end"])]
-    if filtered and len(filtered) < len(segments):
-        segments = filtered
-        # Remap keep_ranges from original timeline to concat timeline.
-        # Each kept segment is placed sequentially in the concat output.
+    # Pre-filter AND clip segments to keep_ranges so FFmpeg only decodes
+    # the source data actually needed for the export window. Without clipping,
+    # a segment spanning 0-71 s would be decoded in full even for a 10 s range.
+    if keep_ranges:
+        kr_min = min(kr_s for kr_s, _ in keep_ranges)
+        kr_max = max(kr_e for _, kr_e in keep_ranges)
+        clipped_segs = []
+        changed = False
+        for seg in segments:
+            tl_s = seg["tl_start"]
+            tl_e = seg["tl_end"]
+            if tl_e <= kr_min + 0.001 or tl_s >= kr_max - 0.001:
+                changed = True
+                continue
+            new_tl_s = max(tl_s, kr_min)
+            new_tl_e = min(tl_e, kr_max)
+            if new_tl_e <= new_tl_s + 0.001:
+                changed = True
+                continue
+            if new_tl_s > tl_s + 0.001 or new_tl_e < tl_e - 0.001:
+                changed = True
+                seg = dict(seg)
+                offset_start = new_tl_s - tl_s
+                offset_end = tl_e - new_tl_e
+                seg["src_start"] = float(seg["src_start"]) + offset_start
+                seg["src_end"] = float(seg["src_end"]) - offset_end
+                seg["tl_start"] = new_tl_s
+                seg["tl_end"] = new_tl_e
+                seg["duration"] = new_tl_e - new_tl_s
+                mc = seg.get("multi_clips")
+                if mc:
+                    mc = [dict(e) for e in mc]
+                    for entry in mc:
+                        entry["src_start"] = float(entry["src_start"]) + offset_start
+                        entry["src_end"] = float(entry["src_end"]) - offset_end
+                    seg["multi_clips"] = mc
+            clipped_segs.append(seg)
+        if clipped_segs and changed:
+            segments = clipped_segs
+    else:
+        changed = False
+    if changed:
         concat_cursor = 0.0
-        seg_map = []  # (orig_start, orig_end, concat_start, concat_end)
+        seg_map = []
         for seg in segments:
             dur = seg["tl_end"] - seg["tl_start"]
             seg_map.append((seg["tl_start"], seg["tl_end"], concat_cursor, concat_cursor + dur))
@@ -1727,7 +1762,6 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
         keep_ranges = _remap_ranges(keep_ranges)
         total_duration = concat_cursor
 
-        # Remap flat_ops tl_start for video ops that fall inside kept segments.
         remapped_ops = []
         for op in flat_ops:
             t = op["tl_start"]
@@ -1737,8 +1771,6 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     break
         flat_ops = remapped_ops
 
-        # Remap audio_lane tl_start/tl_end so adelay positions them correctly
-        # in the shortened concat timeline.
         remapped_lane = []
         for lc in audio_lane:
             t0 = lc["tl_start"]
@@ -1828,6 +1860,21 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
         parts.append(f"[{bi}:v]split={n}[" + "][".join(labels) + "]")
         split_b[bi] = labels
 
+    # ---- Background image: single input, overlay after concat ----
+    # Segments use transparent padding (yuva420p + color=black@0.0) so the
+    # bg shows through gaps.  One post-concat overlay composites the result
+    # onto a looped bg frame.  This avoids the per-segment loop+overlay
+    # approach that deadlocked with concat's sequential consumption.
+    bg_input_idx = None
+    has_bg = False
+    if use_background and not is_audio_only and W and H:
+        bg_path = _resolve_background_image(slug)
+        if bg_path:
+            cmd += ["-i", str(bg_path)]
+            bg_input_idx = n_clip_inputs
+            n_clip_inputs += 1
+            has_bg = True
+
     for k, seg in enumerate(segments):
         c = seg["clip"]
         mc = seg.get("multi_clips")
@@ -1900,13 +1947,23 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     )
                 else:
                     pw = panel_widths[j]
-                    chain = (
-                        f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
-                        f"fps={target_fps},"
-                        f"scale={pw}:{H}:force_original_aspect_ratio=decrease,"
-                        f"pad={pw}:{H}:(ow-iw)/2:(oh-ih)/2,"
-                        f"setsar=1,format=yuv420p"
-                    )
+                    if has_bg:
+                        chain = (
+                            f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                            f"fps={target_fps},"
+                            f"scale={pw}:{H}:force_original_aspect_ratio=decrease,"
+                            f"format=yuva420p,"
+                            f"pad={pw}:{H}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,"
+                            f"setsar=1"
+                        )
+                    else:
+                        chain = (
+                            f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                            f"fps={target_fps},"
+                            f"scale={pw}:{H}:force_original_aspect_ratio=decrease,"
+                            f"pad={pw}:{H}:(ow-iw)/2:(oh-ih)/2,"
+                            f"setsar=1,format=yuv420p"
+                        )
                 parts.append(f"[{src}]{chain}[{pl}]")
                 panel_labels.append(f"[{pl}]")
 
@@ -1914,7 +1971,13 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             if is_vsplit:
                 parts.append(f"{''.join(panel_labels)}vstack=inputs={n_panels}[{comp}]")
                 out_w = min(W, int(H * 9 / 16))
-                if out_w < W:
+                if has_bg and out_w < W:
+                    parts.append(
+                        f"[{comp}]format=yuva420p,"
+                        f"pad={W}:{H}:(ow-iw)/2:0:color=black@0.0,"
+                        f"setsar=1[v{k}]"
+                    )
+                elif out_w < W:
                     parts.append(f"[{comp}]pad={W}:{H}:(ow-iw)/2:0:color=black,setsar=1,format=yuv420p[v{k}]")
                 else:
                     parts.append(f"[{comp}]setsar=1,format=yuv420p[v{k}]")
@@ -1948,21 +2011,32 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
         else:
             if c["file_type"] == "video":
                 src = split_v[c["id"]].pop(0)
-                v_chain = (
-                    f"trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS,"
-                    f"fps={target_fps},"
-                    f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
-                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
-                    f"setsar=1,format=yuv420p"
-                )
+                if has_bg:
+                    v_chain = (
+                        f"trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS,"
+                        f"fps={target_fps},"
+                        f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                        f"format=yuva420p,"
+                        f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,"
+                        f"setsar=1"
+                    )
+                else:
+                    v_chain = (
+                        f"trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS,"
+                        f"fps={target_fps},"
+                        f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                        f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
+                        f"setsar=1,format=yuv420p"
+                    )
                 parts.append(f"[{src}]{v_chain}[v{k}]")
             else:
                 bidx = black_idx_map[i]
                 src = split_b[bidx].pop(0)
                 seg_dur = seg["duration"]
+                fmt = "yuva420p" if has_bg else "yuv420p"
                 parts.append(
                     f"[{src}]trim=start=0:end={seg_dur:.3f},setpts=PTS-STARTPTS,"
-                    f"fps={target_fps},scale={W}:{H},setsar=1,format=yuv420p[v{k}]"
+                    f"fps={target_fps},scale={W}:{H},setsar=1,format={fmt}[v{k}]"
                 )
             if all_have_audio:
                 src = split_a[c["id"]].pop(0)
@@ -1997,6 +2071,18 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             parts.append(f"{concat_in}concat=n={n_segs}:v=1:a=0[vconcat]")
             audio_label = None
         video_label = "vconcat"
+
+    # ---- Background overlay (single post-concat pass) ----
+    if video_label and has_bg and bg_input_idx is not None:
+        parts.append(
+            f"[{bg_input_idx}:v]scale={W}:{H},setsar=1,format=yuv420p,"
+            f"loop=-1:1:0,setpts=N/{target_fps}/TB[bgloop]"
+        )
+        parts.append(
+            f"[bgloop][{video_label}]overlay=0:0:shortest=1,"
+            f"format=yuv420p[vbg]"
+        )
+        video_label = "vbg"
 
     # ---- Video operations ----
     if video_label:
@@ -2069,26 +2155,6 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                 parts, video_label, proj_segments, total_duration, W, H,
                 heading_font=heading_font,
             )
-
-    # ---- Branding background ----
-    # Loop the single-frame image INSIDE the filter graph (loop filter) instead
-    # of at the demuxer level (-loop 1) to avoid deadlocks with split/concat.
-    if video_label and not is_audio_only and use_background:
-        bg_path = _resolve_background_image(slug)
-        if bg_path:
-            cmd += ["-i", str(bg_path)]
-            bg_idx = n_clip_inputs
-            n_clip_inputs += 1
-            bg_scaled = "bg_scaled"
-            parts.append(
-                f"[{bg_idx}:v]scale={W}:{H},setsar=1,format=yuv420p,"
-                f"loop=-1:1:0,setpts=N/FRAME_RATE/TB[{bg_scaled}]"
-            )
-            composited = "v_bg"
-            parts.append(
-                f"[{bg_scaled}][{video_label}]overlay=0:0:shortest=1[{composited}]"
-            )
-            video_label = composited
 
     # ---- Moment banner (CNN-style bar with logo + label + social) ----
     if video_label and not is_audio_only and moment_banner and range_start is not None:
@@ -2363,7 +2429,8 @@ def run_export(slug: str, job_id: int):
         db.commit()
         job = db.execute(
             "SELECT preset_id, burn_captions_json, generate_notes, enhance_speech, "
-            "range_start, range_end, spotlight, use_background, moment_banner, banner_position FROM export_jobs WHERE id=?",
+            "range_start, range_end, spotlight, use_background, moment_banner, "
+            "banner_position, vertical_center_spotlight FROM export_jobs WHERE id=?",
             (job_id,),
         ).fetchone()
     finally:
@@ -2377,6 +2444,7 @@ def run_export(slug: str, job_id: int):
     use_background = bool(job["use_background"]) if "use_background" in job_keys else False
     moment_banner = bool(job["moment_banner"]) if "moment_banner" in job_keys else False
     banner_position = job["banner_position"] if "banner_position" in job_keys else "bottom"
+    vertical_center_spotlight = bool(job["vertical_center_spotlight"]) if "vertical_center_spotlight" in job_keys else False
     preset = find_preset(preset_id)
     if not preset:
         _update_job(slug, job_id, status="error", error_msg=f"preset desconocido: {preset_id}")
@@ -2406,6 +2474,7 @@ def run_export(slug: str, job_id: int):
             use_background=use_background,
             moment_banner=moment_banner,
             banner_position=banner_position or "bottom",
+            vertical_center_spotlight=vertical_center_spotlight,
         )
     except Exception as e:
         _update_job(slug, job_id, status="error", error_msg=f"no se pudo construir el comando: {e}")
