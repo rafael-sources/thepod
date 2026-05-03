@@ -1,8 +1,9 @@
 import json
 import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from slugify import slugify
 
 from auth import current_user, require_auth
@@ -145,6 +146,70 @@ def delete_project(slug):
         return jsonify({"error": "no autorizado"}), 403
     shutil.rmtree(project_dir)
     return jsonify({"ok": True})
+
+
+@bp.get("/<slug>/export-bundle")
+@require_auth
+def export_bundle(slug):
+    project_dir = PROJECTS_DIR / slug
+    if not project_dir.exists():
+        return jsonify({"error": "proyecto no encontrado"}), 404
+    meta = _read_meta(slug) or {}
+    if not _can_see(meta):
+        return jsonify({"error": "no autorizado"}), 403
+    from project_io import export_project
+    try:
+        zip_path = export_project(slug)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return send_file(
+        str(zip_path),
+        as_attachment=True,
+        download_name=f"{slug}_bundle.zip",
+    )
+
+
+@bp.post("/import")
+@require_auth
+def import_project_endpoint():
+    if "file" not in request.files:
+        return jsonify({"error": "archivo requerido"}), 400
+    f = request.files["file"]
+    if not f.filename or not f.filename.endswith(".zip"):
+        return jsonify({"error": "debe ser un archivo .zip"}), 400
+
+    import tempfile
+    from project_io import import_project, unique_import_slug, validate_import_zip
+
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        f.save(tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        validation = validate_import_zip(tmp_path)
+        if not validation["valid"]:
+            return jsonify({"error": "; ".join(validation["errors"])}), 400
+
+        manifest = validation["manifest"] or {}
+        desired_slug = manifest.get("slug", "imported-project")
+        mode = request.form.get("mode", "copy")
+
+        if mode == "replace" and (PROJECTS_DIR / desired_slug).exists():
+            slug = desired_slug
+            shutil.rmtree(PROJECTS_DIR / slug)
+        else:
+            slug = unique_import_slug(desired_slug)
+
+        result = import_project(tmp_path, slug, owner_username=current_user())
+        if result["missing_files"]:
+            return jsonify({
+                "slug": slug,
+                "warning": f"{len(result['missing_files'])} archivos referenciados no encontrados en el zip",
+                "missing": result["missing_files"][:10],
+            }), 201
+        return jsonify({"slug": slug, "meta": result["meta"]}), 201
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
