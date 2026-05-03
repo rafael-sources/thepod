@@ -3170,6 +3170,9 @@ var ExportModal = {
     const spotlight = ref(localStorage.getItem("postpod.spotlight") === "1");
     watch(spotlight, (v) => localStorage.setItem("postpod.spotlight", v ? "1" : "0"));
 
+    const verticalCenterSpotlight = ref(localStorage.getItem("postpod.verticalCenterSpotlight") === "1");
+    watch(verticalCenterSpotlight, (v) => localStorage.setItem("postpod.verticalCenterSpotlight", v ? "1" : "0"));
+
     const useBackground = ref(localStorage.getItem("postpod.useBackground") === "1");
     watch(useBackground, (v) => localStorage.setItem("postpod.useBackground", v ? "1" : "0"));
 
@@ -3237,6 +3240,7 @@ var ExportModal = {
         if (generateNotes.value) body.generate_notes = true;
         if (enhanceSpeech.value) body.enhance_speech = true;
         if (spotlight.value) body.spotlight = true;
+        if (verticalCenterSpotlight.value) body.vertical_center_spotlight = true;
         if (useBackground.value) body.use_background = true;
         if (momentBanner.value) {
           body.moment_banner = true;
@@ -3333,7 +3337,7 @@ var ExportModal = {
     return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, notesUrl,
              start, cancel, reset, loadHistory, showAllHistory,
              burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions,
-             generateNotes, enhanceSpeech, spotlight, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
+             generateNotes, enhanceSpeech, spotlight, verticalCenterSpotlight, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
@@ -3380,6 +3384,10 @@ var ExportModal = {
             <label v-if="hasMultitrack" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
               <input type="checkbox" v-model="spotlight">
               Spotlight (speaker activo 70/30)
+            </label>
+            <label v-if="hasMultitrack && spotlight && isVerticalPreset" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 18px;">
+              <input type="checkbox" v-model="verticalCenterSpotlight">
+              Centrar speaker activo (un solo track)
             </label>
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
               <input type="checkbox" v-model="useBackground">
