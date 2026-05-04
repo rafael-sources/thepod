@@ -257,6 +257,8 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "episode_guests", "photo_filename", "photo_filename TEXT")
     # Sponsor logo image for overlay banners.
     _ensure_column(conn, "sponsors", "logo_filename", "logo_filename TEXT")
+    # Planned offset (seconds from episode start) for sponsor moments.
+    _ensure_column(conn, "episode_blocks", "planned_offset_seconds", "planned_offset_seconds INTEGER")
     # Team members: extend with youtube + tiktok to match guest social fields.
     _ensure_column(conn, "team_members", "social_youtube", "social_youtube TEXT")
     _ensure_column(conn, "team_members", "social_tiktok", "social_tiktok TEXT")

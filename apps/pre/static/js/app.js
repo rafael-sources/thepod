@@ -1480,13 +1480,34 @@ var RundownEditor = {
           try {
             await api(`/api/podcasts/${props.slug}/blocks/${b.id}`, {
               method: "PUT",
-              body: { kind: b.kind, title: b.title, duration_estimate: b.duration_estimate, notes: b.notes },
+              body: { kind: b.kind, title: b.title, duration_estimate: b.duration_estimate, notes: b.notes, planned_offset_seconds: b.planned_offset_seconds },
             });
           } catch (e) { error.value = e.message; }
         }, 500);
         _savers.set(b.id, fn);
       }
       fn();
+    }
+
+    function fmtOffset(sec) {
+      if (sec == null) return "";
+      var m = Math.floor(sec / 60);
+      var s = sec % 60;
+      return m + ":" + String(s).padStart(2, "0");
+    }
+
+    function parseOffset(str) {
+      str = (str || "").trim();
+      if (!str) return null;
+      var parts = str.split(":");
+      if (parts.length === 2) return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+      return parseInt(str, 10) * 60;
+    }
+
+    function sponsorCopy(b) {
+      if (!b.sponsor_id) return "";
+      var sp = sponsors.value.find(function (s) { return s.id === b.sponsor_id; });
+      return sp ? sp.copy : "";
     }
 
     function onDragStart(b)   { dragging.value = b.id; }
@@ -1542,7 +1563,7 @@ var RundownEditor = {
     return {
       blocks, sponsors, error, dragging, kinds: BLOCK_KINDS,
       add, remove, save, onDragStart, onDragEnd, onDragOver, onDrop,
-      totalMin, fmtMin, kindLabel, setSponsor,
+      totalMin, fmtMin, kindLabel, setSponsor, fmtOffset, parseOffset, sponsorCopy,
     };
   },
   template: `
@@ -1576,15 +1597,25 @@ var RundownEditor = {
             <button class="icon danger" @click="remove(b)" title="Eliminar">✕</button>
           </div>
           <div v-if="b.kind === 'sponsor'" class="rundown-sponsor-link"
-               style="margin: -2px 0 6px 36px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; background: rgba(244,199,112,0.06); border-left: 2px solid var(--accent, #f4c770); border-radius: 0 6px 6px 0;">
-            <span class="eyebrow">SPONSOR</span>
-            <select :value="b.sponsor_id || ''" @change="setSponsor(b, $event.target.value)" style="flex: 1; max-width: 280px;">
-              <option value="">— Sin enlazar —</option>
-              <option v-for="s in sponsors" :key="s.id" :value="s.id">
-                {{ s.name }}{{ s.is_active ? '' : ' (pausado)' }}
-              </option>
-            </select>
-            <span v-if="!sponsors.length" class="muted" style="font-size: 11px;">Crea sponsors en la pestaña "Sponsors".</span>
+               style="margin: -2px 0 6px 36px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; background: rgba(244,199,112,0.06); border-left: 2px solid var(--accent, #f4c770); border-radius: 0 6px 6px 0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="eyebrow">SPONSOR</span>
+              <select :value="b.sponsor_id || ''" @change="setSponsor(b, $event.target.value)" style="flex: 1; max-width: 280px;">
+                <option value="">— Sin enlazar —</option>
+                <option v-for="s in sponsors" :key="s.id" :value="s.id">
+                  {{ s.name }}{{ s.is_active ? '' : ' (pausado)' }}
+                </option>
+              </select>
+              <span v-if="!sponsors.length" class="muted" style="font-size: 11px;">Crea sponsors en la pestaña "Sponsors".</span>
+              <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; color: #aaa;" title="Minuto planificado (m:ss)">
+                Offset
+                <input type="text" :value="fmtOffset(b.planned_offset_seconds)" @change="b.planned_offset_seconds = parseOffset($event.target.value); save(b)" placeholder="m:ss" style="width: 54px; font-size: 12px; padding: 2px 6px; text-align: center;">
+              </label>
+            </div>
+            <div v-if="b.sponsor_id && sponsorCopy(b)" style="font-size: 12px; color: #bbb; white-space: pre-wrap; padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: 4px; line-height: 1.4;">
+              <span class="eyebrow" style="display: block; margin-bottom: 2px;">AD-READ (TELEPROMPTER)</span>
+              {{ sponsorCopy(b) }}
+            </div>
           </div>
         </template>
       </div>
@@ -3518,13 +3549,37 @@ var SponsorsPanel = {
       fn();
     }
 
+    async function uploadLogo(s, ev) {
+      var file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      var fd = new FormData();
+      fd.append("logo", file);
+      try {
+        var updated = await fetch("/api/podcasts/" + props.slug + "/sponsors/" + s.id + "/logo", {
+          method: "POST", body: fd, credentials: "same-origin",
+        }).then(function (r) { return r.json(); });
+        if (updated.error) { error.value = updated.error; return; }
+        s.logo_filename = updated.logo_filename;
+        s.logo_url = updated.logo_url;
+      } catch (e) { error.value = e.message; }
+      ev.target.value = "";
+    }
+
+    async function removeLogo(s) {
+      try {
+        await api("/api/podcasts/" + props.slug + "/sponsors/" + s.id + "/logo", { method: "DELETE" });
+        s.logo_filename = "";
+        s.logo_url = "";
+      } catch (e) { error.value = e.message; }
+    }
+
     function openReport(s) { reportFor.value = s; showReport.value = true; }
     function closeReport() { showReport.value = false; }
 
     onMounted(load);
     return {
       sponsors, error, reportFor, showReport,
-      createSponsor, deleteSponsor, saveSponsor, openReport, closeReport,
+      createSponsor, deleteSponsor, saveSponsor, uploadLogo, removeLogo, openReport, closeReport,
     };
   },
   template: `
@@ -3553,16 +3608,28 @@ var SponsorsPanel = {
                display: 'flex', flexDirection: 'column', gap: '8px',
                opacity: s.is_active ? 1 : 0.55,
              }">
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div v-if="s.logo_url" style="position: relative; flex-shrink: 0;">
+              <img :src="s.logo_url" style="width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: rgba(255,255,255,0.08);">
+              <button class="icon danger" @click="removeLogo(s)" title="Quitar logo" style="position: absolute; top: -6px; right: -6px; font-size: 10px; width: 18px; height: 18px; padding: 0; line-height: 18px;">✕</button>
+            </div>
+            <label v-else class="ghost" style="font-size: 11px; padding: 4px 8px; cursor: pointer; flex-shrink: 0;">
+              🖼 Logo
+              <input type="file" accept="image/*" @change="uploadLogo(s, $event)" style="display: none;">
+            </label>
             <input type="text" v-model="s.name" @input="saveSponsor(s)" style="flex: 1; font-size: 15px; font-weight: 600; background: transparent; border: 0; padding: 0; color: inherit;">
             <span v-if="!s.is_active" class="pill" style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75);">PAUSADO</span>
           </div>
           <input type="text" v-model="s.url" @input="saveSponsor(s)" placeholder="https://…" style="font-size: 12px; background: transparent; border: 0; padding: 0; color: var(--signal); border-bottom: 1px dashed var(--ink-line);">
-          <textarea v-model="s.copy" @input="saveSponsor(s)" rows="3" placeholder="Copy del ad-read..." style="font-size: 13px; padding: 8px; border-radius: 6px;"></textarea>
+          <textarea v-model="s.copy" @input="saveSponsor(s)" rows="3" placeholder="Copy del ad-read (teleprompter)..." style="font-size: 13px; padding: 8px; border-radius: 6px;"></textarea>
           <input type="text" v-model="s.notes" @input="saveSponsor(s)" placeholder="Notas internas (opcional)" style="font-size: 12px;">
           <div class="muted mono" style="font-size: 11px;">{{ s.episode_count || 0 }} episodio(s)</div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="openReport(s)">📊 Reporte</button>
+            <label v-if="s.logo_url" class="ghost" style="font-size: 12px; padding: 4px 10px; cursor: pointer;">
+              🖼 Cambiar logo
+              <input type="file" accept="image/*" @change="uploadLogo(s, $event)" style="display: none;">
+            </label>
             <label style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
               <input type="checkbox" :checked="s.is_active" @change="s.is_active = $event.target.checked; saveSponsor(s)">
               Activo

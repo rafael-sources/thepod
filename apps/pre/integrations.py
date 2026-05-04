@@ -162,7 +162,8 @@ def _serialize_episode_payload(slug: str, ep_id: int):
         ).fetchall()
         block_rows = db.execute(
             "SELECT eb.id, eb.position, eb.kind, eb.title, eb.duration_estimate, eb.notes, "
-            "eb.sponsor_id, s.name AS sponsor_name, s.copy AS sponsor_copy, "
+            "eb.sponsor_id, eb.planned_offset_seconds, "
+            "s.name AS sponsor_name, s.copy AS sponsor_copy, "
             "s.url AS sponsor_url, s.logo_filename AS sponsor_logo "
             "FROM episode_blocks eb "
             "LEFT JOIN sponsors s ON s.id = eb.sponsor_id "
@@ -248,8 +249,8 @@ def _serialize_episode_payload(slug: str, ep_id: int):
                 "ideas": [dict(r) for r in idea_rows],
                 "links": [dict(r) for r in link_rows],
                 "guests": [dict(r) for r in guest_rows],
-                "blocks": [dict(r) for r in block_rows],
-                "sponsors": [dict(r) for r in sponsor_rows],
+                "blocks": [{**dict(r), "sponsor_logo_url": (f"{base}/media/podcasts/{slug}/sponsors/{r['sponsor_logo']}" if r["sponsor_logo"] else None)} for r in block_rows],
+                "sponsors": [{**dict(r), "logo_url": (f"{base}/media/podcasts/{slug}/sponsors/{r['logo_filename']}" if r["logo_filename"] else None)} for r in sponsor_rows],
             },
         }
         return payload, None

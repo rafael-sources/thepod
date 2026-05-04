@@ -884,6 +884,7 @@ BLOCK_KINDS = ("intro", "segment", "interview", "sponsor", "break", "outro", "cu
 
 
 def _serialize_block(row):
+    keys = row.keys()
     return {
         "id": row["id"],
         "episode_id": row["episode_id"],
@@ -892,7 +893,8 @@ def _serialize_block(row):
         "title": row["title"] or "",
         "duration_estimate": row["duration_estimate"],
         "notes": row["notes"] or "",
-        "sponsor_id": row["sponsor_id"] if "sponsor_id" in row.keys() else None,
+        "sponsor_id": row["sponsor_id"] if "sponsor_id" in keys else None,
+        "planned_offset_seconds": row["planned_offset_seconds"] if "planned_offset_seconds" in keys else None,
         "created_at": row["created_at"],
     }
 
@@ -977,6 +979,9 @@ def update_block(slug, block_id):
             updates.append("duration_estimate=?"); params.append(v if v in (None, "") else float(v) or None)
         if "notes" in data:
             updates.append("notes=?"); params.append((data["notes"] or "").strip() or None)
+        if "planned_offset_seconds" in data:
+            v = data["planned_offset_seconds"]
+            updates.append("planned_offset_seconds=?"); params.append(int(v) if v not in (None, "", False) else None)
         if not updates:
             return jsonify({"error": "nada para actualizar"}), 400
         params.append(block_id)

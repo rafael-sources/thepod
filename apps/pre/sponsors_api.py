@@ -28,7 +28,9 @@ def _ensure_podcast(slug):
         abort(404, description="podcast no encontrado")
 
 
-def _serialize_sponsor(row, episode_count: int | None = None):
+def _serialize_sponsor(row, episode_count: int | None = None, *, slug: str = ""):
+    keys = row.keys()
+    logo = row["logo_filename"] if "logo_filename" in keys else None
     out = {
         "id": row["id"],
         "name": row["name"],
@@ -37,6 +39,8 @@ def _serialize_sponsor(row, episode_count: int | None = None):
         "notes": row["notes"] or "",
         "is_active": bool(row["is_active"]),
         "position": row["position"],
+        "logo_filename": logo or "",
+        "logo_url": f"/media/podcasts/{slug}/sponsors/{logo}" if logo and slug else "",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -61,7 +65,7 @@ def list_sponsors(slug):
                 "FROM episode_blocks WHERE sponsor_id=?",
                 (r["id"],),
             ).fetchone()["n"]
-            out.append(_serialize_sponsor(r, n))
+            out.append(_serialize_sponsor(r, n, slug=slug))
         return jsonify(out)
     finally:
         db.close()
@@ -94,7 +98,7 @@ def create_sponsor(slug):
         )
         db.commit()
         row = db.execute("SELECT * FROM sponsors WHERE id=?", (cur.lastrowid,)).fetchone()
-        return jsonify(_serialize_sponsor(row, 0)), 201
+        return jsonify(_serialize_sponsor(row, 0, slug=slug)), 201
     finally:
         db.close()
 
@@ -132,7 +136,7 @@ def update_sponsor(slug, sid):
         )
         db.commit()
         row = db.execute("SELECT * FROM sponsors WHERE id=?", (sid,)).fetchone()
-        return jsonify(_serialize_sponsor(row))
+        return jsonify(_serialize_sponsor(row, slug=slug))
     finally:
         db.close()
 
@@ -147,6 +151,50 @@ def delete_sponsor(slug, sid):
             return jsonify({"error": "sponsor no encontrado"}), 404
         # ON DELETE SET NULL on episode_blocks.sponsor_id (declared in db.py).
         db.execute("DELETE FROM sponsors WHERE id=?", (sid,))
+        db.commit()
+        return jsonify({"ok": True})
+    finally:
+        db.close()
+
+
+@bp.post("/api/podcasts/<slug>/sponsors/<int:sid>/logo")
+@require_auth
+def upload_sponsor_logo(slug, sid):
+    _ensure_podcast(slug)
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        return jsonify({"error": "archivo 'logo' requerido"}), 400
+    ext = (f.filename.rsplit(".", 1)[-1] if "." in f.filename else "png").lower()
+    if ext not in ("png", "jpg", "jpeg", "svg", "webp"):
+        return jsonify({"error": "formato no soportado"}), 400
+    filename = f"sponsor_{sid}.{ext}"
+    dest = PODCASTS_DIR / slug / "sponsors"
+    dest.mkdir(parents=True, exist_ok=True)
+    f.save(dest / filename)
+    db = get_db(slug)
+    try:
+        db.execute("UPDATE sponsors SET logo_filename=?, updated_at=datetime('now') WHERE id=?", (filename, sid))
+        db.commit()
+        row = db.execute("SELECT * FROM sponsors WHERE id=?", (sid,)).fetchone()
+        return jsonify(_serialize_sponsor(row, slug=slug))
+    finally:
+        db.close()
+
+
+@bp.delete("/api/podcasts/<slug>/sponsors/<int:sid>/logo")
+@require_auth
+def delete_sponsor_logo(slug, sid):
+    _ensure_podcast(slug)
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT logo_filename FROM sponsors WHERE id=?", (sid,)).fetchone()
+        if not row:
+            return jsonify({"error": "sponsor no encontrado"}), 404
+        if row["logo_filename"]:
+            path = PODCASTS_DIR / slug / "sponsors" / row["logo_filename"]
+            if path.exists():
+                path.unlink()
+        db.execute("UPDATE sponsors SET logo_filename=NULL, updated_at=datetime('now') WHERE id=?", (sid,))
         db.commit()
         return jsonify({"ok": True})
     finally:

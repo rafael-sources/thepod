@@ -194,6 +194,16 @@ def create_app():
         from flask import request
         return _serve_with_range(target, request)
 
+    @app.get("/media/podcasts/<slug>/sponsors/<path:filename>")
+    @require_auth
+    def serve_sponsor_media(slug, filename):
+        base = (PODCASTS_DIR / slug / "sponsors").resolve()
+        target = (base / filename).resolve()
+        if not str(target).startswith(str(base) + os.sep) and target != base:
+            abort(403)
+        from flask import request
+        return _serve_with_range(target, request)
+
     import time as _time
     _boot_ts = str(int(_time.time()))
 
