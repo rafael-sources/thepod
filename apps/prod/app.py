@@ -34,6 +34,48 @@ def create_app():
 
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Per-session access guard for restricted users.
+    import re as _re
+    from flask import request as _req, session as _sess, jsonify as _json
+    _SID_RE = _re.compile(r"^/api/sessions/(\d+)(?:/|$)")
+
+    @app.before_request
+    def _enforce_session_access():
+        path = _req.path or ""
+        m = _SID_RE.match(path)
+        if not m:
+            return None
+        username = _sess.get("username")
+        if not username:
+            return None
+        from config import policy_for
+        if policy_for(username).get("see_all"):
+            return None
+        try:
+            sid = int(m.group(1))
+        except ValueError:
+            return None
+        from db import get_db as _gdb
+        try:
+            _db = _gdb()
+            row = _db.execute("SELECT created_by FROM sessions WHERE id=?", (sid,)).fetchone()
+            if not row:
+                _db.close()
+                return None
+            if row["created_by"] == username:
+                _db.close()
+                return None
+            p = _db.execute(
+                "SELECT 1 FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            _db.close()
+            if not p:
+                return _json({"error": "no autorizado para esta sesión"}), 403
+        except Exception:
+            return None
+        return None
+
     # One-shot migrations on startup (idempotent)
     import logging
     _log = logging.getLogger(__name__)
@@ -47,8 +89,30 @@ def create_app():
         _sync_defaults()
     except Exception as _e:
         _log.warning("default sounds sync skipped: %s", _e)
+    try:
+        from migrations.cleanup_auto_added_cohosts import run as _cleanup_cohosts
+        _log.info("cleanup_auto_added_cohosts: %s", _cleanup_cohosts())
+    except Exception as _e:
+        _log.warning("cohost cleanup skipped: %s", _e)
 
     _boot_ts = str(int(_time.time()))
+
+    @app.get("/api/config/apps")
+    def list_apps():
+        from shared_config import load_shared_config
+        cfg = load_shared_config()
+        return {
+            "current": "prodpod",
+            "thepod_url": cfg.get("thepod_url") or "",
+            "apps": [
+                {"key": "prepod",  "name": "prePod",  "icon": "🎙",
+                 "url": cfg.get("prepod_url") or ""},
+                {"key": "prodpod", "name": "prodPod", "icon": "🔴",
+                 "url": cfg.get("prodpod_url") or ""},
+                {"key": "postpod", "name": "postPod", "icon": "🎬",
+                 "url": cfg.get("postpod_url") or ""},
+            ],
+        }
 
     @app.get("/")
     def index():

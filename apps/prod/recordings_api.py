@@ -23,6 +23,7 @@ from flask import Blueprint, Response, abort, jsonify, request
 from auth import current_user, require_auth
 from config import INTEGRATION_SECRET, POSTPOD_URL, SESSIONS_DIR
 from db import get_db, session_dir
+from integrations import notify_source
 
 
 bp = Blueprint("recordings_api", __name__)
@@ -175,6 +176,19 @@ def list_chapter_markers(sid):
             (sid,),
         ).fetchall()
         return jsonify([dict(r) for r in rows])
+    finally:
+        db.close()
+
+
+@bp.get("/api/sessions/<int:sid>/sound-triggers/stats")
+@require_auth
+def sound_trigger_stats(sid):
+    db = get_db()
+    try:
+        n = db.execute(
+            "SELECT COUNT(*) AS n FROM sound_triggers WHERE session_id=?", (sid,)
+        ).fetchone()["n"]
+        return jsonify({"count": n})
     finally:
         db.close()
 
@@ -402,6 +416,25 @@ def export_recordings_to_postpod(sid):
         pname = re.sub(r"[^A-Za-z0-9_-]+", "_", r["participant_name"] or "anon").strip("_") or "anon"
         original_name = f"{pname}_{r['track_type']}_{r['id']}.webm"
 
+        # Owner of this prodPod session is the host. Co-host usernames go in
+        # extra_hosts so postPod grants them visibility too.
+        session_owner = sess["created_by"]
+        co_host_rows = []
+        try:
+            db = get_db()
+            try:
+                co_host_rows = db.execute(
+                    "SELECT username FROM participants "
+                    "WHERE session_id=? AND role IN ('host','co-host') AND username IS NOT NULL "
+                    "AND username != ?",
+                    (sid, session_owner),
+                ).fetchall()
+            finally:
+                db.close()
+        except Exception:
+            co_host_rows = []
+        extra_hosts = ",".join(sorted({h["username"] for h in co_host_rows}))
+
         try:
             with open(fpath, "rb") as fh:
                 resp = requests.post(
@@ -414,6 +447,8 @@ def export_recordings_to_postpod(sid):
                         "duration_seconds": str(r["duration_seconds"] or 0),
                         "participant_name": r["participant_name"] or "anon",
                         "project_name": sess["title"],
+                        "owner_username": session_owner,
+                        "extra_hosts": extra_hosts,
                     },
                     files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
                     timeout=120,
@@ -504,6 +539,22 @@ def export_recordings_to_postpod(sid):
                 errors.append({"triggers_status": resp.status_code, "body": resp.text[:200]})
         except requests.RequestException as e:
             errors.append({"triggers_error": str(e)})
+
+    if exported > 0:
+        db = get_db()
+        try:
+            row = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        finally:
+            db.close()
+        postpod_project_url = None
+        if project_info and project_info.get("slug"):
+            postpod_project_url = f"{POSTPOD_URL.rstrip('/')}/#/projects/{project_info['slug']}"
+        notify_source(row, "exported_to_postpod", {
+            "exported_count": exported,
+            "failed_count": failed,
+            "postpod_project_slug": (project_info or {}).get("slug"),
+            "postpod_url": postpod_project_url,
+        })
 
     return jsonify({
         "exported": exported,

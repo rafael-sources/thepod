@@ -159,7 +159,7 @@ var DashboardView = {
     }
     async function remove(s, ev) {
       ev.stopPropagation();
-      if (!confirm("¿Eliminar sesión \"" + s.title + "\"? Se borran invitados y grabaciones.")) return;
+      if (!await podSwal.confirm("¿Eliminar sesión \"" + s.title + "\"? Se borran invitados y grabaciones.")) return;
       try { await api("/api/sessions/" + s.id, { method: "DELETE" }); await load(); }
       catch (e) { error.value = e.message; }
     }
@@ -312,6 +312,7 @@ var StudioView = {
     var error = ref("");
     var busy = ref(false);
     var recording = ref(props.session.status === "recording");
+    var sessionEnded = ref(props.session.status === "finished" || props.session.status === "archived");
     var recordingStart = ref(null);
     var timecode = ref(0);
     var timerHandle = null;
@@ -332,6 +333,147 @@ var StudioView = {
     var prejoinMeterStop = null;
     var prejoinError = ref("");
 
+    // ---- Mic check wizard ----
+    // 10-second capture that measures peak + average loudness, suggests a
+    // gain compensation, and (on apply) routes the live mic through a
+    // GainNode before publishing. Per-device, persisted in localStorage.
+    var micCheckRunning = ref(false);
+    var micCheckCountdown = ref(0);  // seconds remaining (10..0)
+    var micCheckResult = ref(null);  // {peak_dbfs, avg_dbfs, suggested_db}
+    var micCheckAppliedGain = ref(0); // currently applied gain in dB (mirrors localStorage)
+
+    function _readMicGainFor(deviceId) {
+      var raw = localStorage.getItem("prodpod.micCheckGainDb_" + (deviceId || "default"));
+      var n = parseFloat(raw);
+      return isFinite(n) ? n : 0;
+    }
+    function _writeMicGainFor(deviceId, db) {
+      localStorage.setItem("prodpod.micCheckGainDb_" + (deviceId || "default"), String(db));
+    }
+    // Sync `micCheckAppliedGain` to whichever mic is currently selected.
+    watch(function () { return deviceSelection.micId; }, function (id) {
+      micCheckAppliedGain.value = _readMicGainFor(id);
+      micCheckResult.value = null;  // a different mic invalidates the last reading
+    }, { immediate: true });
+
+    // Run a 10-second analysis on the active prejoinStream's mic track.
+    // We use AnalyserNode.getFloatTimeDomainData so we can compute true peak
+    // and full-band RMS in linear amplitude, then convert to dBFS. We do not
+    // implement BS.1770 K-weighting — for a one-click podcast "studio" the
+    // full-band RMS is close enough and the user's expectation is just
+    // "is my voice too hot or too quiet?". The display label avoids "LUFS"
+    // accordingly.
+    var _micCheckCancel = null;
+    async function runMicCheck() {
+      if (micCheckRunning.value) return;
+      if (!prejoinStream) {
+        prejoinError.value = "Activa cámara/micrófono primero.";
+        return;
+      }
+      var track = prejoinStream.getAudioTracks()[0];
+      if (!track) {
+        prejoinError.value = "No hay micrófono activo.";
+        return;
+      }
+      micCheckRunning.value = true;
+      micCheckResult.value = null;
+      micCheckCountdown.value = 10;
+
+      var AC = window.AudioContext || window.webkitAudioContext;
+      var ctx = new AC();
+      var src = ctx.createMediaStreamSource(new MediaStream([track]));
+      var an = ctx.createAnalyser();
+      an.fftSize = 2048;
+      src.connect(an);
+      var buf = new Float32Array(an.fftSize);
+
+      var peakAbs = 0;
+      var sumSquares = 0;
+      var sampleCount = 0;
+      var stopped = false;
+
+      function tick() {
+        if (stopped) return;
+        an.getFloatTimeDomainData(buf);
+        for (var i = 0; i < buf.length; i++) {
+          var v = buf[i];
+          if (v < 0) v = -v;
+          if (v > peakAbs) peakAbs = v;
+          sumSquares += buf[i] * buf[i];
+        }
+        sampleCount += buf.length;
+        if (!stopped) requestAnimationFrame(tick);
+      }
+      tick();
+
+      var startedAt = Date.now();
+      var timer = setInterval(function () {
+        var rem = Math.max(0, 10 - Math.floor((Date.now() - startedAt) / 1000));
+        micCheckCountdown.value = rem;
+      }, 200);
+
+      _micCheckCancel = function () {
+        stopped = true;
+        clearInterval(timer);
+        try { ctx.close(); } catch (_) {}
+        micCheckRunning.value = false;
+        micCheckCountdown.value = 0;
+      };
+
+      await new Promise(function (resolve) { setTimeout(resolve, 10_000); });
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      try { ctx.close(); } catch (_) {}
+
+      // Convert to dBFS. Floor at -90 dB so an empty mic doesn't show -Infinity.
+      function dbfs(amp) {
+        if (!(amp > 0)) return -90;
+        return Math.max(-90, 20 * Math.log10(amp));
+      }
+      var rms = sampleCount ? Math.sqrt(sumSquares / sampleCount) : 0;
+      var peakDb = dbfs(peakAbs);
+      var avgDb = dbfs(rms);
+      // Target average loudness = -18 dBFS (close to a -16 LUFS podcast aim
+      // when run through postPod's loudnorm, which we can rely on if the
+      // user opts into Speech Enhancement at export time).
+      var TARGET = -18;
+      // Cap the suggestion: never recommend more than +18 dB (would amplify
+      // noise floor beyond usability) or less than -12 dB (likely the user
+      // is shouting and should move the mic, not ask us to attenuate).
+      var raw = TARGET - avgDb;
+      // If the speaker barely produced signal (< -55 dBFS avg), don't pretend
+      // we can save it with gain — the mic is probably muted or very far.
+      var suggested;
+      if (avgDb < -55) suggested = null;
+      else suggested = Math.max(-12, Math.min(18, Math.round(raw)));
+
+      micCheckResult.value = {
+        peak_dbfs: Math.round(peakDb * 10) / 10,
+        avg_dbfs: Math.round(avgDb * 10) / 10,
+        suggested_db: suggested,
+      };
+      micCheckRunning.value = false;
+      micCheckCountdown.value = 0;
+      _micCheckCancel = null;
+    }
+
+    function cancelMicCheck() {
+      if (_micCheckCancel) _micCheckCancel();
+    }
+
+    function applyMicCheckGain() {
+      if (!micCheckResult.value || micCheckResult.value.suggested_db == null) return;
+      var db = micCheckResult.value.suggested_db;
+      _writeMicGainFor(deviceSelection.micId, db);
+      micCheckAppliedGain.value = db;
+    }
+
+    function resetMicCheckGain() {
+      _writeMicGainFor(deviceSelection.micId, 0);
+      micCheckAppliedGain.value = 0;
+    }
+
     async function listDevices() {
       try {
         var all = await navigator.mediaDevices.enumerateDevices();
@@ -349,12 +491,36 @@ var StudioView = {
     async function startPrejoinPreview() {
       stopPrejoinPreview();
       prejoinError.value = "";
-      try {
+      // First attempt: use the saved device selection if any. If that fails
+      // (e.g. saved deviceId no longer exists → "Invalid constraint" /
+      // "OverconstrainedError"), retry with browser-default devices and
+      // forget the stale selection.
+      async function _grab(useStored) {
         var constraints = {
-          video: deviceSelection.cameraId ? { deviceId: { exact: deviceSelection.cameraId } } : true,
-          audio: deviceSelection.micId   ? { deviceId: { exact: deviceSelection.micId } }   : true,
+          video: (useStored && deviceSelection.cameraId)
+            ? { deviceId: { exact: deviceSelection.cameraId } } : true,
+          audio: (useStored && deviceSelection.micId)
+            ? { deviceId: { exact: deviceSelection.micId } } : true,
         };
-        prejoinStream = await navigator.mediaDevices.getUserMedia(constraints);
+        return navigator.mediaDevices.getUserMedia(constraints);
+      }
+      try {
+        try {
+          prejoinStream = await _grab(true);
+        } catch (firstErr) {
+          // Common transient: stored deviceId stale → retry with defaults.
+          if (firstErr && (firstErr.name === "OverconstrainedError"
+                       || /constraint/i.test(firstErr.message || ""))) {
+            // Wipe the bad selection so next reload doesn't repeat the failure.
+            deviceSelection.cameraId = "";
+            deviceSelection.micId = "";
+            try { localStorage.removeItem("prodpod.cameraId"); } catch (_) {}
+            try { localStorage.removeItem("prodpod.micId"); } catch (_) {}
+            prejoinStream = await _grab(false);
+          } else {
+            throw firstErr;
+          }
+        }
         await nextTick();
         if (prejoinVideoEl.value) prejoinVideoEl.value.srcObject = prejoinStream;
         var micTrack = prejoinStream.getAudioTracks()[0];
@@ -394,7 +560,21 @@ var StudioView = {
     var localMeter = ref(0);
     var localSpeaking = ref(false);
     var localMeterStop = null;
+    var layoutMode = ref("grid");   // "grid" | "spotlight"
+    var spotlightId = ref(null);    // identity of the spotlighted participant (or "__local__")
+    var _spotlightTimer = null;
+    var micGainCtx = null;  // AudioContext that wraps the published mic with a GainNode (mic-check)
     var recorder = null;
+    // Screen share state: only one local share at a time. screenSharing tracks
+    // the *local* state. remoteScreen tracks who else is sharing right now
+    // (limit is enforced client-side: if anyone is already sharing, we refuse
+    // to start a second one).
+    var screenSharing = ref(false);     // I am sharing
+    var screenRecordOnly = ref(false);  // I am sharing but NOT publishing to LiveKit
+    var screenStream = null;            // local MediaStream from getDisplayMedia
+    var screenRecorder = null;          // MediaRecorder for the screen
+    var screenPub = null;               // LiveKit screen track publication
+    var remoteScreen = ref(null);       // {identity, name} of the participant currently sharing
     // Soundboard triggers are logged with their offset from record-start
     // (replacing the old MediaRecorder-on-Web-Audio approach).
     var triggerLog = [];
@@ -402,6 +582,7 @@ var StudioView = {
     var practiceMode = ref(localStorage.getItem("prodpod.practiceMode") === "1");
     watch(practiceMode, function (v) {
       localStorage.setItem("prodpod.practiceMode", v ? "1" : "0");
+      sendData({ type: "practice_mode", active: v });
     });
     var handsRaised = reactive({});  // identity -> bool (from hand_raise data msgs)
     var qualityPreset = ref(localStorage.getItem("prodpod.qualityPreset") || "med");
@@ -459,8 +640,14 @@ var StudioView = {
 
     var chat = ref([]);
     var chatInput = ref("");
+    // Backstage chat: hosts-only side channel.
+    var backstageChat = ref([]);
+    var backstageInput = ref("");
+    var chatChannel = ref("main");  // active tab in the chat panel
+    var hostIdentities = ref([]);   // LiveKit identities to target backstage at
 
     var finishedRecordings = ref([]);
+    var triggerStats = reactive({ count: 0 });
     var exportStatus = ref("");
     var exporting = ref(false);
 
@@ -476,6 +663,16 @@ var StudioView = {
       try { participants.value = await api("/api/sessions/" + props.session.id + "/participants"); }
       catch (e) { error.value = e.message; }
     }
+
+    // True if the current user is either the session creator (host) OR has
+    // role co-host in the participants table. Drives visibility of the
+    // Backstage tab (server enforces the same rule on the chat endpoints).
+    var canBackstage = computed(function () {
+      if (props.user.username === props.session.created_by) return true;
+      return participants.value.some(function (p) {
+        return p.username === props.user.username && p.role === "co-host";
+      });
+    });
 
     // Browser notification when the tab is hidden (e.g. user is in another
     // tab) — also gentle no-op if the user denied the permission.
@@ -521,15 +718,15 @@ var StudioView = {
         showAddSound.value = false;
         newSound.name = ""; newSound.shortcut_key = ""; newSound.color = "#5a8bff";
         await loadSounds();
-      } catch (e) { alert(e.message); }
+      } catch (e) { podSwal.error(e.message); }
     }
 
     async function deleteCustomPad(s) {
-      if (!confirm("¿Eliminar el pad \"" + s.name + "\"?")) return;
+      if (!await podSwal.confirm("¿Eliminar el pad \"" + s.name + "\"?")) return;
       try {
         await api("/api/sessions/" + props.session.id + "/sounds/" + s.id, { method: "DELETE" });
         await loadSounds();
-      } catch (e) { alert(e.message); }
+      } catch (e) { podSwal.error(e.message); }
     }
 
     function onPadDrop(s, ev) {
@@ -598,14 +795,26 @@ var StudioView = {
 
     async function loadChat() {
       try {
-        var msgs = await api("/api/sessions/" + props.session.id + "/chat");
+        var msgs = await api("/api/sessions/" + props.session.id + "/chat?channel=main");
         chat.value = msgs.map(function (m) { return { id: m.id, author: m.author_name, text: m.message_text, ts: m.timestamp }; });
+      } catch (_) {}
+      // Backstage only loads if user is host/co-host (server returns 403 otherwise).
+      try {
+        var bs = await api("/api/sessions/" + props.session.id + "/chat?channel=backstage");
+        backstageChat.value = bs.map(function (m) { return { id: m.id, author: m.author_name, text: m.message_text, ts: m.timestamp }; });
+      } catch (_) { /* not a host → ignore silently */ }
+      try {
+        hostIdentities.value = await api("/api/sessions/" + props.session.id + "/host-identities");
       } catch (_) {}
     }
 
     async function loadRecordings() {
       try { finishedRecordings.value = await api("/api/sessions/" + props.session.id + "/recordings"); }
       catch (_) {}
+      try {
+        var s = await api("/api/sessions/" + props.session.id + "/sound-triggers/stats");
+        triggerStats.count = s.count || 0;
+      } catch (_) {}
     }
 
     async function loadStreams() {
@@ -648,7 +857,7 @@ var StudioView = {
       }
     }
     async function stopStream(s) {
-      if (!confirm("¿Detener el stream en " + (s.platform || "plataforma") + "?")) return;
+      if (!await podSwal.confirm("¿Detener el stream en " + (s.platform || "plataforma") + "?")) return;
       try {
         await api("/api/sessions/" + props.session.id + "/streams/" + s.id, { method: "DELETE" });
         await loadStreams();
@@ -657,6 +866,35 @@ var StudioView = {
     var activeStreams = computed(function () {
       return streams.value.filter(function (s) { return s.status === "active" || s.status === "starting"; });
     });
+
+    async function showDiagnostic() {
+      try {
+        var d = await api("/api/debug/session/" + props.session.id + "/room-state");
+        var mySide = room ? Array.from(room.remoteParticipants.values()).map(function(p){return p.identity;}) : [];
+        var lkSide = (d.livekit_participants || []).map(function(p){return p.identity || JSON.stringify(p);});
+        var localState = "no hay objeto room (no entraste)";
+        var localRoomName = "—";
+        if (room) {
+          localState = room.state || "?";
+          localRoomName = room.name || "(sin nombre)";
+        }
+        var msg = "📊 ESTADO DE LA SALA\n\n" +
+          "Sesión que mira el diagnóstico: #" + d.session_id + " — " + d.title + "\n" +
+          "URL actual del navegador: " + window.location.pathname + window.location.search + "\n" +
+          "ID que tu UI cree estar mostrando: #" + props.session.id + "\n\n" +
+          "Sala LiveKit (DB): " + (d.db_room_name || "(sin nombre)") + "\n" +
+          "Sala LiveKit a la que tu navegador conectó: " + localRoomName + "\n" +
+          "Estado actual del Room en tu navegador: " + localState + "\n" +
+          "Flag 'connected' en tu UI: " + (typeof connected !== "undefined" && connected.value ? "SÍ" : "NO") + "\n\n" +
+          "👤 Participantes en la base de datos:\n  • " +
+            d.db_participants.map(function(p){return p.display_name + " ("+p.role+", "+p.status+")";}).join("\n  • ") + "\n\n" +
+          "🎥 Participantes que LiveKit ve en la sala (lo que importa):\n  " +
+            (lkSide.length ? "• " + lkSide.join("\n  • ") : "(NADIE — la sala está vacía o no existe en LiveKit)") + "\n\n" +
+          "👁 Lo que tu navegador ve como remotos en este momento:\n  " +
+            (mySide.length ? "• " + mySide.join("\n  • ") : "(nadie)");
+        podSwal.info(msg, "Estado de la sala");
+      } catch (e) { podSwal.error("Error consultando estado: " + e.message); }
+    }
 
     async function exportToPostpod() {
       if (exporting.value) return;
@@ -727,6 +965,130 @@ var StudioView = {
       playingPad.value = null;
     }
 
+    // ----- Screen share -----
+    async function startScreenShare(recordOnly) {
+      if (screenSharing.value) return;
+      if (remoteScreen.value && !recordOnly) {
+        await podSwal.error(
+          "Ya hay alguien compartiendo pantalla (" + remoteScreen.value.name + "). Solo una pantalla a la vez.",
+          "No se pudo iniciar"
+        );
+        return;
+      }
+      try {
+        // No system audio per the suite policy.
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 18, max: 20 } },
+          audio: false,
+        });
+      } catch (e) {
+        // User cancelled the picker → silent. Real failures show an error.
+        if (e && e.name !== "NotAllowedError" && e.name !== "AbortError") {
+          await podSwal.error("No pude capturar la pantalla: " + e.message);
+        }
+        return;
+      }
+
+      screenSharing.value = true;
+      screenRecordOnly.value = !!recordOnly;
+
+      // Local preview into the screen card.
+      nextTick(function () {
+        var host = document.querySelector("[data-screen-host]");
+        if (host && screenStream) {
+          var v = document.createElement("video");
+          v.autoplay = true; v.playsInline = true; v.muted = true;
+          v.style.width = "100%"; v.style.height = "100%";
+          v.style.objectFit = "contain"; v.style.background = "#000";
+          v.srcObject = screenStream;
+          host.innerHTML = ""; host.appendChild(v);
+        }
+      });
+
+      // Publish to LiveKit unless record-only.
+      if (!recordOnly && room) {
+        try {
+          screenPub = await room.localParticipant.publishTrack(
+            screenStream.getVideoTracks()[0],
+            {
+              name: "screen",
+              source: LK.Track.Source.ScreenShare,
+              videoCodec: "vp8",
+              videoEncoding: { maxBitrate: 2_500_000, maxFramerate: 18 },
+            }
+          );
+        } catch (e) {
+          // If publish fails, fall back to record-only and tell the user.
+          screenRecordOnly.value = true;
+          if (window.toast) window.toast({ type: "warn", text: "No pude publicar a LiveKit; sigo grabando local." });
+        }
+      }
+
+      // Local MediaRecorder for the upload to postPod.
+      try {
+        screenRecorder = _startRecorder(
+          screenStream,
+          function (blob) { uploadRecording(blob, "screen"); },
+          1000
+        );
+      } catch (e) {
+        // Best-effort — keep the share going even if recording fails.
+        screenRecorder = null;
+      }
+
+      // If the user clicks "Stop sharing" on the browser bar, the track ends.
+      var t = screenStream.getVideoTracks()[0];
+      if (t) t.addEventListener("ended", function () { stopScreenShare(); });
+
+      if (window.toast) window.toast({
+        type: "info",
+        text: recordOnly ? "📺 Grabando pantalla (solo local)" : "📺 Compartiendo y grabando pantalla",
+      });
+    }
+
+    async function stopScreenShare() {
+      if (!screenSharing.value && !screenStream) return;
+      // Stop the recorder first so the final chunk gets uploaded.
+      if (screenRecorder) {
+        try { screenRecorder.stop(); } catch (_) {}
+        screenRecorder = null;
+      }
+      if (screenPub && room) {
+        try { await room.localParticipant.unpublishTrack(screenPub.track || screenPub.videoTrack); } catch (_) {}
+        screenPub = null;
+      }
+      if (screenStream) {
+        try { screenStream.getTracks().forEach(function (t) { t.stop(); }); } catch (_) {}
+        screenStream = null;
+      }
+      screenSharing.value = false;
+      screenRecordOnly.value = false;
+      // Clear the local preview from the screen card.
+      var host = document.querySelector("[data-screen-host]");
+      if (host && (!remoteScreen.value)) host.innerHTML = "";
+    }
+
+    async function askStartScreenShare() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        await podSwal.error("Tu navegador no soporta compartir pantalla.");
+        return;
+      }
+      var r = await window.Swal.fire({
+        title: "📺 Pantalla",
+        text: "¿Cómo quieres compartirla?",
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: "📡 Compartir y grabar",
+        denyButtonText: "💾 Solo grabar local",
+        cancelButtonText: "Cancelar",
+        background: getComputedStyle(document.documentElement).getPropertyValue("--ink-panel") || "#161922",
+        color: getComputedStyle(document.documentElement).getPropertyValue("--paper") || "#fff",
+        confirmButtonColor: getComputedStyle(document.documentElement).getPropertyValue("--signal") || "#ff3b3b",
+      });
+      if (r.isConfirmed)      startScreenShare(false);
+      else if (r.isDenied)    startScreenShare(true);
+    }
+
     function sendData(msg) {
       if (!room) return;
       try { room.localParticipant.publishData(_encodeMsg(msg), LK.DataPacket_Kind.RELIABLE); } catch (_) {}
@@ -739,8 +1101,16 @@ var StudioView = {
         var s = sounds.value.find(function (x) { return x.filename === msg.filename; });
         if (s) playLocalSound(s);
       } else if (msg.type === "chat") {
-        chat.value.push({ id: msg.id, author: msg.author, text: msg.text, ts: msg.ts });
-        scrollChatBottom();
+        if (msg.channel === "backstage") {
+          backstageChat.value.push({ id: msg.id, author: msg.author, text: msg.text, ts: msg.ts });
+          nextTick(function () {
+            var el = document.getElementById("backstage-scroll");
+            if (el) el.scrollTop = el.scrollHeight;
+          });
+        } else {
+          chat.value.push({ id: msg.id, author: msg.author, text: msg.text, ts: msg.ts });
+          scrollChatBottom();
+        }
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
         // Host (session creator) decides when to fire the countdown
@@ -755,6 +1125,8 @@ var StudioView = {
           var who = (msg.identity || "").replace("participant_", "P");
           window.toast({ type: "info", text: "✋ " + who + " levantó la mano" });
         }
+      } else if (msg.type === "practice_mode") {
+        practiceMode.value = !!msg.active;
       } else if (msg.type === "kick" && room && room.localParticipant &&
                  msg.target_identity === room.localParticipant.identity) {
         error.value = "El host te desconectó.";
@@ -795,17 +1167,55 @@ var StudioView = {
       if (!text) return;
       try {
         var saved = await api("/api/sessions/" + props.session.id + "/chat", {
-          method: "POST", body: { text: text },
+          method: "POST", body: { text: text, channel: "main" },
         });
         chat.value.push({ id: saved.id, author: saved.author_name, text: saved.message_text, ts: saved.timestamp });
-        sendData({ type: "chat", id: saved.id, author: saved.author_name, text: saved.message_text, ts: saved.timestamp });
+        sendData({ type: "chat", channel: "main", id: saved.id, author: saved.author_name, text: saved.message_text, ts: saved.timestamp });
         chatInput.value = "";
         scrollChatBottom();
       } catch (e) { error.value = e.message; }
     }
 
+    async function sendBackstage() {
+      var text = backstageInput.value.trim();
+      if (!text) return;
+      try {
+        var saved = await api("/api/sessions/" + props.session.id + "/chat", {
+          method: "POST", body: { text: text, channel: "backstage" },
+        });
+        backstageChat.value.push({ id: saved.id, author: saved.author_name, text: saved.message_text, ts: saved.timestamp });
+        // Targeted data publish: only the host/co-host identities receive it
+        // in real time. Guests' clients never get the message even via LiveKit.
+        var msg = { type: "chat", channel: "backstage", id: saved.id, author: saved.author_name, text: saved.message_text, ts: saved.timestamp };
+        if (room) {
+          try {
+            var dests = (hostIdentities.value || []).filter(function (i) { return i !== myIdentity.value; });
+            await room.localParticipant.publishData(_encodeMsg(msg), LK.DataPacket_Kind.RELIABLE,
+              dests.length ? { destinationIdentities: dests } : undefined);
+          } catch (_) {}
+        }
+        backstageInput.value = "";
+        nextTick(function () {
+          var el = document.getElementById("backstage-scroll");
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      } catch (e) {
+        error.value = e.message;
+      }
+    }
+
     async function connect() {
       if (!LK) { error.value = "LiveKit client no cargado"; return; }
+      // Don't let the user re-enter a session that already finished. The
+      // recordings list + export button are still visible, but no new
+      // microphone/camera capture is possible.
+      if (sessionEnded.value) {
+        await podSwal.info(
+          "Esta sesión ya finalizó. Podés ver y exportar las grabaciones, pero no se puede volver a entrar al estudio.",
+          "Sesión finalizada"
+        );
+        return;
+      }
       try {
         busy.value = true;
         // Defensive: if a previous room object is still around (e.g. user
@@ -849,6 +1259,23 @@ var StudioView = {
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           var id = participant.identity;
           if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0, speaking: false };
+          // ScreenShare arrives as a video track with source=ScreenShare. We
+          // mount it into a dedicated big card on top of the participant grid.
+          var isScreen = (track.source === LK.Track.Source.ScreenShare) ||
+                         (pub && pub.source === LK.Track.Source.ScreenShare);
+          if (isScreen) {
+            remoteScreen.value = { identity: id, name: participant.name || id };
+            nextTick(function () {
+              var host = document.querySelector("[data-screen-host]");
+              if (host) {
+                var el = track.attach();
+                el.style.width = "100%"; el.style.height = "100%";
+                el.style.objectFit = "contain"; el.style.background = "#000";
+                host.innerHTML = ""; host.appendChild(el);
+              }
+            });
+            return;
+          }
           if (track.kind === LK.Track.Kind.Video) {
             _mountRemoteVideo(id, track);
           } else if (track.kind === LK.Track.Kind.Audio) {
@@ -862,8 +1289,13 @@ var StudioView = {
             remoteMap[id]._stopMeter = stop;
           }
         });
-        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) {
+        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track, pub, participant) {
           track.detach().forEach(function (el) { el.remove(); });
+          var isScreen = (track.source === LK.Track.Source.ScreenShare) ||
+                         (pub && pub.source === LK.Track.Source.ScreenShare);
+          if (isScreen && remoteScreen.value && participant && remoteScreen.value.identity === participant.identity) {
+            remoteScreen.value = null;
+          }
         });
         newRoom.on(LK.RoomEvent.ParticipantDisconnected, function (p) {
           var name = p.name || p.identity;
@@ -871,6 +1303,7 @@ var StudioView = {
           _maybeBrowserNotify(name + " se desconectó");
           if (remoteMap[p.identity] && remoteMap[p.identity]._stopMeter) remoteMap[p.identity]._stopMeter();
           delete remoteMap[p.identity];
+          if (remoteScreen.value && remoteScreen.value.identity === p.identity) remoteScreen.value = null;
           loadParticipants();
         });
         newRoom.on(LK.RoomEvent.ActiveSpeakersChanged, function (speakers) {
@@ -879,8 +1312,30 @@ var StudioView = {
           Object.keys(remoteMap).forEach(function (id) { remoteMap[id].speaking = !!active[id]; });
           var me = newRoom.localParticipant && newRoom.localParticipant.identity;
           localSpeaking.value = me ? !!active[me] : false;
+          if (layoutMode.value === "spotlight" && speakers.length) {
+            var top = speakers[0].identity;
+            var candidate = (top === me) ? "__local__" : top;
+            if (candidate !== spotlightId.value) {
+              clearTimeout(_spotlightTimer);
+              _spotlightTimer = setTimeout(function () { spotlightId.value = candidate; }, 1000);
+            }
+          }
         });
         newRoom.on(LK.RoomEvent.DataReceived, onDataReceived);
+        // If the room itself disconnects (network drop, kicked, etc.) we cut
+        // any in-flight screen share immediately. The screen would otherwise
+        // keep recording locally without a way to publish.
+        newRoom.on(LK.RoomEvent.Disconnected, function (reason) {
+          // The LiveKit session ended outside our control (kicked, server
+          // shutdown, host stopped, network failure, etc.). Run the full
+          // cleanup so we don't keep a half-alive recording / screen share
+          // / camera handle / orphaned audio elements lying around.
+          var msg = "Te desconectaste de la sala";
+          if (reason && typeof reason === "string") msg += " (" + reason + ")";
+          if (window.toast) window.toast({ type: "warn", text: msg });
+          // Don't await — we're in an event callback.
+          disconnect().catch(function () {});
+        });
 
         await newRoom.connect(tokenData.livekit_ws_url, tokenData.livekit_token);
         // setCameraEnabled / setMicrophoneEnabled return the publication once
@@ -891,6 +1346,30 @@ var StudioView = {
         var camOpts = deviceSelection.cameraId ? { deviceId: deviceSelection.cameraId } : undefined;
         var micPub = await newRoom.localParticipant.setMicrophoneEnabled(true, micOpts);
         var camPub = await newRoom.localParticipant.setCameraEnabled(true, camOpts);
+
+        // Apply mic-check gain (if any) by re-routing the published mic
+        // track through a Web Audio GainNode. We replaceTrack on LiveKit's
+        // LocalAudioTrack so peers see the same publication ID — no
+        // re-negotiation. Skip for ≈0 dB to avoid the extra graph.
+        var savedMicGainDb = _readMicGainFor(deviceSelection.micId);
+        if (micPub && micPub.track && Math.abs(savedMicGainDb) > 0.5) {
+          try {
+            var rawTrack = micPub.track.mediaStreamTrack;
+            var ACg = window.AudioContext || window.webkitAudioContext;
+            micGainCtx = new ACg();
+            var gSrc = micGainCtx.createMediaStreamSource(new MediaStream([rawTrack]));
+            var gNode = micGainCtx.createGain();
+            gNode.gain.value = Math.pow(10, savedMicGainDb / 20);
+            var gDest = micGainCtx.createMediaStreamDestination();
+            gSrc.connect(gNode).connect(gDest);
+            var processed = gDest.stream.getAudioTracks()[0];
+            await micPub.track.replaceTrack(processed);
+          } catch (_) {
+            // Fall through silently — peers still hear the unprocessed mic.
+            try { if (micGainCtx) micGainCtx.close(); } catch (__) {}
+            micGainCtx = null;
+          }
+        }
 
         var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
@@ -919,23 +1398,53 @@ var StudioView = {
     }
 
     async function disconnect() {
+      // Full state cleanup so a stale session never survives into a new one.
       stopLocalRecorders();
+      // Screen share: stop recorder + unpublish + release stream.
+      if (screenSharing.value || screenStream || screenRecorder) {
+        try { await stopScreenShare(); } catch (_) {}
+      }
+      // Soundboard: silence any pad still playing.
+      try { stopAllSounds && stopAllSounds(); } catch (_) {}
+      // Timers and pending state.
       if (countdownHandle) { clearTimeout(countdownHandle); countdownHandle = null; }
       countdown.value = null;
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       if (localMeterStop) { localMeterStop(); localMeterStop = null; }
-      // Disconnect the room FIRST. LiveKit unpublishes and stops its own
-      // mediaStreamTracks cleanly so the browser releases the camera/mic
-      // immediately. Our `localStream` wraps the SAME tracks — if we stop
-      // them ourselves here we leak the device handle and the next
-      // setMicrophoneEnabled() call returns a dead track ("mic stopped
-      // working after entering a few sessions").
+      if (micGainCtx) {
+        try { micGainCtx.close(); } catch (_) {}
+        micGainCtx = null;
+      }
+      // Recording / ready state.
+      recording.value = false;
+      ownReady.value = false;
+      Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
+      Object.keys(handsRaised).forEach(function (k) { delete handsRaised[k]; });
+      ownHandUp.value = false;
+      remoteScreen.value = null;
+      // Remote track meters (kept by participant identity).
+      Object.keys(remoteMap).forEach(function (id) {
+        if (remoteMap[id] && remoteMap[id]._stopMeter) {
+          try { remoteMap[id]._stopMeter(); } catch (_) {}
+        }
+        delete remoteMap[id];
+      });
+      // Detached audio elements piling up under <body> (one per remote audio
+      // track) — clean those too.
+      document.querySelectorAll('audio[data-duckable="1"]').forEach(function (el) {
+        try { el.pause(); } catch (_) {}
+        try { el.remove(); } catch (_) {}
+      });
+      // Disconnect the room. LiveKit unpublishes and stops its own
+      // mediaStreamTracks cleanly so the browser releases the camera/mic.
       if (room) {
         try { await room.disconnect(); } catch (_) {}
         room = null;
       }
-      // Drop the wrapper but DON'T re-stop tracks — LK already did.
       localStream = null;
       connected.value = false;
+      // Restore the original tab title.
+      try { document.title = "prodPod"; } catch (_) {}
     }
 
     async function toggleMute() {
@@ -1039,7 +1548,7 @@ var StudioView = {
     async function markChapter() {
       if (!recording.value || recordingStartedAtMs == null) return;
       var off = (Date.now() - recordingStartedAtMs) / 1000;
-      var label = prompt("Etiqueta del momento (opcional):", "");
+      var label = await podSwal.prompt("Etiqueta del momento (opcional):", "");
       if (label === null) return;
       label = (label || "").trim();
       if (practiceMode.value) {
@@ -1105,16 +1614,27 @@ var StudioView = {
     function finishRecording() {
       if (!recording.value) return;
       recording.value = false;
+      if (!practiceMode.value) sessionEnded.value = true;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       stopLocalRecorders();
       flushTriggerLog();
       recordingStartedAtMs = null;
       // Restore the original tab title
       document.title = props.session.title + " — prodPod";
-      // Clear ready state for the next take
+      // Clear ready state — no new take in this session
       ownReady.value = false;
       Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
-      if (!practiceMode.value) setTimeout(loadRecordings, 2500);
+      if (!practiceMode.value) {
+        // Poll up to ~30s for uploads to land. Stop as soon as we see anything.
+        var attempts = 0;
+        var poll = setInterval(function () {
+          attempts++;
+          loadRecordings().then(function () {
+            if (finishedRecordings.value.length > 0 || attempts >= 10) clearInterval(poll);
+          });
+        }, 3000);
+        setTimeout(loadRecordings, 1000);
+      }
     }
 
     /* ---------- invite / kick ---------- */
@@ -1132,12 +1652,12 @@ var StudioView = {
       } catch (e) { error.value = e.message; }
     }
     async function copyInvite(link) {
-      try { await navigator.clipboard.writeText(link.invite_url); alert("Link copiado"); }
-      catch (_) { prompt("Copiá este link:", link.invite_url); }
+      try { await navigator.clipboard.writeText(link.invite_url); podSwal.toast("Link copiado", "success"); }
+      catch (_) { await podSwal.prompt("Copia este link:", link.invite_url); }
     }
 
     async function kickParticipant(p) {
-      if (!confirm("¿Quitar a " + p.display_name + "?")) return;
+      if (!await podSwal.confirm("¿Quitar a " + p.display_name + "?")) return;
       try {
         // Signal first so they disconnect gracefully
         sendData({ type: "kick", target_identity: "participant_" + p.id });
@@ -1179,6 +1699,58 @@ var StudioView = {
     // Initial tab title for this studio
     document.title = props.session.title + " — prodPod";
 
+    function toggleLayout() {
+      if (layoutMode.value === "grid") {
+        layoutMode.value = "spotlight";
+        if (!spotlightId.value) spotlightId.value = "__local__";
+      } else {
+        layoutMode.value = "grid";
+        clearTimeout(_spotlightTimer);
+      }
+      _reattachAllVideos();
+    }
+    function _reattachAllVideos() {
+      nextTick(function () {
+        if (!room) return;
+        if (localVideoEl.value) {
+          var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+          if (camPub && camPub.track) {
+            try { camPub.track.attach(localVideoEl.value); } catch (_) {}
+          }
+        }
+        room.remoteParticipants.forEach(function (p) {
+          p.trackPublications.forEach(function (pub) {
+            if (pub.track && pub.track.kind === LK.Track.Kind.Video) {
+              var isScreen = pub.source === LK.Track.Source.ScreenShare;
+              if (isScreen) {
+                var host = document.querySelector("[data-screen-host]");
+                if (host) {
+                  var el = pub.track.attach();
+                  el.style.width = "100%"; el.style.height = "100%";
+                  el.style.objectFit = "contain"; el.style.background = "#000";
+                  host.innerHTML = ""; host.appendChild(el);
+                }
+              } else {
+                _mountRemoteVideo(p.identity, pub.track);
+              }
+            }
+          });
+        });
+      });
+    }
+    function spotlightParticipant() {
+      if (!spotlightId.value || spotlightId.value === "__local__") return null;
+      var p = participants.value.find(function (pp) {
+        return "participant_" + pp.id === spotlightId.value || pp.username === spotlightId.value;
+      });
+      return p || null;
+    }
+    function pinSpotlight(identity) {
+      spotlightId.value = identity;
+      clearTimeout(_spotlightTimer);
+      _reattachAllVideos();
+    }
+
     // Wrap the back-handler so we synchronously close the LiveKit room
     // before letting the parent unmount us. Without this, room.disconnect()
     // fires async after the unmount and the other participant keeps seeing
@@ -1190,7 +1762,7 @@ var StudioView = {
 
     return {
       participants: participants, remoteMap: remoteMap, error: error, busy: busy,
-      recording: recording, timecode: timecode, formatTC: formatTC, initials: initials,
+      recording: recording, sessionEnded: sessionEnded, timecode: timecode, formatTC: formatTC, initials: initials,
       connected: connected, connect: connect, disconnect: disconnect, safeBack: safeBack,
       localVideoEl: localVideoEl, localMuted: localMuted, localCamOff: localCamOff, localMeter: localMeter,
       localSpeaking: localSpeaking,
@@ -1205,20 +1777,34 @@ var StudioView = {
       soundLimits: soundLimits, soundUploadStatus: soundUploadStatus, uploadSound: uploadSound,
       showAddSound: showAddSound, newSound: newSound, addCustomPad: addCustomPad, deleteCustomPad: deleteCustomPad,
       chat: chat, chatInput: chatInput, sendChat: sendChat,
-      finishedRecordings: finishedRecordings,
+      backstageChat: backstageChat, backstageInput: backstageInput,
+      sendBackstage: sendBackstage, chatChannel: chatChannel,
+      finishedRecordings: finishedRecordings, loadRecordings: loadRecordings,
+      triggerStats: triggerStats,
       exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting,
+      showDiagnostic: showDiagnostic,
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
       streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
       applyStreamPreset: applyStreamPreset, startStream: startStream, stopStream: stopStream,
       isHost: props.user.username === props.session.created_by,
+      canBackstage: canBackstage,
       hasSharedProject: !!props.session.shared_project_id,
       // Pre-join exports
       prejoinVideoEl: prejoinVideoEl, devices: devices, deviceSelection: deviceSelection,
       prejoinMeter: prejoinMeter, prejoinError: prejoinError,
       startPrejoinPreview: startPrejoinPreview,
+      // Mic check wizard
+      micCheckRunning: micCheckRunning, micCheckCountdown: micCheckCountdown,
+      micCheckResult: micCheckResult, micCheckAppliedGain: micCheckAppliedGain,
+      runMicCheck: runMicCheck, cancelMicCheck: cancelMicCheck,
+      applyMicCheckGain: applyMicCheckGain, resetMicCheckGain: resetMicCheckGain,
       practiceMode: practiceMode, markChapter: markChapter,
       qualityPreset: qualityPreset,
       handsRaised: handsRaised, ownHandUp: ownHandUp, toggleHand: toggleHand,
+      screenSharing: screenSharing, screenRecordOnly: screenRecordOnly, remoteScreen: remoteScreen,
+      askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
+      layoutMode: layoutMode, spotlightId: spotlightId, toggleLayout: toggleLayout,
+      spotlightParticipant: spotlightParticipant, pinSpotlight: pinSpotlight,
     };
   },
   template: `
@@ -1229,18 +1815,22 @@ var StudioView = {
         <span class="badge-id">#{{ session.id }}</span>
         <div class="spacer"></div>
         <div class="timecode mono">{{ formatTC(timecode) }}</div>
-        <label v-if="!recording && countdown === null" class="practice-toggle"
+        <label v-if="!recording && countdown === null && isHost" class="practice-toggle"
                :title="'En modo ensayo nada se sube al servidor — solo prueba.'">
           <input type="checkbox" v-model="practiceMode">
           <span>Ensayo</span>
         </label>
+        <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
         <select v-if="!connected" v-model="qualityPreset" class="quality-pick"
                 title="Calidad de captura — más alto = más CPU">
           <option value="low">Baja 360p</option>
           <option value="med">Media 480p</option>
           <option value="high">Alta 720p</option>
         </select>
-        <template v-if="!recording && countdown === null">
+        <template v-if="sessionEnded">
+          <span class="session-done-badge" title="La grabación de esta sesión ya finalizó">✓ FINALIZADA</span>
+        </template>
+        <template v-else-if="!recording && countdown === null">
           <button class="primary rec-btn" @click="toggleReady" :disabled="!connected"
                   :style="ownReady ? 'background: var(--signal); color:#fff;' : ''">
             {{ ownReady ? "✓ Listo" : "● Prepararse" }}
@@ -1260,7 +1850,19 @@ var StudioView = {
         <span v-if="activeStreams.length" class="tally live" style="margin-left: 8px;" :title="activeStreams.length + ' stream(s) activos'">
           <span class="dot"></span>EN VIVO
         </span>
+        <button v-if="connected && !screenSharing" class="ghost" style="margin-left: 8px;"
+                :disabled="!!remoteScreen"
+                :title="remoteScreen ? ('Ya está compartiendo ' + remoteScreen.name) : 'Compartir o grabar pantalla'"
+                @click="askStartScreenShare">📺 Pantalla</button>
+        <button v-if="connected && screenSharing" class="ghost" style="margin-left: 8px; background: rgba(255,59,59,0.16); color: #ff7373;"
+                @click="stopScreenShare" :title="screenRecordOnly ? 'Detener (solo grabando local)' : 'Dejar de compartir'">
+          ■ {{ screenRecordOnly ? 'Detener pantalla' : 'Dejar de compartir' }}
+        </button>
         <button v-if="isHost && connected" class="ghost" style="margin-left: 8px;" @click="showStream = true" title="Transmitir a RTMP">📡 Stream</button>
+        <button v-if="isHost" class="ghost" style="margin-left: 8px;" @click="showDiagnostic" title="Ver quién está conectado a la sala según LiveKit">🔍 Diagnóstico</button>
+        <button v-if="!connected" class="primary" style="margin-left: 8px; padding: 6px 14px;" @click="connect" :disabled="busy" title="Conectar este navegador a la sala de LiveKit">
+          {{ busy ? "Conectando…" : "🟢 Conectar" }}
+        </button>
       </div>
 
       <div class="studio-main">
@@ -1292,7 +1894,7 @@ var StudioView = {
                   </option>
                 </select>
               </div>
-              <div class="form-row" style="margin-bottom: 18px;">
+              <div class="form-row" style="margin-bottom: 12px;">
                 <label>🎤 Micrófono</label>
                 <select v-model="deviceSelection.micId">
                   <option v-for="d in devices.mics" :key="d.deviceId" :value="d.deviceId">
@@ -1300,6 +1902,62 @@ var StudioView = {
                   </option>
                 </select>
               </div>
+
+              <div class="mic-check-panel" style="margin: 0 0 18px; padding: 12px; border: 1px solid var(--ink-line); border-radius: 8px; background: var(--ink-sunken, rgba(0,0,0,0.18));">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <span class="eyebrow">MIC CHECK</span>
+                  <span v-if="micCheckAppliedGain"
+                        class="role-chip"
+                        :style="{ background: 'var(--signal)', color: '#fff', fontSize: '10px' }">
+                    APLICADO {{ micCheckAppliedGain > 0 ? '+' : '' }}{{ micCheckAppliedGain }} dB
+                  </span>
+                </div>
+
+                <button v-if="!micCheckRunning"
+                        class="ghost"
+                        @click="runMicCheck"
+                        :disabled="!deviceSelection.micId"
+                        style="width: 100%; padding: 8px; font-size: 13px;">
+                  🎤 Probar micrófono (10s)
+                </button>
+                <div v-else style="text-align: center; padding: 6px 0;">
+                  <div class="mono" style="font-size: 22px; font-weight: 600;">{{ micCheckCountdown }}s</div>
+                  <div class="muted" style="font-size: 12px;">Habla normalmente al mic…</div>
+                  <button class="ghost" @click="cancelMicCheck" style="margin-top: 6px; font-size: 11px;">Cancelar</button>
+                </div>
+
+                <div v-if="micCheckResult && !micCheckRunning" style="margin-top: 10px; font-size: 12px;">
+                  <div style="display: flex; gap: 14px; margin-bottom: 8px;">
+                    <div><span class="muted">Pico</span><br><strong class="mono">{{ micCheckResult.peak_dbfs }} dBFS</strong></div>
+                    <div><span class="muted">Promedio</span><br><strong class="mono">{{ micCheckResult.avg_dbfs }} dBFS</strong></div>
+                  </div>
+
+                  <div v-if="micCheckResult.suggested_db == null" class="muted" style="margin-bottom: 6px;">
+                    Señal muy baja — verifica que el mic no esté en silencio o muy lejos.
+                  </div>
+                  <template v-else-if="micCheckResult.suggested_db === 0">
+                    <div style="margin-bottom: 6px;">✓ Tu micrófono ya está bien nivelado.</div>
+                  </template>
+                  <template v-else>
+                    <div style="margin-bottom: 8px;">
+                      Sugerencia:
+                      <strong>{{ micCheckResult.suggested_db > 0 ? '+' : '' }}{{ micCheckResult.suggested_db }} dB</strong>
+                      ({{ micCheckResult.suggested_db > 0 ? 'tu voz está baja, te subimos' : 'tu voz está muy fuerte, bajamos' }})
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <button class="primary" style="font-size: 12px; padding: 6px 10px;" @click="applyMicCheckGain">Aplicar</button>
+                      <button class="ghost" style="font-size: 12px; padding: 6px 10px;" @click="runMicCheck">Reintentar</button>
+                      <div class="spacer"></div>
+                      <button v-if="micCheckAppliedGain" class="ghost" style="font-size: 12px; padding: 6px 10px;" @click="resetMicCheckGain">Quitar ajuste</button>
+                    </div>
+                  </template>
+                </div>
+
+                <div v-if="!micCheckResult && micCheckAppliedGain && !micCheckRunning" style="margin-top: 8px;">
+                  <button class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="resetMicCheckGain">Quitar ajuste guardado</button>
+                </div>
+              </div>
+
               <button class="primary" @click="connect" :disabled="busy" style="width: 100%; padding: 14px;">
                 {{ busy ? "Conectando…" : "🎙 Entrar al estudio" }}
               </button>
@@ -1307,7 +1965,69 @@ var StudioView = {
           </div>
         </div>
 
-        <div v-else class="participants-grid">
+        <div v-if="connected && layoutMode === 'spotlight'" class="spotlight-layout">
+          <div class="spotlight-main">
+            <div v-if="screenSharing || remoteScreen" class="screen-card spotlight-screen">
+              <div class="screen-host" data-screen-host></div>
+              <div class="screen-label">
+                <span class="dot"></span>
+                <span class="who">📺 {{ screenSharing ? (screenRecordOnly ? 'Tú · solo grabando' : 'Tú · compartiendo') : (remoteScreen ? remoteScreen.name + ' está compartiendo' : '') }}</span>
+                <button v-if="screenSharing" class="ghost" @click="stopScreenShare">■ Detener</button>
+              </div>
+            </div>
+            <template v-else>
+              <div v-if="spotlightId === '__local__'" class="participant-card spotlight-card" :class="{ speaking: localSpeaking }">
+                <video ref="localVideoEl" autoplay muted playsinline></video>
+                <div v-if="localCamOff" class="initials" style="position: absolute;">{{ initials(user.display_name || user.username) }}</div>
+                <div class="label">
+                  <span>{{ user.display_name || user.username }}</span>
+                  <span class="role-chip">TÚ</span>
+                </div>
+                <div v-if="localMuted" class="muted-icon">🔇</div>
+                <div class="meter"><div class="meter-fill" :style="{ width: localMeter + '%' }"></div></div>
+              </div>
+              <div v-else-if="spotlightParticipant()" class="participant-card spotlight-card" :class="{ speaking: remoteMap[spotlightId] && remoteMap[spotlightId].speaking }">
+                <div :data-remote-id="spotlightId" style="width: 100%; height: 100%;">
+                  <div class="initials" :style="{ background: spotlightParticipant().avatar_color }">{{ initials(spotlightParticipant().display_name) }}</div>
+                </div>
+                <div class="label">
+                  <span>{{ spotlightParticipant().display_name }}</span>
+                  <span class="role-chip">{{ spotlightParticipant().role }}</span>
+                </div>
+                <div class="meter"><div class="meter-fill" :style="{ width: ((remoteMap[spotlightId] && remoteMap[spotlightId].meter) || 0) + '%' }"></div></div>
+              </div>
+            </template>
+          </div>
+          <div class="spotlight-sidebar">
+            <div class="participant-card thumb-card" :class="{ speaking: localSpeaking }" @click="pinSpotlight('__local__')">
+              <video ref="localVideoEl" autoplay muted playsinline></video>
+              <div v-if="localCamOff" class="initials" style="position: absolute;">{{ initials(user.display_name || user.username) }}</div>
+              <div class="label"><span>{{ user.display_name || user.username }}</span><span class="role-chip">TÚ</span></div>
+              <div v-if="localMuted" class="muted-icon">🔇</div>
+            </div>
+            <template v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected')" :key="'side-' + p.id">
+              <div class="participant-card thumb-card"
+                   :class="{ speaking: remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].speaking, hand: handsRaised['participant_' + p.id] }"
+                   @click="pinSpotlight('participant_' + p.id)">
+                <div :data-remote-id="'participant_' + p.id" style="width: 100%; height: 100%;">
+                  <div class="initials" :style="{ background: p.avatar_color }">{{ initials(p.display_name) }}</div>
+                </div>
+                <div class="label"><span>{{ p.display_name }}</span><span class="role-chip">{{ p.role }}</span></div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div v-if="connected && (screenSharing || remoteScreen) && layoutMode !== 'spotlight'" class="screen-card">
+          <div class="screen-host" data-screen-host></div>
+          <div class="screen-label">
+            <span class="dot"></span>
+            <span class="who">📺 {{ screenSharing ? (screenRecordOnly ? 'Tú · solo grabando' : 'Tú · compartiendo') : (remoteScreen ? remoteScreen.name + ' está compartiendo' : '') }}</span>
+            <button v-if="screenSharing" class="ghost" @click="stopScreenShare">■ Detener</button>
+          </div>
+        </div>
+
+        <div v-if="connected && layoutMode === 'grid'" class="participants-grid">
           <div class="participant-card" :class="{ speaking: localSpeaking }">
             <video ref="localVideoEl" autoplay muted playsinline></video>
             <div v-if="localCamOff" class="initials" style="position: absolute;">{{ initials(user.display_name || user.username) }}</div>
@@ -1350,26 +2070,37 @@ var StudioView = {
           <div class="countdown-label">{{ countdown > 0 ? 'preparándose…' : 'GRABANDO' }}</div>
         </div>
 
-        <div v-if="finishedRecordings.length" style="margin-top: 28px;">
-          <div class="sb-head">
-            <span class="label">Grabaciones</span>
-            <span style="display:flex; gap:10px; align-items:center;">
-              <span class="tiny">{{ finishedRecordings.length }} pista(s)</span>
-              <a :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
-                 class="join-pill" download>↓ todas (ZIP)</a>
-              <button v-if="isHost" class="join-pill"
-                      :disabled="exporting" @click="exportToPostpod"
-                      :title="'Enviar pistas a postPod'">
+        <div v-if="sessionEnded || finishedRecordings.length" class="recordings-panel">
+          <div class="recordings-head">
+            <div class="recordings-title">
+              <span class="label">Grabaciones</span>
+              <span class="track-count">{{ finishedRecordings.length }} pista(s)</span>
+            </div>
+            <div class="recordings-actions">
+              <button class="btn-secondary" @click="loadRecordings" title="Recargar lista de pistas">↻ Recargar</button>
+              <a v-if="finishedRecordings.length" :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
+                 class="btn-secondary" download>↓ ZIP</a>
+              <button v-if="isHost" class="btn-export"
+                      :disabled="exporting || !finishedRecordings.length" @click="exportToPostpod"
+                      title="Enviar pistas a postPod para editar">
                 {{ exporting ? "↗ enviando…" : "↗ Enviar a postPod" }}
               </button>
-            </span>
+            </div>
           </div>
-          <div v-if="exportStatus" class="tiny muted" style="margin-bottom: 6px;">{{ exportStatus }}</div>
-          <div v-for="r in finishedRecordings" :key="r.id" class="invite-row">
-            <span class="who mono">{{ r.filename }} · {{ r.track_type }}</span>
-            <span class="status-chip connected">{{ Math.round((r.size_bytes||0)/1024) }}KB</span>
-            <span v-if="r.exported_to_postpod_at" class="status-chip connected" title="Enviada a postPod">↗ postPod</span>
-            <a :href="r.url + '?download=1'" class="join-pill" download>↓ bajar</a>
+          <div v-if="exportStatus" class="export-status">{{ exportStatus }}</div>
+          <div v-if="!finishedRecordings.length" class="muted" style="padding: 12px; text-align: center;">
+            Aún no llegaron pistas al servidor. Esperá unos segundos y dale ↻ Recargar.
+          </div>
+          <div v-else class="recordings-list">
+            <div v-for="r in finishedRecordings" :key="r.id" class="recording-row">
+              <span class="rec-name mono">{{ r.filename }}</span>
+              <span class="rec-meta">{{ r.track_type }} · {{ Math.round((r.size_bytes||0)/1024) }} KB</span>
+              <span v-if="r.exported_to_postpod_at" class="rec-chip exported" title="Enviada a postPod">↗ postPod</span>
+              <a :href="r.url + '?download=1'" class="btn-secondary tight" download>↓</a>
+            </div>
+          </div>
+          <div v-if="triggerStats.count > 0" class="muted" style="margin-top: 10px; padding: 8px 12px; background: var(--ink-sunken); border-radius: 4px; font-size: 12px;">
+            🎚 <strong>{{ triggerStats.count }} disparo(s) de soundboard</strong> registrados durante la sesión — se envían junto con las pistas a postPod en su timestamp exacto.
           </div>
         </div>
       </div>
@@ -1382,7 +2113,7 @@ var StudioView = {
             <button class="ghost" style="padding: 3px 9px; font-size: 10px;" @click="stopAllSounds" title="Detener todos los sonidos">■ Stop all</button>
             <span class="tiny" style="margin-left: 6px;">⌥ click = cue</span>
           </div>
-          <div class="sb-grid">
+          <div class="sb-grid" :class="{ compact: layoutMode === 'spotlight' }">
             <div v-for="s in sounds" :key="s.id" class="sb-pad-wrap"
                  @dragover.prevent
                  @drop.prevent="onPadDrop(s, $event)">
@@ -1460,17 +2191,38 @@ var StudioView = {
         </div>
 
         <div style="flex: 1; display: flex; flex-direction: column; min-height: 200px;">
-          <div class="sb-head"><span class="label">Chat en vivo</span><span class="tiny">{{ chat.length }}</span></div>
-          <div id="chat-scroll" style="flex: 1; overflow-y: auto; background: var(--ink-sunken); border: 1px solid var(--ink-line); border-radius: var(--r-md); padding: 8px; margin-bottom: 6px; min-height: 100px; font-size: 12px;">
+          <div class="sb-head" style="display: flex; align-items: center; gap: 8px;">
+            <span class="label" style="cursor: pointer;"
+                  :style="{ opacity: chatChannel === 'main' ? 1 : 0.55 }"
+                  @click="chatChannel = 'main'">Chat en vivo</span>
+            <span v-if="canBackstage" class="label" style="cursor: pointer;"
+                  :style="{ opacity: chatChannel === 'backstage' ? 1 : 0.55 }"
+                  @click="chatChannel = 'backstage'"
+                  title="Solo host y co-hosts">🎩 Backstage</span>
+            <span class="tiny">{{ chatChannel === 'backstage' ? backstageChat.length : chat.length }}</span>
+          </div>
+          <div v-show="chatChannel === 'main'" id="chat-scroll" style="flex: 1; overflow-y: auto; background: var(--ink-sunken); border: 1px solid var(--ink-line); border-radius: var(--r-md); padding: 8px; margin-bottom: 6px; min-height: 100px; font-size: 12px;">
             <div v-for="m in chat" :key="m.id" style="margin-bottom: 6px;">
               <strong style="color: var(--signal);">{{ m.author }}:</strong>
               <span style="color: var(--paper);">{{ m.text }}</span>
             </div>
             <div v-if="chat.length === 0" class="muted" style="text-align: center; padding: 20px;">(sin mensajes)</div>
           </div>
-          <div style="display: flex; gap: 4px;">
+          <div v-show="canBackstage && chatChannel === 'backstage'" id="backstage-scroll" style="flex: 1; overflow-y: auto; background: rgba(255,180,0,0.06); border: 1px solid rgba(255,180,0,0.35); border-radius: var(--r-md); padding: 8px; margin-bottom: 6px; min-height: 100px; font-size: 12px;">
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Privado: solo host y co-hosts.</div>
+            <div v-for="m in backstageChat" :key="m.id" style="margin-bottom: 6px;">
+              <strong style="color: #ffb84d;">{{ m.author }}:</strong>
+              <span style="color: var(--paper);">{{ m.text }}</span>
+            </div>
+            <div v-if="backstageChat.length === 0" class="muted" style="text-align: center; padding: 20px;">(sin mensajes)</div>
+          </div>
+          <div v-if="chatChannel === 'main'" style="display: flex; gap: 4px;">
             <input type="text" v-model="chatInput" @keyup.enter="sendChat" placeholder="Mensaje..." style="flex: 1; font-size: 12px; padding: 6px 10px;">
             <button class="primary" @click="sendChat" :disabled="!chatInput.trim()" style="padding: 6px 12px;">↑</button>
+          </div>
+          <div v-else-if="canBackstage" style="display: flex; gap: 4px;">
+            <input type="text" v-model="backstageInput" @keyup.enter="sendBackstage" placeholder="Mensaje al equipo..." style="flex: 1; font-size: 12px; padding: 6px 10px;">
+            <button class="primary" @click="sendBackstage" :disabled="!backstageInput.trim()" style="padding: 6px 12px;">↑</button>
           </div>
         </div>
       </aside>
@@ -1478,6 +2230,7 @@ var StudioView = {
       <div class="controls-bar">
         <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
         <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
+        <button v-if="connected" class="layout-toggle" @click="toggleLayout" :title="layoutMode === 'grid' ? 'Cambiar a vista de speaker' : 'Cambiar a grilla'">{{ layoutMode === 'grid' ? '◫' : '⊞' }}</button>
         <div class="spacer"></div>
         <span v-if="connected" class="join-pill">EN VIVO · {{ (participants.filter(p => p.status === 'connected').length) }} conectado(s)</span>
         <button v-if="connected" class="ghost" @click="disconnect">Salir del estudio</button>
@@ -1620,7 +2373,8 @@ var GuestStudioView = {
   setup: function (props) {
     var localVideoEl = ref(null);
     var error = ref("");
-    var busy = ref(true);
+    var busy = ref(false);
+    var connectStep = ref("");
     var connected = ref(false);
     var localMuted = ref(false);
     var localCamOff = ref(false);
@@ -1654,7 +2408,9 @@ var GuestStudioView = {
 
     async function loadSounds() {
       try {
-        var resp = await fetch("/api/sessions/" + props.joinData.session_id + "/sounds");
+        var resp = await fetch(
+          "/api/sessions/" + props.joinData.session_id + "/sounds?token=" + encodeURIComponent(props.inviteToken)
+        );
         if (!resp.ok) return;
         sounds.value = await resp.json();
         sounds.value.forEach(function (s) {
@@ -1709,6 +2465,10 @@ var GuestStudioView = {
         var s = sounds.value.find(function (x) { return x.filename === msg.filename; });
         if (s) playLocalSound(s);
       } else if (msg.type === "chat") {
+        // Guests never see backstage messages (server enforces, LiveKit
+        // also targets only host identities — but defensively drop any
+        // stray backstage frame here too).
+        if (msg.channel === "backstage") return;
         chat.value.push({ id: msg.id, author: msg.author, text: msg.text, ts: msg.ts });
         scrollChatBottom();
       } else if (msg.type === "ready_toggle") {
@@ -1717,6 +2477,8 @@ var GuestStudioView = {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
         finishRecording();
+      } else if (msg.type === "practice_mode") {
+        practiceMode.value = !!msg.active;
       } else if (msg.type === "kick" && room && room.localParticipant &&
                  msg.target_identity === room.localParticipant.identity) {
         error.value = "El host te desconectó.";
@@ -1813,6 +2575,9 @@ var GuestStudioView = {
 
     async function connect() {
       if (!LK) { error.value = "LiveKit client no cargado"; busy.value = false; return; }
+      busy.value = true;
+      error.value = "";
+      connectStep.value = "preparando…";
       try {
         myIdentity.value = "participant_" + props.joinData.participant_id;
         var newRoom = new LK.Room({
@@ -1832,18 +2597,22 @@ var GuestStudioView = {
           },
         });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
+          var id = participant.identity;
+          // Register the participant in the reactive map FIRST, so Vue renders
+          // the <div data-remote-id> placeholder, and only then mount the
+          // track into that element. (Reversing this order made the guest
+          // unable to see the host's video.)
+          if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0 };
           if (track.kind === LK.Track.Kind.Video) {
-            _mountRemoteVideo(participant.identity, track);
-            if (!remoteMap[participant.identity]) remoteMap[participant.identity] = { name: participant.name || participant.identity, meter: 0 };
+            _mountRemoteVideo(id, track);
           } else if (track.kind === LK.Track.Kind.Audio) {
             var a = track.attach();
+            a.dataset.duckable = "1";
             document.body.appendChild(a);
             var stop = _attachMeter(track, function (lvl) {
-              if (!remoteMap[participant.identity]) remoteMap[participant.identity] = { name: participant.name || participant.identity, meter: 0 };
-              remoteMap[participant.identity].meter = lvl;
+              if (remoteMap[id]) remoteMap[id].meter = lvl;
             });
-            if (!remoteMap[participant.identity]) remoteMap[participant.identity] = {};
-            remoteMap[participant.identity]._stopMeter = stop;
+            remoteMap[id]._stopMeter = stop;
           }
         });
         newRoom.on(LK.RoomEvent.ParticipantDisconnected, function (p) {
@@ -1852,9 +2621,32 @@ var GuestStudioView = {
         });
         newRoom.on(LK.RoomEvent.DataReceived, onDataReceived);
 
-        await newRoom.connect(props.joinData.livekit_ws_url, props.joinData.livekit_token);
-        var micPub = await newRoom.localParticipant.setMicrophoneEnabled(true);
-        var camPub = await newRoom.localParticipant.setCameraEnabled(true);
+        // Helper: race against timeout so we don't hang forever silently.
+        function withTimeout(p, ms, label) {
+          return new Promise(function (resolve, reject) {
+            var to = setTimeout(function () { reject(new Error(label + " sin respuesta tras " + (ms/1000) + "s")); }, ms);
+            p.then(function (v) { clearTimeout(to); resolve(v); },
+                   function (e) { clearTimeout(to); reject(e); });
+          });
+        }
+
+        connectStep.value = "1/4 conectando WebSocket a LiveKit…";
+        await withTimeout(
+          newRoom.connect(props.joinData.livekit_ws_url, props.joinData.livekit_token),
+          15000,
+          "WebSocket a LiveKit"
+        );
+
+        connectStep.value = "2/4 pidiendo permiso de micrófono…";
+        var micPub = null, camPub = null;
+        try { micPub = await withTimeout(newRoom.localParticipant.setMicrophoneEnabled(true), 30000, "Permiso de micrófono"); }
+        catch (me) { error.value = me.message; }
+
+        connectStep.value = "3/4 pidiendo permiso de cámara…";
+        try { camPub = await withTimeout(newRoom.localParticipant.setCameraEnabled(true), 30000, "Permiso de cámara"); }
+        catch (ce) { error.value = (error.value ? error.value + " · " : "") + ce.message; }
+
+        connectStep.value = "4/4 montando streams locales…";
 
         var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
@@ -1866,14 +2658,22 @@ var GuestStudioView = {
 
         room = newRoom;
         connected.value = true;
-        await nextTick();   // wait for the local <video> ref to mount
-        if (localVideoEl.value && camPub && camPub.track) {
-          try { camPub.track.attach(localVideoEl.value); } catch (_) {}
+        await nextTick();
+        // Try several times to attach the local video — the <video> ref might
+        // not be mounted on the very first tick depending on render timing.
+        function attachLocal() {
+          if (localVideoEl.value && camPub && camPub.track) {
+            try { camPub.track.attach(localVideoEl.value); } catch (_) {}
+          }
         }
+        attachLocal();
+        setTimeout(attachLocal, 200);
+        setTimeout(attachLocal, 800);
       } catch (e) {
         error.value = "Error de conexión: " + e.message;
       } finally {
         busy.value = false;
+        connectStep.value = "";
       }
     }
 
@@ -1900,7 +2700,7 @@ var GuestStudioView = {
       window.location.href = "/";
     }
 
-    onMounted(function () { connect(); loadSounds(); });
+    onMounted(function () { loadSounds(); });
     onBeforeUnmount(function () { if (timerHandle) clearInterval(timerHandle); if (room) room.disconnect().catch(function () {}); });
 
     return { localVideoEl: localVideoEl, error: error, busy: busy, connected: connected,
@@ -1908,9 +2708,9 @@ var GuestStudioView = {
              localMeter: localMeter, recording: recording, timecode: timecode, formatTC: formatTC,
              sounds: sounds, playingPad: playingPad, triggerSound: triggerSound,
              chat: chat, chatInput: chatInput, sendChat: sendChat,
-             toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
+             connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
              toggleReady: toggleReady, ownReady: ownReady, readyMap: readyMap, countdown: countdown,
-             myIdentity: myIdentity };
+             myIdentity: myIdentity, practiceMode: practiceMode };
   },
   template: `
     <div class="studio">
@@ -1924,11 +2724,25 @@ var GuestStudioView = {
                 :style="ownReady ? 'background: var(--signal); color:#fff;' : ''">
           {{ ownReady ? "✓ Listo" : "● Prepararse" }}
         </button>
+        <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
         <span v-if="connected && recording" class="tally live"><span class="dot"></span>ON AIR</span>
       </div>
       <div class="studio-main">
-        <div v-if="error" class="error">{{ error }}</div>
-        <div v-if="busy" class="muted" style="text-align:center; padding: 60px;">Pidiendo permisos de cámara/micrófono…</div>
+        <div v-if="error" class="error" style="font-size: 16px; padding: 14px; background: #5a1a1a; color: #fff; border: 2px solid red;">⚠️ {{ error }}</div>
+        <div v-if="!connected && !busy" class="prejoin">
+          <div class="prejoin-card">
+            <div class="prejoin-controls" style="text-align: center;">
+              <h3 style="margin: 0 0 6px;">{{ joinData.display_name }}, listo para entrar</h3>
+              <p class="muted" style="margin: 0 0 18px; font-size: 12px;">
+                Activa cámara y micrófono para conectarte al estudio. Vas a poder probar todo antes de que empiecen a grabar.
+              </p>
+              <button class="primary" @click="connect" style="width: 100%; padding: 14px;">
+                🎙 Activar cámara y entrar
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="busy" class="muted" style="text-align:center; padding: 60px;">{{ connectStep || "Pidiendo permisos…" }}</div>
         <div v-else class="participants-grid">
           <div class="participant-card">
             <video ref="localVideoEl" autoplay muted playsinline></video>
@@ -2053,6 +2867,8 @@ var App = {
       currentSession: null, inviteToken: null, joinData: null,
     });
     var anyRecording = ref(false);
+    var siblingApps = ref(null);
+    var thepodUrl = ref("");
 
     function parseRoute() {
       var path = window.location.pathname;
@@ -2066,17 +2882,25 @@ var App = {
       catch (_) { state.user = null; }
       finally { state.loading = false; }
     }
+    async function loadApps() {
+      try {
+        var d = await api("/api/config/apps");
+        siblingApps.value = d.apps.filter(function (a) { return a.key !== d.current; });
+        thepodUrl.value = d.thepod_url || "";
+      } catch (_) {}
+    }
     async function logout() {
       try { await api("/api/auth/logout", { method: "POST" }); } catch (_) {}
       state.user = null; state.currentSession = null;
     }
     function onLoggedIn(u) { state.user = u; state.route = "dashboard"; }
     function openSession(s) { state.currentSession = s; state.route = "studio"; }
-    function onJoined(data) { state.joinData = data; state.route = "guest-studio"; }
+    function onJoined(data) { state.joinData = data; /* keep state.route === "invite" so the guest branch stays active */ }
 
     onMounted(function () {
       parseRoute();
       checkAuth();
+      loadApps();
       // Poll any live video element to update tally
       setInterval(function () {
         var v = document.querySelector(".studio-top.recording");
@@ -2084,7 +2908,8 @@ var App = {
       }, 250);
     });
 
-    return { state: state, anyRecording: anyRecording, onLoggedIn: onLoggedIn,
+    return { state: state, anyRecording: anyRecording, siblingApps: siblingApps, thepodUrl: thepodUrl,
+             onLoggedIn: onLoggedIn,
              openSession: openSession, onJoined: onJoined, logout: logout,
              backToDash: function () { state.route = "dashboard"; state.currentSession = null; } };
   },
@@ -2106,8 +2931,14 @@ var App = {
     <template v-else>
       <header class="app-header">
         <div class="brand">
-          <span class="mark">prod<em>Pod</em></span>
+          <a :href="thepodUrl || '#'" class="mark" title="Ir a thePod">prod<em>Pod</em></a>
           <span class="tag">live booth · v0.1</span>
+        </div>
+        <div class="sibling-apps" v-if="siblingApps">
+          <a v-for="a in siblingApps" :key="a.key" :href="a.url" class="sibling-link" :title="'Ir a ' + a.name">
+            <span class="ico">{{ a.icon }}</span>
+            <span>{{ a.name }}</span>
+          </a>
         </div>
         <div class="tally" :class="{ live: anyRecording }">
           <span class="dot"></span>

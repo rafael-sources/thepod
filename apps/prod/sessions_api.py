@@ -17,15 +17,55 @@ from config import (
     USER_PROFILES,
 )
 from db import get_db
+from integrations import notify_source
 from livekit_service import (
     create_room,
     delete_room,
     generate_participant_token,
     room_name_for_session,
+    list_participants as lk_list_participants,
 )
 
 
 bp = Blueprint("sessions_api", __name__)
+
+
+@bp.get("/api/debug/session/<int:sid>/room-state")
+@require_auth
+def debug_room_state(sid):
+    """
+    Diagnostic: shows what the DB has + what LiveKit thinks is in the room.
+    If 'db_room_name' and 'livekit_participants' don't reconcile, you know
+    why the host and a guest aren't seeing each other.
+    """
+    db = get_db()
+    try:
+        s = db.execute("SELECT id, title, livekit_room_name FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not s:
+            return jsonify({"error": "sesión no encontrada"}), 404
+        ps = db.execute(
+            "SELECT id, display_name, role, status, username FROM participants WHERE session_id=?",
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+
+    room_name = s["livekit_room_name"]
+    lk_parts = []
+    if room_name:
+        try:
+            lk_parts = [{"identity": p.identity, "name": p.name, "state": str(p.state)}
+                        for p in lk_list_participants(room_name)]
+        except Exception as e:
+            lk_parts = [{"error": str(e)}]
+    return jsonify({
+        "session_id": sid,
+        "title": s["title"],
+        "db_room_name": room_name,
+        "db_participants": [dict(p) for p in ps],
+        "livekit_participants": lk_parts,
+        "expected_identities": [f"participant_{p['id']}" for p in ps],
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -97,14 +137,19 @@ def list_sessions():
     db = get_db()
     try:
         username = current_user()
-        rows = db.execute("""
-            SELECT DISTINCT s.* FROM sessions s
-            LEFT JOIN participants p ON p.session_id = s.id
-            WHERE s.created_by = ?
-               OR p.username    = ?
-               OR s.is_public   = 1
-            ORDER BY s.created_at DESC
-        """, (username, username)).fetchall()
+        from config import policy_for
+        if policy_for(username).get("see_all"):
+            rows = db.execute("SELECT * FROM sessions ORDER BY created_at DESC").fetchall()
+        else:
+            # Restricted user: only sessions where they are creator or a
+            # listed participant (host, co-host, guest invited via prePod).
+            # Public sessions are NOT visible to restricted users.
+            rows = db.execute("""
+                SELECT DISTINCT s.* FROM sessions s
+                LEFT JOIN participants p ON p.session_id = s.id
+                WHERE s.created_by = ? OR p.username = ?
+                ORDER BY s.created_at DESC
+            """, (username, username)).fetchall()
 
         # Ask LiveKit who is actually connected right now, so the UI can
         # show "Admin está dentro" instead of guessing from DB state.
@@ -153,7 +198,11 @@ def create_session_endpoint():
         room_name = room_name_for_session(sid)
         db.execute("UPDATE sessions SET livekit_room_name=? WHERE id=?", (room_name, sid))
 
-        # Host as participant #1
+        # Only the creator is added as participant. Anyone else who logs in
+        # and goes to /my-token gets self-healed in as co-host on demand —
+        # see my_join_token. We DO NOT auto-add other accounts at create
+        # time, so people uninvolved with this episode never appear in the
+        # roster.
         host_token = secrets.token_urlsafe(32)
         host_profile = USER_PROFILES.get(username, {})
         db.execute(
@@ -164,21 +213,6 @@ def create_session_endpoint():
             """,
             (sid, username, host_profile.get("display_name", username), host_token),
         )
-        # Every other known user gets auto-added as co-host so they can see
-        # the session in their list and join without invite link friction.
-        for other_user, profile in USER_PROFILES.items():
-            if other_user == username:
-                continue
-            db.execute(
-                """
-                INSERT INTO participants
-                    (session_id, username, display_name, invite_token, role, status)
-                VALUES (?, ?, ?, ?, 'co-host', 'invited')
-                """,
-                (sid, other_user,
-                 profile.get("display_name", other_user),
-                 secrets.token_urlsafe(32)),
-            )
 
         # Default soundboard
         for s in DEFAULT_SOUNDS:
@@ -274,6 +308,7 @@ def start_recording(sid):
         )
         db.commit()
         row = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        notify_source(row, "recording_started")
         return jsonify(_serialize_session(row))
     finally:
         db.close()
@@ -293,6 +328,10 @@ def stop_recording(sid):
         )
         db.commit()
         row = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        notify_source(row, "recording_stopped", {
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+        })
         return jsonify(_serialize_session(row))
     finally:
         db.close()
@@ -345,10 +384,11 @@ def create_invite(sid):
             (sid, display_name, token, role),
         )
         db.commit()
+        from integrations import _public_base_url
         return jsonify({
             "id": cur.lastrowid,
             "invite_token": token,
-            "invite_url": f"{request.host_url.rstrip('/')}/invite/{token}",
+            "invite_url": f"{_public_base_url()}/invite/{token}",
         }), 201
     finally:
         db.close()
@@ -373,16 +413,33 @@ def remove_participant(sid, pid):
 # Chat messages (persisted — live delivery happens via WebRTC data channel)
 # ---------------------------------------------------------------------------
 
+def _is_host_role(p_row) -> bool:
+    return bool(p_row) and (p_row["role"] in ("host", "co-host"))
+
+
 @bp.get("/api/sessions/<int:sid>/chat")
 @require_auth
 def list_chat(sid):
+    """List chat messages. ?channel=main (default) or ?channel=backstage.
+    Backstage requires the caller to be host or co-host; guests get 403."""
+    channel = (request.args.get("channel") or "main").strip().lower()
+    if channel not in ("main", "backstage"):
+        return jsonify({"error": "channel inválido"}), 400
+    username = current_user()
     db = get_db()
     try:
         _load_session(db, sid)
+        if channel == "backstage":
+            p = db.execute(
+                "SELECT role FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            if not _is_host_role(p):
+                return jsonify({"error": "backstage solo para host/co-host"}), 403
         rows = db.execute(
-            "SELECT id, author_name, participant_id, message_text, timestamp "
-            "FROM chat_messages WHERE session_id=? ORDER BY id",
-            (sid,),
+            "SELECT id, author_name, participant_id, message_text, timestamp, channel "
+            "FROM chat_messages WHERE session_id=? AND channel=? ORDER BY id",
+            (sid, channel),
         ).fetchall()
         return jsonify([dict(r) for r in rows])
     finally:
@@ -394,6 +451,9 @@ def list_chat(sid):
 def post_chat(sid):
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
+    channel = (data.get("channel") or "main").strip().lower()
+    if channel not in ("main", "backstage"):
+        return jsonify({"error": "channel inválido"}), 400
     if not text:
         return jsonify({"error": "text requerido"}), 400
     if len(text) > 2000:
@@ -404,18 +464,37 @@ def post_chat(sid):
     try:
         _load_session(db, sid)
         p = db.execute(
-            "SELECT id, display_name FROM participants WHERE session_id=? AND username=?",
+            "SELECT id, display_name, role FROM participants WHERE session_id=? AND username=?",
             (sid, username),
         ).fetchone()
+        if channel == "backstage" and not _is_host_role(p):
+            return jsonify({"error": "backstage solo para host/co-host"}), 403
         author = (p["display_name"] if p else None) or (USER_PROFILES.get(username) or {}).get("display_name", username)
         cur = db.execute(
-            "INSERT INTO chat_messages (session_id, participant_id, author_name, message_text) "
-            "VALUES (?, ?, ?, ?)",
-            (sid, p["id"] if p else None, author, text),
+            "INSERT INTO chat_messages (session_id, participant_id, author_name, message_text, channel) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sid, p["id"] if p else None, author, text, channel),
         )
         db.commit()
         row = db.execute("SELECT * FROM chat_messages WHERE id=?", (cur.lastrowid,)).fetchone()
         return jsonify(dict(row)), 201
+    finally:
+        db.close()
+
+
+@bp.get("/api/sessions/<int:sid>/host-identities")
+@require_auth
+def list_host_identities(sid):
+    """Returns the LiveKit identities of host+co-host participants. Used
+    client-side to target backstage data messages only at hosts."""
+    db = get_db()
+    try:
+        _load_session(db, sid)
+        rows = db.execute(
+            "SELECT id, role FROM participants WHERE session_id=? AND role IN ('host','co-host')",
+            (sid,),
+        ).fetchall()
+        return jsonify([f"participant_{r['id']}" for r in rows])
     finally:
         db.close()
 
@@ -452,8 +531,22 @@ def post_chat_guest(token):
 # ---------------------------------------------------------------------------
 
 @bp.get("/api/sessions/<int:sid>/sounds")
-@require_auth
 def list_sounds(sid):
+    # Accept either logged-in session OR invite token (?token=...) so guests
+    # joining via invite link can pre-load the soundboard for playback when
+    # the host triggers a sound via data channel.
+    if not current_user():
+        token = (request.args.get("token") or "").strip()
+        db = get_db()
+        try:
+            ok = bool(db.execute(
+                "SELECT 1 FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone())
+        finally:
+            db.close()
+        if not ok:
+            return jsonify({"error": "no autorizado"}), 401
     db = get_db()
     try:
         _load_session(db, sid)
@@ -796,7 +889,19 @@ def my_join_token(sid):
             (sid, username),
         ).fetchone()
         if not p:
-            return jsonify({"error": "no sos participante de esta sesión"}), 403
+            # Self-heal: a logged-in operator that isn't yet a participant of
+            # this session (e.g. session created via prePod-import which only
+            # added the first user) gets added on the fly as co-host.
+            from config import USER_PROFILES
+            if username not in USER_PROFILES:
+                return jsonify({"error": "usuario no autorizado"}), 403
+            profile = USER_PROFILES[username]
+            cur = db.execute(
+                "INSERT INTO participants (session_id, username, display_name, invite_token, role, status) "
+                "VALUES (?, ?, ?, ?, 'co-host', 'invited')",
+                (sid, username, profile.get("display_name", username), secrets.token_urlsafe(32)),
+            )
+            p = db.execute("SELECT * FROM participants WHERE id=?", (cur.lastrowid,)).fetchone()
         db.execute(
             "UPDATE participants SET status='connected', joined_at=datetime('now') WHERE id=?",
             (p["id"],),

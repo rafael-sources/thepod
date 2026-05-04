@@ -12,15 +12,35 @@ BASE_DIR = Path(__file__).resolve().parent
 SESSIONS_DIR = BASE_DIR / "sessions"
 SOUNDS_DIR = BASE_DIR / "static" / "sounds"
 
-USERS = {
-    "admin":  md5("CAMBIAR-EN-PRIMER-ARRANQUE"),
-    "rafael": md5("CAMBIAR-EN-PRIMER-ARRANQUE"),
-}
+# Users + policy live in ~/.podpod/users.json (read by all 3 apps).
+from shared_users import (
+    users_passwords as _users_passwords,
+    users_profiles as _users_profiles,
+    users_policy as _users_policy,
+    policy_for as _policy_for,
+)
 
-USER_PROFILES = {
-    "admin":  {"display_name": "Admin", "avatar_color": "#e85a4f"},
-    "rafael": {"display_name": "Rafael", "avatar_color": "#6bb3c4"},
-}
+
+def _live_dict(fn):
+    class _D:
+        def __getitem__(self, k):     return fn()[k]
+        def __contains__(self, k):    return k in fn()
+        def get(self, k, default=None): return fn().get(k, default)
+        def keys(self):               return fn().keys()
+        def values(self):             return fn().values()
+        def items(self):              return fn().items()
+        def __iter__(self):           return iter(fn())
+        def __len__(self):            return len(fn())
+    return _D()
+
+
+USERS         = _live_dict(_users_passwords)
+USER_PROFILES = _live_dict(_users_profiles)
+USER_POLICY   = _live_dict(_users_policy)
+
+
+def policy_for(username: str) -> dict:
+    return _policy_for(username)
 
 # ----- Shared cross-app config (SSO + webhooks) -----
 _shared = load_shared_config()
