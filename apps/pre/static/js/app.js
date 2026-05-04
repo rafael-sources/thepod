@@ -1454,12 +1454,26 @@ var RundownEditor = {
       catch (_) { /* sponsors are optional */ }
     }
 
-    async function add() {
+    async function add(kind) {
+      kind = kind || "segment";
+      var title = kind === "sponsor" ? "" : "Nuevo bloque";
       try {
         const created = await api(`/api/podcasts/${props.slug}/episodes/${props.episodeId}/blocks`, {
           method: "POST",
-          body: { kind: "segment", title: "Nuevo bloque" },
+          body: { kind: kind, title: title },
         });
+        if (kind === "sponsor") {
+          var cum = 0;
+          blocks.value.forEach(function (b) {
+            if (b.duration_estimate) cum += parseFloat(b.duration_estimate) * 60;
+          });
+          created.planned_offset_seconds = Math.round(cum);
+          if (sponsors.value.length === 1) {
+            created.sponsor_id = sponsors.value[0].id;
+            created.title = sponsors.value[0].name;
+          }
+          save(created);
+        }
         blocks.value.push(created);
       } catch (e) { error.value = e.message; }
     }
@@ -1508,6 +1522,12 @@ var RundownEditor = {
       if (!b.sponsor_id) return "";
       var sp = sponsors.value.find(function (s) { return s.id === b.sponsor_id; });
       return sp ? sp.copy : "";
+    }
+
+    function sponsorLogo(b) {
+      if (!b.sponsor_id) return "";
+      var sp = sponsors.value.find(function (s) { return s.id === b.sponsor_id; });
+      return sp ? sp.logo_url : "";
     }
 
     function onDragStart(b)   { dragging.value = b.id; }
@@ -1563,7 +1583,7 @@ var RundownEditor = {
     return {
       blocks, sponsors, error, dragging, kinds: BLOCK_KINDS,
       add, remove, save, onDragStart, onDragEnd, onDragOver, onDrop,
-      totalMin, fmtMin, kindLabel, setSponsor, fmtOffset, parseOffset, sponsorCopy,
+      totalMin, fmtMin, kindLabel, setSponsor, fmtOffset, parseOffset, sponsorCopy, sponsorLogo,
     };
   },
   template: `
@@ -1573,7 +1593,8 @@ var RundownEditor = {
         <h3>Estructura del episodio</h3>
         <div class="spacer"></div>
         <span class="total mono">TOTAL {{ fmtMin(totalMin) }}</span>
-        <button @click="add">＋ Bloque</button>
+        <button @click="add('sponsor')" style="background: rgba(244,199,112,0.12); border-color: rgba(244,199,112,0.3); color: #f4c770;">＋ Sponsor</button>
+        <button @click="add()">＋ Bloque</button>
       </div>
 
       <div v-if="error" class="error">{{ error }}</div>
@@ -1597,23 +1618,27 @@ var RundownEditor = {
             <button class="icon danger" @click="remove(b)" title="Eliminar">✕</button>
           </div>
           <div v-if="b.kind === 'sponsor'" class="rundown-sponsor-link"
-               style="margin: -2px 0 6px 36px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; background: rgba(244,199,112,0.06); border-left: 2px solid var(--accent, #f4c770); border-radius: 0 6px 6px 0;">
+               style="margin: -2px 0 6px 36px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; background: rgba(244,199,112,0.06); border-left: 3px solid rgba(244,199,112,0.5); border-radius: 0 6px 6px 0;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="eyebrow">SPONSOR</span>
-              <select :value="b.sponsor_id || ''" @change="setSponsor(b, $event.target.value)" style="flex: 1; max-width: 280px;">
-                <option value="">— Sin enlazar —</option>
+              <img v-if="sponsorLogo(b)" :src="sponsorLogo(b)" style="width: 28px; height: 28px; object-fit: contain; border-radius: 4px; background: rgba(255,255,255,0.08);">
+              <span v-else style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: rgba(244,199,112,0.12); color: #f4c770; font-size: 14px; flex-shrink: 0;">📢</span>
+              <select :value="b.sponsor_id || ''" @change="setSponsor(b, $event.target.value)" style="flex: 1; max-width: 280px; font-size: 13px;">
+                <option value="">— Elige un sponsor —</option>
                 <option v-for="s in sponsors" :key="s.id" :value="s.id">
                   {{ s.name }}{{ s.is_active ? '' : ' (pausado)' }}
                 </option>
               </select>
               <span v-if="!sponsors.length" class="muted" style="font-size: 11px;">Crea sponsors en la pestaña "Sponsors".</span>
-              <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; color: #aaa;" title="Minuto planificado (m:ss)">
-                Offset
+              <label style="display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; color: #aaa;" title="En qué momento del episodio aparece en prodPod (m:ss)">
+                ⏱ Aparece en
                 <input type="text" :value="fmtOffset(b.planned_offset_seconds)" @change="b.planned_offset_seconds = parseOffset($event.target.value); save(b)" placeholder="m:ss" style="width: 54px; font-size: 12px; padding: 2px 6px; text-align: center;">
               </label>
             </div>
-            <div v-if="b.sponsor_id && sponsorCopy(b)" style="font-size: 12px; color: #bbb; white-space: pre-wrap; padding: 6px 8px; background: rgba(255,255,255,0.04); border-radius: 4px; line-height: 1.4;">
-              <span class="eyebrow" style="display: block; margin-bottom: 2px;">AD-READ (TELEPROMPTER)</span>
+            <div v-if="!b.sponsor_id && sponsors.length" style="font-size: 11px; color: rgba(244,199,112,0.7); padding: 4px 0 0 36px;">
+              ↑ Elige el sponsor que aparecerá en el teleprompter de prodPod en este momento del episodio.
+            </div>
+            <div v-if="b.sponsor_id && sponsorCopy(b)" style="font-size: 12px; color: #bbb; white-space: pre-wrap; padding: 8px 10px; background: rgba(255,255,255,0.04); border-radius: 4px; line-height: 1.45;">
+              <span class="eyebrow" style="display: block; margin-bottom: 3px; color: rgba(244,199,112,0.7);">TELEPROMPTER — esto verás en prodPod</span>
               {{ sponsorCopy(b) }}
             </div>
           </div>
