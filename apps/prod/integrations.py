@@ -226,15 +226,30 @@ def import_from_prepod():
                 )
 
         # Pre-populate planned chapter markers from prePod rundown blocks.
-        # Duration estimates are stored in minutes in prePod; convert to seconds
-        # and accumulate to get the planned offset of each block start.
+        # Use planned_offset_seconds from prePod when available; otherwise
+        # accumulate duration estimates (stored in minutes) as fallback.
         cumulative_sec = 0.0
         for b in (episode.get("blocks") or []):
             label = (b.get("title") or b.get("kind") or "Bloque").strip()
+            offset = b.get("planned_offset_seconds")
+            if offset is not None:
+                try:
+                    offset = float(offset)
+                except (TypeError, ValueError):
+                    offset = cumulative_sec
+            else:
+                offset = cumulative_sec
+            kind = b.get("kind") or "segment"
+            sponsor_name = b.get("sponsor_name") or None
+            sponsor_copy = b.get("sponsor_copy") or None
+            sponsor_logo = b.get("sponsor_logo_url") or None
             db.execute(
-                "INSERT INTO chapter_markers (session_id, label, tl_offset_seconds, is_planned, kind) "
-                "VALUES (?, ?, ?, 1, ?)",
-                (sid, label, cumulative_sec, b.get("kind") or "segment"),
+                "INSERT INTO chapter_markers "
+                "(session_id, label, tl_offset_seconds, is_planned, kind, "
+                " sponsor_name, sponsor_copy, sponsor_logo_url, planned_offset_seconds) "
+                "VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)",
+                (sid, label, offset, kind,
+                 sponsor_name, sponsor_copy, sponsor_logo, offset),
             )
             mins = b.get("duration_estimate")
             if mins:

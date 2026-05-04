@@ -171,11 +171,39 @@ def list_chapter_markers(sid):
         if not _is_session_member(db, sid, current_user()):
             return jsonify({"error": "no autorizado"}), 401
         rows = db.execute(
-            "SELECT id, label, tl_offset_seconds, created_at "
+            "SELECT id, label, tl_offset_seconds, is_planned, kind, "
+            "sponsor_name, sponsor_copy, sponsor_logo_url, planned_offset_seconds, created_at "
             "FROM chapter_markers WHERE session_id=? ORDER BY tl_offset_seconds",
             (sid,),
         ).fetchall()
         return jsonify([dict(r) for r in rows])
+    finally:
+        db.close()
+
+
+@bp.patch("/api/sessions/<int:sid>/chapter-markers/<int:mid>/delay")
+@require_auth
+def delay_chapter_marker(sid, mid):
+    """Push a planned sponsor marker forward by N seconds (default 90)."""
+    db = get_db()
+    try:
+        if not _is_session_member(db, sid, current_user()):
+            return jsonify({"error": "no autorizado"}), 401
+        row = db.execute(
+            "SELECT id, tl_offset_seconds, planned_offset_seconds "
+            "FROM chapter_markers WHERE id=? AND session_id=?", (mid, sid),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "marker no encontrado"}), 404
+        body = request.get_json(silent=True) or {}
+        delay = float(body.get("delay_seconds", 90))
+        new_off = (row["planned_offset_seconds"] or row["tl_offset_seconds"]) + delay
+        db.execute(
+            "UPDATE chapter_markers SET tl_offset_seconds=?, planned_offset_seconds=? WHERE id=?",
+            (new_off, new_off, mid),
+        )
+        db.commit()
+        return jsonify({"id": mid, "tl_offset_seconds": new_off, "planned_offset_seconds": new_off})
     finally:
         db.close()
 

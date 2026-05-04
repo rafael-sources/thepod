@@ -160,6 +160,10 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "sessions", "source_episode_id", "source_episode_id INTEGER")
     _ensure_column(conn, "chapter_markers", "is_planned", "is_planned INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "chapter_markers", "kind", "kind TEXT")
+    _ensure_column(conn, "chapter_markers", "sponsor_name", "sponsor_name TEXT")
+    _ensure_column(conn, "chapter_markers", "sponsor_copy", "sponsor_copy TEXT")
+    _ensure_column(conn, "chapter_markers", "sponsor_logo_url", "sponsor_logo_url TEXT")
+    _ensure_column(conn, "chapter_markers", "planned_offset_seconds", "planned_offset_seconds REAL")
     _ensure_column(conn, "chat_messages", "channel", "channel TEXT NOT NULL DEFAULT 'main'")
     return conn
 

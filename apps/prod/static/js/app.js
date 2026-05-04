@@ -659,6 +659,96 @@ var StudioView = {
     var streamStatus = ref("");
     var streamBusy = ref(false);
 
+    // Sponsor teleprompter state
+    var sponsorMarkers = ref([]);
+    var sponsorAlertId = ref(null);
+    var sponsorCountdown = ref(null);
+    var sponsorDismissed = reactive({});
+    var _sponsorTimers = {};
+
+    async function loadSponsorMarkers() {
+      try {
+        var all = await api("/api/sessions/" + props.session.id + "/chapter-markers");
+        sponsorMarkers.value = all.filter(function (m) { return m.kind === "sponsor" && m.sponsor_name; });
+      } catch (_) {}
+    }
+
+    function _sponsorFmtTC(sec) {
+      if (sec == null) return "--:--";
+      var m = Math.floor(sec / 60);
+      var s = Math.floor(sec % 60);
+      return m + ":" + String(s).padStart(2, "0");
+    }
+
+    function _checkSponsorTimers() {
+      if (!recording.value || recordingStartedAtMs == null) return;
+      var now = (Date.now() - recordingStartedAtMs) / 1000;
+      sponsorMarkers.value.forEach(function (m) {
+        var off = m.planned_offset_seconds != null ? m.planned_offset_seconds : m.tl_offset_seconds;
+        var timeUntil = off - now;
+        var key = m.id;
+        if (sponsorDismissed[key]) return;
+        if (timeUntil <= 60 && timeUntil > 0 && sponsorAlertId.value !== key && !_sponsorTimers["alert_" + key]) {
+          sponsorAlertId.value = key;
+          _sponsorTimers["alert_" + key] = true;
+          if (window.toast) window.toast({ type: "warn", text: "📢 Sponsor \"" + m.sponsor_name + "\" en " + Math.ceil(timeUntil) + "s", duration: 5000 });
+        }
+        if (timeUntil <= 3 && timeUntil > -1 && !_sponsorTimers["cd_" + key]) {
+          _sponsorTimers["cd_" + key] = true;
+          sponsorCountdown.value = { id: key, name: m.sponsor_name, sec: Math.ceil(Math.max(0, timeUntil)) };
+          var cdI = setInterval(function () {
+            if (!sponsorCountdown.value || sponsorCountdown.value.id !== key) { clearInterval(cdI); return; }
+            var rem = off - ((Date.now() - recordingStartedAtMs) / 1000);
+            if (rem <= 0) {
+              sponsorCountdown.value = null;
+              clearInterval(cdI);
+              // auto-mark chapter
+              if (!practiceMode.value) {
+                api("/api/sessions/" + props.session.id + "/chapter-markers", {
+                  method: "POST", body: { tl_offset_seconds: off, label: "SPONSOR: " + m.sponsor_name },
+                }).catch(function () {});
+              }
+            } else {
+              sponsorCountdown.value.sec = Math.ceil(rem);
+            }
+          }, 250);
+        }
+      });
+    }
+
+    var _sponsorInterval = null;
+    watch(recording, function (val) {
+      if (val) {
+        loadSponsorMarkers();
+        _sponsorInterval = setInterval(_checkSponsorTimers, 500);
+      } else {
+        if (_sponsorInterval) { clearInterval(_sponsorInterval); _sponsorInterval = null; }
+        sponsorAlertId.value = null;
+        sponsorCountdown.value = null;
+      }
+    });
+
+    async function delaySponsor(m) {
+      try {
+        var res = await api("/api/sessions/" + props.session.id + "/chapter-markers/" + m.id + "/delay", {
+          method: "PATCH", body: { delay_seconds: 90 },
+        });
+        m.tl_offset_seconds = res.tl_offset_seconds;
+        m.planned_offset_seconds = res.planned_offset_seconds;
+        sponsorAlertId.value = null;
+        delete _sponsorTimers["alert_" + m.id];
+        delete _sponsorTimers["cd_" + m.id];
+        if (window.toast) window.toast({ type: "success", text: "Sponsor retrasado +90s" });
+      } catch (e) {
+        if (window.toast) window.toast({ type: "error", text: e.message });
+      }
+    }
+
+    function dismissSponsor(m) {
+      sponsorDismissed[m.id] = true;
+      if (sponsorAlertId.value === m.id) sponsorAlertId.value = null;
+    }
+
     async function loadParticipants() {
       try { participants.value = await api("/api/sessions/" + props.session.id + "/participants"); }
       catch (e) { error.value = e.message; }
@@ -1697,6 +1787,7 @@ var StudioView = {
       loadRecordings();
       loadStreams();
       loadRtmpPresets();
+      loadSponsorMarkers();
       // Pre-join: list devices early; preview starts as soon as the user
       // gives camera/mic permission (auto-prompt or manual button).
       listDevices();
@@ -1801,6 +1892,10 @@ var StudioView = {
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
       streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
       applyStreamPreset: applyStreamPreset, startStream: startStream, stopStream: stopStream,
+      sponsorMarkers: sponsorMarkers, sponsorAlertId: sponsorAlertId,
+      sponsorCountdown: sponsorCountdown, sponsorDismissed: sponsorDismissed,
+      delaySponsor: delaySponsor, dismissSponsor: dismissSponsor,
+      loadSponsorMarkers: loadSponsorMarkers, _sponsorFmtTC: _sponsorFmtTC,
       isHost: props.user.username === props.session.created_by,
       canBackstage: canBackstage,
       hasSharedProject: !!props.session.shared_project_id,
@@ -2202,6 +2297,36 @@ var StudioView = {
           <div v-for="l in inviteLinks" :key="l.invite_token" class="invite-row" style="cursor: pointer;" @click="copyInvite(l)" title="Click para copiar">
             <span class="who">{{ l.invite_url }}</span>
             <span class="join-pill">copiar</span>
+          </div>
+        </div>
+
+        <div v-if="sponsorMarkers.length" class="sponsor-teleprompter">
+          <div class="sb-head">
+            <span class="label">📢 Sponsors</span>
+            <span class="tiny">{{ sponsorMarkers.length }}</span>
+          </div>
+          <div v-for="m in sponsorMarkers" :key="'sp-' + m.id"
+               class="sponsor-block"
+               :class="{ alert: sponsorAlertId === m.id, dismissed: sponsorDismissed[m.id] }">
+            <div class="sponsor-header">
+              <img v-if="m.sponsor_logo_url" :src="m.sponsor_logo_url" class="sponsor-logo">
+              <div class="sponsor-info">
+                <strong>{{ m.sponsor_name }}</strong>
+                <span class="mono sponsor-time">{{ _sponsorFmtTC(m.planned_offset_seconds != null ? m.planned_offset_seconds : m.tl_offset_seconds) }}</span>
+              </div>
+              <div v-if="isHost && !sponsorDismissed[m.id]" class="sponsor-actions">
+                <button class="ghost" style="font-size: 10px; padding: 2px 6px;" @click="delaySponsor(m)" title="Retrasar 90s">+90s</button>
+                <button class="ghost" style="font-size: 10px; padding: 2px 6px;" @click="dismissSponsor(m)" title="Omitir">✕</button>
+              </div>
+            </div>
+            <div v-if="m.sponsor_copy && !sponsorDismissed[m.id]" class="sponsor-copy-text">
+              <div class="sponsor-copy-label">TELEPROMPTER</div>
+              {{ m.sponsor_copy }}
+            </div>
+          </div>
+          <div v-if="sponsorCountdown" class="sponsor-countdown-bar">
+            <div class="sponsor-countdown-num">{{ sponsorCountdown.sec }}</div>
+            <div class="sponsor-countdown-name">{{ sponsorCountdown.name }}</div>
           </div>
         </div>
 
