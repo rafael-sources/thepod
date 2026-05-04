@@ -41,6 +41,36 @@ def _process_and_save_image(src_bytes: bytes, dest_path: Path, max_size: tuple[i
         img.save(dest_path, "PNG", optimize=True)
 
 
+@bp.post("/api/podcasts/<slug>/landing-image")
+@require_auth
+def upload_landing_image(slug):
+    """
+    Image upload endpoint matching the Editor.js Image Tool contract:
+    multipart 'image' field; returns {success: 1, file: {url}} on success.
+    """
+    _ensure_podcast(slug)
+    f = request.files.get("image") or request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"success": 0, "error": "archivo requerido"}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXTS:
+        return jsonify({"success": 0, "error": f"extensión no soportada: {ext}"}), 400
+
+    dest_dir = PODCASTS_DIR / slug / "branding"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"block_{uuid.uuid4().hex[:10]}{ext}"
+    dest_path = dest_dir / filename
+    try:
+        # Cap max-side at 1600px to keep payloads sane.
+        _process_and_save_image(f.read(), dest_path, (1600, 1600), ext)
+    except Exception as e:
+        return jsonify({"success": 0, "error": f"no pude procesar la imagen: {e}"}), 400
+    return jsonify({
+        "success": 1,
+        "file": {"url": f"/media/podcasts/{slug}/branding/{filename}"},
+    })
+
+
 @bp.post("/api/podcasts/<slug>/branding/logo")
 @require_auth
 def upload_logo(slug):
@@ -51,6 +81,12 @@ def upload_logo(slug):
 @require_auth
 def upload_cover(slug):
     return _upload_branding(slug, "cover", COVER_MAX_SIZE)
+
+
+@bp.post("/api/podcasts/<slug>/branding/background")
+@require_auth
+def upload_background(slug):
+    return _upload_branding(slug, "background", (3840, 2160))
 
 
 def _upload_branding(slug: str, kind: str, max_size: tuple[int, int]):
@@ -112,6 +148,12 @@ def delete_logo(slug):
 @require_auth
 def delete_cover(slug):
     return _delete_branding(slug, "cover")
+
+
+@bp.delete("/api/podcasts/<slug>/branding/background")
+@require_auth
+def delete_background(slug):
+    return _delete_branding(slug, "background")
 
 
 def _delete_branding(slug: str, kind: str):

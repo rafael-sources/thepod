@@ -8,10 +8,16 @@ from flask import Flask, Response, abort, render_template
 
 import auth
 import branding as branding_bp
+import calendar_export as calendar_bp
 import episodes as episodes_bp
 import integrations as integrations_bp
 import landing as landing_bp
 import podcasts
+import rsvp as rsvp_bp
+import sounds as sounds_bp
+import sponsors_api
+import templates_api
+import users_admin
 from auth import require_auth
 from config import AVAILABLE_FONTS, PODCASTS_DIR, SECRET_KEY
 
@@ -97,13 +103,86 @@ def create_app():
     app.register_blueprint(episodes_bp.bp)
     app.register_blueprint(landing_bp.bp)
     app.register_blueprint(integrations_bp.bp)
+    app.register_blueprint(sounds_bp.bp)
+    app.register_blueprint(calendar_bp.bp)
+    app.register_blueprint(templates_api.bp)
+    app.register_blueprint(sponsors_api.bp)
+    app.register_blueprint(rsvp_bp.bp)
+    app.register_blueprint(users_admin.bp)
 
     PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Per-podcast access guard: anything under /api/podcasts/<slug>/... or
+    # /media/podcasts/<slug>/... requires the current user to have access to
+    # that podcast (owner, extra_host, or admin with see_all).
+    import re as _re
+    from flask import abort, request as _req, session as _sess, jsonify as _json
+    _SLUG_RE = _re.compile(r"^/(?:api|media)/podcasts/([A-Za-z0-9_-]+)(?:/|$)")
+
+    @app.before_request
+    def _enforce_podcast_access():
+        path = _req.path or ""
+        # Allow the root podcasts list and create endpoint (those filter inside).
+        if path in ("/api/podcasts", "/api/podcasts/"):
+            return None
+        m = _SLUG_RE.match(path)
+        if not m:
+            return None
+        slug = m.group(1)
+        # Skip if not logged in — let the per-endpoint require_auth handle 401.
+        username = _sess.get("username")
+        if not username:
+            return None
+        # Admin sees everything.
+        from config import policy_for as _pol
+        if _pol(username).get("see_all"):
+            return None
+        from db import get_db as _gdb
+        if not (PODCASTS_DIR / slug).exists():
+            return None  # let the endpoint return its own 404
+        try:
+            _db = _gdb(slug)
+            row = _db.execute("SELECT owner_username, extra_hosts FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+            _db.close()
+        except Exception:
+            return None
+        if not row:
+            return None
+        owner = row["owner_username"] or "admin"
+        extras = []
+        if row["extra_hosts"]:
+            try:
+                import json as _j
+                v = _j.loads(row["extra_hosts"])
+                if isinstance(v, list):
+                    extras = [str(x) for x in v]
+            except (TypeError, ValueError):
+                pass
+        if username != owner and username not in extras:
+            return _json({"error": "no autorizado para este podcast"}), 403
+        return None
 
     @app.get("/api/config/fonts")
     @require_auth
     def list_fonts():
         return {"fonts": AVAILABLE_FONTS}
+
+    @app.get("/api/config/apps")
+    def list_apps():
+        from shared_config import load_shared_config
+        cfg = load_shared_config()
+        return {
+            "current": "prepod",
+            "thepod_url": cfg.get("thepod_url") or "",
+            "apps": [
+                {"key": "prepod",  "name": "prePod",  "icon": "🎙",
+                 "url": cfg.get("prepod_url") or ""},
+                {"key": "prodpod", "name": "prodPod", "icon": "🔴",
+                 "url": cfg.get("prodpod_url") or ""},
+                {"key": "postpod", "name": "postPod", "icon": "🎬",
+                 "url": cfg.get("postpod_url") or ""},
+            ],
+        }
 
     @app.get("/media/podcasts/<slug>/branding/<path:filename>")
     @require_auth

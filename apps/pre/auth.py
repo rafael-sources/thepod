@@ -24,6 +24,10 @@ def require_auth(f):
     return wrapper
 
 
+def current_user():
+    return session.get("username")
+
+
 @bp.post("/login")
 def login():
     data = request.get_json(silent=True) or {}
@@ -37,6 +41,11 @@ def login():
     session["username"] = username
     session["sid"] = uuid.uuid4().hex
     session.permanent = True
+    try:
+        from shared_users import touch_last_login
+        touch_last_login(username)
+    except Exception:
+        pass
     return jsonify({"username": username})
 
 
@@ -51,4 +60,8 @@ def me():
     username = session.get("username")
     if not username:
         return jsonify({"error": "no autenticado"}), 401
-    return jsonify({"username": username})
+    from shared_users import policy_for
+    return jsonify({
+        "username": username,
+        "is_admin": bool(policy_for(username).get("see_all")),
+    })

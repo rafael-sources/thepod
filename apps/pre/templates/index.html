@@ -6,12 +6,25 @@
   <title>prePod — green room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=Bricolage+Grotesque:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&family=DM+Serif+Display&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=Bricolage+Grotesque:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&family=DM+Serif+Display&family=Archivo:wght@400;600;700&family=Archivo+Black&family=Montserrat:wght@300;400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=Anton&family=Oswald:wght@400;500;600;700&family=Bangers&family=Titan+One&family=Permanent+Marker&family=Fira+Code:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ cache_bust }}">
 </head>
 <body>
   <div id="app"></div>
   <script src="{{ url_for('static', filename='js/vendor/vue.global.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/sweetalert2.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/podswal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/editorjs.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/header.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/paragraph.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/list.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/quote.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/delimiter.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/image.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/embed.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/marker.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/inline-code.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/alignment.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_bust }}"></script>
 </body>
 </html>

@@ -28,4 +28,74 @@
   {% if landing.analytics_code %}
   {{ landing.analytics_code | safe }}
   {% endif %}
+
+  <style>
+    /* Editor.js blocks rendered in the landing */
+    .ej-body { max-width: 760px; margin: 60px auto; padding: 0 28px; }
+    .ej-body .ej-header { font-family: var(--fh, serif); font-weight: 600; line-height: 1.2; margin: 1.4em 0 0.4em; }
+    .ej-body h1.ej-header { font-size: 2.4em; }
+    .ej-body h2.ej-header { font-size: 1.8em; }
+    .ej-body h3.ej-header { font-size: 1.4em; }
+    .ej-body h4.ej-header { font-size: 1.15em; }
+    .ej-body .ej-paragraph { font-size: 1.05em; line-height: 1.65; margin: 0.8em 0; }
+    .ej-body .ej-list { margin: 1em 0 1em 1.5em; }
+    .ej-body .ej-list li { margin: 0.3em 0; }
+    .ej-body .ej-quote { border-left: 3px solid var(--p, #5a8bff); padding: 4px 16px; margin: 1.6em 0; font-style: italic; opacity: 0.92; }
+    .ej-body .ej-quote cite { display: block; font-style: normal; font-size: 0.85em; opacity: 0.75; margin-top: 6px; }
+    .ej-body .ej-delimiter { border: 0; height: 0; text-align: center; margin: 36px 0; }
+    .ej-body .ej-delimiter::after { content: "* * *"; letter-spacing: 0.5em; opacity: 0.4; }
+    .ej-body .ej-image { margin: 1.2em 0; }
+    .ej-body .ej-image img { width: 100%; height: auto; display: block; border-radius: 8px; }
+    .ej-body .ej-image figcaption { font-size: 0.9em; opacity: 0.7; margin-top: 6px; text-align: center; }
+    .ej-body .ej-image--bg { background: color-mix(in srgb, var(--tx,#000) 6%, transparent); padding: 12px; border-radius: 12px; }
+    .ej-body .ej-image--border img { border: 1px solid color-mix(in srgb, var(--tx,#000) 18%, transparent); }
+    .ej-body .ej-image--stretched { max-width: none; margin-left: -28px; margin-right: -28px; }
+    .ej-body .ej-embed { aspect-ratio: 16/9; margin: 1.6em 0; }
+    .ej-body .ej-embed iframe { width: 100%; height: 100%; border: 0; border-radius: 8px; }
+  </style>
+
+  {% if edit_mode %}
+  <style>
+    [data-edit] {
+      outline: 1px dashed transparent;
+      outline-offset: 4px;
+      border-radius: 4px;
+      transition: outline-color .12s ease, background .12s ease;
+      cursor: text;
+    }
+    [data-edit]:hover { outline-color: rgba(244,199,112,0.7); background: rgba(244,199,112,0.06); }
+    [data-edit]:focus {
+      outline: 2px solid rgba(244,199,112,0.95) !important;
+      background: rgba(244,199,112,0.10);
+    }
+    [data-edit][data-saved="1"]::after {
+      content: "✓";
+      position: absolute;
+      margin-left: 6px;
+      color: #8db36a;
+      font-size: 0.7em;
+      opacity: 0.8;
+      animation: epod-fade 1.6s ease forwards;
+    }
+    @keyframes epod-fade { to { opacity: 0; } }
+    .epod-edit-banner {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(244,199,112,0.95);
+      color: #1a1410;
+      font: 600 12px/1.4 system-ui, sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      z-index: 9999;
+      text-align: center;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.2);
+    }
+    body { padding-top: 28px !important; }
+  </style>
+  <script>
+    window.__EPOD_EDIT__ = {
+      slug: "{{ slug }}",
+    };
+  </script>
+  {% endif %}
 </head>

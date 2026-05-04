@@ -37,8 +37,99 @@ def _ensure_podcast(slug):
         abort(404, description="podcast no encontrado")
 
 
+_YT_RE = __import__("re").compile(
+    r"(?:youtube\.com/(?:watch\?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{6,})"
+)
+
+
+def _enrich_link(link: dict):
+    """Add `kind` / `thumb_url` / `embed_url` to a link entry, if recognizable."""
+    url = (link.get("url") or "").strip()
+    m = _YT_RE.search(url)
+    if m:
+        vid = m.group(1)
+        link["kind"] = "youtube"
+        link["video_id"] = vid
+        # maxresdefault sometimes 404s for older videos; hqdefault is universal.
+        link["thumb_url"] = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    else:
+        link["kind"] = (link.get("platform") or "external").lower()
+
+
 def _podcast_meta(db):
     return db.execute("SELECT * FROM podcast_meta").fetchone()
+
+
+def _render_blocks(json_str: str) -> str:
+    """Convert Editor.js block JSON into HTML for the landing template.
+    Returns empty string if there are no blocks."""
+    if not json_str:
+        return ""
+    try:
+        import json as _json, html as _html
+        data = _json.loads(json_str)
+        blocks = data.get("blocks") or []
+    except (TypeError, ValueError):
+        return ""
+    if not blocks:
+        return ""
+
+    out = []
+    for b in blocks:
+        kind = b.get("type")
+        d = b.get("data") or {}
+        # Per-block alignment from the alignment tune (if present).
+        tunes = b.get("tunes") or {}
+        align = (tunes.get("anyTuneName") or {}).get("alignment") if isinstance(tunes, dict) else None
+        align_attr = f' style="text-align:{align}"' if align in ("left","center","right","justify") else ""
+        if kind == "header":
+            level = max(1, min(int(d.get("level") or 2), 6))
+            txt = d.get("text") or ""
+            out.append(f"<h{level} class='ej-header'{align_attr}>{txt}</h{level}>")
+        elif kind == "paragraph":
+            txt = d.get("text") or ""
+            out.append(f"<p class='ej-paragraph'{align_attr}>{txt}</p>")
+        elif kind == "list":
+            items = d.get("items") or []
+            tag = "ol" if d.get("style") == "ordered" else "ul"
+            lis = "".join(f"<li>{i}</li>" for i in items)
+            out.append(f"<{tag} class='ej-list'{align_attr}>{lis}</{tag}>")
+        elif kind == "quote":
+            t = d.get("text") or ""
+            cap = d.get("caption") or ""
+            out.append(
+                f"<blockquote class='ej-quote'{align_attr}>"
+                f"<p>{t}</p>"
+                + (f"<cite>{_html.escape(cap)}</cite>" if cap else "")
+                + "</blockquote>"
+            )
+        elif kind == "delimiter":
+            out.append("<hr class='ej-delimiter'>")
+        elif kind == "image":
+            url = ((d.get("file") or {}).get("url")) or ""
+            cap = d.get("caption") or ""
+            classes = ["ej-image"]
+            if d.get("withBackground"): classes.append("ej-image--bg")
+            if d.get("withBorder"):     classes.append("ej-image--border")
+            if d.get("stretched"):      classes.append("ej-image--stretched")
+            cls = " ".join(classes)
+            if url:
+                out.append(
+                    f"<figure class='{cls}'{align_attr}>"
+                    f"<img src='{_html.escape(url)}' alt='{_html.escape(cap)}' loading='lazy'>"
+                    + (f"<figcaption>{_html.escape(cap)}</figcaption>" if cap else "")
+                    + "</figure>"
+                )
+        elif kind == "embed":
+            embed = d.get("embed") or d.get("source") or ""
+            if embed:
+                out.append(
+                    f"<div class='ej-embed'{align_attr}>"
+                    f"<iframe src='{_html.escape(embed)}' frameborder='0' allowfullscreen></iframe>"
+                    + (f"<figcaption>{_html.escape(d.get('caption') or '')}</figcaption>" if d.get("caption") else "")
+                    + "</div>"
+                )
+    return "\n".join(out)
 
 
 def _get_or_create_landing(db):
@@ -208,6 +299,7 @@ def _team_image_url(slug, filename):
 
 
 def _serialize_member(slug, row):
+    keys = row.keys()
     return {
         "id": row["id"],
         "name": row["name"],
@@ -218,6 +310,8 @@ def _serialize_member(slug, row):
         "social_twitter": row["social_twitter"] or "",
         "social_instagram": row["social_instagram"] or "",
         "social_website": row["social_website"] or "",
+        "social_youtube": row["social_youtube"] if "social_youtube" in keys else "",
+        "social_tiktok": row["social_tiktok"] if "social_tiktok" in keys else "",
         "position": row["position"],
     }
 
@@ -263,7 +357,7 @@ def create_member(slug):
 def update_member(slug, member_id):
     _ensure_podcast(slug)
     data = request.get_json(silent=True) or {}
-    allowed = {"name", "role", "bio", "social_twitter", "social_instagram", "social_website", "position"}
+    allowed = {"name", "role", "bio", "social_twitter", "social_instagram", "social_website", "social_youtube", "social_tiktok", "position"}
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({"error": "nada para actualizar"}), 400
@@ -376,9 +470,16 @@ def _load_landing_bundle(slug):
         if not podcast:
             return None
         landing = _get_or_create_landing(db)
+        # Manual landing order: explicit landing_position wins (lower first).
+        # Episodes without a position fall back to the date/created sort.
         episodes_rows = db.execute("""
             SELECT * FROM episodes
-            ORDER BY COALESCE(scheduled_date, '') DESC, created_at DESC, id DESC
+            ORDER BY
+              CASE WHEN landing_position IS NULL THEN 1 ELSE 0 END,
+              landing_position ASC,
+              COALESCE(scheduled_date, '') DESC,
+              created_at DESC,
+              id DESC
             LIMIT 50
         """).fetchall()
 
@@ -396,6 +497,12 @@ def _load_landing_bundle(slug):
         team_rows = db.execute(
             "SELECT * FROM team_members ORDER BY position, id"
         ).fetchall()
+
+        # Annotate links with embed/thumbnail info so the templates can show
+        # a YouTube/Spotify-style card instead of a plain text link.
+        for ep_id, links in links_by_ep.items():
+            for l in links:
+                _enrich_link(l)
 
         return {
             "podcast": dict(podcast),
@@ -458,7 +565,15 @@ def render_landing(slug):
         "socials": socials,
         "logo_url": _logo_url(slug, podcast),
         "cover_url": _cover_url(slug, podcast),
-        "rss_url": f"/landing/{slug}/feed.xml",
+        "rss_url": (
+            (podcast["rss_override_url"] if "rss_override_url" in podcast.keys() and podcast["rss_override_url"] else "").strip()
+            or f"/landing/{slug}/feed.xml"
+        ),
+        "edit_mode": request.args.get("edit_mode") == "1",
+        "blocks_html": _render_blocks(
+            bundle["podcast"].get("landing_blocks") if isinstance(bundle["podcast"], dict)
+            else (bundle["podcast"]["landing_blocks"] if "landing_blocks" in bundle["podcast"].keys() else None)
+        ),
     }
     template = landing.get("template") or "minimal"
     if template not in ("minimal", "bold", "classic"):

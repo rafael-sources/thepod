@@ -5,37 +5,65 @@
     --p: {{ podcast.color_primary or '#5a8bff' }};
     --s: {{ podcast.color_secondary or '#1e2a54' }};
     --a: {{ podcast.color_accent or '#f4c770' }};
+    --bg: {{ podcast.color_bg or '#fafaf7' }};
+    --tx: {{ podcast.color_text or '#14110b' }};
+    --tx-dim: color-mix(in srgb, var(--tx) 65%, var(--bg));
+    --tx-soft: color-mix(in srgb, var(--tx) 40%, var(--bg));
     --fh: '{{ podcast.font_heading or "Fraunces" }}', Georgia, serif;
     --fb: '{{ podcast.font_body or "Bricolage Grotesque" }}', -apple-system, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #fafaf7; color: #14110b; font-family: var(--fb); line-height: 1.55; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx); font-family: var(--fb); line-height: 1.55; text-align: {{ podcast.color_text_align or 'left' }}; }
   .page { max-width: 680px; margin: 0 auto; padding: 80px 28px 120px; }
   header.hero { text-align: center; margin-bottom: 48px; }
-  .logo { width: 120px; height: 120px; border-radius: 24px; background-size: cover; background-position: center; margin: 0 auto 28px; box-shadow: 0 10px 30px -8px rgba(20,17,11,0.2); background-color: var(--s); }
+  .logo { width: 200px; height: 200px; border-radius: 28px; background-size: contain; background-repeat: no-repeat; background-position: center; margin: 0 auto 32px; box-shadow: 0 10px 30px -8px rgba(20,17,11,0.2); background-color: var(--s); }
   h1 { font-family: var(--fh); font-size: 56px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 10px; line-height: 1.02; }
-  .tagline { font-family: var(--fh); font-style: italic; font-size: 20px; color: #5c5240; margin: 0; }
-  .description { font-size: 17px; color: #2a2319; max-width: 540px; margin: 32px auto 0; text-align: center; }
+  .tagline { font-family: var(--fh);  font-size: 20px; color: var(--tx-dim); margin: 0; }
+  .description { font-size: 17px; color: var(--tx); max-width: 540px; margin: 32px auto 0; text-align: center; }
   .subscribe { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 36px; }
   .subscribe a { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; background: var(--p); color: #fff; text-decoration: none; font-size: 14px; font-weight: 500; transition: transform .15s ease; border: 0; }
   .subscribe a:hover { transform: translateY(-1px); }
   .subscribe a.rss { background: var(--a); color: var(--s); }
   .section-title { font-family: var(--fh); font-size: 28px; margin: 80px 0 24px; font-weight: 500; letter-spacing: -0.01em; }
   .rule { border: 0; height: 1px; background: linear-gradient(90deg, transparent, #3a2f22, transparent); margin: 60px 0 20px; opacity: 0.15; }
-  .ep { padding: 22px 0; border-bottom: 1px solid rgba(20,17,11,0.08); }
+  .ep { padding: 22px 0; border-bottom: 1px solid color-mix(in srgb, var(--tx) 12%, transparent); }
   .ep:last-child { border-bottom: 0; }
   .ep-num { font-family: var(--fb); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--p); }
-  .ep-title { font-family: var(--fh); font-size: 24px; margin: 4px 0 8px; font-weight: 500; letter-spacing: -0.01em; color: #14110b; }
-  .ep-desc { color: #5c5240; font-size: 15px; margin-bottom: 10px; }
+  .ep-title { font-family: var(--fh); font-size: 24px; margin: 4px 0 8px; font-weight: 500; letter-spacing: -0.01em; color: var(--tx); }
+  .ep-desc { color: var(--tx-dim); font-size: 15px; margin-bottom: 10px; }
+  .yt-card { display: block; margin: 14px 0; text-decoration: none; }
+  .yt-thumb {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background-size: cover;
+    background-position: center;
+    background-color: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .yt-thumb:hover { transform: translateY(-2px); box-shadow: 0 14px 30px -8px rgba(0,0,0,0.3); }
+  .yt-play {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: rgba(255,0,0,0.92);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  }
   .ep-links { display: flex; flex-wrap: wrap; gap: 8px; }
-  .ep-links a { font-family: var(--fb); font-size: 12px; padding: 4px 12px; border-radius: 999px; background: rgba(20,17,11,0.06); color: #14110b; text-decoration: none; text-transform: capitalize; }
+  .ep-links a { font-family: var(--fb); font-size: 12px; padding: 4px 12px; border-radius: 999px; background: rgba(20,17,11,0.06); color: var(--tx); text-decoration: none; text-transform: capitalize; }
   .ep-links a:hover { background: var(--p); color: #fff; }
   .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; }
   .member { text-align: center; }
   .member .avatar { width: 100px; height: 100px; border-radius: 50%; background-size: cover; background-position: center; background-color: var(--s); margin: 0 auto 10px; }
   .member .name { font-family: var(--fh); font-size: 18px; font-weight: 600; }
-  .member .role { font-size: 13px; color: #5c5240; }
-  footer { margin-top: 80px; text-align: center; color: #8a7d65; font-size: 13px; }
+  .member .role { font-size: 13px; color: var(--tx-dim); }
+  footer { margin-top: 80px; text-align: center; color: var(--tx-soft); font-size: 13px; }
   footer a { color: inherit; }
   @media (max-width: 520px) { h1 { font-size: 42px; } .tagline { font-size: 17px; } }
   {% if landing.custom_css %}{{ landing.custom_css | safe }}{% endif %}
@@ -44,14 +72,18 @@
 <div class="page">
   <header class="hero">
     {% if logo_url %}<div class="logo" style="background-image: url('{{ logo_url }}');"></div>{% else %}<div class="logo"></div>{% endif %}
-    <h1>{{ podcast.name }}</h1>
-    {% if podcast.tagline %}<p class="tagline">{{ podcast.tagline }}</p>{% endif %}
-    {% if podcast.description %}<p class="description">{{ podcast.description }}</p>{% endif %}
+    <h1 {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.name"{% endif %}>{{ podcast.name }}</h1>
+    {% if edit_mode or podcast.tagline %}<p class="tagline" {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.tagline" data-placeholder="(sin tagline)"{% endif %}>{{ podcast.tagline or '(sin tagline)' if edit_mode else podcast.tagline }}</p>{% endif %}
+    {% if edit_mode or podcast.description %}<p class="description" {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.description" data-placeholder="(sin descripción)"{% endif %}>{% if edit_mode and not podcast.description %}(sin descripción){% else %}{{ podcast.description | safe }}{% endif %}</p>{% endif %}
     <div class="subscribe">
       {% for s in socials %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.label }}</a>{% endfor %}
       <a class="rss" href="{{ rss_url }}">RSS feed</a>
     </div>
   </header>
+
+  {% if blocks_html %}
+  <div class="ej-body">{{ blocks_html | safe }}</div>
+  {% endif %}
 
   {% if episodes %}
   <h2 class="section-title">Episodios</h2>
@@ -59,11 +91,19 @@
     {% for ep in episodes %}
     <article class="ep" id="ep{{ ep.id }}">
       <div class="ep-num">EP · #{{ ep.episode_number }}{% if ep.scheduled_date %} · {{ ep.scheduled_date }}{% endif %}</div>
-      <h3 class="ep-title">{{ ep.title }}</h3>
-      {% if ep.description %}<p class="ep-desc">{{ ep.description }}</p>{% endif %}
+      <h3 class="ep-title" {% if edit_mode %}contenteditable="plaintext-only" data-edit="episode.{{ ep.id }}.title"{% endif %}>{{ ep.title }}</h3>
+      {% if edit_mode or ep.description %}<p class="ep-desc" {% if edit_mode %}contenteditable="plaintext-only" data-edit="episode.{{ ep.id }}.description"{% endif %}>{% if edit_mode and not ep.description %}(sin descripción){% else %}{{ ep.description | safe }}{% endif %}</p>{% endif %}
+      {% set yt_link = ep.links | selectattr('kind', 'equalto', 'youtube') | first %}
+      {% if yt_link %}
+      <a class="yt-card" href="{{ yt_link.url }}" target="_blank" rel="noopener" :title="Ver en YouTube">
+        <div class="yt-thumb" style="background-image: url('{{ yt_link.thumb_url }}');">
+          <div class="yt-play">▶</div>
+        </div>
+      </a>
+      {% endif %}
       {% if ep.links %}
       <div class="ep-links">
-        {% for l in ep.links %}<a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.platform.replace('_', ' ') }}</a>{% endfor %}
+        {% for l in ep.links if l.kind != 'youtube' %}<a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.platform.replace('_', ' ') }}</a>{% endfor %}
       </div>
       {% endif %}
     </article>
@@ -90,5 +130,10 @@
     <div style="margin-top: 6px;"><a href="{{ rss_url }}">Subscripción RSS</a></div>
   </footer>
 </div>
+
+{% if edit_mode %}
+<div class="epod-edit-banner">✏️ MODO EDICIÓN — click en cualquier texto para editarlo · escape para cancelar · click afuera para guardar</div>
+<script src="/static/landing-edit.js"></script>
+{% endif %}
 </body>
 </html>
