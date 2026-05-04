@@ -74,7 +74,7 @@
     0 10px 30px -12px rgba(0,0,0,0.9);
 
   /* Typography */
-  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-display: 'Newsreader', 'Georgia', serif;
   --font-ui:      'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
