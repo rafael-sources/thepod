@@ -1609,6 +1609,9 @@ var RSVP_STATUSES = [
   { value: "maybe", label: "Tal vez" },
 ];
 
+var RSVP_LABELS = { pending: "Pendiente", yes: "Confirmado", no: "No puede", maybe: "Tal vez" };
+var RSVP_COLORS = { pending: "#888", yes: "#2a7", no: "#c44", maybe: "#c90" };
+
 var GuestsPanel = {
   props: { slug: String, episodeId: Number },
   setup(props) {
@@ -1720,19 +1723,62 @@ var GuestsPanel = {
       }
     }
 
+    async function sendPreRecording(g) {
+      if (!g.email || !g.email.trim()) {
+        error.value = "Agrega un email para enviar preparación";
+        return;
+      }
+      g._prep_sending = true;
+      g._prep_msg = "";
+      try {
+        var r = await api("/api/podcasts/" + props.slug + "/episodes/" + props.episodeId + "/send-pre-recording", {
+          method: "POST", body: { guest_id: g.id },
+        });
+        if (r.results && r.results.length) {
+          var res = r.results[0];
+          g._prep_msg = res.ok ? ("✓ Preparación enviada a " + res.sent_to) : ("✕ " + (res.reason || res.error || "Error"));
+        }
+      } catch (e) { error.value = e.message; }
+      finally { g._prep_sending = false; }
+    }
+
+    var bulkSending = ref(false);
+    var bulkMsg = ref("");
+
+    async function sendAllPreRecording() {
+      var withEmail = guests.value.filter(function (g) { return g.email && g.email.trim(); });
+      if (!withEmail.length) { error.value = "Ningún invitado tiene email"; return; }
+      bulkSending.value = true;
+      bulkMsg.value = "";
+      try {
+        var r = await api("/api/podcasts/" + props.slug + "/episodes/" + props.episodeId + "/send-pre-recording", {
+          method: "POST", body: {},
+        });
+        bulkMsg.value = "✓ Enviados " + r.sent + "/" + r.total;
+      } catch (e) { error.value = e.message; }
+      finally { bulkSending.value = false; }
+    }
+
     watch(() => props.episodeId, load, { immediate: true });
     return {
       guests, error, newName, newEmail, newRole,
-      roles: GUEST_ROLES, rsvpStatuses: RSVP_STATUSES,
+      roles: GUEST_ROLES, rsvpLabels: RSVP_LABELS, rsvpColors: RSVP_COLORS,
       add, remove, saveGuest, copyInvite, copyRsvp, sendRsvp,
+      sendPreRecording, sendAllPreRecording, bulkSending, bulkMsg,
     };
   },
   template: `
     <div>
-      <div class="section-head">
-        <div class="eyebrow">ROSTER</div>
-        <h3>Quiénes participan en este episodio</h3>
+      <div class="section-head" style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div class="eyebrow">ROSTER</div>
+          <h3>Quiénes participan en este episodio</h3>
+        </div>
+        <button v-if="guests.length > 0" class="ghost" :disabled="bulkSending" @click="sendAllPreRecording" style="font-size: 12px; padding: 5px 12px; white-space: nowrap;">
+          {{ bulkSending ? "Enviando…" : "📋 Enviar preparación a todos" }}
+        </button>
       </div>
+      <div v-if="bulkMsg" class="muted" style="font-size: 12px; margin-bottom: 8px;">{{ bulkMsg }}</div>
 
       <div v-if="error" class="error">{{ error }}</div>
 
@@ -1744,9 +1790,7 @@ var GuestsPanel = {
             <select v-model="g.role" @change="saveGuest(g)">
               <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
             </select>
-            <select v-model="g.rsvp_status" @change="saveGuest(g)">
-              <option v-for="s in rsvpStatuses" :key="s.value" :value="s.value">{{ s.label }}</option>
-            </select>
+            <span class="rsvp-badge" :style="{ background: rsvpColors[g.rsvp_status] || '#888' }">{{ rsvpLabels[g.rsvp_status] || g.rsvp_status }}</span>
             <button class="icon danger" @click="remove(g)" title="Eliminar">✕</button>
           </div>
           <div class="guest-row">
@@ -1772,12 +1816,16 @@ var GuestsPanel = {
             </button>
             <a :href="g.rsvp_url" target="_blank" rel="noopener" class="ghost" style="font-size: 12px; padding: 4px 10px; text-decoration: none;">↗ Abrir</a>
             <button class="icon" @click="copyRsvp(g)" :title="g._rsvp_copied ? 'copiado' : 'copiar link RSVP'">{{ g._rsvp_copied ? '✓' : '⧉' }}</button>
+            <button class="ghost" :disabled="g._prep_sending || !g.email" @click="sendPreRecording(g)" style="font-size: 12px; padding: 4px 10px;">
+              {{ g._prep_sending ? "Enviando…" : "📋 Preparación" }}
+            </button>
             <span v-if="g._rsvp_msg" class="muted" style="font-size: 12px; flex-basis: 100%;">{{ g._rsvp_msg }}</span>
             <a v-if="g._rsvp_show_link && (g._rsvp_full_url || g.rsvp_url)"
                :href="g._rsvp_full_url || g.rsvp_url" target="_blank" rel="noopener"
                style="font-size: 12px; flex-basis: 100%; word-break: break-all;">
               {{ g._rsvp_full_url || g.rsvp_url }}
             </a>
+            <span v-if="g._prep_msg" class="muted" style="font-size: 12px; flex-basis: 100%;">{{ g._prep_msg }}</span>
           </div>
         </div>
       </div>

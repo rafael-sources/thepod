@@ -799,6 +799,83 @@ def send_rsvp_invite(slug, guest_id):
     return jsonify(result)
 
 
+@bp.post("/api/podcasts/<slug>/episodes/<int:ep_id>/send-pre-recording")
+@require_auth
+def send_pre_recording(slug, ep_id):
+    """Send preparation email to one guest (guest_id in body) or all guests
+    of this episode (guest_id omitted / null).  Returns a list of per-guest
+    results so the UI can show which ones succeeded."""
+    _ensure_podcast(slug)
+    data = request.get_json(silent=True) or {}
+    target_guest_id = data.get("guest_id")
+
+    db = get_db(slug)
+    try:
+        ep = db.execute(
+            """SELECT e.*, p.name AS podcast_name
+               FROM episodes e
+               LEFT JOIN podcast_meta p ON p.slug = ?
+               WHERE e.id = ?""",
+            (slug, ep_id),
+        ).fetchone()
+        if not ep:
+            return jsonify({"error": "episodio no encontrado"}), 404
+
+        if target_guest_id:
+            guests = db.execute(
+                "SELECT * FROM episode_guests WHERE id=? AND episode_id=?",
+                (target_guest_id, ep_id),
+            ).fetchall()
+        else:
+            guests = db.execute(
+                "SELECT * FROM episode_guests WHERE episode_id=? AND email IS NOT NULL AND email != ''",
+                (ep_id,),
+            ).fetchall()
+
+        if not guests:
+            return jsonify({"error": "no hay invitados con email"}), 400
+
+        blocks = db.execute(
+            "SELECT kind, title, duration_estimate FROM episode_blocks "
+            "WHERE episode_id=? ORDER BY position, id",
+            (ep_id,),
+        ).fetchall()
+        rundown = [{"kind": b["kind"], "title": b["title"], "duration_estimate": b["duration_estimate"]} for b in blocks]
+    finally:
+        db.close()
+
+    from email_helper import send_pre_recording_email
+    from rsvp import build_episode_ics_bytes
+    ics = build_episode_ics_bytes(slug, ep_id)
+
+    results = []
+    for g in guests:
+        email = (g["email"] or "").strip()
+        if not email:
+            results.append({"guest_id": g["id"], "name": g["name"], "ok": False, "reason": "no_email"})
+            continue
+        rec_url = (g["invite_url"] or "").strip() or None
+        r = send_pre_recording_email(
+            to_email=email,
+            to_name=g["name"] or "",
+            podcast_name=ep["podcast_name"] or slug,
+            episode_title=ep["title"] or "",
+            episode_number=ep["episode_number"],
+            scheduled_at=ep["scheduled_at"] if "scheduled_at" in ep.keys() else None,
+            scheduled_date=ep["scheduled_date"],
+            duration_estimate=ep["duration_estimate"],
+            recording_url=rec_url,
+            rundown=rundown,
+            ics_bytes=ics,
+        )
+        r["guest_id"] = g["id"]
+        r["name"] = g["name"]
+        results.append(r)
+
+    ok_count = sum(1 for r in results if r.get("ok"))
+    return jsonify({"results": results, "sent": ok_count, "total": len(results)})
+
+
 # ---------------------------------------------------------------------------
 # Episode rundown blocks (intro / segment / sponsor / outro …)
 # ---------------------------------------------------------------------------
