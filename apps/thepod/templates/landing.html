@@ -266,11 +266,14 @@
   .footstrip .ver{color:var(--ink-4);}
   .footstrip .now{color:var(--ink-2);}
 
-  /* LOGIN */
-  .login-area{
-    min-height:60vh;display:flex;align-items:center;justify-content:center;
-    padding:60px 0;
+  /* LOGIN MODAL */
+  .login-overlay{
+    position:fixed;inset:0;z-index:100;
+    background:rgba(7,10,18,0.85);backdrop-filter:blur(12px);
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .3s ease;
   }
+  .login-overlay.open{opacity:1;pointer-events:auto;}
   .login-card{
     width:420px;
     padding:32px 36px 28px;
@@ -279,11 +282,19 @@
     border-radius:18px;
     backdrop-filter:blur(20px);
     box-shadow:0 30px 80px rgba(0,0,0,0.5);
+    transform:translateY(16px);transition:transform .3s ease;
   }
+  .login-overlay.open .login-card{transform:translateY(0);}
+  .login-card .lc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
   .login-card .lc-eyebrow{
     font-family:var(--mono);font-size:10px;letter-spacing:0.22em;text-transform:uppercase;
-    color:var(--gold);font-weight:600;margin-bottom:6px;
+    color:var(--gold);font-weight:600;
   }
+  .login-card .lc-close{
+    background:none;border:none;color:var(--ink-3);font-size:18px;cursor:pointer;
+    padding:4px 8px;border-radius:6px;transition:color .15s, background .15s;
+  }
+  .login-card .lc-close:hover{color:var(--ink);background:rgba(255,255,255,0.06);}
   .login-card h2{
     font-family:var(--serif);font-weight:600;font-size:28px;letter-spacing:-0.02em;
     margin:0 0 6px;color:var(--ink);
@@ -314,6 +325,15 @@
     background:rgba(229,72,77,0.12);border:1px solid rgba(229,72,77,0.4);
     color:var(--red);border-radius:8px;font-size:13px;display:none;
   }
+  .header-login{
+    justify-self:end;
+    display:inline-flex;align-items:center;gap:8px;
+    padding:8px 16px;border:1px solid var(--line-2);border-radius:999px;
+    background:rgba(255,255,255,0.02);color:var(--ink-2);
+    font-family:var(--mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+    cursor:pointer;transition:all .2s ease;
+  }
+  .header-login:hover{color:var(--gold);border-color:rgba(232,196,122,0.4);background:rgba(232,196,122,0.04);}
 
   @media (max-width: 980px){
     .cards{grid-template-columns:1fr;}
@@ -352,28 +372,9 @@
         <button class="out" id="logoutBtn">Salir</button>
       </div>
       {% else %}
-      <div style="justify-self:end;"></div>
+      <button class="header-login" id="headerLoginBtn">Iniciar sesion</button>
       {% endif %}
     </header>
-
-    {% if not username %}
-    <!-- LOGIN -->
-    <main class="login-area">
-      <div class="login-card">
-        <div class="lc-eyebrow">Central · Login</div>
-        <h2>Entra a tu suite</h2>
-        <p class="sub">Una sola clave para prePod, prodPod y postPod.</p>
-        <form id="loginForm">
-          <label>Usuario</label>
-          <input type="text" id="username" autocomplete="username" autofocus>
-          <label style="margin-top:14px;">Clave</label>
-          <input type="password" id="password" autocomplete="current-password">
-          <button type="submit" class="btn-login" id="loginBtn">Entrar</button>
-          <div id="loginErr" class="login-err"></div>
-        </form>
-      </div>
-    </main>
-    {% else %}
 
     <!-- HERO -->
     <section class="hero">
@@ -383,14 +384,39 @@
         <span id="eyebrow-extra"></span>
       </div>
       <h1 class="greet">
+        {% if username %}
         <span class="name">Hola, {{ username }}<span class="punct">.</span></span>
         <span class="ask"> ¿A donde vas<span class="punct">?</span></span>
+        {% else %}
+        <span class="name">Tu podcast<span class="punct">,</span></span>
+        <span class="ask"> de punta a punta<span class="punct">.</span></span>
+        {% endif %}
       </h1>
       <p class="subline">
         Tu suite para pasar de la idea al feed: planea, graba en vivo con tus invitados, y
-        edita en limpio antes de publicar. Elige por donde seguir hoy.
+        edita en limpio antes de publicar.{% if username %} Elige por donde seguir hoy.{% endif %}
       </p>
     </section>
+
+    <!-- LOGIN MODAL -->
+    <div class="login-overlay" id="loginOverlay">
+      <div class="login-card">
+        <div class="lc-header">
+          <div class="lc-eyebrow">Central · Login</div>
+          <button class="lc-close" id="loginClose">&times;</button>
+        </div>
+        <h2>Entra a tu suite</h2>
+        <p class="sub">Una sola clave para prePod, prodPod y postPod.</p>
+        <form id="loginForm">
+          <label>Usuario</label>
+          <input type="text" id="inp-user" autocomplete="username">
+          <label style="margin-top:14px;">Clave</label>
+          <input type="password" id="inp-pass" autocomplete="current-password">
+          <button type="submit" class="btn-login" id="loginBtn">Entrar</button>
+          <div id="loginErr" class="login-err"></div>
+        </form>
+      </div>
+    </div>
 
     <!-- CARDS -->
     <section class="cards">
@@ -666,7 +692,6 @@
       <div class="now" id="foot-now"></div>
       <div class="ver">v3.14</div>
     </div>
-    {% endif %}
 
   </div>
 
@@ -687,25 +712,53 @@ async function jsonFetch(url, opts) {
   return data;
 }
 
+var overlay = document.getElementById("loginOverlay");
+var form = document.getElementById("loginForm");
+var err = document.getElementById("loginErr");
+
+function openLogin() {
+  overlay.classList.add("open");
+  setTimeout(function() { document.getElementById("inp-user").focus(); }, 120);
+}
+function closeLogin() {
+  overlay.classList.remove("open");
+  err.style.display = "none";
+}
+
+// login form submit
+form.addEventListener("submit", async function(e) {
+  e.preventDefault();
+  err.style.display = "none";
+  var username = document.getElementById("inp-user").value.trim();
+  var password = document.getElementById("inp-pass").value;
+  var btn = document.getElementById("loginBtn");
+  btn.disabled = true; btn.textContent = "Entrando…";
+  try {
+    await jsonFetch("/api/login", { method: "POST", body: { username: username, password: password } });
+    window.location.reload();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.style.display = "block";
+    btn.disabled = false; btn.textContent = "Entrar";
+  }
+});
+
+// close modal on X, overlay click, or Escape
+document.getElementById("loginClose").addEventListener("click", closeLogin);
+overlay.addEventListener("click", function(e) { if (e.target === overlay) closeLogin(); });
+document.addEventListener("keydown", function(e) { if (e.key === "Escape") closeLogin(); });
+
 if (!isLoggedIn) {
-  var form = document.getElementById("loginForm");
-  var err = document.getElementById("loginErr");
-  form.addEventListener("submit", async function(e) {
-    e.preventDefault();
-    err.style.display = "none";
-    var username = document.getElementById("username").value.trim();
-    var password = document.getElementById("password").value;
-    var btn = document.getElementById("loginBtn");
-    btn.disabled = true; btn.textContent = "Entrando…";
-    try {
-      await jsonFetch("/api/login", { method: "POST", body: { username: username, password: password } });
-      window.location.reload();
-    } catch (ex) {
-      err.textContent = ex.message;
-      err.style.display = "block";
-      btn.disabled = false; btn.textContent = "Entrar";
-    }
+  // intercept card clicks — open login modal
+  document.querySelectorAll(".card").forEach(function(card) {
+    card.addEventListener("click", function(e) {
+      e.preventDefault();
+      openLogin();
+    });
   });
+  // header login button
+  var hBtn = document.getElementById("headerLoginBtn");
+  if (hBtn) hBtn.addEventListener("click", openLogin);
 } else {
   document.getElementById("logoutBtn").addEventListener("click", async function() {
     try { await jsonFetch("/api/logout", { method: "POST" }); } catch(e) {}
@@ -718,26 +771,26 @@ if (!isLoggedIn) {
       if (el && a.url) el.href = a.url;
     });
   });
-
-  // footer clock
-  var now = new Date();
-  var months = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  var footNow = document.getElementById("foot-now");
-  if (footNow) footNow.textContent = now.getDate() + " " + months[now.getMonth()] + " · " + now.getFullYear() + " · " + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
-
-  // parallax on cards
-  document.querySelectorAll('.card').forEach(function(card) {
-    card.addEventListener('mousemove', function(e) {
-      var r = card.getBoundingClientRect();
-      var x = (e.clientX - r.left) / r.width - 0.5;
-      var y = (e.clientY - r.top) / r.height - 0.5;
-      card.style.transform = 'translateY(-4px) rotateX(' + (-y*2).toFixed(2) + 'deg) rotateY(' + (x*2).toFixed(2) + 'deg)';
-    });
-    card.addEventListener('mouseleave', function() {
-      card.style.transform = '';
-    });
-  });
 }
+
+// footer clock (always visible)
+var now = new Date();
+var months = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+var footNow = document.getElementById("foot-now");
+if (footNow) footNow.textContent = now.getDate() + " " + months[now.getMonth()] + " · " + now.getFullYear() + " · " + String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+
+// parallax on cards (always active)
+document.querySelectorAll('.card').forEach(function(card) {
+  card.addEventListener('mousemove', function(e) {
+    var r = card.getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width - 0.5;
+    var y = (e.clientY - r.top) / r.height - 0.5;
+    card.style.transform = 'translateY(-4px) rotateX(' + (-y*2).toFixed(2) + 'deg) rotateY(' + (x*2).toFixed(2) + 'deg)';
+  });
+  card.addEventListener('mouseleave', function() {
+    card.style.transform = '';
+  });
+});
 </script>
 </body>
 </html>
