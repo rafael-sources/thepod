@@ -1,0 +1,94 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo postPod se conecta con la suite</h1>
+  <p class="lede">postPod es la última capa: recibe el material de prodPod y produce los archivos finales listos para publicar.</p>
+</header>
+
+<section id="desde-prodpod">
+  <h2><span class="num">01</span> Desde prodPod</h2>
+  <p>Cuando una grabación en prodPod se envía a postPod, se crea (o actualiza) un proyecto con:</p>
+  <ul>
+    <li><strong>Pistas de audio y video</strong> de cada participante como archivos separados, listos para agregar al timeline.</li>
+    <li><strong>Grabaciones de pantalla</strong> compartida como pistas adicionales.</li>
+    <li><strong>Marcadores de capítulo</strong>: tanto los planificados del rundown de prePod como los creados en vivo durante la grabación. Llegan como momentos en el timeline.</li>
+    <li><strong>Timestamps de soundboard</strong>: cada disparo de sonido con su tiempo exacto, para que puedas ubicarlos en la edición.</li>
+  </ul>
+  <p>No necesitas subir nada manualmente — todo llega automáticamente al proyecto.</p>
+</section>
+
+<section id="desde-prepod">
+  <h2><span class="num">02</span> Desde prePod (indirecto)</h2>
+  <p>
+    Si el episodio fue planificado en prePod y grabado en prodPod, el proyecto en postPod queda vinculado al episodio original.
+    La información del podcast (branding, metadata) está accesible para las notas de capítulos y créditos al exportar.
+  </p>
+</section>
+
+<section id="captions-whisper">
+  <h2><span class="num">03</span> Captions con Whisper</h2>
+  <p>
+    postPod usa Whisper (un modelo de inteligencia artificial) para generar subtítulos palabra por palabra en múltiples idiomas. Las captions pueden:
+  </p>
+  <ul>
+    <li><strong>Mostrarse en vivo</strong> durante la reproducción (botón CC en el reproductor).</li>
+    <li><strong>Quemarse en el video</strong> al exportar (aparecen siempre, sin necesidad de un reproductor que soporte SRT).</li>
+    <li><strong>Exportarse como SRT</strong> independiente para plataformas que aceptan archivos de subtítulos.</li>
+  </ul>
+</section>
+
+<section id="exportacion">
+  <h2><span class="num">04</span> Exportación a plataformas</h2>
+  <p>Los presets de exportación están optimizados para cada plataforma:</p>
+  <table>
+    <thead>
+      <tr><th>Plataforma</th><th>Formato</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>YouTube</td><td>MP4, H.264 + AAC</td><td>1080p o 4K, 30 o 60 fps</td></tr>
+      <tr><td>TikTok / Reels</td><td>MP4, 1080x1920 vertical</td><td>Listo para subir</td></tr>
+      <tr><td>Instagram</td><td>MP4, 1080x1080 cuadrado</td><td>Formato cuadrado</td></tr>
+      <tr><td>WhatsApp</td><td>MP4, 720p comprimido</td><td>Archivo pequeño para compartir rápido</td></tr>
+      <tr><td>Podcast</td><td>MP3 o M4A</td><td>Solo audio, optimizado para directorios</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="notas-capitulos">
+  <h2><span class="num">05</span> Notas de capítulos</h2>
+  <p>Al exportar con la opción "Generar notas", postPod crea un archivo .txt con:</p>
+  <ul>
+    <li><strong>Capítulos en formato YouTube</strong> (00:00 Título) listos para pegar en la descripción del video.</li>
+    <li>Créditos y metadata del episodio.</li>
+  </ul>
+  <p>Compatible con Spotify, Apple Podcasts, YouTube y otros directorios que soporten capítulos.</p>
+</section>
+
+<section id="audio-profesional">
+  <h2><span class="num">06</span> Audio profesional</h2>
+  <p>Opción de procesamiento al exportar que aplica:</p>
+  <ul>
+    <li>Reducción de ruido de fondo.</li>
+    <li>Ecualización para voz (corte de frecuencias bajas, claridad en medios-altos).</li>
+    <li>Compresión para un volumen más parejo.</li>
+    <li>Normalización a -16 LUFS (estándar de broadcast).</li>
+  </ul>
+  <p>Solo afecta la pista de voz — la música de fondo pasa sin cambios.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#desde-prodpod">Desde prodPod</a>
+  <a href="#desde-prepod">Desde prePod</a>
+  <a href="#captions-whisper">Captions con Whisper</a>
+  <a href="#exportacion">Exportación a plataformas</a>
+  <a href="#notas-capitulos">Notas de capítulos</a>
+  <a href="#audio-profesional">Audio profesional</a>
+</nav>
+{% endblock %}

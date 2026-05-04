@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Docs · thePod{% endblock %}</title>
+  <meta name="description" content="{% block description %}Documentación de la suite thePod — prePod, prodPod, postPod.{% endblock %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,800&family=Bricolage+Grotesque:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="docs theme-{{ theme | default('hub') }}">
+
+<div class="docs-shell">
+
+  <header class="docs-top">
+    <div class="brand">
+      <a href="/"><span class="mark">the<em>Pod</em></span></a>
+      <span class="crumb">
+        <b>DOCS</b>{% if app_cfg %} · {{ app_cfg.name }}{% if section and section_labels %} · {{ section_labels.get(section, section) }}{% endif %}{% endif %}
+      </span>
+    </div>
+
+    <nav class="app-switch" aria-label="Cambiar de app">
+      <a href="/docs/prepod"  class="{% if app_key == 'prepod' %}active{% endif %}">prePod</a>
+      <a href="/docs/prodpod" class="{% if app_key == 'prodpod' %}active{% endif %}">prodPod</a>
+      <a href="/docs/postpod" class="{% if app_key == 'postpod' %}active{% endif %}">postPod</a>
+    </nav>
+
+    <div class="right">
+      {% if app_urls and app_key and app_urls.get(app_key) %}
+        <a class="ghost" href="{{ app_urls[app_key] }}" target="_blank" rel="noopener">↗ Abrir {{ app_cfg.name }}</a>
+      {% endif %}
+      {% if username %}
+        <span class="tiny" style="color: var(--paper-dim);">{{ username }}</span>
+      {% endif %}
+    </div>
+  </header>
+
+  {% block body %}
+  <div class="docs-body">
+
+    <aside class="docs-sidebar">
+      {% if app_cfg %}
+      <div class="app-tag">
+        <span class="icon">{{ app_cfg.icon }}</span>
+        <div>
+          <span class="name">{{ app_cfg.name }}</span>
+          <span class="lbl">{{ app_cfg.tag }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      <nav aria-label="Tabla de contenido">
+        <ol>
+          {% for s in app_cfg.sections %}
+            <li>
+              <a href="/docs/{{ app_key }}/{{ s }}"
+                 class="{% if s == section %}active{% endif %}">
+                {{ section_labels.get(s, s) }}
+              </a>
+            </li>
+          {% endfor %}
+        </ol>
+      </nav>
+
+      <div class="back-hub">
+        <a href="/docs">← Todas las apps</a>
+      </div>
+    </aside>
+
+    <main class="docs-content">
+      {% block content %}{% endblock %}
+
+      {# Pager: prev / next within this app's section list #}
+      {% if prev_section or next_section %}
+      <nav class="docs-pager" aria-label="Navegación entre secciones">
+        {% if prev_section %}
+          <a class="prev" href="/docs/{{ app_key }}/{{ prev_section }}">
+            <span class="lbl">← Anterior</span>
+            <span class="nm">{{ section_labels.get(prev_section, prev_section) }}</span>
+          </a>
+        {% else %}<span></span>{% endif %}
+        {% if next_section %}
+          <a class="next" href="/docs/{{ app_key }}/{{ next_section }}">
+            <span class="lbl">Siguiente →</span>
+            <span class="nm">{{ section_labels.get(next_section, next_section) }}</span>
+          </a>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </main>
+
+    <aside class="docs-rail" aria-label="En esta página">
+      {% block rail %}{% endblock %}
+    </aside>
+
+  </div>
+  {% endblock %}
+</div>
+
+<script>
+  // On-page anchors: click an h2's ¶ to copy a deep link.
+  document.querySelectorAll(".docs-content h2[id]").forEach(h => {
+    const a = document.createElement("a");
+    a.href = "#" + h.id; a.className = "anchor"; a.textContent = "¶";
+    a.title = "Copiar link a esta sección";
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const url = location.origin + location.pathname + "#" + h.id;
+      navigator.clipboard.writeText(url).catch(()=>{});
+      history.replaceState(null, "", "#" + h.id);
+    });
+    h.appendChild(a);
+  });
+  // Keep right-rail anchor highlighted while scrolling
+  const rail = document.querySelector(".docs-rail nav");
+  if (rail) {
+    const anchors = [...rail.querySelectorAll("a")];
+    const targets = anchors
+      .map(a => document.getElementById(a.getAttribute("href").slice(1)))
+      .filter(Boolean);
+    function update() {
+      const y = window.scrollY + 120;
+      let active = targets[0];
+      for (const t of targets) { if (t.offsetTop <= y) active = t; }
+      anchors.forEach(a => a.classList.toggle(
+        "is-active",
+        a.getAttribute("href") === "#" + active.id
+      ));
+    }
+    window.addEventListener("scroll", update, { passive: true });
+    update();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo prePod se conecta con la suite</h1>
+  <p class="lede">prePod es la primera capa: todo lo que planeas acá viaja a las otras dos apps automáticamente.</p>
+</header>
+
+<section id="hacia-prodpod">
+  <h2><span class="num">01</span> prePod a prodPod</h2>
+  <p>Cuando haces clic en <strong>Enviar a prodPod</strong> en un episodio, se crea automáticamente una sesión de grabación que incluye:</p>
+  <ul>
+    <li><strong>Roster de invitados</strong>: nombres, roles y emails para que puedas invitarlos directamente desde prodPod.</li>
+    <li><strong>Soundboard</strong>: todos los sonidos que configuraste en la biblioteca del podcast, listos para usar durante la grabación.</li>
+    <li><strong>Marcadores planificados</strong>: los bloques del rundown se convierten en marcadores de capítulo que el host puede activar durante la grabación.</li>
+    <li><strong>Branding</strong>: colores y logo del podcast para la interfaz del estudio.</li>
+  </ul>
+  <p>Una vez que la grabación está en curso, el episodio en prePod muestra el estado en tiempo real: "grabando ahora" o "grabación lista".</p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>Reenviar al mismo episodio actualiza la sesión existente — no crea una nueva. Útil si agregaste un invitado a último momento.</p></div>
+  </div>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> prePod a postPod</h2>
+  <p>
+    Cuando haces clic en <strong>Enviar a postPod</strong>, se crea un proyecto de edición vinculado al episodio.
+    Si el episodio ya fue grabado en prodPod, las grabaciones ya están disponibles en el proyecto.
+  </p>
+</section>
+
+<section id="calendario-ics">
+  <h2><span class="num">03</span> Calendario y .ics</h2>
+  <p>Puedes descargar la agenda de grabación como archivo .ics:</p>
+  <ul>
+    <li><strong>Por episodio</strong>: botón "Descargar .ics" en el detalle del episodio.</li>
+    <li><strong>Todo el podcast</strong>: botón de descarga en la vista de Calendario.</li>
+  </ul>
+  <p>Los archivos son compatibles con Google Calendar, Outlook y Apple Calendar.</p>
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>El .ics es una descarga puntual. Si cambias la fecha de un episodio, descarga el archivo nuevamente para actualizar tu calendario externo.</p></div>
+  </div>
+</section>
+
+<section id="invitaciones-email">
+  <h2><span class="num">04</span> Invitaciones por email</h2>
+  <p>
+    Si tu instancia tiene email configurado, las invitaciones RSVP se envían directamente al correo del invitado
+    con un archivo .ics adjunto. Si no está configurado, puedes copiar el link de invitación y enviarlo
+    manualmente por cualquier otro medio (WhatsApp, email, etc.).
+  </p>
+  <p>El invitado confirma con un solo clic, sin necesitar cuenta en thePod.</p>
+</section>
+
+<section id="landing-rss">
+  <h2><span class="num">05</span> Landing pública y RSS</h2>
+  <p>La landing pública de tu podcast es accesible sin login. Incluye:</p>
+  <ul>
+    <li>Lista de episodios (si la activaste).</li>
+    <li>Sección de equipo.</li>
+    <li>Contenido personalizado (bloques de texto, imágenes, etc.).</li>
+    <li><strong>Feed RSS</strong> compatible con Apple Podcasts, Spotify, Google Podcasts y otros directorios de podcasts.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#hacia-prodpod">prePod a prodPod</a>
+  <a href="#hacia-postpod">prePod a postPod</a>
+  <a href="#calendario-ics">Calendario .ics</a>
+  <a href="#invitaciones-email">Invitaciones</a>
+  <a href="#landing-rss">Landing y RSS</a>
+</nav>
+{% endblock %}

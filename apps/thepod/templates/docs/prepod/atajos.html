@@ -1,0 +1,111 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Atajos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">ATAJOS DE TECLADO</div>
+  <h1>Teclas rápidas y gestos de mouse</h1>
+  <p class="lede">Atajos para trabajar más ágil en prePod sin depender del mouse.</p>
+</header>
+
+<section id="teclado">
+  <h2><span class="num">01</span> Teclado</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>Ctrl</kbd>+<kbd>N</kbd></div></td>
+        <td class="desc"><strong>Ir al tablero de episodios</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></div></td>
+        <td class="desc"><strong>Enviar idea</strong> en el panel de Ideas</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Cerrar modal activo</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Los atajos de teclado solo funcionan cuando no tienes el cursor dentro de un campo de texto.</p></div>
+  </div>
+</section>
+
+<section id="kanban-gestos">
+  <h2><span class="num">02</span> Kanban</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesto</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Arrastrar episodio entre columnas</div></td>
+        <td class="desc"><strong>Cambiar el estado</strong> del episodio</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Flechas arriba/abajo en tarjeta</div></td>
+        <td class="desc"><strong>Cambiar posición</strong> en la landing pública</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="calendario-gestos">
+  <h2><span class="num">03</span> Calendario</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesto</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Clic en un día vacío</div></td>
+        <td class="desc"><strong>Crear episodio</strong> en esa fecha</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Clic en un episodio</div></td>
+        <td class="desc"><strong>Abrir el detalle</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Arrastrar episodio a otro día</div></td>
+        <td class="desc"><strong>Reprogramar</strong> (se conserva la hora)</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="rundown-gestos">
+  <h2><span class="num">04</span> Rundown</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesto</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Arrastrar bloque por el asa</div></td>
+        <td class="desc"><strong>Reordenar bloques</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="guion-gestos">
+  <h2><span class="num">05</span> Guion</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesto</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Flechas arriba/abajo por sección</div></td>
+        <td class="desc"><strong>Reordenar secciones</strong> del guion</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#teclado">Teclado</a>
+  <a href="#kanban-gestos">Kanban</a>
+  <a href="#calendario-gestos">Calendario</a>
+  <a href="#rundown-gestos">Rundown</a>
+  <a href="#guion-gestos">Guion</a>
+</nav>
+{% endblock %}

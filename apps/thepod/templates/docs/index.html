@@ -1,0 +1,88 @@
+{% extends "docs/_base.html" %}
+
+{% set theme = "hub" %}
+{% block title %}Docs · thePod{% endblock %}
+{% block description %}Documentación visual de la suite thePod: prePod (preproducción), prodPod (estudio en vivo) y postPod (edición y publicación).{% endblock %}
+
+{% block body %}
+<div style="max-width: 980px; margin: 0 auto;">
+
+  <section class="docs-index-hero">
+    <div class="eyebrow" style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 14px;">
+      DOCUMENTACIÓN · suite end-to-end
+    </div>
+    <h1>Tu podcast, de la <em>idea</em> a la publicación.</h1>
+    <p class="lede">
+      thePod orquesta tres apps que se hablan entre sí. Acá vas a entender qué hace cada una, cómo se conectan, y cómo sacarles todo en menos de una hora.
+    </p>
+  </section>
+
+  <div class="docs-index-grid">
+
+    <a href="/docs/prepod" class="docs-index-card theme-prepod" style="--accent: #5a8bff; --accent-soft: rgba(90,139,255,0.14); --accent-dim: rgba(90,139,255,0.45);">
+      <span class="icon">🎙</span>
+      <div class="tag">Preproducción</div>
+      <div class="name">prePod</div>
+      <p class="desc">Branding del podcast, kanban de episodios, rundown, guion, invitados con RSVP, calendario y plantillas recurrentes.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/prodpod" class="docs-index-card theme-prodpod" style="--accent: #ff6b6b; --accent-soft: rgba(255,107,107,0.14); --accent-dim: rgba(255,107,107,0.45);">
+      <span class="icon">🔴</span>
+      <div class="tag">Estudio en vivo</div>
+      <div class="name">prodPod</div>
+      <p class="desc">Grabación remota WebRTC con video multipista, mic check, soundboard, chat backstage, screen share y RTMP a YouTube/Twitch.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/postpod" class="docs-index-card theme-postpod" style="--accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45);">
+      <span class="icon">🎬</span>
+      <div class="tag">Edición y publicación</div>
+      <div class="name">postPod</div>
+      <p class="desc">Edición no-destructiva, momentos, captions Whisper, edición por transcripción, speech enhancement y export con notas auto.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+  </div>
+
+  <section style="margin-top: 56px; padding-top: 36px; border-top: 1px solid var(--ink-line);">
+    <div class="eyebrow" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--paper-dim); font-weight: 600; margin-bottom: 12px;">
+      ¿CÓMO SE CONECTAN?
+    </div>
+    <h2 style="font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: -0.018em; margin: 0 0 14px;">
+      El flujo natural
+    </h2>
+
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 16px; align-items: stretch; margin-top: 24px;">
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #5a8bff;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #5a8bff; font-weight: 700;">PREPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Planeas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Episodio + guion + invitados + calendario.</p>
+      </div>
+      <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #ff6b6b;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff6b6b; font-weight: 700;">PRODPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Grabas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Sesión en vivo, video multipista, marcadores.</p>
+      </div>
+      <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #f4c770;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #f4c770; font-weight: 700;">POSTPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Editas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Cortes, captions, mejoras, export listo para subir.</p>
+      </div>
+    </div>
+
+    <p style="margin-top: 22px; font-size: 14.5px; color: var(--paper-soft); line-height: 1.65; max-width: 70ch;">
+      Cada app pasa el contexto a la siguiente automáticamente: prePod le dice a prodPod quién participa y cuándo, prodPod le entrega a postPod los archivos grabados con marcadores. Una sola sesión, tres herramientas, cero copy-paste.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

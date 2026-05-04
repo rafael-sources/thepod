@@ -1,0 +1,189 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Funcionalidades — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FUNCIONALIDADES</div>
+  <h1>Cada herramienta del estudio en detalle</h1>
+  <p class="lede">Guía detallada de cada herramienta disponible en el estudio de prodPod.</p>
+</header>
+
+<section id="prejoin">
+  <h2><span class="num">01</span> Pre-join y mic check</h2>
+  <p>
+    Antes de entrar al estudio, seleccionas tu cámara y micrófono desde los menús desplegables.
+    Ves una vista previa de tu cámara y un medidor de nivel de audio en tiempo real.
+  </p>
+  <p>
+    El <strong>asistente de mic check</strong> graba 10 segundos de tu voz, analiza el nivel y sugiere un ajuste de ganancia.
+    Tu ajuste se recuerda para ese micrófono específico.
+  </p>
+  <p>Puedes elegir la calidad de video antes de conectar: Baja (360p), Media (480p) o Alta (720p).</p>
+</section>
+
+<section id="grilla">
+  <h2><span class="num">02</span> Grilla de participantes</h2>
+  <p>
+    La vista principal del estudio muestra a todos los participantes en una grilla de video.
+    El hablante activo (quien está hablando) recibe un borde destacado.
+    Cada recuadro muestra el nombre, rol, indicador de mute y medidor de audio.
+  </p>
+  <p>Los participantes invitados que aún no se conectaron aparecen atenuados en la grilla.</p>
+</section>
+
+<section id="ready-record">
+  <h2><span class="num">03</span> Ready, cuenta regresiva y grabación</h2>
+  <p>Cuando el host está listo para grabar:</p>
+  <ol>
+    <li><strong>Prepararse</strong>: el host hace clic en "Prepararse" para señalar que está casi listo.</li>
+    <li><strong>Listo</strong>: al hacer clic en "Listo", se inicia una cuenta regresiva de 3 segundos visible en todas las pantallas.</li>
+    <li><strong>Grabando</strong>: al llegar a cero, la grabación comienza simultáneamente en todos los navegadores. Aparece un indicador rojo con el tiempo transcurrido.</li>
+    <li><strong>Detener</strong>: el host hace clic en "Detener" para finalizar la grabación en todos los participantes.</li>
+  </ol>
+</section>
+
+<section id="soundboard">
+  <h2><span class="num">04</span> Soundboard</h2>
+  <p>Un panel de pads de sonido en la barra lateral. Cada pad tiene nombre, tecla de atajo y color.</p>
+  <ul>
+    <li><strong>Clic en un pad</strong> (o su tecla de atajo): reproduce el sonido y lo transmite a todos los participantes.</li>
+    <li><strong>Alt+clic</strong>: preview privado (cue) — solo tú lo escuchas, no se transmite.</li>
+    <li><strong>Esc</strong> o botón "Stop all": detiene todos los sonidos en reproducción.</li>
+  </ul>
+  <p>
+    Mientras un sonido suena, el audio de voz se baja automáticamente (ducking) para que el efecto se escuche claro.
+    Cada pad tiene un control de volumen individual.
+  </p>
+  <p>Los disparos de soundboard quedan registrados con su tiempo exacto para que postPod pueda ubicarlos en el timeline.</p>
+</section>
+
+<section id="screen-share">
+  <h2><span class="num">05</span> Compartir pantalla</h2>
+  <p>
+    Haz clic en el botón de pantalla para compartir tu pantalla, una ventana o una pestaña del navegador.
+    Solo una persona puede compartir a la vez.
+  </p>
+  <p>
+    La pantalla compartida aparece como un recuadro grande sobre la grilla y se graba como una pista separada.
+    Puedes activar el modo "solo pantalla" donde los participantes ven únicamente tu pantalla, sin tu cámara
+    — útil para demos o presentaciones.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">06</span> Chat (estudio y backstage)</h2>
+  <p>Dos paneles de chat:</p>
+  <ul>
+    <li><strong>Chat del estudio</strong>: todos los participantes lo ven. Para comunicación general durante la grabación.</li>
+    <li><strong>Backstage</strong>: solo el host y co-hosts lo ven. Para coordinación privada ("cerramos en 2 minutos", "saltea este tema", "buen momento para el corte").</li>
+  </ul>
+  <p>Los mensajes se guardan en el historial de la sesión.</p>
+</section>
+
+<section id="hand-raise">
+  <h2><span class="num">07</span> Levantar la mano</h2>
+  <p>
+    Los participantes pueden levantar la mano para señalar que quieren hablar o tienen algo que decir.
+    Aparece un indicador visual en su recuadro de video. Clic de nuevo para bajarla. Atajo: tecla <kbd>R</kbd>.
+  </p>
+</section>
+
+<section id="markers">
+  <h2><span class="num">08</span> Marcadores de capítulo</h2>
+  <p>
+    El host puede crear marcadores durante la grabación haciendo clic en el botón de momento o presionando <kbd>C</kbd>.
+  </p>
+  <p>
+    Los marcadores planificados (importados del rundown de prePod) aparecen en una lista — actívalos cuando llegues a ese punto de la grabación.
+    Los marcadores en vivo se crean sobre la marcha.
+  </p>
+  <p>Todos los marcadores incluyen un timestamp y se convierten en momentos cuando la grabación llega a postPod.</p>
+</section>
+
+<section id="practice">
+  <h2><span class="num">09</span> Modo práctica</h2>
+  <p>
+    Un modo de ensayo que funciona exactamente como una sesión real pero no graba.
+    Usa el toggle "Ensayo" en la barra superior.
+  </p>
+  <p>
+    Sirve para probar niveles de audio, practicar con el soundboard, verificar la pantalla compartida
+    y asegurarte de que todo funciona antes de la toma real.
+  </p>
+</section>
+
+<section id="rtmp">
+  <h2><span class="num">10</span> Streaming RTMP</h2>
+  <p>Transmite la sesión en vivo a YouTube, Twitch o un servidor RTMP personalizado:</p>
+  <ol>
+    <li>Haz clic en el botón "Stream" (solo el host lo ve).</li>
+    <li>Elige un preset (YouTube o Twitch) o ingresa una URL RTMP personalizada. Pega tu clave de stream.</li>
+    <li>La transmisión corre en paralelo con la grabación local. Tienes ambos: los archivos locales de alta calidad y la emisión en vivo.</li>
+  </ol>
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Necesitas al menos 5 Mbps estables de velocidad de subida para una transmisión sin cortes.</p></div>
+  </div>
+</section>
+
+<section id="diagnostico">
+  <h2><span class="num">11</span> Diagnóstico</h2>
+  <p>
+    Una herramienta del host que verifica el estado de la conexión y la sala.
+    Muestra cuántos participantes están conectados y si hay discrepancias.
+    Úsala si algo no parece funcionar correctamente.
+  </p>
+</section>
+
+<section id="kick">
+  <h2><span class="num">12</span> Expulsar participante</h2>
+  <p>El host puede remover a un participante de la sesión con el botón de kick. Úsalo si alguien entró por error o hay una interrupción.</p>
+</section>
+
+<section id="invitado">
+  <h2><span class="num">13</span> Experiencia del invitado</h2>
+  <p>
+    Los invitados reciben un link para unirse sin necesidad de cuenta en thePod.
+    Al abrirlo ven la información de la sesión y un botón para entrar.
+  </p>
+  <p>
+    Antes de entrar pasan por el mismo pre-join (selección de cámara/micrófono, vista previa).
+    Una vez dentro ven la grilla, el soundboard, el chat y pueden levantar la mano,
+    pero no tienen acceso a los controles del host (detener grabación, streaming, diagnóstico, invitaciones, kick).
+  </p>
+  <p>Su audio y video se graban localmente en su navegador con la misma calidad que los demás participantes.</p>
+</section>
+
+<section id="enviar-postpod">
+  <h2><span class="num">14</span> Enviar a postPod</h2>
+  <p>
+    Al finalizar la grabación, en el panel de grabaciones aparecen todas las pistas
+    (video + audio por participante, grabaciones de pantalla). Desde ahí:
+  </p>
+  <ul>
+    <li><strong>Descargar ZIP</strong>: baja todas las pistas en un archivo comprimido.</li>
+    <li><strong>Enviar a postPod</strong>: crea o actualiza un proyecto en postPod con todas las pistas como clips, los marcadores de capítulo como momentos, y los disparos de soundboard con sus timestamps.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#prejoin">Pre-join y mic check</a>
+  <a href="#grilla">Grilla</a>
+  <a href="#ready-record">Ready / Record</a>
+  <a href="#soundboard">Soundboard</a>
+  <a href="#screen-share">Compartir pantalla</a>
+  <a href="#chat">Chat / Backstage</a>
+  <a href="#hand-raise">Levantar la mano</a>
+  <a href="#markers">Marcadores</a>
+  <a href="#practice">Modo práctica</a>
+  <a href="#rtmp">Streaming RTMP</a>
+  <a href="#diagnostico">Diagnóstico</a>
+  <a href="#kick">Expulsar</a>
+  <a href="#invitado">Experiencia del invitado</a>
+  <a href="#enviar-postpod">Enviar a postPod</a>
+</nav>
+{% endblock %}

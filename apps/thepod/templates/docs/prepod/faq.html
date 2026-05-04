@@ -1,0 +1,97 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Respuestas a las dudas más comunes sobre prePod.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>¿Puedo tener más de un podcast?</summary>
+    <div class="ans">
+      <p>Sí. Puedes crear múltiples podcasts, cada uno con su propio branding, episodios, sponsors y landing.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo agrego un co-host?</summary>
+    <div class="ans">
+      <p>En la sección de Branding, busca "Hosts" y escribe el nombre de usuario de la persona. Debe tener cuenta en thePod.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Mis invitados necesitan cuenta en thePod?</summary>
+    <div class="ans">
+      <p>No. Los invitados reciben un link de RSVP que funciona sin cuenta. Solo necesitan cuenta si van a participar como co-host con acceso al panel de edición del podcast.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo cambiar el nombre (slug) de mi podcast?</summary>
+    <div class="ans">
+      <p>No directamente. El slug se genera al crear el podcast. Si necesitas cambiarlo, crea un podcast nuevo y reorganiza el contenido.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo funciona el autosave?</summary>
+    <div class="ans">
+      <p>En branding y episodios, los cambios se guardan automáticamente después de 60 segundos sin editar. También puedes guardar manualmente con el botón "Guardar". El guion se guarda por sección cada vez que dejas de escribir por medio segundo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Las invitaciones por email no llegan?</summary>
+    <div class="ans">
+      <p>El envío de email depende de la configuración de tu instancia. Si no funciona, usa la opción de copiar el link de invitación y envíalo por otro medio (WhatsApp, email manual, etc.).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo genero las show notes?</summary>
+    <div class="ans">
+      <p>Se generan automáticamente cuando el episodio pasa al estado "Publicado". Aparecen con los capítulos del rundown en formato compatible con YouTube, listos para copiar y pegar en la plataforma que uses.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo reordenar los episodios en la landing?</summary>
+    <div class="ans">
+      <p>Sí. Usa las flechas de posición (arriba/abajo) en cada tarjeta del kanban para cambiar el orden en que aparecen en la landing pública.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo exporto un reporte de sponsors?</summary>
+    <div class="ans">
+      <p>En el panel de Sponsors, haz clic en el icono de reporte del sponsor. Verás un resumen con el total de episodios y minutos, y un botón para descargar CSV con el detalle.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El calendario se sincroniza automáticamente?</summary>
+    <div class="ans">
+      <p>No. El archivo .ics es una descarga puntual. Si cambias la fecha de un episodio, necesitas descargar el .ics nuevamente para actualizar tu calendario externo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cambié el rundown de una plantilla, se actualizan los episodios viejos?</summary>
+    <div class="ans">
+      <p>No. La plantilla se aplica en el momento de crear el episodio. Modificar la plantilla después afecta solo a los episodios que crees en el futuro.</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq">Todas las preguntas</a>
+</nav>
+{% endblock %}

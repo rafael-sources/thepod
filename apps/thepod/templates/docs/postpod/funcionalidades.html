@@ -1,0 +1,316 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Funcionalidades — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FUNCIONALIDADES</div>
+  <h1>Cada herramienta en detalle</h1>
+  <p class="lede">Guía detallada de cada panel y herramienta de edición disponible en postPod.</p>
+</header>
+
+<section id="panel-archivos">
+  <h2><span class="num">01</span> Panel de archivos</h2>
+  <p>En la barra lateral izquierda. Tiene dos pestañas:</p>
+  <ul>
+    <li><strong>Proyecto</strong>: archivos subidos a este proyecto (o recibidos desde prodPod).</li>
+    <li><strong>Globales</strong>: biblioteca compartida de assets (música, efectos de sonido) disponible para todos los proyectos.</li>
+  </ul>
+  <p>Acciones por archivo:</p>
+  <ul>
+    <li>Clic para agregarlo al timeline.</li>
+    <li>Botón de captions para generar subtítulos con Whisper.</li>
+    <li>Mover a la biblioteca global.</li>
+    <li>Eliminar.</li>
+  </ul>
+  <p>Soporta subida de archivos de hasta 2 GB. Formatos: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (imagen).</p>
+</section>
+
+<section id="timeline">
+  <h2><span class="num">02</span> Timeline</h2>
+  <p>La barra horizontal central que muestra los clips en secuencia. Cada clip muestra su nombre, track y forma de onda.</p>
+  <p>Interacciones:</p>
+  <ul>
+    <li><strong>Clic en la regla</strong> (zona vacía): mover el playhead a ese punto.</li>
+    <li><strong>Arrastrar en la regla</strong>: seleccionar un rango (banda amarilla). Mientras arrastras, un tooltip muestra el tiempo y la duración.</li>
+    <li><strong>Arrastrar el playhead</strong> (cursor rojo): scrubbing frame a frame.</li>
+    <li><strong>Clic en un marcador</strong> (diamante): seleccionar ese momento y saltar a él.</li>
+  </ul>
+  <p>Los momentos aparecen como marcadores en forma de diamante sobre el timeline. Debajo del timeline principal está el <strong>audio lane</strong> para música de fondo.</p>
+</section>
+
+<section id="reproductor">
+  <h2><span class="num">03</span> Reproductor de video</h2>
+  <p>
+    Muestra el frame actual con todos los efectos activos aplicados en tiempo real: zooms, filtros de color, subtítulos, text overlays, preview vertical.
+    Cuando una operación vertical está activa, el reproductor cambia automáticamente a modo 9:16.
+  </p>
+  <p>Controles:</p>
+  <ul>
+    <li><strong>Espacio</strong>: play/pause.</li>
+    <li><strong>Clic en el video</strong>: alternar reproducción.</li>
+    <li><strong>Botón CC</strong>: activar/desactivar captions en vivo.</li>
+    <li><strong>Control de volumen</strong>: ajustar el volumen de reproducción.</li>
+    <li><strong>Botón Rango</strong>: reproducir el rango visible a velocidad normal.</li>
+    <li><strong>Botón Lento</strong>: estirar un rango a 10 segundos para revisión detallada.</li>
+  </ul>
+</section>
+
+<section id="zoom-timeline">
+  <h2><span class="num">04</span> Zoom del timeline</h2>
+  <p>Controles para acercar o alejar la vista del timeline:</p>
+  <ul>
+    <li>Botones <strong>+</strong> y <strong>-</strong> (o teclas <kbd>+</kbd> / <kbd>-</kbd>): zoom de 10% por paso.</li>
+    <li><kbd>Z</kbd>: hacer zoom al rango seleccionado.</li>
+    <li><kbd>Esc</kbd>: resetear el zoom a la vista completa.</li>
+  </ul>
+  <p>El zoom solo cambia la vista, no el contenido. Es útil para edición precisa de secciones cortas.</p>
+</section>
+
+<section id="tracks">
+  <h2><span class="num">05</span> Tracks (multicámara)</h2>
+  <p>
+    Los clips pueden asignarse a Track 1, Track 2 o más. Esto es para grabaciones multicámara donde quieres alternar entre ángulos.
+  </p>
+  <p>
+    En el panel de Clips (derecha), cada clip tiene un toggle de track (T1/T2). Usa la operación <strong>switch_video</strong> en un momento
+    para cambiar de cámara en ese punto. Los botones rápidos T1, T2 y el toggle en la lista de momentos crean cambios de track de forma inmediata.
+  </p>
+</section>
+
+<section id="momentos-operaciones">
+  <h2><span class="num">06</span> Momentos y operaciones</h2>
+  <p>Los momentos se crean presionando <kbd>M</kbd> o desde el panel de momentos debajo del timeline.</p>
+  <p>Al seleccionar un momento, el panel de operaciones (derecha) muestra:</p>
+  <ul>
+    <li>Resumen del momento: etiqueta (doble clic para editar), tiempo de inicio y fin (editables), tipo (relativo/absoluto, clic en el chip para cambiar).</li>
+    <li>Lista de operaciones existentes con botones de editar y eliminar.</li>
+    <li>Selector para agregar una nueva operación.</li>
+  </ul>
+  <p>Cada momento tiene botones de acción rápida:</p>
+  <ul>
+    <li><strong>Saltar</strong>: ir al momento en el timeline.</li>
+    <li><strong>Preview</strong>: reproducir desde un poco antes para ver el efecto entrar.</li>
+    <li><strong>Exportar</strong>: abrir el modal de exportación con el rango del momento pre-cargado.</li>
+    <li><strong>Eliminar</strong>.</li>
+  </ul>
+</section>
+
+<section id="zoom-inout">
+  <h2><span class="num">07</span> Zoom in y zoom out</h2>
+  <p><strong>Zoom in</strong> acerca la imagen en un punto específico. Configuras:</p>
+  <ul>
+    <li><strong>Escala</strong> (1.0 a 3.0): cuánto se acerca.</li>
+    <li><strong>Punto focal</strong> (origin x/y): dónde centra el zoom.</li>
+    <li><strong>Duración</strong>: cuánto dura el efecto.</li>
+  </ul>
+  <p><strong>Zoom out</strong> vuelve a la vista normal. Solo necesitas definir la duración. El efecto se ve en tiempo real en el reproductor.</p>
+</section>
+
+<section id="color">
+  <h2><span class="num">08</span> Efectos de color</h2>
+  <p>Aplica un filtro visual al video durante un rango de tiempo:</p>
+  <ul>
+    <li><strong>Grayscale</strong>: blanco y negro.</li>
+    <li><strong>Sepia</strong>: tono cálido antiguo.</li>
+    <li><strong>Invert</strong>: colores invertidos.</li>
+  </ul>
+  <p>Define la duración del efecto. Se previsualiza en tiempo real.</p>
+</section>
+
+<section id="subtitulos">
+  <h2><span class="num">09</span> Subtítulos (subtitle)</h2>
+  <p>
+    Texto que aparece sobre el video en la parte superior o inferior. Configuras el texto, la posición (top/bottom) y la duración.
+    Diferente de los captions generados por Whisper — este es texto manual que tú escribes.
+  </p>
+</section>
+
+<section id="audio-ops">
+  <h2><span class="num">10</span> Audio mix y audio replace</h2>
+  <ul>
+    <li><strong>Audio mix</strong>: mezcla un archivo de sonido sobre el audio existente. Puedes elegir archivos locales del proyecto o de la biblioteca global. Ajustas volumen y duración.</li>
+    <li><strong>Audio replace</strong>: reemplaza completamente el audio del video por otro archivo durante una duración específica.</li>
+  </ul>
+</section>
+
+<section id="to-vertical">
+  <h2><span class="num">11</span> To vertical (9:16)</h2>
+  <p>
+    Recorta un video 16:9 a formato vertical 9:16 para TikTok, Reels o Shorts. Configuras:
+  </p>
+  <ul>
+    <li><strong>Centro horizontal</strong> (crop x): deslizador para encuadrar al sujeto. 0.0 = izquierda, 0.5 = centro, 1.0 = derecha.</li>
+    <li><strong>Duración</strong>: cuánto dura el recorte (vacío = hasta el siguiente momento o fin del timeline).</li>
+  </ul>
+  <p>Usa este modo cuando tu video tiene <strong>una sola cámara</strong> y quieres recortar para vertical. El reproductor cambia a preview 9:16 cuando esta operación está activa.</p>
+</section>
+
+<section id="vertical-split">
+  <h2><span class="num">12</span> Vertical split (TikTok apilado)</h2>
+  <p>
+    Para videos <strong>composite</strong> (dos o más cámaras lado a lado en un mismo archivo).
+    Toma el frame horizontal y apila las cámaras en vertical para 9:16.
+  </p>
+  <p>Configuras:</p>
+  <ul>
+    <li><strong>Cantidad de cámaras</strong> (2, 3 o 4).</li>
+    <li><strong>Centro horizontal por panel</strong>: un deslizador por cada cámara para centrar la cara.</li>
+    <li><strong>Duración</strong>.</li>
+  </ul>
+  <p>Pasos:</p>
+  <ol>
+    <li>Selecciona un momento, agrega "Vertical 9:16 apilado (TikTok)" y configura las cámaras.</li>
+    <li>El reproductor muestra los paneles apilados. Si tienes clips en múltiples tracks, los muestra combinados.</li>
+    <li>Haz clic en el botón de exportar del momento (icono de flecha). Se abre el modal con el rango pre-cargado. Elige el preset <strong>TikTok / Reels vertical</strong> (1080x1920) y exporta.</li>
+  </ol>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>El botón de exportar en cada momento es la forma más rápida de generar un clip vertical de una sección específica.</p></div>
+  </div>
+</section>
+
+<section id="text-overlay">
+  <h2><span class="num">13</span> Text overlay (sticker de texto)</h2>
+  <p>Texto estilo cómic que aparece sobre el video con animación. Configuras:</p>
+  <ul>
+    <li><strong>Texto</strong>: lo que quieres que diga (ej: "POW!", "BOOM!", "WOW").</li>
+    <li><strong>Fuente</strong>: Bangers, Titan One, Luckiest Guy o Permanent Marker.</li>
+    <li><strong>Color</strong>: selector de color.</li>
+    <li><strong>Tamaño</strong>: porcentaje del frame.</li>
+    <li><strong>Posición</strong>: arrastra directamente en el reproductor para mover el texto.</li>
+    <li><strong>Rotación</strong>: usa el asa de rotación en el reproductor para inclinar.</li>
+    <li><strong>Outline y shadow</strong>: activar/desactivar borde y sombra.</li>
+    <li><strong>Duración</strong>: cuánto tiempo aparece el sticker.</li>
+    <li><strong>Sonido</strong> (opcional): elige un archivo de audio que suene cuando aparece el texto.</li>
+  </ul>
+  <p>La edición es WYSIWYG: mueves, redimensionas y rotas el texto directamente sobre el video en el reproductor.</p>
+</section>
+
+<section id="remove-silences">
+  <h2><span class="num">14</span> Remove silences (eliminar silencios)</h2>
+  <p>Analiza un rango de audio y corta automáticamente las secciones silenciosas. Configuras:</p>
+  <ul>
+    <li><strong>Umbral (dB)</strong>: qué tan silencioso debe ser para considerarse silencio (más negativo = silencio más profundo).</li>
+    <li><strong>Duración mínima</strong>: cuánto debe durar un silencio para ser cortado.</li>
+    <li><strong>Rango</strong>: la duración de audio a analizar desde el momento.</li>
+  </ul>
+  <p>El sistema muestra cuántos segmentos encontró y cuántos segundos se eliminarían antes de aplicar.</p>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">15</span> Editor de transcript</h2>
+  <p>Un editor de texto completo que muestra la transcripción de tus clips. Ábrelo desde la barra de herramientas.</p>
+  <ul>
+    <li><strong>Clic en una palabra</strong>: el reproductor salta a ese punto del video.</li>
+    <li><strong>Seleccionar y borrar texto</strong>: crea un corte de transcript — ese fragmento de audio/video se elimina del export.</li>
+    <li><strong>Resaltar muletillas</strong>: un checkbox que destaca automáticamente "eh", "um", "este", "o sea" y similares.</li>
+    <li><strong>Eliminar muletillas en lote</strong>: un botón que corta todas las muletillas detectadas de una vez.</li>
+    <li><strong>Restaurar cortes</strong>: cada corte puede deshacerse individualmente, o todos a la vez.</li>
+  </ul>
+  <p>Los cortes son no-destructivos — el archivo original no se toca.</p>
+</section>
+
+<section id="captions">
+  <h2><span class="num">16</span> Captions (Whisper)</h2>
+  <p>Genera subtítulos palabra por palabra para cualquier archivo de video o audio. En el panel de Archivos, haz clic en el botón de captions del archivo:</p>
+  <ol>
+    <li>Selecciona el <strong>idioma</strong> (español, inglés, portugués, etc.).</li>
+    <li>Selecciona el <strong>modelo</strong> (tiny, base, small, medium, large — más grande = más preciso pero más lento).</li>
+    <li>El proceso corre en segundo plano. Cuando termina, los captions aparecen como subtítulos en vivo durante la reproducción.</li>
+  </ol>
+  <p>Al exportar, puedes optar por <strong>quemar los captions</strong> en el video (aparecen siempre) o mantenerlos como archivo SRT independiente.</p>
+</section>
+
+<section id="audio-lane">
+  <h2><span class="num">17</span> Audio lane (pista paralela)</h2>
+  <p>Una pista de audio secundaria que suena junto con el timeline principal. Ideal para:</p>
+  <ul>
+    <li>Música de fondo.</li>
+    <li>Sonido ambiente.</li>
+    <li>Cortinas de intro/outro.</li>
+  </ul>
+  <p>Cada clip en el audio lane tiene:</p>
+  <ul>
+    <li><strong>Inicio y fin</strong> en el timeline.</li>
+    <li><strong>Control de volumen</strong> individual.</li>
+    <li><strong>Etiqueta</strong> descriptiva.</li>
+  </ul>
+  <p>Haz clic en un clip del lane para editarlo. Arrastra para reposicionar.</p>
+</section>
+
+<section id="exportacion">
+  <h2><span class="num">18</span> Exportación</h2>
+  <p>Haz clic en <strong>Exportar</strong> en la barra de herramientas. Elige un preset:</p>
+  <ul>
+    <li><strong>YouTube</strong>: 1080p o 4K, 30 o 60 fps.</li>
+    <li><strong>TikTok / Reels</strong>: 1080x1920 vertical, 30 fps.</li>
+    <li><strong>Instagram</strong>: 1080x1080 cuadrado, 30 fps.</li>
+    <li><strong>WhatsApp</strong>: 720p comprimido.</li>
+    <li><strong>Podcast</strong>: MP3 o M4A (solo audio).</li>
+  </ul>
+  <p>Opciones adicionales:</p>
+  <ul>
+    <li><strong>Quemar captions</strong>: incrusta los subtítulos en el video (selecciona idioma).</li>
+    <li><strong>Generar notas</strong>: crea un archivo .txt con capítulos (formato YouTube) y créditos, listo para pegar en Spotify, Apple o YouTube.</li>
+    <li><strong>Audio profesional</strong>: procesamiento de estudio (reducción de ruido, ecualización, compresión, normalización a -16 LUFS). Solo afecta la voz — la música de fondo pasa sin cambios.</li>
+    <li><strong>Exportar solo el rango</strong>: si tienes un rango seleccionado en el timeline, puedes exportar solo esa porción.</li>
+  </ul>
+  <p>El job corre en segundo plano con barra de progreso. Cuando termina: descarga, reproduce en nueva pestaña, o descarga las notas.</p>
+</section>
+
+<section id="exportar-momento">
+  <h2><span class="num">19</span> Exportar este momento</h2>
+  <p>Cada momento en la lista tiene un botón de exportar (icono de flecha). Al hacer clic:</p>
+  <ol>
+    <li>Se calcula el rango del momento (desde su inicio hasta su fin, o hasta el siguiente momento si no tiene duración definida).</li>
+    <li>Se abre el modal de exportación con el rango pre-cargado y el checkbox "Exportar solo el rango seleccionado" ya activado.</li>
+    <li>Solo necesitas elegir el preset y exportar.</li>
+  </ol>
+  <p>Especialmente útil para <strong>vertical split</strong>: aplicas la operación al momento, haces clic en exportar, eliges TikTok vertical, y obtienes un clip listo para subir.</p>
+</section>
+
+<section id="reordenar">
+  <h2><span class="num">20</span> Reordenar clips</h2>
+  <p>
+    En el panel de Clips (derecha), arrastra los clips por el asa (icono de 6 puntos) para reordenarlos en el timeline.
+    El timeline se actualiza inmediatamente.
+  </p>
+  <p>Cada clip muestra: nombre del archivo, track actual, botones para mover arriba/abajo, botón de seek (ir a ese clip), recortar (trim IN/OUT) y eliminar.</p>
+</section>
+
+<section id="volumen-clip">
+  <h2><span class="num">21</span> Volumen por clip</h2>
+  <p>
+    Cada clip puede tener su propio ajuste de volumen. Haz clic en un clip en el panel de Clips para abrir el editor,
+    donde puedes ajustar el volumen individual además de los puntos de recorte y la asignación de track.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#panel-archivos">Panel de archivos</a>
+  <a href="#timeline">Timeline</a>
+  <a href="#reproductor">Reproductor</a>
+  <a href="#zoom-timeline">Zoom del timeline</a>
+  <a href="#tracks">Tracks</a>
+  <a href="#momentos-operaciones">Momentos y operaciones</a>
+  <a href="#zoom-inout">Zoom in/out</a>
+  <a href="#color">Efectos de color</a>
+  <a href="#subtitulos">Subtítulos</a>
+  <a href="#audio-ops">Audio mix/replace</a>
+  <a href="#to-vertical">To vertical</a>
+  <a href="#vertical-split">Vertical split</a>
+  <a href="#text-overlay">Text overlay</a>
+  <a href="#remove-silences">Remove silences</a>
+  <a href="#transcript">Transcript</a>
+  <a href="#captions">Captions</a>
+  <a href="#audio-lane">Audio lane</a>
+  <a href="#exportacion">Exportación</a>
+  <a href="#exportar-momento">Exportar momento</a>
+  <a href="#reordenar">Reordenar clips</a>
+  <a href="#volumen-clip">Volumen por clip</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo prodPod se conecta con la suite</h1>
+  <p class="lede">prodPod es la capa del medio: recibe contexto de prePod y empuja resultados a postPod.</p>
+</header>
+
+<section id="desde-prepod">
+  <h2><span class="num">01</span> Desde prePod</h2>
+  <p>Cuando un episodio se envía desde prePod, prodPod recibe automáticamente:</p>
+  <ul>
+    <li><strong>Roster de invitados</strong>: nombres, roles y emails, listos para generar links de invitación.</li>
+    <li><strong>Soundboard</strong>: todos los sonidos configurados en el podcast, con sus nombres, atajos y colores.</li>
+    <li><strong>Marcadores planificados</strong>: los bloques del rundown se convierten en marcadores de capítulo que puedes activar durante la grabación.</li>
+    <li><strong>Branding</strong>: colores y logo del podcast para la interfaz del estudio.</li>
+  </ul>
+  <p>No necesitas configurar nada — todo llega cuando el host hace clic en "Enviar a prodPod" desde prePod.</p>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> Hacia postPod</h2>
+  <p>Al finalizar una grabación, puedes enviarla a postPod. Lo que se envía:</p>
+  <ul>
+    <li><strong>Pistas de audio y video</strong> de cada participante (archivos separados para edición precisa).</li>
+    <li><strong>Grabaciones de pantalla</strong> compartida (como pistas adicionales).</li>
+    <li><strong>Marcadores de capítulo</strong>: tanto los planificados del rundown como los creados en vivo durante la grabación.</li>
+    <li><strong>Timestamps de soundboard</strong>: cada disparo de sonido queda registrado con su tiempo exacto.</li>
+  </ul>
+  <p>En postPod se crea (o actualiza) un proyecto con todos estos archivos como clips listos para agregar al timeline.</p>
+</section>
+
+<section id="rtmp">
+  <h2><span class="num">03</span> Streaming RTMP</h2>
+  <p>
+    Presets incluidos para YouTube y Twitch. Solo necesitas pegar tu clave de stream.
+    También puedes usar una URL RTMP personalizada para otras plataformas o servidores propios.
+  </p>
+  <p>El streaming funciona en paralelo con la grabación local — no sacrificas calidad por transmitir en vivo.</p>
+</section>
+
+<section id="estado-prepod">
+  <h2><span class="num">04</span> Estado de producción en prePod</h2>
+  <p>
+    Mientras grabas, prePod muestra el estado de la sesión en tiempo real en el detalle del episodio:
+    "grabando ahora" o "grabación lista". Así el equipo de planificación sabe en qué punto está la producción
+    sin necesidad de preguntar.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#desde-prepod">Desde prePod</a>
+  <a href="#hacia-postpod">Hacia postPod</a>
+  <a href="#rtmp">Streaming RTMP</a>
+  <a href="#estado-prepod">Estado en prePod</a>
+</nav>
+{% endblock %}

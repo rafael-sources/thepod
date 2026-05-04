@@ -1,0 +1,128 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Atajos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">ATAJOS DE TECLADO</div>
+  <h1>Teclas rápidas y gestos de mouse</h1>
+  <p class="lede">Atajos para editar de forma eficiente en postPod sin depender del mouse.</p>
+</header>
+
+<section id="reproductor">
+  <h2><span class="num">01</span> Reproductor y navegación</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>Espacio</kbd></div></td>
+        <td class="desc"><strong>Reproducir / pausar</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>←</kbd></div></td>
+        <td class="desc"><strong>Retroceder 5 segundos</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>→</kbd></div></td>
+        <td class="desc"><strong>Avanzar 5 segundos</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd> + <kbd>←</kbd></div></td>
+        <td class="desc"><strong>Retroceder 1 segundo</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd> + <kbd>→</kbd></div></td>
+        <td class="desc"><strong>Avanzar 1 segundo</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>M</kbd></div></td>
+        <td class="desc"><strong>Capturar momento</strong> en el tiempo actual</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>+</kbd></div></td>
+        <td class="desc"><strong>Acercar</strong> el zoom del timeline 10%</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>-</kbd></div></td>
+        <td class="desc"><strong>Alejar</strong> el zoom del timeline 10%</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Z</kbd></div></td>
+        <td class="desc"><strong>Hacer zoom</strong> al rango seleccionado</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>L</kbd></div></td>
+        <td class="desc"><strong>Activar / desactivar loop</strong> del rango seleccionado</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Limpiar selección</strong> de rango / resetear zoom</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="timeline-mouse">
+  <h2><span class="num">02</span> Timeline (gestos de mouse)</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesto</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Clic en la regla</div></td>
+        <td class="desc"><strong>Mover el playhead</strong> a ese punto</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Arrastrar en la regla</div></td>
+        <td class="desc"><strong>Seleccionar un rango</strong> (banda amarilla)</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Arrastrar el playhead (cursor rojo)</div></td>
+        <td class="desc"><strong>Scrubbing</strong> frame a frame</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Doble clic en un clip</div></td>
+        <td class="desc"><strong>Abrir el editor</strong> del clip</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Clic en un marcador de momento</div></td>
+        <td class="desc"><strong>Seleccionar ese momento</strong> y saltar</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">03</span> Editor de transcript</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Acción</th><th>Resultado</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Clic en una palabra</div></td>
+        <td class="desc"><strong>El reproductor salta</strong> a ese tiempo</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Seleccionar texto y borrar (<kbd>Delete</kbd> / <kbd>Backspace</kbd>)</div></td>
+        <td class="desc"><strong>Corta esa sección</strong> del audio/video</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Limpiar selección</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Los atajos de teclado solo funcionan cuando no tienes el cursor dentro de un campo de texto.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#reproductor">Reproductor y navegación</a>
+  <a href="#timeline-mouse">Timeline (mouse)</a>
+  <a href="#transcript">Editor de transcript</a>
+</nav>
+{% endblock %}
