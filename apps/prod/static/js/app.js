@@ -899,8 +899,23 @@ var StudioView = {
     async function exportToPostpod() {
       if (exporting.value) return;
       exporting.value = true;
-      exportStatus.value = "enviando pistas a postPod…";
+      exportStatus.value = "ESPERANDO QUE ESTÉN DISPONIBLES…";
       try {
+        var connectedCount = participants.value.filter(function (p) {
+          return p.status === "connected" || p.status === "active" || p.status === "left" || p.status === "disconnected";
+        }).length;
+        if (connectedCount < 1) connectedCount = 1;
+        var maxWait = 60;
+        var waited = 0;
+        while (waited < maxWait) {
+          await loadRecordings();
+          var videoCount = finishedRecordings.value.filter(function (r) { return r.track_type === "video"; }).length;
+          if (videoCount >= connectedCount) break;
+          exportStatus.value = "ESPERANDO QUE ESTÉN DISPONIBLES… (" + videoCount + "/" + connectedCount + " pistas)";
+          await new Promise(function (ok) { setTimeout(ok, 3000); });
+          waited += 3;
+        }
+        exportStatus.value = "enviando pistas a postPod…";
         var r = await api("/api/sessions/" + props.session.id + "/recordings/export-to-postpod", { method: "POST" });
         if (r.exported === 0 && r.failed === 0) {
           exportStatus.value = "sin pistas nuevas para enviar";
