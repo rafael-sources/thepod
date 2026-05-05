@@ -7,6 +7,7 @@ from pathlib import Path
 
 from flask import Flask, Response, abort, render_template, send_from_directory
 
+import ai_api
 import auth
 import captions
 import export_api
@@ -104,6 +105,7 @@ def create_app():
     app.register_blueprint(integrations.bp)
     app.register_blueprint(captions.bp)
     app.register_blueprint(transcript_api.bp)
+    app.register_blueprint(ai_api.bp)
 
     # Per-project access guard for restricted users.
     import re as _re
