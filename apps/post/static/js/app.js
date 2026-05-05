@@ -3590,9 +3590,154 @@ var SilenceModal = {
   `,
 };
 
+var AiPanel = {
+  props: { slug: String, moments: Array },
+  emits: ['moment-created'],
+  setup(props, { emit }) {
+    const notes = ref(null);       // { summary, highlights, generated_at }
+    const clips = ref([]);
+    const activeJob = ref(null);
+    const loading = ref(false);
+    let pollTimer = null;
+
+    async function loadResults() {
+      try {
+        const data = await api(`/api/projects/${props.slug}/ai/results`);
+        if (data.notes) {
+          notes.value = {
+            summary: data.notes.summary,
+            highlights: data.notes.highlights || [],
+            generated_at: data.notes.created_at,
+          };
+        }
+        if (data.clips) {
+          const clipsData = data.clips.clips || [];
+          clips.value = clipsData.map(c => ({ ...c, _created: false }));
+        }
+        activeJob.value = data.active_job;
+        if (data.active_job && ['pending', 'running'].includes(data.active_job.status)) {
+          startPoll();
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function startPoll() {
+      if (pollTimer) return;
+      pollTimer = setInterval(async () => {
+        await loadResults();
+        if (!activeJob.value || !['pending', 'running'].includes(activeJob.value.status)) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }, 3000);
+    }
+
+    async function startAnalysis() {
+      loading.value = true;
+      try {
+        const job = await api(`/api/projects/${props.slug}/ai/analyze`, { method: 'POST' });
+        activeJob.value = job;
+        startPoll();
+      } catch (e) { activeJob.value = { status: 'error', error_msg: e.message }; }
+      finally { loading.value = false; }
+    }
+
+    async function regenNotes() {
+      const job = await api(`/api/projects/${props.slug}/ai/regenerate-notes`, { method: 'POST' });
+      activeJob.value = job;
+      startPoll();
+    }
+
+    async function regenClips() {
+      const job = await api(`/api/projects/${props.slug}/ai/regenerate-clips`, { method: 'POST' });
+      activeJob.value = job;
+      startPoll();
+    }
+
+    function parseTimestamp(ts) {
+      const parts = ts.split(':').map(Number);
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+
+    async function createMoment(clip) {
+      const startSec = parseTimestamp(clip.start);
+      const endSec = parseTimestamp(clip.end);
+      const body = {
+        type: 'absolute',
+        timeline_seconds: startSec,
+        duration_seconds: endSec - startSec,
+        label: `[AI] ${clip.title}`,
+      };
+      await api(`/api/projects/${props.slug}/moments`, { method: 'POST', body });
+      clip._created = true;
+      emit('moment-created');
+    }
+
+    async function createAll() {
+      for (const clip of clips.value) {
+        if (!clip._created) await createMoment(clip);
+      }
+    }
+
+    onMounted(loadResults);
+    onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer); });
+
+    return { notes, clips, activeJob, loading, startAnalysis, regenNotes, regenClips, createMoment, createAll };
+  },
+  template: `
+    <div class="ai-panel">
+      <h3>
+        AI Show Notes
+        <button v-if="!notes && !activeJob" class="ai-btn ai-btn-primary" @click="startAnalysis" :disabled="loading">
+          {{ loading ? 'Iniciando...' : 'Analizar episodio' }}
+        </button>
+        <button v-if="notes" class="ai-btn" @click="regenNotes">Regenerar notas</button>
+      </h3>
+
+      <div v-if="activeJob && ['pending','running'].includes(activeJob.status)" class="ai-status">
+        Analizando episodio...
+      </div>
+      <div v-if="activeJob && activeJob.status === 'error'" class="ai-error">
+        Error: {{ activeJob.error_msg }}
+      </div>
+
+      <template v-if="notes">
+        <div class="ai-summary">{{ notes.summary }}</div>
+        <ul class="ai-highlights">
+          <li v-for="h in notes.highlights" :key="h">{{ h }}</li>
+        </ul>
+      </template>
+
+      <template v-if="clips.length">
+        <h3 style="margin-top:1rem;">
+          Clips sugeridos
+          <button class="ai-btn" @click="createAll">Crear todos</button>
+          <button class="ai-btn" @click="regenClips">Regenerar</button>
+        </h3>
+        <div class="ai-clips-grid">
+          <div class="ai-clip-card" v-for="clip in clips" :key="clip.start+clip.end">
+            <h4>{{ clip.title }}</h4>
+            <div class="clip-meta">
+              {{ clip.start }} - {{ clip.end }}
+              <span class="ai-clip-type">{{ clip.type }}</span>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-3,#6c7086);">{{ clip.reason }}</div>
+            <div class="ai-clip-actions">
+              <button @click="createMoment(clip)" :disabled="clip._created">
+                {{ clip._created ? 'Creado' : 'Crear momento' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  `,
+};
+
 var ProjectView = {
   props: { project: Object, onBack: Function },
-  components: { FilesPanel, VideoPlayer, Timeline, ZoomControls, MomentsList, CaptureMomentModal, ClipsPanel, OperationsPanel, SilenceModal, ExportModal, TranscriptEditor, ParticipantsPanel },
+  components: { FilesPanel, VideoPlayer, Timeline, ZoomControls, MomentsList, CaptureMomentModal, ClipsPanel, OperationsPanel, SilenceModal, ExportModal, TranscriptEditor, ParticipantsPanel, AiPanel },
   setup(props) {
     const timeline = reactive({ clips: [], moments: [], duration: 0, audioLane: [] });
     const silenceClip = ref(null);
@@ -4605,6 +4750,8 @@ var ProjectView = {
                         @close="showTranscript = false"
                         @seek="onSeek"
                         @cuts-changed="() => {}" />
+
+      <AiPanel :slug="project.slug" :moments="timeline.moments" @moment-created="loadTimeline" />
 
       <div v-if="prodpodPrompt" class="modal-backdrop" @click.self="prodpodPrompt = null">
         <div class="modal" style="width: 460px;">

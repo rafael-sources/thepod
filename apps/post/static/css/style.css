@@ -2496,3 +2496,25 @@ a.mark:hover { opacity: 0.8; }
   font-weight: 700;
   pointer-events: none;
 }
+
+/* --- AI Analysis Panel --- */
+.ai-panel { margin-top: 1.5rem; padding: 1rem; background: var(--surface-2, #1e1e2e); border-radius: 8px; }
+.ai-panel h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--text-1, #cdd6f4); display: flex; align-items: center; gap: 0.5rem; }
+.ai-summary { font-size: 0.9rem; line-height: 1.5; color: var(--text-2, #a6adc8); white-space: pre-wrap; }
+.ai-highlights { list-style: disc; padding-left: 1.2rem; margin: 0.75rem 0; }
+.ai-highlights li { font-size: 0.85rem; color: var(--text-2, #a6adc8); margin-bottom: 0.3rem; }
+.ai-clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.ai-clip-card { background: var(--surface-3, #313244); border-radius: 6px; padding: 0.75rem; border: 1px solid var(--border, #45475a); }
+.ai-clip-card h4 { margin: 0 0 0.25rem; font-size: 0.85rem; color: var(--text-1, #cdd6f4); }
+.ai-clip-card .clip-meta { font-size: 0.75rem; color: var(--text-3, #6c7086); margin-bottom: 0.5rem; }
+.ai-clip-type { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); margin-left: 0.4rem; }
+.ai-clip-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.ai-clip-actions button { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border, #45475a); background: transparent; color: var(--text-2, #a6adc8); cursor: pointer; }
+.ai-clip-actions button:hover { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); border-color: var(--accent, #89b4fa); }
+.ai-clip-actions button:disabled { opacity: 0.4; cursor: default; }
+.ai-status { font-size: 0.8rem; color: var(--accent, #89b4fa); padding: 0.5rem 0; }
+.ai-error { font-size: 0.8rem; color: var(--red, #f38ba8); padding: 0.5rem 0; }
+.ai-btn { font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border, #45475a); background: transparent; color: var(--text-2, #a6adc8); cursor: pointer; }
+.ai-btn:hover { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); }
+.ai-btn:disabled { opacity: 0.4; cursor: default; }
+.ai-btn-primary { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); border-color: var(--accent, #89b4fa); font-weight: 600; }
