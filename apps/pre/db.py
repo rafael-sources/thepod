@@ -236,6 +236,7 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "episodes", "scheduled_at", "scheduled_at TEXT")
     _ensure_column(conn, "podcast_meta", "owner_username", "owner_username TEXT")
     _ensure_column(conn, "podcast_meta", "extra_hosts", "extra_hosts TEXT")  # JSON array of usernames
+    _ensure_column(conn, "podcast_meta", "host_invitations", "host_invitations TEXT")  # JSON {username: {status, invited_by, invited_at, email_sent}}
     _ensure_column(conn, "podcast_meta", "color_bg", "color_bg TEXT")
     _ensure_column(conn, "podcast_meta", "color_text", "color_text TEXT")
     _ensure_column(conn, "podcast_meta", "color_text_align", "color_text_align TEXT")  # left|center|right|justify
@@ -263,6 +264,11 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "team_members", "social_youtube", "social_youtube TEXT")
     _ensure_column(conn, "team_members", "social_tiktok", "social_tiktok TEXT")
     _ensure_column(conn, "podcast_meta", "background_filename", "background_filename TEXT")
+    _ensure_column(conn, "episodes", "ai_summary", "ai_summary TEXT")
+    _ensure_column(conn, "episodes", "ai_highlights", "ai_highlights TEXT")
+    _ensure_column(conn, "episodes", "ai_notes_edited", "ai_notes_edited INTEGER DEFAULT 0")
+    _ensure_column(conn, "episodes", "ai_notes_synced_at", "ai_notes_synced_at TEXT")
+    _ensure_column(conn, "episodes", "media_url", "media_url TEXT")
     _migrate_episodes_check_archived(conn)
     return conn
 
