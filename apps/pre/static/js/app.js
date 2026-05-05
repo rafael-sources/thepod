@@ -78,10 +78,26 @@ var LoginView = {
     const username = ref("");
     const password = ref("");
     const error = ref("");
+    const success = ref("");
     const busy = ref(false);
+    const mode = ref("login"); // "login" | "forgot" | "reset"
+    const forgotId = ref("");
+    const resetToken = ref("");
+    const newPassword = ref("");
+    const newPassword2 = ref("");
+
+    // Check URL for reset token on mount
+    onMounted(() => {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get("token");
+      if (window.location.pathname === "/reset-password" && token) {
+        mode.value = "reset";
+        resetToken.value = token;
+      }
+    });
+
     async function submit() {
-      error.value = "";
-      busy.value = true;
+      error.value = ""; busy.value = true;
       try {
         const data = await api("/api/auth/login", {
           method: "POST",
@@ -91,28 +107,115 @@ var LoginView = {
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
-    return { username, password, error, busy, submit };
+
+    async function submitForgot() {
+      error.value = ""; success.value = ""; busy.value = true;
+      try {
+        var r = await api("/api/auth/forgot-password", {
+          method: "POST",
+          body: { identifier: forgotId.value },
+        });
+        success.value = r.message;
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+
+    async function submitReset() {
+      error.value = ""; success.value = "";
+      if (newPassword.value.length < 6) { error.value = "La contraseña debe tener al menos 6 caracteres."; return; }
+      if (newPassword.value !== newPassword2.value) { error.value = "Las contraseñas no coinciden."; return; }
+      busy.value = true;
+      try {
+        var r = await api("/api/auth/reset-password", {
+          method: "POST",
+          body: { token: resetToken.value, password: newPassword.value },
+        });
+        success.value = r.message;
+        setTimeout(function() { mode.value = "login"; window.history.replaceState({}, "", "/"); }, 2000);
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
+
+    return { username, password, error, success, busy, mode,
+             forgotId, resetToken, newPassword, newPassword2,
+             submit, submitForgot, submitReset };
   },
   template: `
     <div class="login-wrapper">
       <div class="login-card">
         <div class="eyebrow">GREEN ROOM · PRE-PRODUCCIÓN</div>
         <h2>pre<em>Pod</em></h2>
-        <div class="subtitle">Branding, episodios y planificación previos a la grabación.</div>
-        <form @submit.prevent="submit">
-          <div class="form-row">
-            <label>Operador</label>
-            <input type="text" v-model="username" autofocus autocomplete="username">
+
+        <!-- LOGIN -->
+        <template v-if="mode === 'login'">
+          <div class="subtitle">Branding, episodios y planificación previos a la grabación.</div>
+          <form @submit.prevent="submit">
+            <div class="form-row">
+              <label>Operador</label>
+              <input type="text" v-model="username" autofocus autocomplete="username">
+            </div>
+            <div class="form-row" style="margin-top:14px;">
+              <label>Clave</label>
+              <input type="password" v-model="password" autocomplete="current-password">
+            </div>
+            <div v-if="error" class="error">{{ error }}</div>
+            <button type="submit" class="primary" :disabled="busy">
+              {{ busy ? "Verificando…" : "Entrar a la sala" }}
+            </button>
+          </form>
+          <div style="text-align:center;margin-top:14px;">
+            <a href="#" @click.prevent="mode = 'forgot'; error = ''; success = ''" style="font-size:12px;color:var(--paper-dim,#8a7d65);">
+              Olvidé mi contraseña
+            </a>
           </div>
-          <div class="form-row" style="margin-top:14px;">
-            <label>Clave</label>
-            <input type="password" v-model="password" autocomplete="current-password">
+        </template>
+
+        <!-- FORGOT PASSWORD -->
+        <template v-if="mode === 'forgot'">
+          <div class="subtitle">Ingresa tu usuario o email para recibir un enlace de recuperación.</div>
+          <form @submit.prevent="submitForgot">
+            <div class="form-row">
+              <label>Usuario o email</label>
+              <input type="text" v-model="forgotId" autofocus placeholder="ej: admin o correo@ejemplo.com">
+            </div>
+            <div v-if="error" class="error">{{ error }}</div>
+            <div v-if="success" class="success" style="color:#5a8bff;font-size:13px;margin:10px 0;">{{ success }}</div>
+            <button type="submit" class="primary" :disabled="busy || !forgotId.trim()">
+              {{ busy ? "Enviando…" : "Enviar enlace" }}
+            </button>
+          </form>
+          <div style="text-align:center;margin-top:14px;">
+            <a href="#" @click.prevent="mode = 'login'; error = ''; success = ''" style="font-size:12px;color:var(--paper-dim,#8a7d65);">
+              Volver al login
+            </a>
           </div>
-          <div v-if="error" class="error">{{ error }}</div>
-          <button type="submit" class="primary" :disabled="busy">
-            {{ busy ? "Verificando…" : "Entrar a la sala" }}
-          </button>
-        </form>
+        </template>
+
+        <!-- RESET PASSWORD -->
+        <template v-if="mode === 'reset'">
+          <div class="subtitle">Crea tu nueva contraseña.</div>
+          <form @submit.prevent="submitReset">
+            <div class="form-row">
+              <label>Nueva contraseña</label>
+              <input type="password" v-model="newPassword" autofocus autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="form-row" style="margin-top:14px;">
+              <label>Confirmar contraseña</label>
+              <input type="password" v-model="newPassword2" autocomplete="new-password">
+            </div>
+            <div v-if="error" class="error">{{ error }}</div>
+            <div v-if="success" class="success" style="color:#5a8bff;font-size:13px;margin:10px 0;">{{ success }}</div>
+            <button type="submit" class="primary" :disabled="busy">
+              {{ busy ? "Guardando…" : "Cambiar contraseña" }}
+            </button>
+          </form>
+          <div style="text-align:center;margin-top:14px;">
+            <a href="#" @click.prevent="mode = 'login'; error = ''; success = ''; window.history.replaceState({}, '', '/')" style="font-size:12px;color:var(--paper-dim,#8a7d65);">
+              Volver al login
+            </a>
+          </div>
+        </template>
+
         <div class="footer-line">
           <span>CH · 02</span>
           <span>v0.1 · plan 1</span>
@@ -350,47 +453,84 @@ var BrandingEditor = {
     // ---- Hosts (owner + extra_hosts) ----
     const owner = ref("");
     const extraHosts = ref([]);
+    const hostInvitations = ref({});
     const newHost = ref("");
     const hostsError = ref("");
+    const hostsSuccess = ref("");
     const hostsBusy = ref(false);
+    const hostSuggestions = ref([]);
+    const hostSearchFocused = ref(false);
+    let hostSearchTimer = null;
+
+    function _syncHostResponse(r) {
+      owner.value = r.owner || "";
+      extraHosts.value = r.extra_hosts || [];
+      if (r.invitations) hostInvitations.value = r.invitations;
+    }
 
     async function loadHosts() {
-      try {
-        const r = await api(`/api/podcasts/${meta.slug}/hosts`);
-        owner.value = r.owner || "";
-        extraHosts.value = r.extra_hosts || [];
-      } catch (e) { hostsError.value = e.message; }
+      try { _syncHostResponse(await api(`/api/podcasts/${meta.slug}/hosts`)); }
+      catch (e) { hostsError.value = e.message; }
     }
     async function saveHosts(list) {
       hostsBusy.value = true; hostsError.value = "";
+      try { _syncHostResponse(await api(`/api/podcasts/${meta.slug}/hosts`, { method: "PUT", body: { extra_hosts: list } })); }
+      catch (e) { hostsError.value = e.message; }
+      finally { hostsBusy.value = false; }
+    }
+    function onHostInput() {
+      clearTimeout(hostSearchTimer);
+      const q = newHost.value.trim();
+      if (q.length < 1) { hostSuggestions.value = []; return; }
+      hostSearchTimer = setTimeout(async () => {
+        try {
+          const all = await api("/api/podcasts/search-users?q=" + encodeURIComponent(q));
+          hostSuggestions.value = all.filter(u =>
+            u.username !== owner.value && !extraHosts.value.includes(u.username)
+          );
+        } catch (_) { hostSuggestions.value = []; }
+      }, 200);
+    }
+    async function inviteHost(username) {
+      hostsBusy.value = true; hostsError.value = ""; hostsSuccess.value = "";
+      hostSuggestions.value = [];
+      newHost.value = "";
       try {
-        const r = await api(`/api/podcasts/${meta.slug}/hosts`, {
-          method: "PUT",
-          body: { extra_hosts: list },
+        const r = await api(`/api/podcasts/${meta.slug}/invite-host`, {
+          method: "POST",
+          body: { username },
         });
-        owner.value = r.owner;
-        extraHosts.value = r.extra_hosts;
+        _syncHostResponse(r);
+        if (r.email && r.email.ok) {
+          hostsSuccess.value = "Invitación enviada por correo a " + username + ".";
+          setTimeout(() => { hostsSuccess.value = ""; }, 5000);
+        } else if (r.email && r.email.reason === "no_email") {
+          hostsError.value = "Host agregado, pero no tiene email configurado — no se envió invitación.";
+        } else if (r.email && !r.email.ok) {
+          hostsError.value = "Host agregado, pero falló el envío del correo.";
+        } else {
+          hostsSuccess.value = "Host agregado.";
+          setTimeout(() => { hostsSuccess.value = ""; }, 3000);
+        }
       } catch (e) { hostsError.value = e.message; }
       finally { hostsBusy.value = false; }
     }
     async function addHost() {
       const v = newHost.value.trim().toLowerCase();
       if (!v) return;
-      if (v === owner.value) { hostsError.value = "el owner ya es host por defecto"; return; }
-      if (extraHosts.value.includes(v)) { hostsError.value = "ese usuario ya está en la lista"; return; }
-      await saveHosts([...extraHosts.value, v]);
-      if (!hostsError.value) newHost.value = "";
+      await inviteHost(v);
     }
     async function removeHost(u) {
-      if (!await podSwal.confirm(`¿Quitar a "${u}" como host de este podcast?`)) return;
+      if (!await podSwal.confirm('¿Quitar a "' + u + '" como host de este podcast?')) return;
       await saveHosts(extraHosts.value.filter(x => x !== u));
     }
 
     return {
       meta, error, saveState, dirty, saveNow, fonts,
       previewStyle, uploadImage, clearImage, fmtDate,
-      owner, extraHosts, newHost, hostsError, hostsBusy,
-      loadHosts, addHost, removeHost,
+      owner, extraHosts, hostInvitations, newHost, hostsError, hostsSuccess, hostsBusy,
+      hostSuggestions, hostSearchFocused,
+      loadHosts, addHost, removeHost, onHostInput, inviteHost,
     };
   },
   template: `
@@ -428,18 +568,42 @@ var BrandingEditor = {
             El <strong>owner</strong> creó el podcast. Los <strong>hosts adicionales</strong> también lo ven en su lista y pueden editarlo.
           </p>
           <div v-if="hostsError" class="error">{{ hostsError }}</div>
+          <div v-if="hostsSuccess" class="host-success" style="font-size:13px;color:#5a8bff;padding:6px 10px;background:rgba(90,139,255,0.08);border-radius:6px;margin-top:8px;">{{ hostsSuccess }}</div>
           <div class="hosts-row">
-            <span class="host-chip owner">👑 {{ owner }} · owner</span>
-            <span v-for="u in extraHosts" :key="u" class="host-chip">
+            <span class="host-chip owner">{{ owner }} · owner</span>
+            <span v-for="u in extraHosts" :key="u" class="host-chip"
+                  :class="{ 'host-pending': hostInvitations[u] && hostInvitations[u].status === 'pendiente',
+                            'host-accepted': hostInvitations[u] && hostInvitations[u].status === 'aceptado' }">
               {{ u }}
-              <button class="icon danger" @click="removeHost(u)" :disabled="hostsBusy" title="Quitar host">✕</button>
+              <span v-if="hostInvitations[u]" class="host-status-badge">
+                <template v-if="hostInvitations[u].status === 'pendiente'">
+                  pendiente
+                  <span v-if="hostInvitations[u].email_sent" class="host-email-sent" title="Correo enviado">&#9993;</span>
+                </template>
+                <template v-else-if="hostInvitations[u].status === 'aceptado'">aceptado</template>
+              </span>
+              <button class="icon danger" @click="removeHost(u)" :disabled="hostsBusy" title="Quitar host">&#10005;</button>
             </span>
             <span v-if="!extraHosts.length && owner" class="muted" style="font-size: 12px;">Sin hosts adicionales.</span>
           </div>
-          <div class="hosts-add">
-            <input type="text" v-model="newHost" @keyup.enter="addHost"
-                   placeholder="username (ej: karelia)" :disabled="hostsBusy">
-            <button class="primary" @click="addHost" :disabled="hostsBusy || !newHost.trim()">＋ Agregar host</button>
+          <div class="hosts-add" style="position:relative;">
+            <input type="text" v-model="newHost" @input="onHostInput"
+                   @focus="hostSearchFocused = true"
+                   @blur="setTimeout(() => hostSearchFocused = false, 200)"
+                   @keyup.enter="addHost"
+                   placeholder="Buscar usuario..." :disabled="hostsBusy"
+                   autocomplete="off">
+            <button class="primary" @click="addHost" :disabled="hostsBusy || !newHost.trim()">＋ Invitar host</button>
+            <div v-if="hostSuggestions.length && hostSearchFocused" class="host-autocomplete">
+              <div v-for="s in hostSuggestions" :key="s.username" class="host-suggestion"
+                   @mousedown.prevent="inviteHost(s.username)">
+                <span class="host-sug-avatar" :style="{ background: s.avatar_color }">{{ s.display_name[0] }}</span>
+                <span class="host-sug-info">
+                  <strong>{{ s.display_name }}</strong> <span class="muted mono">@{{ s.username }}</span>
+                  <span v-if="s.email" class="muted" style="font-size:11px;display:block;">{{ s.email }}</span>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2077,8 +2241,51 @@ var EpisodeDetail = {
     function openShowNotes() { showNotesOpen.value = true; }
     function closeShowNotes() { showNotesOpen.value = false; }
 
+    // --- Show Notes (AI) ---
+    async function forceSyncNotes(slug, epId) {
+      const data = await api(`/api/podcasts/${slug}/episodes/${epId}/sync-notes`, { method: 'POST' });
+      return data;
+    }
+
+    async function syncNotes() {
+      const data = await forceSyncNotes(props.slug, ep.value.id);
+      if (data.ok) {
+        ep.value.ai_summary = data.ai_summary;
+        ep.value.ai_highlights = data.ai_highlights;
+        ep.value.ai_notes_synced_at = data.synced_at;
+      }
+    }
+
+    // --- Publish ---
+    const publishPath = ref('');
+    const publishing = ref(false);
+
+    async function publishEpisode(slug, epId, mediaFile) {
+      const data = await api(`/api/podcasts/${slug}/episodes/${epId}/publish`, {
+        method: 'POST',
+        body: { media_file: mediaFile },
+      });
+      return data;
+    }
+
+    async function doPublish() {
+      if (!publishPath.value) return;
+      publishing.value = true;
+      try {
+        const data = await publishEpisode(props.slug, ep.value.id, publishPath.value);
+        if (data.ok) {
+          ep.value.media_url = data.media_url;
+          ep.value.status = 'published';
+        } else {
+          alert(data.error || 'Error al publicar');
+        }
+      } catch (e) { alert(e.message); }
+      finally { publishing.value = false; }
+    }
+
     return { ep, error, saveState, dirty, saveNow, fmtDate,
-             showNotesOpen, openShowNotes, closeShowNotes };
+             showNotesOpen, openShowNotes, closeShowNotes,
+             publishPath, publishing, syncNotes, doPublish };
   },
   template: `
     <div v-if="ep" class="episode-detail">
@@ -2132,6 +2339,42 @@ var EpisodeDetail = {
             <span v-else class="muted" style="font-size: 12px;">Programa fecha y hora para exportar al calendario.</span>
             <div class="spacer"></div>
             <button class="ghost" @click="openShowNotes" title="Generar texto listo para publicar">📋 Show notes</button>
+          </div>
+        </div>
+
+        <div class="show-notes-panel" v-if="ep.ai_summary">
+          <h4>
+            Show Notes (AI)
+            <span class="show-notes-meta" v-if="ep.ai_notes_synced_at">
+              Sincronizado: {{ ep.ai_notes_synced_at }}
+            </span>
+          </h4>
+          <div class="show-notes-summary">{{ ep.ai_summary }}</div>
+          <ul class="show-notes-highlights" v-if="ep.ai_highlights && ep.ai_highlights.length">
+            <li v-for="h in ep.ai_highlights" :key="h">{{ h }}</li>
+          </ul>
+          <div class="show-notes-actions">
+            <button @click="syncNotes">Sincronizar notas</button>
+          </div>
+        </div>
+
+        <div class="publish-section" v-if="ep.status !== 'published' && ep.media_url === null">
+          <h4>Publicar episodio</h4>
+          <p style="font-size:0.8rem;color:var(--text-3);">
+            Sube el audio/video final a VPS y actualiza el feed RSS.
+          </p>
+          <input v-model="publishPath" placeholder="Ruta al archivo exportado" style="width:100%;margin-bottom:0.5rem;padding:6px;border-radius:4px;border:1px solid var(--border,#dee2e6);font-size:0.8rem;" />
+          <button class="publish-btn" @click="doPublish" :disabled="publishing || !publishPath">
+            {{ publishing ? 'Publicando...' : 'Publicar' }}
+          </button>
+          <div class="publish-status" v-if="ep.media_url">
+            Publicado: <a :href="ep.media_url" target="_blank">{{ ep.media_url }}</a>
+          </div>
+        </div>
+        <div class="publish-section" v-else-if="ep.media_url">
+          <h4>Publicado</h4>
+          <div class="publish-status">
+            <a :href="ep.media_url" target="_blank">{{ ep.media_url }}</a>
           </div>
         </div>
 
@@ -3841,12 +4084,40 @@ var UsersAdminModal = {
     const users = ref([]);
     const error = ref("");
     const busy = ref(false);
-    const lastGenerated = reactive({});  // username -> generated_password
-    const newUser = reactive({ username: "", password: "", display_name: "", is_admin: false, max_podcasts: 1 });
+    const lastGenerated = reactive({});
+    const editing = ref(null);
+    const editForm = reactive({ display_name: "", email: "", avatar_color: "" });
+    const newUser = reactive({ username: "", password: "", display_name: "", email: "", is_admin: false, max_podcasts: 1 });
 
     async function load() {
       try { users.value = await api("/api/users"); }
       catch (e) { error.value = e.message; }
+    }
+
+    function startEdit(u) {
+      editing.value = u.username;
+      editForm.display_name = u.display_name || "";
+      editForm.email = u.email || "";
+      editForm.avatar_color = u.avatar_color || "";
+    }
+
+    function cancelEdit() { editing.value = null; }
+
+    async function saveEdit(u) {
+      busy.value = true; error.value = "";
+      try {
+        await api("/api/users/" + u.username, {
+          method: "PUT",
+          body: {
+            display_name: editForm.display_name.trim() || u.username,
+            email: editForm.email.trim() || null,
+            avatar_color: editForm.avatar_color.trim() || null,
+          },
+        });
+        editing.value = null;
+        await load();
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
     }
 
     async function createNew() {
@@ -3859,56 +4130,58 @@ var UsersAdminModal = {
             username: newUser.username.trim(),
             password: newUser.password.trim() || null,
             display_name: newUser.display_name.trim() || newUser.username.trim(),
+            email: newUser.email.trim() || null,
             is_admin: newUser.is_admin,
             max_podcasts: newUser.is_admin ? null : (parseInt(newUser.max_podcasts) || 0),
           },
         });
         if (r.generated_password) lastGenerated[r.username] = r.generated_password;
-        Object.assign(newUser, { username: "", password: "", display_name: "", is_admin: false, max_podcasts: 1 });
+        Object.assign(newUser, { username: "", password: "", display_name: "", email: "", is_admin: false, max_podcasts: 1 });
         await load();
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
 
     async function resetPassword(u) {
-      if (!await podSwal.confirm(`¿Generar una contraseña nueva para ${u.username}? La actual va a dejar de funcionar.`)) return;
+      if (!await podSwal.confirm("¿Generar una contraseña nueva para " + u.username + "? La actual va a dejar de funcionar.")) return;
       try {
-        const r = await api(`/api/users/${u.username}`, { method: "PUT", body: { password: "" } });
+        const r = await api("/api/users/" + u.username, { method: "PUT", body: { password: "" } });
         if (r.generated_password) lastGenerated[u.username] = r.generated_password;
       } catch (e) { error.value = e.message; }
     }
 
     async function setAdmin(u, is_admin) {
       try {
-        await api(`/api/users/${u.username}`, { method: "PUT", body: { is_admin } });
+        await api("/api/users/" + u.username, { method: "PUT", body: { is_admin } });
         await load();
       } catch (e) { error.value = e.message; await load(); }
     }
 
     async function setMaxPodcasts(u, v) {
       try {
-        await api(`/api/users/${u.username}`, { method: "PUT", body: { max_podcasts: v === "" ? null : parseInt(v) } });
+        await api("/api/users/" + u.username, { method: "PUT", body: { max_podcasts: v === "" ? null : parseInt(v) } });
         await load();
       } catch (e) { error.value = e.message; await load(); }
     }
 
     async function removeUser(u) {
-      if (!await podSwal.confirm(`¿Eliminar al usuario "${u.username}"? Sus podcasts NO se eliminan, solo el acceso.`)) return;
+      if (!await podSwal.confirm('¿Eliminar al usuario "' + u.username + '"? Sus podcasts NO se eliminan, solo el acceso.')) return;
       try {
-        await api(`/api/users/${u.username}`, { method: "DELETE" });
+        await api("/api/users/" + u.username, { method: "DELETE" });
         await load();
       } catch (e) { error.value = e.message; }
     }
 
     onMounted(load);
-    return { users, error, busy, newUser, lastGenerated,
-             createNew, resetPassword, setAdmin, setMaxPodcasts, removeUser };
+    return { users, error, busy, newUser, lastGenerated, editing, editForm,
+             createNew, resetPassword, setAdmin, setMaxPodcasts, removeUser,
+             startEdit, cancelEdit, saveEdit };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
       <div class="modal users-admin-modal">
         <div class="modal-head">
-          <h3>👥 Usuarios</h3>
+          <h3>Usuarios</h3>
           <button class="icon ghost" @click="$emit('close')">✕</button>
         </div>
         <div class="modal-body">
@@ -3917,12 +4190,33 @@ var UsersAdminModal = {
           <div class="user-list">
             <div v-for="u in users" :key="u.username" class="user-row">
               <div class="user-avatar" :style="{ background: u.avatar_color }">{{ u.display_name[0] }}</div>
-              <div class="user-info">
+              <div class="user-info" style="flex:1;min-width:0;">
                 <div class="user-name">{{ u.display_name }} <span class="muted mono">@{{ u.username }}</span></div>
+                <div v-if="u.email" class="muted" style="font-size:12px;">{{ u.email }}</div>
                 <div v-if="lastGenerated[u.username]" class="user-pw-flash mono">
-                  🔑 nueva clave: <strong>{{ lastGenerated[u.username] }}</strong> (copiala YA, no se guarda en pantalla)
+                  nueva clave: <strong>{{ lastGenerated[u.username] }}</strong> (copia ahora, no se guarda en pantalla)
+                </div>
+
+                <div v-if="editing === u.username" class="user-edit-form" style="margin-top:8px;padding:12px;background:#f7f7f9;border-radius:8px;">
+                  <div class="form-row" style="margin-bottom:6px;">
+                    <label style="font-size:11px;color:#888;">Nombre</label>
+                    <input type="text" v-model="editForm.display_name" style="width:100%;">
+                  </div>
+                  <div class="form-row" style="margin-bottom:6px;">
+                    <label style="font-size:11px;color:#888;">Email</label>
+                    <input type="email" v-model="editForm.email" placeholder="correo@ejemplo.com" style="width:100%;">
+                  </div>
+                  <div class="form-row" style="margin-bottom:8px;">
+                    <label style="font-size:11px;color:#888;">Color avatar</label>
+                    <input type="color" v-model="editForm.avatar_color" style="width:48px;height:28px;padding:0;border:1px solid #ddd;border-radius:4px;cursor:pointer;">
+                  </div>
+                  <div style="display:flex;gap:8px;">
+                    <button class="primary" :disabled="busy" @click="saveEdit(u)" style="font-size:13px;padding:4px 14px;">Guardar</button>
+                    <button class="ghost" @click="cancelEdit" style="font-size:13px;padding:4px 14px;">Cancelar</button>
+                  </div>
                 </div>
               </div>
+              <button v-if="editing !== u.username" class="ghost" @click="startEdit(u)" title="Editar usuario" style="font-size:14px;">&#9998;</button>
               <label class="user-toggle">
                 <input type="checkbox" :checked="u.is_admin" @change="setAdmin(u, $event.target.checked)">
                 admin
@@ -3930,8 +4224,8 @@ var UsersAdminModal = {
               <input type="number" min="0" class="user-max" placeholder="∞"
                      :value="u.max_podcasts === null ? '' : u.max_podcasts"
                      :disabled="u.is_admin"
-                     @change="setMaxPodcasts(u, $event.target.value)" title="Podcasts máx (vacío = ∞)">
-              <button class="ghost" @click="resetPassword(u)" title="Generar nueva clave">🔑</button>
+                     @change="setMaxPodcasts(u, $event.target.value)" title="Podcasts max">
+              <button class="ghost" @click="resetPassword(u)" title="Generar nueva clave" style="font-size:14px;">&#128273;</button>
               <button class="icon danger" @click="removeUser(u)" title="Eliminar">✕</button>
             </div>
           </div>
@@ -3943,12 +4237,16 @@ var UsersAdminModal = {
               <input type="text" v-model="newUser.username" placeholder="ej: maria">
             </div>
             <div class="form-row" style="margin-bottom: 8px;">
-              <label>Display name (opcional)</label>
+              <label>Nombre para mostrar (opcional)</label>
               <input type="text" v-model="newUser.display_name" placeholder="ej: María García">
             </div>
             <div class="form-row" style="margin-bottom: 8px;">
+              <label>Email (opcional)</label>
+              <input type="email" v-model="newUser.email" placeholder="correo@ejemplo.com">
+            </div>
+            <div class="form-row" style="margin-bottom: 8px;">
               <label>Contraseña (vacío = generar aleatoria)</label>
-              <input type="text" v-model="newUser.password" placeholder="dejá vacío para generar">
+              <input type="text" v-model="newUser.password" placeholder="dejar vacío para generar">
             </div>
             <div class="row" style="gap: 16px;">
               <label class="user-toggle">
@@ -3956,7 +4254,7 @@ var UsersAdminModal = {
                 admin (ve y maneja todo)
               </label>
               <label v-if="!newUser.is_admin" class="user-toggle">
-                máx podcasts:
+                max podcasts:
                 <input type="number" min="0" v-model.number="newUser.max_podcasts" style="width: 60px; margin-left: 6px;">
               </label>
             </div>
