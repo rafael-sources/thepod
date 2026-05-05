@@ -6,6 +6,7 @@ The public endpoints are intentionally NOT protected — they're meant to be
 hit by anyone (listeners, podcast apps, social previews).
 """
 
+import json
 import uuid
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -618,7 +619,24 @@ def render_rss(slug):
     for ep in bundle["episodes"]:
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = ep.get("title") or f"Episodio {ep.get('episode_number')}"
-        ET.SubElement(item, "description").text = ep.get("description") or ""
+        # Use AI summary + highlights as description if available
+        description = ""
+        ai_summary = ep.get("ai_summary") if isinstance(ep, dict) else (ep["ai_summary"] if "ai_summary" in ep.keys() else None)
+        ai_highlights = None
+        raw_highlights = ep.get("ai_highlights") if isinstance(ep, dict) else (ep["ai_highlights"] if "ai_highlights" in ep.keys() else None)
+        if raw_highlights:
+            try:
+                ai_highlights = json.loads(raw_highlights) if isinstance(raw_highlights, str) else raw_highlights
+            except (json.JSONDecodeError, TypeError):
+                ai_highlights = None
+
+        if ai_summary:
+            description = ai_summary
+            if ai_highlights:
+                description += "\n\nPuntos clave:\n" + "\n".join(f"• {h}" for h in ai_highlights)
+        else:
+            description = ep.get("description") or ""
+        ET.SubElement(item, "description").text = description
         ET.SubElement(item, "link").text = f"{base}/landing/{slug}#ep{ep['id']}"
         ET.SubElement(item, "guid", attrib={"isPermaLink": "false"}).text = f"{podcast.get('shared_project_id','')}:{ep['id']}"
 
@@ -645,14 +663,24 @@ def render_rss(slug):
             ET.SubElement(item, "{%s}duration" % rss_ns["itunes"]).text = f"{mm:02d}:00"
         ET.SubElement(item, "{%s}explicit" % rss_ns["itunes"]).text = "no"
 
-        # Enclosure: first external link (if any)
-        ext_links = [l for l in ep.get("links", []) if l["url"].startswith(("http://", "https://"))]
-        if ext_links:
+        # Enclosure: prefer media_url (VPS), fall back to first external link
+        media_url = ep.get("media_url") if isinstance(ep, dict) else (ep["media_url"] if "media_url" in ep.keys() else None)
+        if media_url:
+            ext = media_url.rsplit(".", 1)[-1].lower() if "." in media_url else "mp3"
+            mime = "video/mp4" if ext in ("mp4", "webm", "mov") else "audio/mpeg"
             ET.SubElement(item, "enclosure", attrib={
-                "url": ext_links[0]["url"],
-                "type": "audio/mpeg",
+                "url": media_url,
+                "type": mime,
                 "length": "0",
             })
+        else:
+            ext_links = [l for l in ep.get("links", []) if l["url"].startswith(("http://", "https://"))]
+            if ext_links:
+                ET.SubElement(item, "enclosure", attrib={
+                    "url": ext_links[0]["url"],
+                    "type": "audio/mpeg",
+                    "length": "0",
+                })
 
     xml = b'<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(rss, encoding="utf-8")
     return Response(xml, mimetype="application/rss+xml; charset=utf-8")
