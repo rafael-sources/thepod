@@ -2871,6 +2871,9 @@ var TranscriptEditor = {
     const selEnd = ref(null);
     const dragging = ref(false);
 
+    // Undo stack — stores IDs of recently created cuts.
+    const cutHistory = ref([]);
+
     // Filter state
     const showFillersOnly = ref(false);
 
@@ -2943,6 +2946,9 @@ var TranscriptEditor = {
     );
 
     const cutsCount = computed(() => cuts.value.length);
+    const totalCutSeconds = computed(() =>
+      cuts.value.reduce((sum, c) => sum + (c.end_seconds - c.start_seconds), 0)
+    );
     const hasSelection = computed(() => selStart.value != null && selEnd.value != null);
     const selectionLabel = computed(() => {
       if (!hasSelection.value) return "";
@@ -2983,6 +2989,7 @@ var TranscriptEditor = {
           body: { start_seconds: first.s, end_seconds: last.e, label: `${b - a + 1} palabra(s)` },
         });
         cuts.value.push(created);
+        if (created && created.id) cutHistory.value.push(created.id);
         clearSelection();
         emit("cuts-changed");
       } catch (e) { error.value = e.message; }
@@ -3023,6 +3030,18 @@ var TranscriptEditor = {
       } catch (e) { error.value = e.message; }
     }
 
+    function getCutIdForWord(word) {
+      const cut = cuts.value.find(
+        c => word.s >= c.start_seconds - 0.01 && word.e <= c.end_seconds + 0.01
+      );
+      return cut ? cut.id : null;
+    }
+
+    async function undoLastCut() {
+      const lastId = cutHistory.value.pop();
+      if (lastId) await restoreCut(lastId);
+    }
+
     /* ---------- keyboard ---------- */
 
     function onKey(ev) {
@@ -3031,6 +3050,9 @@ var TranscriptEditor = {
       if ((ev.key === "Delete" || ev.key === "Backspace") && hasSelection.value) {
         ev.preventDefault();
         deleteSelection();
+      } else if ((ev.ctrlKey || ev.metaKey) && ev.key === "z") {
+        ev.preventDefault();
+        undoLastCut();
       } else if (ev.key === "Escape") {
         clearSelection();
       }
@@ -3063,10 +3085,11 @@ var TranscriptEditor = {
       files, selectedFileId, selectedLanguage,
       transcript, cuts, loading, error,
       selStart, selEnd, hasSelection, selectionLabel,
-      visibleWords, fillerWords, cutsCount, showFillersOnly,
-      isWordDeleted, isFiller, fmtTs, fileChanged,
+      visibleWords, fillerWords, cutsCount, totalCutSeconds, showFillersOnly,
+      cutHistory, isWordDeleted, isFiller, fmtTs, fileChanged,
       onWordMouseDown, onWordMouseEnter, clearSelection,
       deleteSelection, deleteAllFillers, restoreCut, restoreAll, loadTranscript,
+      getCutIdForWord, undoLastCut,
     };
   },
   template: `
@@ -3101,8 +3124,12 @@ var TranscriptEditor = {
             <span v-if="hasSelection" class="role-chip" style="background: var(--signal); color: #fff;">{{ selectionLabel }}</span>
             <button v-if="hasSelection" class="primary" style="font-size: 12px; padding: 4px 10px;" @click="deleteSelection">✕ Eliminar selección (Del)</button>
             <button v-if="hasSelection" class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="clearSelection">Cancelar</button>
+            <button v-if="cutHistory.length" class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="undoLastCut" title="Ctrl+Z">↶ Deshacer</button>
 
             <div class="spacer"></div>
+
+            <span v-if="totalCutSeconds > 0" class="transcript-cut-counter">{{ totalCutSeconds.toFixed(1) }}s eliminados</span>
+            <span class="transcript-hint">Selecciona palabras y presiona Delete · Ctrl+Z deshace</span>
 
             <label style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
               <input type="checkbox" v-model="showFillersOnly">

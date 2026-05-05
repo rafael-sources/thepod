@@ -2215,6 +2215,16 @@ a.mark:hover { opacity: 0.8; }
   border-color: transparent;
 }
 
+/* --- Text-based Editing (improved) --- */
+.transcript-editor .word { display: inline; cursor: pointer; padding: 1px 2px; border-radius: 2px; transition: background 0.1s; user-select: none; }
+.transcript-editor .word:hover { background: rgba(137, 180, 250, 0.15); }
+.transcript-editor .word.selected { background: rgba(137, 180, 250, 0.35); color: var(--text-1, #cdd6f4); }
+.transcript-editor .word.cut { text-decoration: line-through; opacity: 0.4; color: var(--text-3, #6c7086); }
+.transcript-editor .word.cut:hover { opacity: 0.7; }
+.transcript-editor .word.dragging { background: rgba(137, 180, 250, 0.25); }
+.transcript-cut-counter { font-weight: 600; color: var(--accent, #89b4fa); }
+.transcript-hint { opacity: 0.6; font-size: 0.75rem; }
+
 /* ============================================================
    Timeline · time tooltip + playhead scrubbing
    ============================================================ */
