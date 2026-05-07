@@ -1449,13 +1449,19 @@ var StudioView = {
             });
             return;
           }
+          if (track.kind === LK.Track.Kind.Audio && pub && pub.trackName === "ifb_audio") {
+            var ifbEl = track.attach();
+            ifbEl.dataset.ifb = "1";
+            ifbEl.volume = 1.0;
+            document.body.appendChild(ifbEl);
+            return;
+          }
           if (track.kind === LK.Track.Kind.Video) {
             _mountRemoteVideo(id, track);
           } else if (track.kind === LK.Track.Kind.Audio) {
             var a = track.attach();
-            a.dataset.duckable = "1";  // marked so soundboard ducking can find it
+            a.dataset.duckable = "1";
             document.body.appendChild(a);
-            // meter
             var stop = _attachMeter(track, function (lvl) {
               if (remoteMap[id]) remoteMap[id].meter = lvl;
             });
@@ -1463,6 +1469,11 @@ var StudioView = {
           }
         });
         newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track, pub, participant) {
+          if (pub && pub.trackName === "ifb_audio") {
+            track.detach().forEach(function (el) { el.remove(); });
+            ifbActive.value = false;
+            return;
+          }
           track.detach().forEach(function (el) { el.remove(); });
           var isScreen = (track.source === LK.Track.Source.ScreenShare) ||
                          (pub && pub.source === LK.Track.Source.ScreenShare);
@@ -3314,6 +3325,39 @@ var DirectorView = {
       } catch (_) {}
     }
 
+    // --- IFB Push-to-Talk ---
+    var ifbStream = null;
+    var ifbTrack = null;
+    var ifbActive = ref(false);
+
+    async function startIFB(targets) {
+      sendData({ type: "ifb_start", targets: targets });
+      ifbActive.value = true;
+      try {
+        ifbStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var audioTrack = ifbStream.getAudioTracks()[0];
+        ifbTrack = new LK.LocalAudioTrack(audioTrack);
+        await room.localParticipant.publishTrack(ifbTrack, { name: "ifb_audio", stream: "ifb" });
+      } catch (e) {
+        if (window.toast) window.toast({ type: "error", text: "No se pudo activar el micrófono IFB: " + e.message });
+        ifbActive.value = false;
+      }
+    }
+
+    function stopIFB() {
+      sendData({ type: "ifb_stop" });
+      ifbActive.value = false;
+      if (ifbTrack) {
+        try { room.localParticipant.unpublishTrack(ifbTrack); } catch (_) {}
+        ifbTrack.stop();
+        ifbTrack = null;
+      }
+      if (ifbStream) {
+        ifbStream.getTracks().forEach(function (t) { t.stop(); });
+        ifbStream = null;
+      }
+    }
+
     // --- Sound trigger ---
     function triggerSound(s) {
       sendData({ type: "sound_trigger", filename: s.filename, key: s.shortcut_key });
@@ -3404,6 +3448,7 @@ var DirectorView = {
       sendCue: sendCue, cueTarget: cueTarget,
       forceMute: forceMute, kickParticipant: kickParticipant,
       sounds: sounds, triggerSound: triggerSound, playingPad: playingPad,
+      ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
     };
   },
   template: '\
@@ -3435,6 +3480,14 @@ var DirectorView = {
             <button class="ghost" @click="forceMute(p)" title="Mutear" style="font-size:12px;">🔇</button>\
             <button class="ghost" @click="kickParticipant(p)" title="Expulsar" style="font-size:12px; color:var(--signal);">✕</button>\
           </div>\
+        </div>\
+\
+        <div class="eyebrow" style="padding:10px 0 6px 2px;">IFB AUDIO</div>\
+        <button class="ptt-btn ptt-btn-all" :class="{ active: ifbActive }"\
+                @mousedown="startIFB(\'all_hosts\')" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()">🎧 PTT TODOS</button>\
+        <div v-for="p in participants.filter(function(x){ return x.role === \'host\' || x.role === \'co-host\'; })" :key="\'ptt-\' + p.id" style="margin-bottom:4px;">\
+          <button class="ptt-btn" style="width:100%;"\
+                  @mousedown="startIFB([\'participant_\' + p.id])" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()">🎧 {{ p.display_name }}</button>\
         </div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">DIRECTOR CHAT</div>\
