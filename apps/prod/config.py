@@ -56,7 +56,7 @@ LIVEKIT_API_SECRET = _shared.get("livekit_api_secret", "secret")
 
 MAX_SESSION_PARTICIPANTS = 4
 SESSION_STATUSES = ("preparing", "live", "recording", "finished", "archived")
-PARTICIPANT_ROLES = ("host", "co-host", "guest")
+PARTICIPANT_ROLES = ("host", "co-host", "guest", "director")
 PARTICIPANT_STATUSES = ("invited", "connected", "active", "disconnected", "left")
 
 # ----- Integration with prePod / postPod -----

@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS participants (
     display_name               TEXT NOT NULL,
     invite_token               TEXT UNIQUE NOT NULL,
     role                       TEXT NOT NULL DEFAULT 'guest'
-        CHECK(role IN ('host', 'co-host', 'guest')),
+        CHECK(role IN ('host', 'co-host', 'guest', 'director')),
     status                     TEXT NOT NULL DEFAULT 'invited'
         CHECK(status IN ('invited', 'connected', 'active', 'disconnected', 'left')),
     joined_at                  TEXT,
@@ -139,6 +139,29 @@ CREATE TABLE IF NOT EXISTS live_streams (
     error       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_live_streams_session ON live_streams(session_id);
+
+CREATE TABLE IF NOT EXISTS podcast_directors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    shared_project_id TEXT NOT NULL,
+    assigned_by TEXT NOT NULL,
+    assigned_at DATETIME DEFAULT (datetime('now')),
+    UNIQUE(username, shared_project_id)
+);
+
+CREATE TABLE IF NOT EXISTS director_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    file_path TEXT,
+    injected_at DATETIME DEFAULT (datetime('now')),
+    recording_offset_seconds REAL,
+    duration_seconds REAL,
+    created_by TEXT NOT NULL,
+    removed_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_director_events_session ON director_events(session_id);
 """
 
 
@@ -165,6 +188,9 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "chapter_markers", "sponsor_logo_url", "sponsor_logo_url TEXT")
     _ensure_column(conn, "chapter_markers", "planned_offset_seconds", "planned_offset_seconds REAL")
     _ensure_column(conn, "chat_messages", "channel", "channel TEXT NOT NULL DEFAULT 'main'")
+    _ensure_column(conn, "sound_effects", "director_only", "director_only INTEGER DEFAULT 0")
+    _ensure_column(conn, "sound_triggers", "triggered_by", "triggered_by TEXT")
+    _ensure_column(conn, "chat_messages", "target_username", "target_username TEXT")
     return conn
 
 
