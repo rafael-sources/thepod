@@ -509,7 +509,8 @@ def export_recordings_to_postpod(sid):
     db = get_db()
     try:
         ch_rows = db.execute(
-            "SELECT label, tl_offset_seconds FROM chapter_markers "
+            "SELECT label, tl_offset_seconds, kind, sponsor_name, sponsor_copy, sponsor_logo_url "
+            "FROM chapter_markers "
             "WHERE session_id=? ORDER BY tl_offset_seconds",
             (sid,),
         ).fetchall()
@@ -517,11 +518,19 @@ def export_recordings_to_postpod(sid):
         db.close()
     if ch_rows:
         try:
+            chapters = []
+            for r in ch_rows:
+                ch = {"label": r["label"], "tl_offset_seconds": r["tl_offset_seconds"]}
+                if r["kind"] == "sponsor" and r["sponsor_name"]:
+                    ch["kind"] = "sponsor"
+                    ch["sponsor_name"] = r["sponsor_name"]
+                    ch["sponsor_copy"] = r["sponsor_copy"]
+                    ch["sponsor_logo_url"] = r["sponsor_logo_url"]
+                chapters.append(ch)
             payload = {
                 "shared_project_id": spid,
                 "project_name": sess["title"],
-                "chapters": [{"label": r["label"], "tl_offset_seconds": r["tl_offset_seconds"]}
-                             for r in ch_rows],
+                "chapters": chapters,
             }
             resp = requests.post(chapters_endpoint, headers=headers, json=payload, timeout=60)
             if resp.status_code in (200, 201):
@@ -568,6 +577,73 @@ def export_recordings_to_postpod(sid):
         except requests.RequestException as e:
             errors.append({"triggers_error": str(e)})
 
+    # Ship director events (overlay timeline) so postPod can render them
+    director_events_sent = 0
+    director_events_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-director-events"
+    db = get_db()
+    try:
+        dev_rows = db.execute(
+            "SELECT * FROM director_events WHERE session_id=? ORDER BY injected_at",
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+    if dev_rows:
+        try:
+            events_payload = [
+                {
+                    "event_type": ev["event_type"],
+                    "payload": ev["payload"],
+                    "recording_offset_seconds": ev["recording_offset_seconds"],
+                    "duration_seconds": ev["duration_seconds"],
+                    "file_path": ev["file_path"],
+                    "created_by": ev["created_by"],
+                    "injected_at": ev["injected_at"],
+                    "removed_at": ev["removed_at"],
+                }
+                for ev in dev_rows
+            ]
+            resp = requests.post(
+                director_events_endpoint,
+                headers=headers,
+                json={
+                    "shared_project_id": spid,
+                    "project_name": sess["title"],
+                    "events": events_payload,
+                },
+                timeout=30,
+            )
+            if resp.status_code in (200, 201):
+                director_events_sent = (resp.json() or {}).get("created_events", 0)
+            else:
+                errors.append({"director_events_status": resp.status_code, "body": resp.text[:200]})
+        except requests.RequestException as e:
+            errors.append({"director_events_error": str(e)})
+
+    # Ship director asset files (graphics uploaded by the director)
+    director_assets_sent = 0
+    assets_dir = session_dir(sid) / "director_assets"
+    if assets_dir.exists():
+        asset_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-director-asset"
+        for f in sorted(assets_dir.iterdir()):
+            if not f.is_file():
+                continue
+            try:
+                with open(f, "rb") as fh:
+                    resp = requests.post(
+                        asset_endpoint,
+                        files={"file": (f.name, fh)},
+                        data={"shared_project_id": spid, "session_id": str(sid)},
+                        headers=headers,
+                        timeout=30,
+                    )
+                if resp.status_code in (200, 201):
+                    director_assets_sent += 1
+                else:
+                    errors.append({"director_asset": f.name, "status": resp.status_code})
+            except requests.RequestException as e:
+                errors.append({"director_asset_error": f.name, "detail": str(e)})
+
     if exported > 0:
         db = get_db()
         try:
@@ -592,6 +668,8 @@ def export_recordings_to_postpod(sid):
         "postpod_url": POSTPOD_URL,
         "triggers_sent": triggers_sent,
         "chapters_sent": chapters_sent,
+        "director_events_sent": director_events_sent,
+        "director_assets_sent": director_assets_sent,
     }), (200 if failed == 0 else 207)
 
 
