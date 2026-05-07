@@ -4,6 +4,7 @@ import time as _time
 from flask import Flask, abort, render_template
 
 import auth
+import director_api
 import integrations as integrations_bp
 import recordings_api
 import sessions_api
@@ -31,6 +32,7 @@ def create_app():
     app.register_blueprint(integrations_bp.bp)
     app.register_blueprint(recordings_api.bp)
     app.register_blueprint(streams_api.bp)
+    app.register_blueprint(director_api.bp)
 
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 

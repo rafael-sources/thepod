@@ -3,7 +3,6 @@ Sessions CRUD + start/stop recording + participants + invitations.
 """
 
 import secrets
-from datetime import datetime, timezone
 
 from flask import Blueprint, abort, jsonify, request
 
@@ -125,6 +124,14 @@ def _is_host(db, sid, username):
         (sid, username),
     ).fetchone()
     return bool(p and p["role"] in ("host", "co-host"))
+
+
+def _is_director(db, sid, username):
+    p = db.execute(
+        "SELECT role FROM participants WHERE session_id=? AND username=? AND role='director'",
+        (sid, username),
+    ).fetchone()
+    return bool(p)
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +407,8 @@ def remove_participant(sid, pid):
     db = get_db()
     try:
         _load_session(db, sid)
-        if not _is_host(db, sid, current_user()):
+        username = current_user()
+        if not (_is_host(db, sid, username) or _is_director(db, sid, username)):
             return jsonify({"error": "solo el host puede remover"}), 403
         db.execute("DELETE FROM participants WHERE id=? AND session_id=?", (pid, sid))
         db.commit()
@@ -813,6 +821,20 @@ def get_invite_details(token):
         ).fetchone()
         if not p:
             return jsonify({"error": "invitación inválida"}), 404
+
+        session_status = p["session_status"]
+        expired = session_status in ("finished", "archived")
+
+        host_present = False
+        if not expired and p["role"] == "guest":
+            host_row = db.execute(
+                "SELECT id FROM participants "
+                "WHERE session_id=? AND role IN ('host','co-host') AND status IN ('connected','active') "
+                "LIMIT 1",
+                (p["session_id"],),
+            ).fetchone()
+            host_present = host_row is not None
+
         return jsonify({
             "participant_id": p["id"],
             "session_id": p["session_id"],
@@ -821,7 +843,9 @@ def get_invite_details(token):
             "status": p["status"],
             "session_title": p["session_title"],
             "session_description": p["session_description"] or "",
-            "session_status": p["session_status"],
+            "session_status": session_status,
+            "expired": expired,
+            "host_present": host_present,
         })
     finally:
         db.close()
@@ -835,13 +859,28 @@ def join_with_invite(token):
     db = get_db()
     try:
         p = db.execute(
-            "SELECT p.*, s.livekit_room_name "
+            "SELECT p.*, s.livekit_room_name, s.status AS session_status "
             "FROM participants p JOIN sessions s ON s.id = p.session_id "
             "WHERE p.invite_token=?",
             (token,),
         ).fetchone()
         if not p:
             return jsonify({"error": "invitación inválida"}), 404
+
+        if p["session_status"] in ("finished", "archived"):
+            return jsonify({"error": "Esta sesión ya finalizó. La invitación ya no es válida."}), 410
+
+        is_host = p["role"] in ("host", "co-host")
+
+        if not is_host:
+            host_row = db.execute(
+                "SELECT id FROM participants "
+                "WHERE session_id=? AND role IN ('host','co-host') AND status IN ('connected','active') "
+                "LIMIT 1",
+                (p["session_id"],),
+            ).fetchone()
+            if not host_row:
+                return jsonify({"error": "El host aún no se ha conectado. Espera a que entre primero."}), 425
 
         display_name = override_name or p["display_name"]
         if override_name and override_name != p["display_name"]:
@@ -853,7 +892,6 @@ def join_with_invite(token):
         )
         db.commit()
 
-        is_host = p["role"] in ("host", "co-host")
         token_jwt = generate_participant_token(
             room_name=p["livekit_room_name"],
             identity=f"participant_{p['id']}",
@@ -924,3 +962,45 @@ def my_join_token(sid):
         })
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Import / Export session bundles
+# ---------------------------------------------------------------------------
+
+@bp.get("/api/sessions/<int:sid>/export-bundle")
+@require_auth
+def export_session_bundle(sid):
+    from flask import send_file
+    from project_io import export_session
+    try:
+        zip_path = export_session(sid)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    return send_file(str(zip_path), as_attachment=True, download_name=zip_path.name)
+
+
+@bp.post("/api/sessions/import")
+@require_auth
+def import_session_bundle():
+    import tempfile
+    from pathlib import Path
+    from project_io import validate_import_zip, import_session
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "archivo ZIP requerido"}), 400
+
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        f.save(tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        validation = validate_import_zip(tmp_path)
+        if not validation["valid"]:
+            return jsonify({"error": "; ".join(validation["errors"])}), 400
+
+        result = import_session(tmp_path, owner_username=current_user())
+        return jsonify(result), 201
+    finally:
+        tmp_path.unlink(missing_ok=True)

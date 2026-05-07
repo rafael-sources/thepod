@@ -17,6 +17,14 @@ from livekit_service import start_rtmp_egress, stop_egress
 bp = Blueprint("streams_api", __name__)
 
 
+def _is_director(db, sid, username):
+    p = db.execute(
+        "SELECT role FROM participants WHERE session_id=? AND username=? AND role='director'",
+        (sid, username),
+    ).fetchone()
+    return bool(p)
+
+
 def _rtmp_destination(rtmp_url: str, stream_key: str) -> str:
     """Join base RTMP URL + key, tolerating trailing slash on the URL."""
     return rtmp_url.rstrip("/") + "/" + stream_key.lstrip("/")
@@ -51,7 +59,8 @@ def list_streams(sid):
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
         if not sess:
             return jsonify({"error": "sesión no encontrada"}), 404
-        if sess["created_by"] != current_user():
+        username = current_user()
+        if sess["created_by"] != username and not _is_director(db, sid, username):
             return jsonify({"error": "sólo el host puede ver streams"}), 403
         rows = db.execute(
             "SELECT * FROM live_streams WHERE session_id=? ORDER BY id DESC", (sid,)
@@ -79,7 +88,8 @@ def create_stream(sid):
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
         if not sess:
             return jsonify({"error": "sesión no encontrada"}), 404
-        if sess["created_by"] != current_user():
+        username = current_user()
+        if sess["created_by"] != username and not _is_director(db, sid, username):
             return jsonify({"error": "sólo el host puede iniciar streams"}), 403
 
         data = request.get_json(silent=True) or {}
@@ -157,7 +167,8 @@ def stop_stream(sid, stream_id):
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
         if not sess:
             return jsonify({"error": "sesión no encontrada"}), 404
-        if sess["created_by"] != current_user():
+        username = current_user()
+        if sess["created_by"] != username and not _is_director(db, sid, username):
             return jsonify({"error": "sólo el host puede detener streams"}), 403
 
         row = db.execute(
