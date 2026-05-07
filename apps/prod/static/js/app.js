@@ -3365,6 +3365,35 @@ var DirectorView = {
       setTimeout(function () { playingPad[s.id] = false; }, 400);
     }
 
+    // --- Director Chat ---
+    var directorChat = ref([]);
+    var directorChatInput = ref("");
+
+    async function loadDirectorChat() {
+      try {
+        directorChat.value = await api("/api/sessions/" + props.session.id + "/chat?channel=director");
+      } catch (_) {}
+    }
+
+    async function sendDirectorChat() {
+      var text = (directorChatInput.value || "").trim();
+      if (!text) return;
+      try {
+        var msg = await api("/api/sessions/" + props.session.id + "/chat", {
+          method: "POST", body: { text: text, channel: "director" },
+        });
+        directorChatInput.value = "";
+        directorChat.value.push(msg);
+        sendData({ type: "director_chat", id: msg.id, author: msg.author, text: msg.text });
+        nextTick(function () {
+          var el = document.getElementById("director-chat-scroll");
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      } catch (e) {
+        if (window.toast) window.toast({ type: "error", text: e.message });
+      }
+    }
+
     // --- Connect to LiveKit ---
     async function connect() {
       try {
@@ -3380,6 +3409,13 @@ var DirectorView = {
               playingPad[s.id] = true;
               setTimeout(function () { playingPad[s.id] = false; }, 400);
             }
+          }
+          if (msg.type === "director_chat" && msg.text) {
+            directorChat.value.push({ id: msg.id, author: msg.author, text: msg.text });
+            nextTick(function () {
+              var el = document.getElementById("director-chat-scroll");
+              if (el) el.scrollTop = el.scrollHeight;
+            });
           }
         });
         room.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
@@ -3435,7 +3471,7 @@ var DirectorView = {
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     }
 
-    onMounted(function () { loadParticipants(); loadStreams(); loadSounds(); });
+    onMounted(function () { loadParticipants(); loadStreams(); loadSounds(); loadDirectorChat(); });
     onBeforeUnmount(function () { disconnect(); });
 
     return {
@@ -3449,6 +3485,7 @@ var DirectorView = {
       forceMute: forceMute, kickParticipant: kickParticipant,
       sounds: sounds, triggerSound: triggerSound, playingPad: playingPad,
       ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
+      directorChat: directorChat, directorChatInput: directorChatInput, sendDirectorChat: sendDirectorChat,
     };
   },
   template: '\
@@ -3491,7 +3528,17 @@ var DirectorView = {
         </div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">DIRECTOR CHAT</div>\
-        <div style="font-size:11px; color:var(--paper-dim);">Chat del director disponible próximamente.</div>\
+        <div style="max-height:160px;overflow-y:auto;margin-bottom:6px;" id="director-chat-scroll">\
+          <div v-for="m in directorChat" :key="m.id" style="font-size:11px;margin-bottom:4px;">\
+            <span style="font-weight:600;color:var(--signal-cyan);">{{ m.author }}:</span> {{ m.text }}\
+          </div>\
+          <div v-if="!directorChat.length" style="font-size:11px;color:var(--paper-dim);">Sin mensajes aún.</div>\
+        </div>\
+        <div style="display:flex;gap:4px;">\
+          <input v-model="directorChatInput" placeholder="Mensaje..." class="input" style="flex:1;font-size:11px;padding:5px 8px;"\
+                 @keyup.enter="sendDirectorChat" />\
+          <button class="ghost" style="font-size:11px;padding:5px 8px;" @click="sendDirectorChat">Enviar</button>\
+        </div>\
       </div>\
 \
       <div class="cr-center">\

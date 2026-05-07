@@ -431,7 +431,7 @@ def list_chat(sid):
     """List chat messages. ?channel=main (default) or ?channel=backstage.
     Backstage requires the caller to be host or co-host; guests get 403."""
     channel = (request.args.get("channel") or "main").strip().lower()
-    if channel not in ("main", "backstage"):
+    if channel not in ("main", "backstage", "director"):
         return jsonify({"error": "channel inválido"}), 400
     username = current_user()
     db = get_db()
@@ -444,6 +444,13 @@ def list_chat(sid):
             ).fetchone()
             if not _is_host_role(p):
                 return jsonify({"error": "backstage solo para host/co-host"}), 403
+        if channel == "director":
+            p = db.execute(
+                "SELECT role FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+            if not p or p["role"] not in ("host", "co-host", "director"):
+                return jsonify({"error": "canal director solo para host/co-host/director"}), 403
         rows = db.execute(
             "SELECT id, author_name, participant_id, message_text, timestamp, channel "
             "FROM chat_messages WHERE session_id=? AND channel=? ORDER BY id",
@@ -460,7 +467,7 @@ def post_chat(sid):
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     channel = (data.get("channel") or "main").strip().lower()
-    if channel not in ("main", "backstage"):
+    if channel not in ("main", "backstage", "director"):
         return jsonify({"error": "channel inválido"}), 400
     if not text:
         return jsonify({"error": "text requerido"}), 400
@@ -477,6 +484,8 @@ def post_chat(sid):
         ).fetchone()
         if channel == "backstage" and not _is_host_role(p):
             return jsonify({"error": "backstage solo para host/co-host"}), 403
+        if channel == "director" and (not p or p["role"] not in ("host", "co-host", "director")):
+            return jsonify({"error": "canal director solo para host/co-host/director"}), 403
         author = (p["display_name"] if p else None) or (USER_PROFILES.get(username) or {}).get("display_name", username)
         cur = db.execute(
             "INSERT INTO chat_messages (session_id, participant_id, author_name, message_text, channel) "
