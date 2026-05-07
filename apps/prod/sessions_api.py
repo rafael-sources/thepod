@@ -568,7 +568,7 @@ def list_sounds(sid):
     try:
         _load_session(db, sid)
         rows = db.execute(
-            "SELECT id, name, filename, shortcut_key, color, duration_seconds, is_default "
+            "SELECT id, name, filename, shortcut_key, color, duration_seconds, is_default, director_only "
             "FROM sound_effects WHERE session_id=? ORDER BY shortcut_key, id",
             (sid,),
         ).fetchall()
@@ -612,8 +612,8 @@ def upload_sound(sid, sound_id):
     db = get_db()
     try:
         _load_session(db, sid)
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede cambiar sonidos"}), 403
+        if not (_is_host(db, sid, current_user()) or _is_director(db, sid, current_user())):
+            return jsonify({"error": "solo el host o director puede cambiar sonidos"}), 403
         row = db.execute(
             "SELECT * FROM sound_effects WHERE id=? AND session_id=?",
             (sound_id, sid),
@@ -706,8 +706,10 @@ def create_sound(sid):
     db = get_db()
     try:
         _load_session(db, sid)
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede agregar sonidos"}), 403
+        username = current_user()
+        is_dir = _is_director(db, sid, username)
+        if not (_is_host(db, sid, username) or is_dir):
+            return jsonify({"error": "solo el host o director puede agregar sonidos"}), 403
 
         n = db.execute(
             "SELECT COUNT(*) AS n FROM sound_effects WHERE session_id=?", (sid,)
@@ -715,11 +717,10 @@ def create_sound(sid):
         if n >= MAX_SOUNDS_PER_SESSION:
             return jsonify({"error": f"máximo {MAX_SOUNDS_PER_SESSION} sonidos por sesión"}), 409
 
-        # Conflict check on shortcut_key (nullable, just warn via frontend if already taken)
         cur = db.execute(
-            "INSERT INTO sound_effects (session_id, name, filename, shortcut_key, color, is_default) "
-            "VALUES (?, ?, '', ?, ?, 0)",
-            (sid, name, key or None, color),
+            "INSERT INTO sound_effects (session_id, name, filename, shortcut_key, color, is_default, director_only) "
+            "VALUES (?, ?, '', ?, ?, 0, ?)",
+            (sid, name, key or None, color, 1 if is_dir else 0),
         )
         db.commit()
         row = db.execute("SELECT * FROM sound_effects WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -743,8 +744,8 @@ def delete_sound(sid, sound_id):
     db = get_db()
     try:
         _load_session(db, sid)
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede eliminar"}), 403
+        if not (_is_host(db, sid, current_user()) or _is_director(db, sid, current_user())):
+            return jsonify({"error": "solo el host o director puede eliminar"}), 403
         row = db.execute(
             "SELECT * FROM sound_effects WHERE id=? AND session_id=?",
             (sound_id, sid),
@@ -776,8 +777,8 @@ def reset_sound(sid, sound_id):
     db = get_db()
     try:
         _load_session(db, sid)
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede resetear"}), 403
+        if not (_is_host(db, sid, current_user()) or _is_director(db, sid, current_user())):
+            return jsonify({"error": "solo el host o director puede resetear"}), 403
         row = db.execute(
             "SELECT shortcut_key FROM sound_effects WHERE id=? AND session_id=?",
             (sound_id, sid),

@@ -3359,6 +3359,13 @@ var DirectorView = {
     }
 
     // --- Sound trigger ---
+    var sessionSounds = computed(function () {
+      return sounds.value.filter(function (s) { return !s.director_only; });
+    });
+    var directorSounds = computed(function () {
+      return sounds.value.filter(function (s) { return s.director_only; });
+    });
+
     function triggerSound(s) {
       sendData({ type: "sound_trigger", filename: s.filename, key: s.shortcut_key });
       playingPad[s.id] = true;
@@ -3483,7 +3490,7 @@ var DirectorView = {
       expandedSection: expandedSection,
       sendCue: sendCue, cueTarget: cueTarget,
       forceMute: forceMute, kickParticipant: kickParticipant,
-      sounds: sounds, triggerSound: triggerSound, playingPad: playingPad,
+      sounds: sounds, sessionSounds: sessionSounds, directorSounds: directorSounds, triggerSound: triggerSound, playingPad: playingPad,
       ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
       directorChat: directorChat, directorChatInput: directorChatInput, sendDirectorChat: sendDirectorChat,
     };
@@ -3628,9 +3635,17 @@ var DirectorView = {
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
-          <button v-for="s in sounds" :key="s.id" class="ghost"\
+          <button v-for="s in sessionSounds" :key="s.id" class="ghost"\
                   :style="\'background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);\'"\
                   @click="triggerSound(s)">{{ s.name }}</button>\
+        </div>\
+        <div v-if="directorSounds.length" style="margin-top:6px;">\
+          <div class="eyebrow" style="padding:0 0 4px 2px;font-size:9px;color:var(--signal-cyan);">DIRECTOR ONLY</div>\
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
+            <button v-for="s in directorSounds" :key="s.id" class="ghost"\
+                    :style="\'border:1px solid var(--signal-cyan);background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);\'"\
+                    @click="triggerSound(s)">{{ s.name }}</button>\
+          </div>\
         </div>\
       </div>\
 \
