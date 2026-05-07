@@ -667,21 +667,6 @@ a.mark:hover { opacity: 0.8; }
   color: var(--paper-dim);
   background: rgba(0,0,0,0.6);
 }
-.prejoin-meter {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  height: 6px;
-  background: rgba(255,255,255,0.12);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.prejoin-meter-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--signal-cool), var(--signal), var(--signal-hot));
-  transition: width 80ms linear;
-}
 .prejoin-controls {
   display: flex;
   flex-direction: column;
@@ -782,21 +767,139 @@ a.mark:hover { opacity: 0.8; }
   border-radius: var(--r-sm);
   color: var(--signal);
 }
-.participant-card .meter {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  top: 10px;
-  height: 4px;
-  background: rgba(0,0,0,0.6);
+/* ---- VU meter — segmented LED bar ---- */
+
+.vu {
+  --vu: 0;
+  position: relative;
+  background: rgba(0,0,0,0.55);
   border-radius: 2px;
   overflow: hidden;
 }
-.participant-card .meter-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--signal-cool), var(--signal-amber), var(--signal));
-  transition: width 80ms linear;
+.vu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+    #4ade80 0%, #4ade80 55%,
+    #facc15 55%, #facc15 78%,
+    #ef4444 78%, #ef4444 100%);
+  transform-origin: bottom;
+  transform: scaleY(calc(var(--vu) / 100));
+  transition: transform 60ms linear;
+  /* segment gaps via mask */
+  -webkit-mask-image: repeating-linear-gradient(to top,
+    black 0px, black 3px, transparent 3px, transparent 4px);
+  mask-image: repeating-linear-gradient(to top,
+    black 0px, black 3px, transparent 3px, transparent 4px);
 }
+.vu::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top,
+    #4ade80 0%, #4ade80 55%,
+    #facc15 55%, #facc15 78%,
+    #ef4444 78%, #ef4444 100%);
+  transform-origin: bottom;
+  transform: scaleY(calc(var(--vu) / 100));
+  filter: blur(6px);
+  opacity: 0.35;
+  -webkit-mask-image: repeating-linear-gradient(to top,
+    black 0px, black 3px, transparent 3px, transparent 4px);
+  mask-image: repeating-linear-gradient(to top,
+    black 0px, black 3px, transparent 3px, transparent 4px);
+}
+
+/* Vertical VU inside participant cards */
+.participant-card .vu {
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 5px;
+  z-index: 3;
+}
+.participant-card .vu.vu-left {
+  right: auto;
+  left: 6px;
+}
+
+/* Horizontal VU — used in toolbar / prejoin */
+.vu-h {
+  --vu: 0;
+  position: relative;
+  height: 8px;
+  background: rgba(0,0,0,0.55);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.vu-h::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right,
+    #4ade80 0%, #4ade80 55%,
+    #facc15 55%, #facc15 78%,
+    #ef4444 78%, #ef4444 100%);
+  transform-origin: left;
+  transform: scaleX(calc(var(--vu) / 100));
+  transition: transform 60ms linear;
+  -webkit-mask-image: repeating-linear-gradient(to right,
+    black 0px, black 4px, transparent 4px, transparent 5px);
+  mask-image: repeating-linear-gradient(to right,
+    black 0px, black 4px, transparent 4px, transparent 5px);
+}
+.vu-h::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right,
+    #4ade80 0%, #4ade80 55%,
+    #facc15 55%, #facc15 78%,
+    #ef4444 78%, #ef4444 100%);
+  transform-origin: left;
+  transform: scaleX(calc(var(--vu) / 100));
+  filter: blur(5px);
+  opacity: 0.3;
+  -webkit-mask-image: repeating-linear-gradient(to right,
+    black 0px, black 4px, transparent 4px, transparent 5px);
+  mask-image: repeating-linear-gradient(to right,
+    black 0px, black 4px, transparent 4px, transparent 5px);
+}
+
+/* Master VU in studio toolbar */
+.vu-master {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--ink-sunken);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--r-md);
+}
+.vu-master .vu-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vu-master .vu-h {
+  width: 80px;
+  height: 10px;
+}
+
+/* Prejoin meter upgrade */
+.prejoin-vu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+}
+.prejoin-vu .vu-h { height: 10px; }
 
 /* Spotlight layout */
 
@@ -1525,4 +1628,160 @@ a.mark:hover { opacity: 0.8; }
   font-size: 11px;
   color: var(--paper-soft);
   margin-top: 4px;
+}
+
+/* ==========================================================================
+   Director overlays + cues (visible on host screens)
+   ========================================================================== */
+
+.director-overlay {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 800;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.overlay-card {
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--r-md);
+  padding: 14px 24px;
+  color: #fff;
+  font-family: var(--font-ui);
+  animation: overlay-in 300ms var(--ease-out-back);
+  max-width: 600px;
+  text-align: center;
+}
+.overlay-card.banner .ov-name {
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+.overlay-card.banner .ov-title {
+  font-size: 13px;
+  color: var(--paper-soft);
+  margin-top: 2px;
+}
+.overlay-card.segment .ov-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--signal-cyan);
+}
+.overlay-card.segment .ov-subtitle {
+  font-size: 16px;
+  font-family: var(--font-display);
+  margin-top: 4px;
+}
+.overlay-card.comment .ov-author {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--signal-blue);
+  margin-bottom: 4px;
+}
+.overlay-card.comment .ov-text {
+  font-size: 15px;
+  font-style: italic;
+}
+.overlay-card.countdown .ov-timer {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--signal);
+}
+.overlay-card.countdown .ov-label {
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+.overlay-card.graphic img {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: var(--r-sm);
+}
+.overlay-card.sponsor {
+  border-color: var(--signal-amber);
+}
+.overlay-card.sponsor .ov-sponsor-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--signal-amber);
+}
+@keyframes overlay-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* Director cue alert — top of screen */
+.director-cue {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  padding: 14px 32px;
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  animation: cue-in 200ms var(--ease-out-back);
+  pointer-events: none;
+}
+.director-cue.wrap-up    { background: rgba(250, 204, 21, 0.2); color: #facc15; border: 2px solid #facc15; }
+.director-cue.next-topic { background: rgba(107, 179, 196, 0.2); color: #6bb3c4; border: 2px solid #6bb3c4; }
+.director-cue.break      { background: rgba(251, 146, 60, 0.2); color: #fb923c; border: 2px solid #fb923c; }
+.director-cue.speed-up   { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 2px solid #ef4444; }
+.director-cue.slow-down  { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 2px solid #4ade80; }
+.director-cue.ad-read    { background: rgba(244, 199, 112, 0.2); color: #f4c770; border: 2px solid #f4c770; }
+.director-cue.custom     { background: rgba(255, 255, 255, 0.1); color: #fff; border: 2px solid rgba(255,255,255,0.4); }
+@keyframes cue-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(1.1); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+/* IFB indicator — host toolbar */
+.ifb-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(107, 179, 196, 0.15);
+  border: 1px solid var(--signal-cyan);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--signal-cyan);
+  font-weight: 600;
+  animation: ifb-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ifb-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(107,179,196,0); }
+  50%      { box-shadow: 0 0 14px 2px rgba(107,179,196,0.35); }
+}
+
+/* Director connected indicator */
+.director-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(107, 179, 196, 0.1);
+  border: 1px solid var(--signal-cyan);
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal-cyan);
+  font-weight: 600;
 }

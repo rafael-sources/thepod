@@ -163,10 +163,36 @@ var DashboardView = {
       try { await api("/api/sessions/" + s.id, { method: "DELETE" }); await load(); }
       catch (e) { error.value = e.message; }
     }
+    var importing = ref(false);
+    function triggerImport() {
+      var input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".zip";
+      input.onchange = async function () {
+        if (!input.files || !input.files[0]) return;
+        importing.value = true;
+        error.value = "";
+        try {
+          var fd = new FormData();
+          fd.append("file", input.files[0]);
+          var r = await fetch("/api/sessions/import", { method: "POST", credentials: "same-origin", body: fd });
+          var data = await r.json();
+          if (!r.ok) throw new Error(data.error || "error al importar");
+          await load();
+        } catch (e) { error.value = e.message; }
+        finally { importing.value = false; }
+      };
+      input.click();
+    }
+    function exportSession(s, ev) {
+      ev.stopPropagation();
+      window.location.href = "/api/sessions/" + s.id + "/export-bundle";
+    }
     onMounted(function () { load(); startPolling(); });
     onBeforeUnmount(stopPolling);
     return { sessions: sessions, loading: loading, error: error, showCreate: showCreate, form: form,
-             creating: creating, create: create, remove: remove, fmtDate: fmtDate };
+             creating: creating, create: create, remove: remove, fmtDate: fmtDate,
+             importing: importing, triggerImport: triggerImport, exportSession: exportSession };
   },
   template: `
     <div class="container">
@@ -176,6 +202,9 @@ var DashboardView = {
           <h2>Studio <em style="color:var(--signal);font-style:italic;">live</em></h2>
         </div>
         <div class="spacer"></div>
+        <button class="ghost" @click="triggerImport" :disabled="importing" style="margin-right:8px;">
+          {{ importing ? "Importando…" : "↑ Importar" }}
+        </button>
         <button class="primary" @click="showCreate = true">＋ Nueva sesión</button>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
@@ -200,6 +229,7 @@ var DashboardView = {
           </div>
           <div class="bottom">
             <span class="tiny">{{ fmtDate(s.created_at) }} · {{ s.max_participants }}p</span>
+            <button class="ghost" style="font-size:11px;padding:3px 8px;" @click="exportSession(s, $event)">↓ Exportar</button>
             <button class="danger" @click="remove(s, $event)">Eliminar</button>
           </div>
         </div>
@@ -562,6 +592,13 @@ var StudioView = {
     var localMeterStop = null;
     var layoutMode = ref("grid");   // "grid" | "spotlight"
     var spotlightId = ref(null);    // identity of the spotlighted participant (or "__local__")
+
+    // ---- Director signals (host receives these) ----
+    var activeOverlays = reactive([]);
+    var activeCue = ref(null);
+    var cueTimer = null;
+    var ifbActive = ref(false);
+    var directorConnected = ref(false);
     var _spotlightTimer = null;
     var micGainCtx = null;  // AudioContext that wraps the published mic with a GainNode (mic-check)
     var recorder = null;
@@ -1236,6 +1273,32 @@ var StudioView = {
                  msg.target_identity === room.localParticipant.identity) {
         error.value = "El host te desconectó.";
         disconnect();
+      } else if (msg.type === "overlay_inject") {
+        activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload, file_path: msg.file_path });
+      } else if (msg.type === "overlay_remove") {
+        var idx = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
+        if (idx !== -1) activeOverlays.splice(idx, 1);
+      } else if (msg.type === "director_cue") {
+        var cueMap = { "WRAP UP": "wrap-up", "NEXT TOPIC": "next-topic", "BREAK": "break", "SPEED UP": "speed-up", "SLOW DOWN": "slow-down", "AD READ": "ad-read", "CUSTOM": "custom" };
+        if (msg.target === "all" || msg.target === myIdentity.value) {
+          activeCue.value = { cue: msg.cue, text: msg.text || "", cssClass: cueMap[msg.cue] || "custom" };
+          clearTimeout(cueTimer);
+          cueTimer = setTimeout(function () { activeCue.value = null; }, 6000);
+        }
+      } else if (msg.type === "ifb_start") {
+        if (msg.targets === "all_hosts" || (Array.isArray(msg.targets) && msg.targets.indexOf(myIdentity.value) !== -1)) {
+          ifbActive.value = true;
+        }
+      } else if (msg.type === "ifb_stop") {
+        ifbActive.value = false;
+      } else if (msg.type === "force_mute") {
+        if (msg.target === myIdentity.value && room) {
+          room.localParticipant.setMicrophoneEnabled(false);
+          localMuted.value = true;
+          if (window.toast) window.toast({ type: "warn", text: "El director te muteó" });
+        }
+      } else if (msg.type === "director_chat") {
+        if (window.toast) window.toast({ type: "info", text: "Director: " + (msg.text || "") });
       }
     }
 
@@ -1357,7 +1420,12 @@ var StudioView = {
 
         newRoom.on(LK.RoomEvent.ParticipantConnected, function (p) {
           var name = p.name || p.identity;
-          if (window.toast) window.toast({ type: "info", text: name + " entró al estudio" });
+          if (p.identity && p.identity.startsWith("director_")) {
+            directorConnected.value = true;
+            if (window.toast) window.toast({ type: "info", text: "Director conectado" });
+          } else {
+            if (window.toast) window.toast({ type: "info", text: name + " entró al estudio" });
+          }
           _maybeBrowserNotify(name + " entró al estudio");
           loadParticipants();
         });
@@ -1404,6 +1472,9 @@ var StudioView = {
         });
         newRoom.on(LK.RoomEvent.ParticipantDisconnected, function (p) {
           var name = p.name || p.identity;
+          if (p.identity && p.identity.startsWith("director_")) {
+            directorConnected.value = false;
+          }
           if (window.toast) window.toast({ type: "warn", text: name + " se desconectó" });
           _maybeBrowserNotify(name + " se desconectó");
           if (remoteMap[p.identity] && remoteMap[p.identity]._stopMeter) remoteMap[p.identity]._stopMeter();
@@ -1915,6 +1986,7 @@ var StudioView = {
       askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
       layoutMode: layoutMode, spotlightId: spotlightId, toggleLayout: toggleLayout,
       spotlightParticipant: spotlightParticipant, pinSpotlight: pinSpotlight,
+      activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
     };
   },
   template: `
@@ -1925,6 +1997,12 @@ var StudioView = {
         <span class="badge-id">#{{ session.id }}</span>
         <div class="spacer"></div>
         <div class="timecode mono">{{ formatTC(timecode) }}</div>
+        <div v-if="connected" class="vu-master">
+          <span class="vu-label">MIC</span>
+          <div class="vu-h" :style="'--vu:' + localMeter"></div>
+        </div>
+        <span v-if="ifbActive" class="ifb-indicator">🎧 Director hablándote...</span>
+        <span v-if="directorConnected" class="director-badge">🎬 Director</span>
         <label v-if="!recording && countdown === null && isHost" class="practice-toggle"
                :title="'En modo ensayo nada se sube al servidor — solo prueba.'">
           <input type="checkbox" v-model="practiceMode">
@@ -1975,6 +2053,40 @@ var StudioView = {
         </button>
       </div>
 
+      <div v-if="activeCue" class="director-cue" :class="activeCue.cssClass">
+        {{ activeCue.cue }}
+        <div v-if="activeCue.text" style="font-size: 13px; font-weight: 400; margin-top: 4px;">{{ activeCue.text }}</div>
+      </div>
+
+      <div v-if="activeOverlays.length" class="director-overlay">
+        <div v-for="ov in activeOverlays" :key="ov.event_id" class="overlay-card" :class="ov.event_type">
+          <template v-if="ov.event_type === 'banner'">
+            <div class="ov-name">{{ ov.payload.name }}</div>
+            <div class="ov-title">{{ ov.payload.title }}</div>
+          </template>
+          <template v-else-if="ov.event_type === 'segment'">
+            <div class="ov-title">{{ ov.payload.title }}</div>
+            <div class="ov-subtitle">{{ ov.payload.subtitle }}</div>
+          </template>
+          <template v-else-if="ov.event_type === 'comment'">
+            <div class="ov-author">{{ ov.payload.author }} · {{ ov.payload.platform }}</div>
+            <div class="ov-text">{{ ov.payload.text }}</div>
+          </template>
+          <template v-else-if="ov.event_type === 'countdown'">
+            <div class="ov-label">{{ ov.payload.label }}</div>
+            <div class="ov-timer">{{ ov.payload.seconds }}s</div>
+          </template>
+          <template v-else-if="ov.event_type === 'sponsor'">
+            <div class="ov-sponsor-name">{{ ov.payload.sponsor_name }}</div>
+            <div class="ov-title">{{ ov.payload.sponsor_copy }}</div>
+          </template>
+          <template v-else-if="ov.event_type === 'graphic'">
+            <img v-if="ov.file_path" :src="'/api/sessions/' + session.id + '/director/assets/' + ov.file_path.split('/').pop()" />
+            <div v-if="ov.payload.caption" class="ov-title">{{ ov.payload.caption }}</div>
+          </template>
+        </div>
+      </div>
+
       <div class="studio-main">
         <div v-if="error" class="error">{{ error }}</div>
 
@@ -1987,8 +2099,8 @@ var StudioView = {
                 <button class="primary" @click="startPrejoinPreview">Activar cámara/mic</button>
                 <div v-if="prejoinError" class="error" style="margin-top: 14px;">{{ prejoinError }}</div>
               </div>
-              <div class="prejoin-meter" :title="'Nivel de mic: ' + prejoinMeter + '%'">
-                <div class="prejoin-meter-fill" :style="{ width: prejoinMeter + '%' }"></div>
+              <div class="prejoin-vu" :title="'Nivel de mic: ' + prejoinMeter + '%'">
+                <div class="vu-h" :style="'--vu:' + prejoinMeter"></div>
               </div>
             </div>
             <div class="prejoin-controls">
@@ -2094,7 +2206,7 @@ var StudioView = {
                   <span class="role-chip">TÚ</span>
                 </div>
                 <div v-if="localMuted" class="muted-icon">🔇</div>
-                <div class="meter"><div class="meter-fill" :style="{ width: localMeter + '%' }"></div></div>
+                <div class="vu" :style="'--vu:' + localMeter"></div>
               </div>
               <div v-else-if="spotlightParticipant()" class="participant-card spotlight-card" :class="{ speaking: remoteMap[spotlightId] && remoteMap[spotlightId].speaking }">
                 <div :data-remote-id="spotlightId" style="width: 100%; height: 100%;">
@@ -2104,7 +2216,7 @@ var StudioView = {
                   <span>{{ spotlightParticipant().display_name }}</span>
                   <span class="role-chip">{{ spotlightParticipant().role }}</span>
                 </div>
-                <div class="meter"><div class="meter-fill" :style="{ width: ((remoteMap[spotlightId] && remoteMap[spotlightId].meter) || 0) + '%' }"></div></div>
+                <div class="vu" :style="'--vu:' + ((remoteMap[spotlightId] && remoteMap[spotlightId].meter) || 0)"></div>
               </div>
             </template>
           </div>
@@ -2147,7 +2259,7 @@ var StudioView = {
               <span v-if="ownReady && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
             <div v-if="localMuted" class="muted-icon">🔇</div>
-            <div class="meter"><div class="meter-fill" :style="{ width: localMeter + '%' }"></div></div>
+            <div class="vu" :style="'--vu:' + localMeter"></div>
           </div>
 
           <div v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected')"
@@ -2163,7 +2275,7 @@ var StudioView = {
               <span class="role-chip">{{ p.role }}</span>
               <span v-if="readyMap['participant_' + p.id] && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
-            <div class="meter"><div class="meter-fill" :style="{ width: ((remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].meter) || 0) + '%' }"></div></div>
+            <div class="vu" :style="'--vu:' + ((remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].meter) || 0)"></div>
           </div>
 
           <div v-for="p in participants.filter(pp => pp.status === 'invited')"
@@ -2463,11 +2575,38 @@ var InviteView = {
     var error = ref("");
     var busy = ref(false);
     var name = ref("");
+    var waitingForHost = ref(false);
+    var pollTimer = ref(null);
 
     async function load() {
-      try { invite.value = await api("/api/invite/" + props.token); name.value = invite.value.display_name; }
+      try {
+        invite.value = await api("/api/invite/" + props.token);
+        name.value = invite.value.display_name;
+        if (invite.value.expired) return;
+        if (invite.value.role === "guest" && !invite.value.host_present) {
+          waitingForHost.value = true;
+          startPolling();
+        }
+      }
       catch (e) { error.value = e.message; }
     }
+
+    function startPolling() {
+      if (pollTimer.value) return;
+      pollTimer.value = setInterval(async () => {
+        try {
+          var res = await api("/api/invite/" + props.token);
+          invite.value = res;
+          if (res.expired) { stopPolling(); return; }
+          if (res.host_present) { waitingForHost.value = false; stopPolling(); }
+        } catch (_) {}
+      }, 5000);
+    }
+
+    function stopPolling() {
+      if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null; }
+    }
+
     async function join() {
       busy.value = true; error.value = "";
       try {
@@ -2475,12 +2614,16 @@ var InviteView = {
           method: "POST",
           body: { display_name: name.value.trim() },
         });
+        stopPolling();
         props.onJoined(r);
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
+
     onMounted(load);
-    return { invite: invite, error: error, busy: busy, name: name, join: join };
+    onBeforeUnmount(stopPolling);
+
+    return { invite, error, busy, name, waitingForHost, join };
   },
   template: `
     <div class="login-wrapper">
@@ -2488,9 +2631,24 @@ var InviteView = {
         <div class="eyebrow">INVITACIÓN · LIVE BOOTH</div>
         <h2 v-if="invite">{{ invite.session_title }}</h2>
         <h2 v-else>Cargando…</h2>
-        <div v-if="invite" class="subtitle">{{ invite.session_description || "Te invitaron a grabar en prodPod." }}</div>
-        <div v-if="error" class="error">{{ error }}</div>
-        <div v-if="invite">
+        <div v-if="invite && !invite.expired" class="subtitle">{{ invite.session_description || "Te invitaron a grabar en prodPod." }}</div>
+
+        <!-- Session expired -->
+        <div v-if="invite && invite.expired" style="text-align: center; padding: 20px 0;">
+          <div style="font-size: 32px; margin-bottom: 12px;">⏹</div>
+          <p style="font-size: 15px; color: var(--paper-dim);">Esta sesión ya finalizó.<br>La invitación ya no es válida.</p>
+        </div>
+
+        <!-- Waiting for host -->
+        <div v-else-if="waitingForHost" style="text-align: center; padding: 20px 0;">
+          <div style="font-size: 32px; margin-bottom: 12px;">⏳</div>
+          <p style="font-size: 15px; color: var(--paper-dim);">Esperando a que el host se conecte…</p>
+          <p style="font-size: 12px; color: var(--paper-dim); margin-top: 8px;">La página se actualizará automáticamente.</p>
+        </div>
+
+        <!-- Ready to join -->
+        <template v-else-if="invite && !invite.expired">
+          <div v-if="error" class="error">{{ error }}</div>
           <div class="form-row">
             <label>Tu nombre</label>
             <input type="text" v-model="name" placeholder="Cómo quieres aparecer">
@@ -2498,7 +2656,9 @@ var InviteView = {
           <button class="primary" :disabled="busy || !name.trim()" @click="join" style="width:100%; margin-top: 12px; padding: 12px;">
             {{ busy ? "Entrando…" : "🎙 Entrar al estudio" }}
           </button>
-        </div>
+        </template>
+
+        <div v-if="error && !invite" class="error">{{ error }}</div>
       </div>
     </div>
   `,
@@ -2859,6 +3019,10 @@ var GuestStudioView = {
         <span class="badge-id">{{ joinData.role }}</span>
         <div class="spacer"></div>
         <div v-if="recording" class="timecode mono">{{ formatTC(timecode) }}</div>
+        <div v-if="connected" class="vu-master">
+          <span class="vu-label">MIC</span>
+          <div class="vu-h" :style="'--vu:' + localMeter"></div>
+        </div>
         <button v-if="connected && !recording && countdown === null" class="primary rec-btn"
                 @click="toggleReady"
                 :style="ownReady ? 'background: var(--signal); color:#fff;' : ''">
@@ -2893,7 +3057,7 @@ var GuestStudioView = {
               <span v-if="ownReady && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
             <div v-if="localMuted" class="muted-icon">🔇</div>
-            <div class="meter"><div class="meter-fill" :style="{ width: localMeter + '%' }"></div></div>
+            <div class="vu" :style="'--vu:' + localMeter"></div>
           </div>
           <div v-for="(t, id) in remoteMap" :key="id" class="participant-card">
             <div :data-remote-id="id" style="width:100%; height:100%;"></div>
@@ -2901,7 +3065,7 @@ var GuestStudioView = {
               <span>{{ t.name || id }}</span>
               <span v-if="readyMap[id] && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
-            <div class="meter"><div class="meter-fill" :style="{ width: (t.meter || 0) + '%' }"></div></div>
+            <div class="vu" :style="'--vu:' + (t.meter || 0)"></div>
           </div>
         </div>
         <div v-if="countdown !== null" class="countdown-overlay">
