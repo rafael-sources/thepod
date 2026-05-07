@@ -85,18 +85,20 @@ def generate_participant_token(
     identity: str,
     display_name: str,
     is_host: bool = False,
+    is_director: bool = False,
     ttl_seconds: int = 6 * 3600,
 ) -> str:
     """
     Create a JWT access token the browser uses to join the LiveKit room.
     `is_host` gets extra grants (record, can-update-metadata).
+    `is_director` cannot publish regular audio/video (only data and IFB audio).
     """
     from livekit import api
 
     grants = api.VideoGrants(
         room_join=True,
         room=room_name,
-        can_publish=True,
+        can_publish=not is_director,
         can_subscribe=True,
         can_publish_data=True,
     )
