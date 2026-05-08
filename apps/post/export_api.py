@@ -40,6 +40,7 @@ def _serialize_job(row):
         "moment_banner": bool(row["moment_banner"]) if "moment_banner" in keys else False,
         "banner_position": row["banner_position"] if "banner_position" in keys else "bottom",
         "vertical_center_spotlight": bool(row["vertical_center_spotlight"]) if "vertical_center_spotlight" in keys else False,
+        "director_overlays": bool(row["director_overlays"]) if "director_overlays" in keys else False,
     }
 
 
@@ -80,6 +81,7 @@ def create_export(slug):
     if banner_position not in ("top", "middle", "bottom"):
         banner_position = "bottom"
     vertical_center_spotlight = 1 if data.get("vertical_center_spotlight") else 0
+    director_overlays = 1 if data.get("director_overlays") else 0
 
     # Optional partial-range export: render only the segment [range_start,
     # range_end] of the final timeline. Internal cuts/transcript_cuts/zooms
@@ -112,10 +114,12 @@ def create_export(slug):
         cur = db.execute(
             "INSERT INTO export_jobs (preset_id, status, burn_captions_json, "
             "generate_notes, enhance_speech, range_start, range_end, spotlight, "
-            "use_background, moment_banner, banner_position, vertical_center_spotlight) "
-            "VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "use_background, moment_banner, banner_position, vertical_center_spotlight, "
+            "director_overlays) "
+            "VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (preset_id, burn_json, generate_notes, enhance_speech, range_start, range_end,
-             spotlight, use_background, moment_banner, banner_position, vertical_center_spotlight),
+             spotlight, use_background, moment_banner, banner_position, vertical_center_spotlight,
+             director_overlays),
         )
         db.commit()
         job_id = cur.lastrowid

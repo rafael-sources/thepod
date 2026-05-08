@@ -178,10 +178,29 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN banner_position TEXT DEFAULT 'bottom'")
     if "vertical_center_spotlight" not in ej_cols:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN vertical_center_spotlight INTEGER NOT NULL DEFAULT 0")
+    if "director_overlays" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN director_overlays INTEGER NOT NULL DEFAULT 0")
     # Moment duration: lets the user define a moment as a range
     # [timeline_seconds .. timeline_seconds + duration_seconds] instead of
     # a point. Old rows stay NULL and are treated as point-in-time.
     m_cols = {r["name"] for r in conn.execute("PRAGMA table_info(moments)")}
     if "duration_seconds" not in m_cols:
         conn.execute("ALTER TABLE moments ADD COLUMN duration_seconds REAL")
+    seg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(project_segments)")}
+    if "actual_offset_seconds" not in seg_cols:
+        conn.execute("ALTER TABLE project_segments ADD COLUMN actual_offset_seconds REAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS director_events (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type               TEXT NOT NULL,
+            payload                  TEXT,
+            file_path                TEXT,
+            recording_offset_seconds REAL,
+            duration_seconds         REAL,
+            created_by               TEXT,
+            injected_at              TEXT,
+            removed_at               TEXT,
+            imported_at              TEXT DEFAULT (datetime('now'))
+        )
+    """)
     conn.commit()

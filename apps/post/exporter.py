@@ -1329,7 +1329,8 @@ def _apply_sponsor_banners(parts, current_label, sponsors, segments,
             cursor += float(seg.get("duration_estimate") or 0)
             continue
         sp = sponsor_map[sid]
-        t0 = cursor
+        actual = seg.get("actual_offset_seconds")
+        t0 = float(actual) if actual is not None else cursor
         dur = 5.0
         t1 = min(t0 + dur, total_duration)
         if t1 - t0 < 0.5:
@@ -1438,6 +1439,107 @@ def _apply_topic_lowerthirds(parts, current_label, segments, total_duration, W, 
         current_label = tx_lbl
 
         cursor += dur_est
+
+    return current_label
+
+
+def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
+                              heading_font=None):
+    """Render director_events as timed lower-third overlays during export.
+    Each event with a recording_offset_seconds gets a 6s drawbox+drawtext."""
+    if not W or not H:
+        return current_label
+
+    db = get_db(slug)
+    try:
+        rows = db.execute(
+            "SELECT * FROM director_events WHERE recording_offset_seconds IS NOT NULL "
+            "ORDER BY recording_offset_seconds"
+        ).fetchall()
+    finally:
+        db.close()
+
+    if not rows:
+        return current_label
+
+    fallback = drawtext_fontfile()
+    font_part = _font_part_for(heading_font, fallback)
+    uid = 0
+
+    type_labels = {
+        "banner": "BANNER", "segment": "SEGMENTO", "comment": "COMENTARIO",
+        "sponsor": "SPONSOR", "countdown": "COUNTDOWN", "graphic": "GRÁFICO",
+        "cue": "CUE",
+    }
+
+    for ev in rows:
+        t0 = float(ev["recording_offset_seconds"])
+        dur = float(ev["duration_seconds"] or 6.0)
+        if ev["removed_at"] and ev["injected_at"]:
+            try:
+                from datetime import datetime as _dt
+                injected = _dt.fromisoformat(ev["injected_at"].replace("Z", "+00:00"))
+                removed = _dt.fromisoformat(ev["removed_at"].replace("Z", "+00:00"))
+                dur = max(1.0, (removed - injected).total_seconds())
+            except (ValueError, TypeError):
+                pass
+        t1 = min(t0 + dur, total_duration)
+        if t1 - t0 < 0.3:
+            continue
+
+        payload = {}
+        if ev["payload"]:
+            try:
+                payload = json.loads(ev["payload"])
+            except (TypeError, ValueError):
+                pass
+
+        etype = ev["event_type"] or "overlay"
+        prefix = type_labels.get(etype, etype.upper())
+
+        if etype == "banner":
+            text = f"{payload.get('name', '')} — {payload.get('title', '')}"
+        elif etype == "segment":
+            text = payload.get("title", "")
+            if payload.get("subtitle"):
+                text += f" · {payload['subtitle']}"
+        elif etype == "comment":
+            text = f"@{payload.get('author', '')}\\: {payload.get('text', '')}"
+        elif etype == "sponsor":
+            text = f"{payload.get('sponsor_name', '')} — {payload.get('sponsor_copy', '')}"
+        elif etype == "cue":
+            text = payload.get("cue", "")
+        else:
+            text = payload.get("caption", "") or payload.get("text", "") or etype
+
+        text = text.strip()
+        if not text:
+            continue
+        escaped = _escape_drawtext(f"{prefix}\\: {text}")
+        enable = f"between(t,{t0:.3f},{t1:.3f})"
+
+        bar_y = int(H * 0.85)
+        bar_h = int(H * 0.08)
+        title_size = max(16, int(H * 0.026))
+
+        uid += 1
+        bg_lbl = f"dov{uid}"
+        parts.append(
+            f"[{current_label}]drawbox=x=0:y={bar_y}:w={W}:h={bar_h}"
+            f":color=black@0.7:t=fill:enable='{enable}'[{bg_lbl}]"
+        )
+        current_label = bg_lbl
+
+        uid += 1
+        tx_lbl = f"dov{uid}"
+        tx_x = int(W * 0.04)
+        tx_y = bar_y + int(bar_h * 0.25)
+        parts.append(
+            f"[{current_label}]drawtext=text='{escaped}'"
+            f"{font_part}:fontsize={title_size}:fontcolor=white"
+            f":x={tx_x}:y={tx_y}:enable='{enable}'[{tx_lbl}]"
+        )
+        current_label = tx_lbl
 
     return current_label
 
@@ -1561,7 +1663,8 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                          use_background: bool = False,
                          moment_banner: bool = False,
                          banner_position: str = "bottom",
-                         vertical_center_spotlight: bool = False):
+                         vertical_center_spotlight: bool = False,
+                         director_overlays: bool = False):
     """Returns (cmd_list, effective_duration_seconds).
 
     `enhance_speech`: when True, runs the speech track through a small
@@ -2231,6 +2334,14 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                 heading_font=heading_font,
             )
 
+    # ---- Director overlays (timed lower-thirds from prodPod director events) ----
+    if video_label and not is_audio_only and director_overlays:
+        h_font = _resolve_project_fonts(slug)[0]
+        video_label = _apply_director_overlays(
+            parts, video_label, slug, total_duration, W, H,
+            heading_font=h_font,
+        )
+
     # ---- Moment banner (CNN-style bar with logo + label + social) ----
     if video_label and not is_audio_only and moment_banner and range_start is not None:
         n_before = sum(1 for a in cmd if a == "-i")
@@ -2510,7 +2621,7 @@ def run_export(slug: str, job_id: int):
         job = db.execute(
             "SELECT preset_id, burn_captions_json, generate_notes, enhance_speech, "
             "range_start, range_end, spotlight, use_background, moment_banner, "
-            "banner_position, vertical_center_spotlight FROM export_jobs WHERE id=?",
+            "banner_position, vertical_center_spotlight, director_overlays FROM export_jobs WHERE id=?",
             (job_id,),
         ).fetchone()
     finally:
@@ -2525,6 +2636,7 @@ def run_export(slug: str, job_id: int):
     moment_banner = bool(job["moment_banner"]) if "moment_banner" in job_keys else False
     banner_position = job["banner_position"] if "banner_position" in job_keys else "bottom"
     vertical_center_spotlight = bool(job["vertical_center_spotlight"]) if "vertical_center_spotlight" in job_keys else False
+    director_overlays_flag = bool(job["director_overlays"]) if "director_overlays" in job_keys else False
     preset = find_preset(preset_id)
     if not preset:
         _update_job(slug, job_id, status="error", error_msg=f"preset desconocido: {preset_id}")
@@ -2555,6 +2667,7 @@ def run_export(slug: str, job_id: int):
             moment_banner=moment_banner,
             banner_position=banner_position or "bottom",
             vertical_center_spotlight=vertical_center_spotlight,
+            director_overlays=director_overlays_flag,
         )
     except Exception as e:
         _update_job(slug, job_id, status="error", error_msg=f"no se pudo construir el comando: {e}")

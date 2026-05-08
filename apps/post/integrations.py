@@ -531,6 +531,7 @@ def import_chapters_from_prodpod():
     db = get_db(slug)
     created = 0
     skipped = 0
+    sponsor_offsets = 0
     try:
         for c in chapters:
             try:
@@ -540,8 +541,23 @@ def import_chapters_from_prodpod():
             if off < 0:
                 skipped += 1; continue
             label = (c.get("label") or "").strip()[:200]
-            # Idempotent: skip if a moment already exists at this exact time
-            # with the same label (likely re-import).
+
+            if c.get("kind") == "sponsor" and c.get("sponsor_name"):
+                sname = c["sponsor_name"].strip()
+                seg = db.execute(
+                    """SELECT ps.id AS seg_id FROM project_segments ps
+                       JOIN project_sponsors sp ON sp.id = ps.sponsor_id
+                       WHERE sp.name = ? AND ps.kind = 'sponsor'
+                       ORDER BY ps.position LIMIT 1""",
+                    (sname,),
+                ).fetchone()
+                if seg:
+                    db.execute(
+                        "UPDATE project_segments SET actual_offset_seconds=? WHERE id=?",
+                        (off, seg["seg_id"]),
+                    )
+                    sponsor_offsets += 1
+
             exists = db.execute(
                 "SELECT id FROM moments WHERE timeline_seconds=? AND COALESCE(label,'')=?",
                 (off, label),
@@ -561,6 +577,7 @@ def import_chapters_from_prodpod():
         "project": _summarize_project(meta),
         "created_moments": created,
         "skipped": skipped,
+        "sponsor_offsets_applied": sponsor_offsets,
     }), 201
 
 
@@ -944,3 +961,99 @@ def delete_export_by_spid(job_id):
     finally:
         db.close()
     return jsonify({"ok": True})
+
+
+@bp.post("/api/integrations/prodpod/import-director-events")
+def import_director_events():
+    """
+    Receive director overlay events from prodPod and store them in the
+    project's director_events table for post-production rendering.
+    Body: {shared_project_id, project_name?, events: [{event_type, payload, ...}]}
+    """
+    err = _require_shared_secret()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    spid = (data.get("shared_project_id") or "").strip()
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+    events = data.get("events") or []
+    if not isinstance(events, list):
+        return jsonify({"error": "events debe ser lista"}), 400
+
+    meta = find_project_by_shared_id(spid)
+    if not meta:
+        project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+        meta = _create_project_internal(
+            name=project_name, shared_project_id=spid,
+            source_info={"app": "prodpod",
+                         "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                         "auto_created_by": "prodpod_director_events"},
+        )
+    slug = meta["slug"]
+
+    db = get_db(slug)
+    created = 0
+    try:
+        for ev in events:
+            db.execute(
+                """INSERT INTO director_events
+                   (event_type, payload, file_path, recording_offset_seconds,
+                    duration_seconds, created_by, injected_at, removed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ev.get("event_type"),
+                    ev.get("payload"),
+                    ev.get("file_path"),
+                    ev.get("recording_offset_seconds"),
+                    ev.get("duration_seconds"),
+                    ev.get("created_by"),
+                    ev.get("injected_at"),
+                    ev.get("removed_at"),
+                ),
+            )
+            created += 1
+        db.commit()
+    finally:
+        db.close()
+
+    return jsonify({
+        "project": _summarize_project(meta),
+        "created_events": created,
+    }), 201
+
+
+@bp.post("/api/integrations/prodpod/import-director-asset")
+def import_director_asset():
+    """
+    Receive a director graphic asset file from prodPod and store it in the
+    project's director_assets/ directory.
+    Multipart: file + shared_project_id + session_id
+    """
+    err = _require_shared_secret()
+    if err:
+        return err
+    spid = (request.form.get("shared_project_id") or "").strip()
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "file requerido"}), 400
+
+    meta = find_project_by_shared_id(spid)
+    if not meta:
+        return jsonify({"error": "proyecto no encontrado para shared_project_id"}), 404
+    slug = meta["slug"]
+
+    dest_dir = PROJECTS_DIR / slug / "director_assets"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(f.filename).name
+    dest = dest_dir / safe_name
+    f.save(str(dest))
+
+    return jsonify({
+        "project": _summarize_project(meta),
+        "filename": safe_name,
+        "size": dest.stat().st_size,
+    }), 201
