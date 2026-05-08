@@ -332,3 +332,40 @@ def notify_source(session_row, event: str, extra: dict | None = None, timeout: f
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
         # Source app is offline or rejected the event — production keeps going.
         pass
+
+
+@bp.post("/api/integrations/sync-directors")
+def sync_directors():
+    """
+    Receive the canonical list of directors for a shared_project_id from prePod.
+    Replaces all existing rows in podcast_directors for that project.
+    """
+    err = _require_shared_secret()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    spid = (data.get("shared_project_id") or "").strip()
+    directors = data.get("directors")
+    assigned_by = (data.get("assigned_by") or "").strip()
+    if not spid or not isinstance(directors, list):
+        return jsonify({"error": "shared_project_id y directors[] requeridos"}), 400
+
+    db = get_db()
+    try:
+        db.execute("DELETE FROM podcast_directors WHERE shared_project_id=?", (spid,))
+        for username in directors:
+            u = (str(username) or "").strip()
+            if not u:
+                continue
+            db.execute(
+                "INSERT OR IGNORE INTO podcast_directors (username, shared_project_id, assigned_by) "
+                "VALUES (?, ?, ?)",
+                (u, spid, assigned_by or "system"),
+            )
+        db.commit()
+        count = db.execute(
+            "SELECT COUNT(*) AS n FROM podcast_directors WHERE shared_project_id=?", (spid,)
+        ).fetchone()["n"]
+        return jsonify({"ok": True, "synced": count})
+    finally:
+        db.close()
