@@ -2717,6 +2717,13 @@ var GuestStudioView = {
     var countdown = ref(null);
     var countdownHandle = null;
 
+    // Director state
+    var activeOverlays = reactive([]);
+    var activeCue = ref(null);
+    var cueTimer = null;
+    var ifbActive = ref(false);
+    var directorConnected = ref(false);
+
     async function loadSounds() {
       try {
         var resp = await fetch(
@@ -2794,6 +2801,27 @@ var GuestStudioView = {
                  msg.target_identity === room.localParticipant.identity) {
         error.value = "El host te desconectó.";
         leave();
+      } else if (msg.type === "overlay_inject") {
+        activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload });
+      } else if (msg.type === "overlay_remove") {
+        var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
+        if (oi !== -1) activeOverlays.splice(oi, 1);
+      } else if (msg.type === "director_cue") {
+        activeCue.value = msg;
+        if (cueTimer) clearTimeout(cueTimer);
+        cueTimer = setTimeout(function () { activeCue.value = null; }, 8000);
+      } else if (msg.type === "ifb_start") {
+        ifbActive.value = true;
+      } else if (msg.type === "ifb_stop") {
+        ifbActive.value = false;
+      } else if (msg.type === "force_mute") {
+        if (msg.target === myIdentity.value && room) {
+          room.localParticipant.setMicrophoneEnabled(false);
+          localMuted.value = true;
+          if (window.toast) window.toast({ type: "warn", text: "El director te muteó" });
+        }
+      } else if (msg.type === "director_chat") {
+        if (window.toast) window.toast({ type: "info", text: "Director: " + (msg.text || "") });
       }
     }
 
@@ -2909,10 +2937,13 @@ var GuestStudioView = {
         });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           var id = participant.identity;
-          // Register the participant in the reactive map FIRST, so Vue renders
-          // the <div data-remote-id> placeholder, and only then mount the
-          // track into that element. (Reversing this order made the guest
-          // unable to see the host's video.)
+          if (track.kind === LK.Track.Kind.Audio && pub.trackName === "ifb_audio") {
+            var ifbEl = track.attach(); ifbEl.volume = 1.0;
+            ifbEl.id = "ifb-audio-guest";
+            document.body.appendChild(ifbEl);
+            return;
+          }
+          if (id.startsWith("director_")) return;
           if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0 };
           if (track.kind === LK.Track.Kind.Video) {
             _mountRemoteVideo(id, track);
@@ -2926,9 +2957,19 @@ var GuestStudioView = {
             remoteMap[id]._stopMeter = stop;
           }
         });
+        newRoom.on(LK.RoomEvent.ParticipantConnected, function (p) {
+          if (p.identity.startsWith("director_")) directorConnected.value = true;
+        });
         newRoom.on(LK.RoomEvent.ParticipantDisconnected, function (p) {
+          if (p.identity.startsWith("director_")) { directorConnected.value = false; return; }
           if (remoteMap[p.identity] && remoteMap[p.identity]._stopMeter) remoteMap[p.identity]._stopMeter();
           delete remoteMap[p.identity];
+        });
+        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) {
+          if (track.kind === LK.Track.Kind.Audio) {
+            var ifbEl = document.getElementById("ifb-audio-guest");
+            if (ifbEl) { ifbEl.remove(); }
+          }
         });
         newRoom.on(LK.RoomEvent.DataReceived, onDataReceived);
 
@@ -3021,7 +3062,8 @@ var GuestStudioView = {
              chat: chat, chatInput: chatInput, sendChat: sendChat,
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
              toggleReady: toggleReady, ownReady: ownReady, readyMap: readyMap, countdown: countdown,
-             myIdentity: myIdentity, practiceMode: practiceMode };
+             myIdentity: myIdentity, practiceMode: practiceMode,
+             activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
   },
   template: `
     <div class="studio">
@@ -3083,6 +3125,28 @@ var GuestStudioView = {
           <div class="countdown-num">{{ countdown > 0 ? countdown : '●' }}</div>
           <div class="countdown-label">{{ countdown > 0 ? 'preparándose…' : 'GRABANDO' }}</div>
         </div>
+        <div v-if="activeOverlays.length" class="director-overlay">
+          <div v-for="ov in activeOverlays" :key="ov.event_id" class="overlay-card" :class="'overlay-' + ov.event_type">
+            <template v-if="ov.event_type === 'banner'">
+              <div class="ov-name">{{ ov.payload.name }}</div><div class="ov-title">{{ ov.payload.title }}</div>
+            </template>
+            <template v-else-if="ov.event_type === 'segment'">
+              <div class="ov-name">{{ ov.payload.title }}</div><div class="ov-title">{{ ov.payload.subtitle }}</div>
+            </template>
+            <template v-else-if="ov.event_type === 'comment'">
+              <div class="ov-name">{{ ov.payload.author }}</div><div class="ov-title">{{ ov.payload.text }}</div>
+            </template>
+            <template v-else-if="ov.event_type === 'sponsor'">
+              <div class="ov-name">{{ ov.payload.sponsor_name }}</div><div class="ov-title">{{ ov.payload.sponsor_copy }}</div>
+            </template>
+            <template v-else>
+              <div class="ov-name">{{ ov.event_type }}</div>
+            </template>
+          </div>
+        </div>
+        <div v-if="activeCue" class="director-cue" :class="(activeCue.cue || '').toLowerCase().replace(/ /g, '-')">
+          {{ activeCue.cue }}
+        </div>
       </div>
       <aside class="studio-side">
         <div>
@@ -3114,6 +3178,8 @@ var GuestStudioView = {
       <div class="controls-bar">
         <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
         <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
+        <span v-if="ifbActive" class="ifb-indicator">IFB</span>
+        <span v-if="directorConnected" class="director-badge">Director conectado</span>
         <div class="spacer"></div>
         <button class="ghost" @click="leave">Salir</button>
       </div>
