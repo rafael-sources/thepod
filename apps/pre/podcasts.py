@@ -1,9 +1,11 @@
 import json
 import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from slugify import slugify
 
 from auth import current_user, require_auth
@@ -28,6 +30,61 @@ def _row_extra_hosts(row) -> list[str]:
         return [str(x) for x in v] if isinstance(v, list) else []
     except (TypeError, ValueError):
         return []
+
+
+def _row_invitations(row) -> dict:
+    if "host_invitations" not in row.keys() or not row["host_invitations"]:
+        return {}
+    try:
+        v = json.loads(row["host_invitations"])
+        return v if isinstance(v, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _save_invitations(db, slug: str, invitations: dict):
+    db.execute(
+        "UPDATE podcast_meta SET host_invitations=?, updated_at=datetime('now') WHERE slug=?",
+        (json.dumps(invitations), slug),
+    )
+
+
+def _row_directors(row) -> list[str]:
+    if "directors" not in row.keys() or not row["directors"]:
+        return []
+    try:
+        v = json.loads(row["directors"])
+        return [str(x) for x in v] if isinstance(v, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
+def _sync_directors_to_prodpod(shared_project_id: str, directors: list[str], assigned_by: str):
+    """Best-effort push of the directors list to prodPod."""
+    from shared_config import load_shared_config
+    cfg = load_shared_config()
+    prodpod_url = (cfg.get("prodpod_url") or "").rstrip("/")
+    if not prodpod_url:
+        return
+    from config import INTEGRATION_SECRET
+    import urllib.request
+    import urllib.error
+    body = json.dumps({
+        "shared_project_id": shared_project_id,
+        "directors": directors,
+        "assigned_by": assigned_by,
+    }).encode()
+    req = urllib.request.Request(
+        f"{prodpod_url}/api/integrations/sync-directors",
+        data=body,
+        headers={"Content-Type": "application/json", "X-PodPod-Secret": INTEGRATION_SECRET},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
+        pass
 
 
 def _can_see(username: str, owner: str, extra_hosts=()) -> bool:
@@ -83,6 +140,7 @@ def _serialize_meta(row):
             if "background_filename" in keys and row["background_filename"] else None
         ),
         "shared_project_id": row["shared_project_id"],
+        "directors": _row_directors(row),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -197,11 +255,26 @@ def list_hosts(slug):
         row = db.execute("SELECT * FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
         if not row:
             return jsonify({"error": "podcast no encontrado"}), 404
-        if not _can_see(current_user(), _row_owner(row), _row_extra_hosts(row)):
+        user = current_user()
+        if not _can_see(user, _row_owner(row), _row_extra_hosts(row)):
             return jsonify({"error": "no autorizado"}), 403
+
+        invitations = _row_invitations(row)
+        extra = _row_extra_hosts(row)
+
+        # Auto-accept: if current user is in extra_hosts and still "pendiente"
+        inv = invitations.get(user)
+        if inv and inv.get("status") == "pendiente" and user in extra:
+            invitations[user]["status"] = "aceptado"
+            invitations[user]["accepted_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+            _save_invitations(db, slug, invitations)
+            db.commit()
+
         return jsonify({
             "owner": _row_owner(row),
-            "extra_hosts": _row_extra_hosts(row),
+            "extra_hosts": extra,
+            "invitations": invitations,
+            "directors": _row_directors(row),
         })
     finally:
         db.close()
@@ -243,8 +316,14 @@ def set_hosts(slug):
             "UPDATE podcast_meta SET extra_hosts=?, updated_at=datetime('now') WHERE slug=?",
             (json.dumps(cleaned), slug),
         )
+        # Clean up invitations for removed hosts
+        invitations = _row_invitations(row)
+        removed = set(_row_extra_hosts(row)) - set(cleaned)
+        for r in removed:
+            invitations.pop(r, None)
+        _save_invitations(db, slug, invitations)
         db.commit()
-        return jsonify({"owner": owner, "extra_hosts": cleaned})
+        return jsonify({"owner": owner, "extra_hosts": cleaned, "invitations": invitations})
     finally:
         db.close()
 
@@ -309,7 +388,6 @@ def delete_podcast(slug):
     project_dir = PODCASTS_DIR / slug
     if not project_dir.exists():
         return jsonify({"error": "podcast no encontrado"}), 404
-    # Only the owner (or an admin) can delete.
     db = get_db(slug)
     try:
         row = db.execute("SELECT * FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
@@ -322,3 +400,245 @@ def delete_podcast(slug):
             return jsonify({"error": "solo el owner puede eliminar este podcast"}), 403
     shutil.rmtree(project_dir)
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Directors
+# ---------------------------------------------------------------------------
+
+
+@bp.post("/<slug>/directors")
+@require_auth
+def add_director(slug):
+    if not (PODCASTS_DIR / slug).exists():
+        return jsonify({"error": "podcast no encontrado"}), 404
+    data = request.get_json(silent=True) or {}
+    target = (data.get("username") or "").strip().lower()
+    if not target:
+        return jsonify({"error": "username requerido"}), 400
+
+    from config import USERS
+    if target not in USERS:
+        return jsonify({"error": f"usuario desconocido: {target}"}), 400
+
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT * FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            return jsonify({"error": "podcast no encontrado"}), 404
+        owner = _row_owner(row)
+        if current_user() != owner and not policy_for(current_user()).get("see_all"):
+            return jsonify({"error": "solo el owner o admin puede asignar directores"}), 403
+
+        directors = _row_directors(row)
+        if target in directors:
+            return jsonify({"error": "ese usuario ya es director"}), 400
+        directors.append(target)
+        db.execute(
+            "UPDATE podcast_meta SET directors=?, updated_at=datetime('now') WHERE slug=?",
+            (json.dumps(directors), slug),
+        )
+        db.commit()
+
+        spid = row["shared_project_id"]
+        if spid:
+            _sync_directors_to_prodpod(spid, directors, current_user())
+
+        return jsonify({"directors": directors})
+    finally:
+        db.close()
+
+
+@bp.delete("/<slug>/directors/<username>")
+@require_auth
+def remove_director(slug, username):
+    if not (PODCASTS_DIR / slug).exists():
+        return jsonify({"error": "podcast no encontrado"}), 404
+
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT * FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            return jsonify({"error": "podcast no encontrado"}), 404
+        owner = _row_owner(row)
+        if current_user() != owner and not policy_for(current_user()).get("see_all"):
+            return jsonify({"error": "solo el owner o admin puede quitar directores"}), 403
+
+        directors = _row_directors(row)
+        if username not in directors:
+            return jsonify({"error": "usuario no es director"}), 404
+        directors = [d for d in directors if d != username]
+        db.execute(
+            "UPDATE podcast_meta SET directors=?, updated_at=datetime('now') WHERE slug=?",
+            (json.dumps(directors), slug),
+        )
+        db.commit()
+
+        spid = row["shared_project_id"]
+        if spid:
+            _sync_directors_to_prodpod(spid, directors, current_user())
+
+        return jsonify({"directors": directors})
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# User search (autocomplete for adding hosts)
+# ---------------------------------------------------------------------------
+
+@bp.get("/search-users")
+@require_auth
+def search_users():
+    q = (request.args.get("q") or "").strip().lower()
+    if len(q) < 1:
+        return jsonify([])
+    from shared_users import list_user_rows
+    results = []
+    for r in list_user_rows():
+        un = r["username"].lower()
+        dn = (r["display_name"] or "").lower()
+        if q in un or q in dn:
+            results.append({
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "avatar_color": r["avatar_color"],
+                "email": r.get("email") or "",
+            })
+    return jsonify(results[:10])
+
+
+# ---------------------------------------------------------------------------
+# Host invitation (add host + send branded email)
+# ---------------------------------------------------------------------------
+
+@bp.post("/<slug>/invite-host")
+@require_auth
+def invite_host(slug):
+    if not (PODCASTS_DIR / slug).exists():
+        return jsonify({"error": "podcast no encontrado"}), 404
+    data = request.get_json(silent=True) or {}
+    target_username = (data.get("username") or "").strip().lower()
+    if not target_username:
+        return jsonify({"error": "username requerido"}), 400
+
+    from config import USERS
+    if target_username not in USERS:
+        return jsonify({"error": f"usuario desconocido: {target_username}"}), 400
+
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT * FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            return jsonify({"error": "podcast no encontrado"}), 404
+        owner = _row_owner(row)
+        if current_user() != owner and not policy_for(current_user()).get("see_all"):
+            return jsonify({"error": "solo el owner puede invitar hosts"}), 403
+
+        existing = _row_extra_hosts(row)
+        if target_username == owner:
+            return jsonify({"error": "ese usuario ya es el owner"}), 400
+        if target_username in existing:
+            return jsonify({"error": "ese usuario ya es host"}), 400
+
+        existing.append(target_username)
+        db.execute(
+            "UPDATE podcast_meta SET extra_hosts=?, updated_at=datetime('now') WHERE slug=?",
+            (json.dumps(existing), slug),
+        )
+
+        from shared_users import get_user
+        target_user = get_user(target_username)
+        inviter_user = get_user(current_user())
+        inviter_display = (inviter_user or {}).get("display_name") or current_user()
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+        # Track invitation metadata
+        invitations = _row_invitations(row)
+        invitations[target_username] = {
+            "status": "pendiente",
+            "invited_by": current_user(),
+            "invited_by_name": inviter_display,
+            "invited_at": now_str,
+            "email_sent": False,
+        }
+
+        email_result = {"ok": False, "reason": "no_email"}
+        target_email = (target_user or {}).get("email")
+        if target_email:
+            from email_helper import send_host_invitation_email, _public_base_url
+            base = _public_base_url()
+            podcast_color = row["color_primary"] or "#5a8bff"
+            podcast_logo = ""
+            if row["logo_filename"]:
+                podcast_logo = f"{base}/media/podcasts/{slug}/branding/{row['logo_filename']}"
+
+            email_result = send_host_invitation_email(
+                to_email=target_email,
+                host_name=target_user["display_name"],
+                inviter_name=inviter_display,
+                podcast_name=row["name"],
+                podcast_color=podcast_color,
+                podcast_logo_url=podcast_logo,
+                action_url=f"{base}/podcast/{slug}" if base else f"/podcast/{slug}",
+            )
+            if email_result.get("ok"):
+                invitations[target_username]["email_sent"] = True
+
+        _save_invitations(db, slug, invitations)
+        db.commit()
+
+        return jsonify({
+            "ok": True,
+            "owner": owner,
+            "extra_hosts": existing,
+            "invitations": invitations,
+            "email": email_result,
+        })
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Import / Export
+# ---------------------------------------------------------------------------
+
+@bp.get("/<slug>/export-bundle")
+@require_auth
+def export_bundle(slug):
+    if not (PODCASTS_DIR / slug).exists():
+        return jsonify({"error": "podcast no encontrado"}), 404
+    from project_io import export_podcast
+    try:
+        zip_path = export_podcast(slug)
+        return send_file(str(zip_path), as_attachment=True,
+                         download_name=f"{slug}_bundle.zip")
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@bp.post("/import")
+@require_auth
+def import_podcast_endpoint():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "archivo ZIP requerido"}), 400
+    if not f.filename.lower().endswith(".zip"):
+        return jsonify({"error": "solo archivos .zip"}), 400
+
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        f.save(tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        from project_io import validate_import_zip, import_podcast, unique_import_slug
+        result = validate_import_zip(tmp_path)
+        if not result["valid"]:
+            return jsonify({"error": "ZIP inválido", "details": result["errors"]}), 400
+
+        desired = result["manifest"].get("slug", "imported-podcast")
+        slug = unique_import_slug(desired)
+        imp = import_podcast(tmp_path, slug, owner_username=current_user())
+        return jsonify({"slug": imp["slug"], "name": result["manifest"].get("name", slug)}), 201
+    finally:
+        tmp_path.unlink(missing_ok=True)

@@ -270,8 +270,29 @@ var PodcastListView = {
       catch (e) { error.value = e.message; }
     }
 
+    const importing = ref(false);
+    function triggerImport() {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".zip";
+      input.onchange = async () => {
+        if (!input.files || !input.files[0]) return;
+        importing.value = true;
+        error.value = "";
+        try {
+          const fd = new FormData();
+          fd.append("file", input.files[0]);
+          const r = await fetch("/api/podcasts/import", { method: "POST", credentials: "same-origin", body: fd });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || "error al importar");
+          await load();
+        } catch (e) { error.value = e.message; }
+        finally { importing.value = false; }
+      };
+      input.click();
+    }
     onMounted(load);
-    return { podcasts, loading, error, showCreate, newName, creating, create, remove, fmtDate };
+    return { podcasts, loading, error, showCreate, newName, creating, create, remove, fmtDate, importing, triggerImport };
   },
   template: `
     <div class="container">
@@ -281,6 +302,9 @@ var PodcastListView = {
           <h2>Green <em style="color:var(--signal);font-style:italic;">room</em></h2>
         </div>
         <div class="spacer"></div>
+        <button class="ghost" @click="triggerImport" :disabled="importing" style="margin-right:8px;">
+          {{ importing ? "Importando…" : "↑ Importar" }}
+        </button>
         <button class="primary" @click="showCreate = true">＋ Nuevo podcast</button>
       </div>
       <div v-if="error" class="error">{{ error }}</div>
@@ -461,6 +485,7 @@ var BrandingEditor = {
     const hostSuggestions = ref([]);
     const hostSearchFocused = ref(false);
     let hostSearchTimer = null;
+    const directors = ref([]);
 
     function _syncHostResponse(r) {
       owner.value = r.owner || "";
@@ -469,8 +494,11 @@ var BrandingEditor = {
     }
 
     async function loadHosts() {
-      try { _syncHostResponse(await api(`/api/podcasts/${meta.slug}/hosts`)); }
-      catch (e) { hostsError.value = e.message; }
+      try {
+        const r = await api(`/api/podcasts/${meta.slug}/hosts`);
+        _syncHostResponse(r);
+        if (r.directors) directors.value = r.directors;
+      } catch (e) { hostsError.value = e.message; }
     }
     async function saveHosts(list) {
       hostsBusy.value = true; hostsError.value = "";
@@ -525,12 +553,61 @@ var BrandingEditor = {
       await saveHosts(extraHosts.value.filter(x => x !== u));
     }
 
+    // ---- Directors ----
+    const newDirector = ref("");
+    const directorError = ref("");
+    const directorBusy = ref(false);
+    const directorSuggestions = ref([]);
+    const directorSearchFocused = ref(false);
+    let directorSearchTimer = null;
+
+    function onDirectorInput() {
+      clearTimeout(directorSearchTimer);
+      const q = newDirector.value.trim();
+      if (q.length < 1) { directorSuggestions.value = []; return; }
+      directorSearchTimer = setTimeout(async () => {
+        try {
+          const all = await api("/api/podcasts/search-users?q=" + encodeURIComponent(q));
+          directorSuggestions.value = all.filter(u =>
+            !directors.value.includes(u.username)
+          );
+        } catch (_) { directorSuggestions.value = []; }
+      }, 200);
+    }
+
+    async function addDirector(username) {
+      const u = username || newDirector.value.trim().toLowerCase();
+      if (!u) return;
+      directorBusy.value = true; directorError.value = "";
+      directorSuggestions.value = []; newDirector.value = "";
+      try {
+        const r = await api(`/api/podcasts/${meta.slug}/directors`, {
+          method: "POST", body: { username: u },
+        });
+        _syncDirectors(r);
+      } catch (e) { directorError.value = e.message; }
+      finally { directorBusy.value = false; }
+    }
+
+    async function removeDirector(u) {
+      if (!await podSwal.confirm('¿Quitar a "' + u + '" como director?')) return;
+      directorBusy.value = true; directorError.value = "";
+      try {
+        const r = await api(`/api/podcasts/${meta.slug}/directors/${u}`, { method: "DELETE" });
+        _syncDirectors(r);
+      } catch (e) { directorError.value = e.message; }
+      finally { directorBusy.value = false; }
+    }
+
     return {
       meta, error, saveState, dirty, saveNow, fonts,
       previewStyle, uploadImage, clearImage, fmtDate,
       owner, extraHosts, hostInvitations, newHost, hostsError, hostsSuccess, hostsBusy,
       hostSuggestions, hostSearchFocused,
       loadHosts, addHost, removeHost, onHostInput, inviteHost,
+      directors, newDirector, directorError, directorBusy,
+      directorSuggestions, directorSearchFocused,
+      addDirector, removeDirector, onDirectorInput,
     };
   },
   template: `
@@ -601,6 +678,43 @@ var BrandingEditor = {
                 <span class="host-sug-info">
                   <strong>{{ s.display_name }}</strong> <span class="muted mono">@{{ s.username }}</span>
                   <span v-if="s.email" class="muted" style="font-size:11px;display:block;">{{ s.email }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Director -->
+        <div class="section">
+          <div class="section-head">
+            <div class="eyebrow">DIRECTOR</div>
+            <h3>Director de producción</h3>
+          </div>
+          <p class="muted" style="margin-top: -6px; font-size: 12px;">
+            El director puede conectarse al Control Room en prodPod durante una grabación en vivo. Desde ahí puede inyectar overlays, enviar cues a los hosts, y controlar la producción sin estar en cámara.
+          </p>
+          <div v-if="directorError" class="error">{{ directorError }}</div>
+          <div class="hosts-row">
+            <span v-for="d in directors" :key="d" class="host-chip" style="border-color: #00bcd4;">
+              {{ d }}
+              <button class="icon danger" @click="removeDirector(d)" :disabled="directorBusy" title="Quitar director">&#10005;</button>
+            </span>
+            <span v-if="!directors.length" class="muted" style="font-size: 12px;">Sin director asignado.</span>
+          </div>
+          <div class="hosts-add" style="position:relative;">
+            <input type="text" v-model="newDirector" @input="onDirectorInput"
+                   @focus="directorSearchFocused = true"
+                   @blur="setTimeout(() => directorSearchFocused = false, 200)"
+                   @keyup.enter="addDirector()"
+                   placeholder="Buscar usuario..." :disabled="directorBusy"
+                   autocomplete="off">
+            <button class="primary" @click="addDirector()" :disabled="directorBusy || !newDirector.trim()">＋ Asignar director</button>
+            <div v-if="directorSuggestions.length && directorSearchFocused" class="host-autocomplete">
+              <div v-for="s in directorSuggestions" :key="s.username" class="host-suggestion"
+                   @mousedown.prevent="addDirector(s.username)">
+                <span class="host-sug-avatar" :style="{ background: s.avatar_color }">{{ s.display_name[0] }}</span>
+                <span class="host-sug-info">
+                  <strong>{{ s.display_name }}</strong> <span class="muted mono">@{{ s.username }}</span>
                 </span>
               </div>
             </div>
@@ -4017,8 +4131,276 @@ var ExportsPanel = {
 };
 
 
+/* ==========================================================================
+   Distribution Panel
+   ========================================================================== */
+
+var DistributionPanel = {
+  props: { slug: String },
+  setup(props) {
+    const data = ref(null);
+    const loading = ref(true);
+    const error = ref("");
+    const checking = ref("");
+    const youtube = ref(null);
+    const ytConnecting = ref(false);
+
+    async function load() {
+      loading.value = true;
+      error.value = "";
+      try {
+        data.value = await api(`/api/podcasts/${props.slug}/distribution`);
+        const ytStatus = await api(`/api/youtube/status?slug=${props.slug}`);
+        youtube.value = ytStatus;
+      } catch (e) { error.value = e.message; }
+      finally { loading.value = false; }
+    }
+
+    async function markSubmitted(platform) {
+      try {
+        await api(`/api/podcasts/${props.slug}/distribution`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform, status: "pending" }),
+        });
+        await load();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function markConnected(platform, url) {
+      try {
+        await api(`/api/podcasts/${props.slug}/distribution`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform, status: "connected", external_url: url || "" }),
+        });
+        await load();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function checkLive(platform) {
+      checking.value = platform;
+      try {
+        const res = await api(`/api/podcasts/${props.slug}/distribution/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ platform }),
+        });
+        if (res.found) {
+          await load();
+        } else {
+          error.value = `No se encontró el podcast en ${platform === "apple" ? "Apple Podcasts" : "Spotify"} todavía. Puede tardar entre 24-72 horas.`;
+        }
+      } catch (e) { error.value = e.message; }
+      finally { checking.value = ""; }
+    }
+
+    async function resetPlatform(platform) {
+      if (!confirm("¿Resetear la conexión de esta plataforma?")) return;
+      try {
+        await api(`/api/podcasts/${props.slug}/distribution/${platform}`, { method: "DELETE" });
+        await load();
+      } catch (e) { error.value = e.message; }
+    }
+
+    async function connectYoutube() {
+      ytConnecting.value = true;
+      try {
+        const res = await api(`/api/youtube/auth-url?slug=${props.slug}`);
+        if (res.auth_url) {
+          const popup = window.open(res.auth_url, "youtube-auth", "width=600,height=700");
+          const handler = (ev) => {
+            if (ev.data === "youtube-connected") {
+              window.removeEventListener("message", handler);
+              load();
+            }
+          };
+          window.addEventListener("message", handler);
+          const interval = setInterval(() => {
+            if (popup && popup.closed) {
+              clearInterval(interval);
+              window.removeEventListener("message", handler);
+              ytConnecting.value = false;
+              load();
+            }
+          }, 1000);
+        }
+      } catch (e) { error.value = e.message; ytConnecting.value = false; }
+    }
+
+    async function disconnectYoutube() {
+      if (!confirm("¿Desconectar YouTube de este podcast?")) return;
+      try {
+        await api("/api/youtube/disconnect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: props.slug }),
+        });
+        youtube.value = { connected: false };
+      } catch (e) { error.value = e.message; }
+    }
+
+    function copyFeed() {
+      if (data.value && data.value.feed_url) {
+        navigator.clipboard.writeText(data.value.feed_url);
+      }
+    }
+
+    onMounted(load);
+
+    return { data, loading, error, checking, youtube, ytConnecting, load, markSubmitted, markConnected, checkLive, resetPlatform, connectYoutube, disconnectYoutube, copyFeed };
+  },
+  template: `
+    <div style="padding: 20px; max-width: 700px;">
+      <h3 style="margin: 0 0 6px 0;">Distribución</h3>
+      <p style="color: var(--paper-dim); font-size: 13px; margin: 0 0 16px 0;">
+        Conecta tu podcast a las plataformas. Solo necesitas hacerlo una vez por plataforma.
+      </p>
+
+      <div v-if="error" class="error" style="margin-bottom: 12px; font-size: 13px;">{{ error }}</div>
+
+      <div v-if="loading" style="color: var(--paper-dim); padding: 20px;">Cargando…</div>
+
+      <template v-if="data && !loading">
+        <!-- Feed URL -->
+        <div class="dist-feed-box">
+          <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--paper-dim); margin-bottom: 4px; display: block;">URL del Feed RSS</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <code style="flex: 1; background: var(--ink-bg); padding: 8px 12px; border-radius: 6px; font-size: 12px; word-break: break-all;">{{ data.feed_url }}</code>
+            <button class="ghost" @click="copyFeed" style="font-size: 11px; white-space: nowrap;">Copiar</button>
+          </div>
+        </div>
+
+        <!-- Validation -->
+        <div v-if="data.validation" class="dist-validation" style="margin: 16px 0;">
+          <div v-if="data.validation.valid" style="color: var(--signal-cool); font-size: 13px; font-weight: 500;">
+            ✓ Feed listo para enviar a plataformas
+          </div>
+          <div v-else>
+            <div style="color: var(--signal-hot); font-size: 13px; font-weight: 500; margin-bottom: 6px;">
+              El feed tiene problemas que debes resolver:
+            </div>
+            <ul style="margin: 0; padding-left: 18px; font-size: 13px;">
+              <li v-for="issue in data.validation.issues" :key="issue" style="color: var(--signal-hot); margin-bottom: 3px;">{{ issue }}</li>
+            </ul>
+          </div>
+          <ul v-if="data.validation.warnings && data.validation.warnings.length" style="margin: 6px 0 0; padding-left: 18px; font-size: 12px;">
+            <li v-for="w in data.validation.warnings" :key="w" style="color: var(--signal); margin-bottom: 2px;">{{ w }}</li>
+          </ul>
+        </div>
+
+        <!-- Platform cards -->
+        <div class="dist-platforms">
+
+          <!-- Spotify & Apple cards -->
+          <template v-for="key in ['spotify', 'apple']" :key="key">
+            <div class="dist-card">
+              <div class="dist-card-header">
+                <span class="dist-platform-icon">{{ key === 'spotify' ? '🎧' : '🎙' }}</span>
+                <strong>{{ data.platforms[key].name }}</strong>
+                <span class="dist-badge" :class="'dist-badge--' + (data.platforms[key].status || 'not_configured')">
+                  {{ data.platforms[key].status === 'connected' ? 'Conectado' : data.platforms[key].status === 'pending' ? 'Pendiente' : 'No configurado' }}
+                </span>
+              </div>
+
+              <div v-if="!data.platforms[key].status || data.platforms[key].status === 'not_configured'" class="dist-card-body">
+                <p style="font-size: 13px; color: var(--paper-dim); margin: 8px 0;">{{ data.platforms[key].help }}</p>
+                <div v-if="data.validation && data.validation.valid" class="dist-steps">
+                  <div class="dist-step">
+                    <span class="dist-step-num">1</span>
+                    <span>Copia la URL del feed RSS (arriba)</span>
+                  </div>
+                  <div class="dist-step">
+                    <span class="dist-step-num">2</span>
+                    <span>
+                      <a :href="data.platforms[key].submit_url" target="_blank" rel="noopener" style="color: var(--accent);">
+                        Abre {{ data.platforms[key].name }}
+                      </a>
+                      e inicia sesión con tu cuenta personal
+                    </span>
+                  </div>
+                  <div class="dist-step">
+                    <span class="dist-step-num">3</span>
+                    <span>Pega la URL del feed cuando te la pidan</span>
+                  </div>
+                </div>
+                <div style="margin-top: 10px;">
+                  <button class="ghost" @click="markSubmitted(key)" :disabled="!data.validation || !data.validation.valid">
+                    Ya lo envié ✓
+                  </button>
+                </div>
+              </div>
+
+              <div v-else-if="data.platforms[key].status === 'pending'" class="dist-card-body">
+                <p style="font-size: 13px; color: var(--paper-dim); margin: 8px 0;">
+                  Enviado{{ data.platforms[key].submitted_at ? ' el ' + data.platforms[key].submitted_at.slice(0, 10) : '' }}. Las plataformas suelen tardar entre 24 y 72 horas en aprobar.
+                </p>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button class="ghost" @click="checkLive(key)" :disabled="checking === key">
+                    {{ checking === key ? 'Verificando…' : 'Verificar si está live' }}
+                  </button>
+                  <button class="ghost" @click="markConnected(key, '')">Marcar como conectado</button>
+                  <button class="ghost danger" @click="resetPlatform(key)" style="font-size: 11px;">Resetear</button>
+                </div>
+              </div>
+
+              <div v-else-if="data.platforms[key].status === 'connected'" class="dist-card-body">
+                <p style="font-size: 13px; color: var(--signal-cool); margin: 8px 0;">
+                  ✓ Tu podcast está en {{ data.platforms[key].name }}
+                </p>
+                <a v-if="data.platforms[key].external_url" :href="data.platforms[key].external_url" target="_blank" rel="noopener"
+                   style="font-size: 12px; color: var(--accent);">
+                  Ver en {{ data.platforms[key].name }} →
+                </a>
+                <div style="margin-top: 8px;">
+                  <button class="ghost danger" @click="resetPlatform(key)" style="font-size: 11px;">Desconectar</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- YouTube card (OAuth flow) -->
+          <div class="dist-card">
+            <div class="dist-card-header">
+              <span class="dist-platform-icon">▶</span>
+              <strong>YouTube</strong>
+              <span class="dist-badge" :class="youtube && youtube.connected ? 'dist-badge--connected' : 'dist-badge--not_configured'">
+                {{ youtube && youtube.connected ? 'Conectado' : 'No conectado' }}
+              </span>
+            </div>
+
+            <div v-if="!youtube || !youtube.connected" class="dist-card-body">
+              <p style="font-size: 13px; color: var(--paper-dim); margin: 8px 0;">
+                Conecta tu canal de YouTube para subir videos directamente desde prePod. Usa tu cuenta personal de Google — la misma con la que accedes a YouTube.
+              </p>
+              <button class="ghost" @click="connectYoutube" :disabled="ytConnecting" style="margin-top: 6px;">
+                {{ ytConnecting ? 'Conectando…' : 'Conectar canal de YouTube' }}
+              </button>
+            </div>
+
+            <div v-else class="dist-card-body">
+              <p style="font-size: 13px; color: var(--signal-cool); margin: 8px 0;">
+                ✓ Canal conectado: <strong>{{ youtube.channel_name || 'YouTube' }}</strong>
+              </p>
+              <a v-if="youtube.channel_id" :href="'https://www.youtube.com/channel/' + youtube.channel_id" target="_blank" rel="noopener"
+                 style="font-size: 12px; color: var(--accent);">
+                Ver canal →
+              </a>
+              <div style="margin-top: 8px;">
+                <button class="ghost danger" @click="disconnectYoutube" style="font-size: 11px;">Desconectar</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </template>
+    </div>
+  `,
+};
+
+
 var PodcastView = {
-  components: { BrandingEditor, EpisodesBoard, EpisodeDetail, LandingPanel, SoundboardLibrary, CalendarView, TemplatesPanel, SponsorsPanel, ExportsPanel },
+  components: { BrandingEditor, EpisodesBoard, EpisodeDetail, LandingPanel, SoundboardLibrary, CalendarView, TemplatesPanel, SponsorsPanel, ExportsPanel, DistributionPanel },
   props: { podcast: Object, onBack: Function, onUpdated: Function },
   setup(props) {
     const mode = ref("branding");
@@ -4056,8 +4438,11 @@ var PodcastView = {
           <button :class="{active: mode === 'sponsors'}" @click="mode = 'sponsors'">Sponsors</button>
           <button :class="{active: mode === 'landing'}" @click="mode = 'landing'">Landing</button>
           <button :class="{active: mode === 'exports'}" @click="mode = 'exports'">Archivos</button>
+          <button :class="{active: mode === 'distribution'}" @click="mode = 'distribution'">Distribución</button>
         </div>
         <div class="spacer"></div>
+        <a :href="'/api/podcasts/' + podcast.slug + '/export-bundle'" download
+           class="ghost" style="font-size:11px;padding:4px 10px;text-decoration:none;margin-right:8px;">↓ Exportar</a>
         <span class="badge-id" :title="podcast.shared_project_id">id · {{ podcast.shared_project_id ? podcast.shared_project_id.slice(0, 8) + '…' : '—' }}</span>
       </div>
 
@@ -4069,10 +4454,12 @@ var PodcastView = {
       <SponsorsPanel v-else-if="mode === 'sponsors'" :slug="podcast.slug" />
       <LandingPanel v-else-if="mode === 'landing'" :podcast="podcast" />
       <ExportsPanel v-else-if="mode === 'exports'" :slug="podcast.slug" />
+      <DistributionPanel v-else-if="mode === 'distribution'" :slug="podcast.slug" />
       <EpisodeDetail v-else-if="mode === 'episode-detail'" :slug="podcast.slug" :episode-id="selectedEpId" @back="backToBoard" />
     </div>
   `,
 };
+
 
 /* ==========================================================================
    Root

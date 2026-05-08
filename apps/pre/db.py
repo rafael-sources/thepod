@@ -263,6 +263,7 @@ def get_db(slug: str) -> sqlite3.Connection:
     # Team members: extend with youtube + tiktok to match guest social fields.
     _ensure_column(conn, "team_members", "social_youtube", "social_youtube TEXT")
     _ensure_column(conn, "team_members", "social_tiktok", "social_tiktok TEXT")
+    _ensure_column(conn, "podcast_meta", "directors", "directors TEXT")  # JSON array of usernames
     _ensure_column(conn, "podcast_meta", "background_filename", "background_filename TEXT")
     _ensure_column(conn, "episodes", "ai_summary", "ai_summary TEXT")
     _ensure_column(conn, "episodes", "ai_highlights", "ai_highlights TEXT")
