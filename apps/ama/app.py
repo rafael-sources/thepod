@@ -55,6 +55,11 @@ def create_app():
             ],
         }
 
+    @app.get("/api/config/livekit")
+    def livekit_config():
+        from config import LIVEKIT_WS_URL
+        return {"ws_url": LIVEKIT_WS_URL}
+
     @app.get("/")
     def index():
         return render_template("index.html", cache_bust=_boot_ts)

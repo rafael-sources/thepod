@@ -30,6 +30,24 @@ def _serialize_event(row):
     }
 
 
+@bp.get("/api/events/<int:eid>/public-info")
+def public_event_info(eid):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+        if not row:
+            return jsonify({"error": "evento no encontrado"}), 404
+        return jsonify({
+            "id": row["id"],
+            "title": row["title"],
+            "description": row["description"],
+            "status": row["status"],
+            "host_username": row["host_username"],
+        })
+    finally:
+        db.close()
+
+
 @bp.post("/api/events")
 @require_auth
 def create_event():
