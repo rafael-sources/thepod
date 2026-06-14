@@ -181,6 +181,8 @@ def create_app():
                  "url": cfg.get("prodpod_url") or ""},
                 {"key": "postpod", "name": "postPod", "icon": "🎬",
                  "url": cfg.get("postpod_url") or ""},
+                {"key": "amapod",  "name": "amaPod",  "icon": "❓",
+                 "url": cfg.get("amapod_url") or ""},
             ],
         }
 
