@@ -21,6 +21,9 @@ def create_app():
 
     app.register_blueprint(auth.bp)
 
+    import events_api
+    app.register_blueprint(events_api.bp)
+
     EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
     _boot_ts = str(int(_time.time()))
