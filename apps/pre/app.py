@@ -18,6 +18,8 @@ import sounds as sounds_bp
 import sponsors_api
 import templates_api
 import users_admin
+import distribution as distribution_bp
+import youtube_publish as youtube_bp
 from auth import require_auth
 from config import AVAILABLE_FONTS, PODCASTS_DIR, SECRET_KEY
 
@@ -109,6 +111,8 @@ def create_app():
     app.register_blueprint(sponsors_api.bp)
     app.register_blueprint(rsvp_bp.bp)
     app.register_blueprint(users_admin.bp)
+    app.register_blueprint(distribution_bp.bp)
+    app.register_blueprint(youtube_bp.bp)
 
     PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -181,6 +185,8 @@ def create_app():
                  "url": cfg.get("prodpod_url") or ""},
                 {"key": "postpod", "name": "postPod", "icon": "🎬",
                  "url": cfg.get("postpod_url") or ""},
+                {"key": "amapod",  "name": "amaPod",  "icon": "❓",
+                 "url": cfg.get("amapod_url") or ""},
             ],
         }
 
