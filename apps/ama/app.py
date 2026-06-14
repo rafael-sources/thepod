@@ -27,6 +27,9 @@ def create_app():
     import queue_api
     app.register_blueprint(queue_api.bp)
 
+    import recording_api
+    app.register_blueprint(recording_api.bp)
+
     EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
     _boot_ts = str(int(_time.time()))
