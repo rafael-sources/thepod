@@ -33,6 +33,9 @@ def create_app():
     import chat_api
     app.register_blueprint(chat_api.bp)
 
+    import integrations
+    app.register_blueprint(integrations.bp)
+
     EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
     _boot_ts = str(int(_time.time()))
