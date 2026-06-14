@@ -696,6 +696,46 @@ var StudioView = {
     var streamStatus = ref("");
     var streamBusy = ref(false);
 
+    // AMA (amaPod) integration
+    var amaPanel = ref(false);
+    var amaEmbedUrl = ref("");
+    var amaEventId = ref(null);
+    var amaBusy = ref(false);
+
+    async function startAma() {
+      amaBusy.value = true;
+      try {
+        var data = await api("/api/sessions/" + props.session.id + "/ama/start", { method: "POST" });
+        amaEventId.value = data.event_id;
+        amaEmbedUrl.value = data.embed_url;
+        amaPanel.value = true;
+      } catch (e) {
+        window.toast({ type: "error", text: "Error al iniciar AMA: " + e.message });
+      }
+      amaBusy.value = false;
+    }
+
+    function closeAma() {
+      amaPanel.value = false;
+    }
+
+    function handleAmaMessage(ev) {
+      if (!ev.data || ev.data.source !== "amapod") return;
+      var msg = ev.data;
+      if (msg.type === "ama_participant_active") {
+        window.toast({ type: "info", text: (msg.display_name || "Participante") + " al aire en Q&A" });
+      } else if (msg.type === "ama_participant_removed") {
+        window.toast({ type: "info", text: "Participante salio de Q&A" });
+      } else if (msg.type === "ama_session_ended") {
+        window.toast({ type: "info", text: "Sesion de Q&A finalizada" });
+        amaPanel.value = false;
+        amaEmbedUrl.value = "";
+        amaEventId.value = null;
+      }
+    }
+
+    window.addEventListener("message", handleAmaMessage);
+
     // Sponsor teleprompter state
     var sponsorMarkers = ref([]);
     var sponsorAlertId = ref(null);
@@ -1878,6 +1918,7 @@ var StudioView = {
     });
     onBeforeUnmount(function () {
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("message", handleAmaMessage);
       if (timerHandle) clearInterval(timerHandle);
       stopPrejoinPreview();
       disconnect();
@@ -1998,6 +2039,8 @@ var StudioView = {
       layoutMode: layoutMode, spotlightId: spotlightId, toggleLayout: toggleLayout,
       spotlightParticipant: spotlightParticipant, pinSpotlight: pinSpotlight,
       activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
+      amaPanel: amaPanel, amaEmbedUrl: amaEmbedUrl, amaEventId: amaEventId, amaBusy: amaBusy,
+      startAma: startAma, closeAma: closeAma,
     };
   },
   template: `
@@ -2494,6 +2537,7 @@ var StudioView = {
         <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
         <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
         <button v-if="connected" class="layout-toggle" @click="toggleLayout" :title="layoutMode === 'grid' ? 'Cambiar a vista de speaker' : 'Cambiar a grilla'">{{ layoutMode === 'grid' ? '◫' : '⊞' }}</button>
+        <button v-if="connected && isHost" @click="amaPanel ? closeAma() : startAma()" :disabled="amaBusy" :class="{ primary: amaPanel }" title="Q&A con audiencia">❓ AMA</button>
         <div class="spacer"></div>
         <span v-if="connected" class="join-pill">EN VIVO · {{ (participants.filter(p => p.status === 'connected').length) }} conectado(s)</span>
         <button v-if="connected" class="ghost" @click="disconnect">Salir del estudio</button>
@@ -2546,6 +2590,17 @@ var StudioView = {
               {{ streamBusy ? "Iniciando…" : "● Transmitir" }}
             </button>
           </div>
+        </div>
+      </div>
+
+      <div v-if="amaPanel && amaEmbedUrl" class="modal-backdrop" @click.self="closeAma" style="align-items:flex-end;justify-content:flex-end;padding:16px">
+        <div style="width:380px;height:calc(100vh - 80px);background:var(--ink-panel);border:1px solid var(--ink-line);border-radius:var(--r-lg);overflow:hidden;display:flex;flex-direction:column">
+          <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--ink-line)">
+            <span style="font-weight:600;font-size:13px">❓ amaPod — Q&A</span>
+            <span class="spacer"></span>
+            <button class="ghost" @click="closeAma" style="font-size:11px;padding:4px 8px">Cerrar</button>
+          </div>
+          <iframe :src="amaEmbedUrl" style="flex:1;border:none;width:100%"></iframe>
         </div>
       </div>
 

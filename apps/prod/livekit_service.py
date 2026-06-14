@@ -165,6 +165,34 @@ def stop_egress(egress_id: str):
         return None
 
 
+def generate_multi_room_token(
+    rooms: list,
+    identity: str,
+    display_name: str,
+    is_host: bool = False,
+    ttl_seconds: int = 6 * 3600,
+) -> str:
+    from livekit import api
+    grants = api.VideoGrants(
+        room_join=True,
+        room=",".join(rooms),
+        can_publish=True,
+        can_subscribe=True,
+        can_publish_data=True,
+    )
+    if is_host:
+        grants.room_admin = True
+        grants.room_record = True
+    token = (
+        api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        .with_identity(identity)
+        .with_name(display_name)
+        .with_grants(grants)
+        .with_ttl(__import__("datetime").timedelta(seconds=ttl_seconds))
+    )
+    return token.to_jwt()
+
+
 def list_egress(room_name: str = None, active_only: bool = True):
     try:
         from livekit import api

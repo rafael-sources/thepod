@@ -1014,3 +1014,43 @@ def import_session_bundle():
         return jsonify(result), 201
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+@bp.post("/api/sessions/<int:sid>/ama/start")
+@require_auth
+def start_ama(sid):
+    import requests as http
+    from shared_config import load_shared_config
+    cfg = load_shared_config()
+    amapod_url = cfg.get("amapod_url", "http://127.0.0.1:5003")
+    integration_secret = cfg.get("integration_secret", "")
+
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesion no encontrada"}), 404
+
+        resp = http.post(
+            f"{amapod_url}/api/integrations/prodpod/create-event",
+            json={
+                "host_username": current_user(),
+                "title": f"Q&A — {sess['title']}",
+                "shared_project_id": sess.get("shared_project_id"),
+                "prodpod_session_id": sid,
+            },
+            headers={"X-PodPod-Secret": integration_secret},
+            timeout=10,
+        )
+        if resp.status_code >= 400:
+            return jsonify({"error": f"amaPod respondio {resp.status_code}: {resp.text}"}), 502
+        data = resp.json()
+        return jsonify({
+            "event_id": data["event_id"],
+            "embed_url": data["embed_url"],
+            "room_name": data.get("room_name"),
+        })
+    except http.ConnectionError:
+        return jsonify({"error": "no se pudo conectar a amaPod"}), 502
+    finally:
+        db.close()
