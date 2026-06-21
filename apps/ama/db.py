@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS participants (
     livekit_identity TEXT,
     is_preconnected INTEGER DEFAULT 0,
     is_censored INTEGER DEFAULT 0,
+    questions TEXT DEFAULT '[]',
     requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_at TIMESTAMP,
     turn_started_at TIMESTAMP,
@@ -72,7 +73,15 @@ def get_db() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.executescript(MAIN_SCHEMA)
+    _migrate(conn)
     return conn
+
+def _migrate(conn):
+    cur = conn.execute("PRAGMA table_info(participants)")
+    cols = {r[1] for r in cur.fetchall()}
+    if "questions" not in cols:
+        conn.execute("ALTER TABLE participants ADD COLUMN questions TEXT DEFAULT '[]'")
+        conn.commit()
 
 def event_dir(event_id: int) -> Path:
     d = EVENTS_DIR / str(event_id)

@@ -38,7 +38,14 @@ def create_app():
 
     EVENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    _boot_ts = str(int(_time.time()))
+    _static_dir = app.static_folder or "static"
+
+    def _cache_bust():
+        import os as _os
+        try:
+            return str(int(_os.path.getmtime(_os.path.join(_static_dir, "js", "app.js"))))
+        except OSError:
+            return str(int(_time.time()))
 
     @app.get("/api/config/apps")
     def list_apps():
@@ -62,16 +69,16 @@ def create_app():
 
     @app.get("/")
     def index():
-        return render_template("index.html", cache_bust=_boot_ts)
+        return render_template("index.html", cache_bust=_cache_bust())
 
     @app.get("/<path:path>")
     def spa(path):
         if path.startswith(("api/", "static/", "media/")):
             abort(404)
-        return render_template("index.html", cache_bust=_boot_ts)
+        return render_template("index.html", cache_bust=_cache_bust())
 
     return app
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(host="0.0.0.0", port=5003, debug=True)
+    app.run(host="0.0.0.0", port=5004, debug=True)

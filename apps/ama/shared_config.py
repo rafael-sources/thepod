@@ -23,8 +23,10 @@ def _default_config():
         "secret_key": secrets.token_hex(32),
         "integration_secret": secrets.token_hex(32),
         "cookie_domain": None,   # e.g. ".podpod.tudominio.com" in prod
+        "prepod_url":  "http://127.0.0.1:5001",
         "postpod_url": "http://127.0.0.1:5000",
         "prodpod_url": "http://127.0.0.1:5002",
+        "amapod_url":  "http://127.0.0.1:5004",
     }
 
 

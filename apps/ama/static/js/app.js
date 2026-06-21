@@ -620,6 +620,7 @@ var HostView = {
     <button class="primary" @click="nextTurnAction" :disabled="!inQueueOnly.length">Siguiente &#9654;</button>\
     <button v-if="currentParticipant && !currentParticipant.is_censored" class="danger" @click="censorParticipant(currentParticipant.id)">Censurar</button>\
     <button v-if="currentParticipant && currentParticipant.is_censored" @click="uncensorParticipant(currentParticipant.id)">Quitar censura</button>\
+    <button v-if="currentParticipant" class="danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar participante">Expulsar</button>\
     <span class="spacer"></span>\
     <button v-if="!isRecording" @click="startRecording">&#9679; Grabar</button>\
     <button v-else class="danger" @click="stopRecording">&#9632; Parar grabacion</button>\
@@ -631,7 +632,12 @@ var HostView = {
       <div v-if="!requests.length" class="muted" style="padding:4px 0">Sin solicitudes</div>\
       <div v-for="r in requests" :key="r.id" class="request-item">\
         <div class="avatar">{{ initials(r.display_name) }}</div>\
-        <span class="name">{{ r.display_name }}</span>\
+        <div style="flex:1;min-width:0">\
+          <span class="name">{{ r.display_name }}</span>\
+          <div v-if="r.questions && r.questions.length" class="participant-questions">\
+            <div v-for="(q, i) in r.questions" :key="i" class="pq-item">{{ q }}</div>\
+          </div>\
+        </div>\
         <div class="actions">\
           <button class="icon" @click="approveRequest(r.id)" title="Aprobar" style="color:var(--signal-cool)">&#10003;</button>\
           <button class="icon danger" @click="rejectRequest(r.id)" title="Rechazar">&#10005;</button>\
@@ -643,7 +649,12 @@ var HostView = {
       <div v-if="!inQueueOnly.length" class="muted" style="padding:4px 0">Cola vacia</div>\
       <div v-for="p in inQueueOnly" :key="p.id" class="queue-item">\
         <div class="avatar">{{ initials(p.display_name) }}</div>\
-        <span class="name">{{ p.display_name }}</span>\
+        <div style="flex:1;min-width:0">\
+          <span class="name">{{ p.display_name }}</span>\
+          <div v-if="p.questions && p.questions.length" class="participant-questions">\
+            <div v-for="(q, i) in p.questions" :key="i" class="pq-item">{{ q }}</div>\
+          </div>\
+        </div>\
         <span v-if="p.is_preconnected" style="color:var(--signal);font-size:10px" title="Pre-conectado">&#9679;</span>\
         <div class="actions">\
           <button class="icon" @click="skipTo(p.id)" title="Saltar a este">&#9654;</button>\
@@ -655,7 +666,12 @@ var HostView = {
       <h3>AL AIRE</h3>\
       <div class="queue-item on-air">\
         <div class="avatar">{{ initials(currentParticipant.display_name) }}</div>\
-        <span class="name">{{ currentParticipant.display_name }}</span>\
+        <div style="flex:1;min-width:0">\
+          <span class="name">{{ currentParticipant.display_name }}</span>\
+          <div v-if="currentParticipant.questions && currentParticipant.questions.length" class="participant-questions">\
+            <div v-for="(q, i) in currentParticipant.questions" :key="i" class="pq-item">{{ q }}</div>\
+          </div>\
+        </div>\
         <span class="on-air-badge">EN VIVO</span>\
       </div>\
     </div>\
@@ -690,7 +706,6 @@ var JoinView = {
     var busy = ref(false);
     var submitted = ref(false);
     var participantData = ref(null);
-    var statusPoll = ref(null);
 
     async function loadEventInfo() {
       loading.value = true;
@@ -713,30 +728,13 @@ var JoinView = {
         });
         participantData.value = result;
         submitted.value = true;
-        startStatusPolling();
       } catch (e) {
         error.value = e.message;
       }
       busy.value = false;
     }
 
-    function startStatusPolling() {
-      if (statusPoll.value) return;
-      statusPoll.value = setInterval(async function () {
-        if (!participantData.value) return;
-        try {
-          var s = await api("/api/events/" + props.eventId + "/my-status?token=" + participantData.value.access_token);
-          participantData.value = s;
-        } catch (_) {}
-      }, 3000);
-    }
-
-    function stopStatusPolling() {
-      if (statusPoll.value) { clearInterval(statusPoll.value); statusPoll.value = null; }
-    }
-
     onMounted(loadEventInfo);
-    onBeforeUnmount(stopStatusPolling);
 
     return {
       eventInfo: eventInfo, loading: loading, displayName: displayName,
@@ -777,6 +775,8 @@ var ParticipantView = {
     var lkToken = ref(null);
     var statusPoll = ref(null);
     var isCensored = ref(false);
+    var waitingForTap = ref(false);
+    var lkError = ref("");
 
     var statusLabel = computed(function () {
       if (!pdata.value) return "";
@@ -799,15 +799,42 @@ var ParticipantView = {
       return pdata.value && pdata.value.is_preconnected && pdata.value.status === "in_queue";
     });
 
+    var canAskQuestions = computed(function () {
+      return pdata.value && (pdata.value.status === "pending" || pdata.value.status === "in_queue" || pdata.value.status === "approved");
+    });
+
+    var myQuestions = ref(["", "", ""]);
+    var questionsSaved = ref(false);
+
+    async function saveQuestions() {
+      if (!pdata.value || !pdata.value.access_token) return;
+      var qs = myQuestions.value.filter(function (q) { return q.trim(); });
+      try {
+        await api("/api/events/" + props.eventId + "/my-questions?token=" + pdata.value.access_token, {
+          method: "PUT",
+          body: { questions: qs },
+        });
+        questionsSaved.value = true;
+        setTimeout(function () { questionsSaved.value = false; }, 2000);
+      } catch (_) {}
+    }
+
     watch(function () { return props.participantData; }, function (v) {
-      if (v) pdata.value = v;
+      if (v) {
+        if (!v.access_token && pdata.value && pdata.value.access_token) {
+          v.access_token = pdata.value.access_token;
+        }
+        pdata.value = v;
+      }
     }, { deep: true });
 
     async function pollStatus() {
       if (!pdata.value || !pdata.value.access_token) return;
       try {
-        var s = await api("/api/events/" + props.eventId + "/my-status?token=" + pdata.value.access_token);
+        var savedToken = pdata.value.access_token;
+        var s = await api("/api/events/" + props.eventId + "/my-status?token=" + savedToken);
         var oldStatus = pdata.value.status;
+        s.access_token = savedToken;
         pdata.value = s;
         isCensored.value = !!s.is_censored;
 
@@ -815,11 +842,7 @@ var ParticipantView = {
           getTokenAndConnect(false);
         }
         if (s.status === "on_air" && oldStatus !== "on_air") {
-          if (!connected.value) {
-            getTokenAndConnect(true);
-          } else {
-            enablePublish();
-          }
+          waitingForTap.value = true;
         }
       } catch (_) {}
     }
@@ -877,25 +900,66 @@ var ParticipantView = {
           await enablePublish();
         }
       } catch (e) {
-        window.toast({ type: "error", text: "Error al conectar: " + e.message });
+        lkError.value = "Error al conectar: " + e.message;
+        window.toast({ type: "error", text: lkError.value });
       }
     }
 
     async function enablePublish() {
-      if (!room.value) return;
+      if (!room.value) {
+        lkError.value = "Sin conexion a la sala";
+        return;
+      }
       try {
-        await room.value.localParticipant.setCameraEnabled(true);
-        await room.value.localParticipant.setMicrophoneEnabled(true);
+        // Single getUserMedia for both audio+video avoids iOS Safari
+        // invalidating the first track when the second is requested.
+        var tracks = await LK.createLocalTracks({ audio: true, video: true });
+        for (var i = 0; i < tracks.length; i++) {
+          await room.value.localParticipant.publishTrack(tracks[i]);
+        }
         nextTick(function () {
-          var camPub = room.value.localParticipant.getTrackPublication(LK.Track.Source.Camera);
-          if (camPub && camPub.track) {
-            var el = document.getElementById("pv-local-video");
-            if (el) camPub.track.attach(el);
+          for (var j = 0; j < tracks.length; j++) {
+            if (tracks[j].kind === LK.Track.Kind.Video) {
+              var el = document.getElementById("pv-local-video");
+              if (el) tracks[j].attach(el);
+            }
           }
+          attachHostTracks();
         });
       } catch (e) {
-        window.toast({ type: "error", text: "No se pudo activar la camara: " + e.message });
+        lkError.value = "No se pudo activar camara/microfono: " + e.message;
+        window.toast({ type: "error", text: lkError.value });
       }
+    }
+
+    function attachHostTracks() {
+      if (!room.value) return;
+      room.value.remoteParticipants.forEach(function (p) {
+        if (!p.identity.startsWith("host_")) return;
+        p.trackPublications.forEach(function (pub) {
+          if (!pub.track) return;
+          if (pub.track.kind === LK.Track.Kind.Video) {
+            var el = document.getElementById("pv-host-video");
+            if (el) pub.track.attach(el);
+          } else if (pub.track.kind === LK.Track.Kind.Audio) {
+            var a = pub.track.attach();
+            document.body.appendChild(a);
+          }
+        });
+      });
+    }
+
+    async function goLive() {
+      waitingForTap.value = false;
+      lkError.value = "";
+      // Always reconnect fresh from the user-tap context.
+      // Preconnect may have gone stale (iOS suspends idle WebSockets).
+      if (room.value) {
+        try { room.value.disconnect(); } catch (_) {}
+        room.value = null;
+        connected.value = false;
+      }
+      await getTokenAndConnect(true);
     }
 
     function leaveEvent() {
@@ -922,15 +986,23 @@ var ParticipantView = {
     return {
       pdata: pdata, connected: connected, statusLabel: statusLabel,
       showVideo: showVideo, showPreconnect: showPreconnect, isCensored: isCensored,
-      leaveEvent: leaveEvent,
+      waitingForTap: waitingForTap, goLive: goLive, leaveEvent: leaveEvent, lkError: lkError,
+      canAskQuestions: canAskQuestions, myQuestions: myQuestions, saveQuestions: saveQuestions, questionsSaved: questionsSaved,
     };
   },
   template: '\
 <div class="participant-view">\
-  <div v-if="showVideo" style="width:100%;max-width:900px">\
+  <div v-if="waitingForTap" class="participant-status" style="text-align:center">\
+    <h1 class="brand" style="margin-bottom:16px">ama<span class="brand-accent">Pod</span></h1>\
+    <h2>{{ pdata && pdata.display_name }}</h2>\
+    <p style="margin-bottom:20px">El host te puso al aire</p>\
+    <button class="primary" @click="goLive" style="font-size:18px;padding:14px 32px">Entrar en vivo</button>\
+    <p class="muted" style="margin-top:12px;font-size:13px">Se activara tu camara y microfono</p>\
+  </div>\
+  <div v-else-if="showVideo" style="width:100%;max-width:900px">\
     <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">\
       <div class="video-card split">\
-        <video id="pv-host-video" autoplay playsinline></video>\
+        <video id="pv-host-video" autoplay muted playsinline></video>\
         <div class="video-label">Host</div>\
       </div>\
       <div class="video-card split" style="position:relative">\
@@ -939,8 +1011,10 @@ var ParticipantView = {
         <div class="video-label">Tu</div>\
       </div>\
     </div>\
+    <div v-if="lkError" style="text-align:center;margin-top:12px;padding:10px;background:#fee;border-radius:8px;color:#c00;font-size:14px">{{ lkError }}</div>\
     <div style="text-align:center;margin-top:12px">\
       <span class="on-air-badge">EN VIVO</span>\
+      <button class="primary" @click="goLive" style="margin-left:12px" v-if="lkError">Reintentar</button>\
       <button class="danger" @click="leaveEvent" style="margin-left:12px">Abandonar</button>\
     </div>\
   </div>\
@@ -953,6 +1027,14 @@ var ParticipantView = {
     </div>\
     <div v-if="showPreconnect" style="margin-top:12px">\
       <div class="muted">Pre-conectado. Tu turno esta cerca.</div>\
+    </div>\
+    <div v-if="canAskQuestions" style="margin-top:20px;width:100%;max-width:360px">\
+      <h4 style="margin:0 0 8px;font-size:14px">Tus preguntas <span class="muted" style="font-weight:normal">(opcional, max 3)</span></h4>\
+      <input type="text" v-model="myQuestions[0]" placeholder="Pregunta 1" style="margin-bottom:6px;width:100%;box-sizing:border-box">\
+      <input type="text" v-model="myQuestions[1]" placeholder="Pregunta 2" style="margin-bottom:6px;width:100%;box-sizing:border-box">\
+      <input type="text" v-model="myQuestions[2]" placeholder="Pregunta 3" style="margin-bottom:8px;width:100%;box-sizing:border-box">\
+      <button class="primary" @click="saveQuestions" style="font-size:13px;padding:6px 16px">Guardar preguntas</button>\
+      <span v-if="questionsSaved" style="color:var(--signal-cool);margin-left:8px;font-size:13px">&#10003; Guardado</span>\
     </div>\
     <div v-if="pdata && (pdata.status === \'done\' || pdata.status === \'left\' || pdata.status === \'rejected\')" style="margin-top:16px">\
       <div class="muted">Puedes cerrar esta ventana.</div>\
@@ -1155,17 +1237,28 @@ var EmbedHostView = {
         <h3>AL AIRE</h3>\
         <div class="queue-item on-air">\
           <div class="avatar">{{ initials(currentParticipant.display_name) }}</div>\
-          <span class="name">{{ currentParticipant.display_name }}</span>\
+          <div style="flex:1;min-width:0">\
+            <span class="name">{{ currentParticipant.display_name }}</span>\
+            <div v-if="currentParticipant.questions && currentParticipant.questions.length" class="participant-questions">\
+              <div v-for="(q, i) in currentParticipant.questions" :key="i" class="pq-item">{{ q }}</div>\
+            </div>\
+          </div>\
           <span class="on-air-badge" style="font-size:10px;padding:2px 8px">EN VIVO</span>\
           <button v-if="!currentParticipant.is_censored" class="icon danger" @click="censorParticipant(currentParticipant.id)" title="Censurar">&#128263;</button>\
           <button v-else class="icon" @click="uncensorParticipant(currentParticipant.id)" title="Quitar censura" style="color:var(--signal-cool)">&#128264;</button>\
+          <button class="icon danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar">&#10005;</button>\
         </div>\
       </div>\
       <div class="queue-section">\
         <h3>SOLICITUDES ({{ requests.length }})</h3>\
         <div v-for="r in requests" :key="r.id" class="request-item">\
           <div class="avatar">{{ initials(r.display_name) }}</div>\
-          <span class="name">{{ r.display_name }}</span>\
+          <div style="flex:1;min-width:0">\
+            <span class="name">{{ r.display_name }}</span>\
+            <div v-if="r.questions && r.questions.length" class="participant-questions">\
+              <div v-for="(q, i) in r.questions" :key="i" class="pq-item">{{ q }}</div>\
+            </div>\
+          </div>\
           <button class="icon" @click="approveRequest(r.id)" style="color:var(--signal-cool)">&#10003;</button>\
           <button class="icon danger" @click="rejectRequest(r.id)">&#10005;</button>\
         </div>\
@@ -1174,7 +1267,12 @@ var EmbedHostView = {
         <h3>COLA ({{ inQueueOnly.length }})</h3>\
         <div v-for="p in inQueueOnly" :key="p.id" class="queue-item">\
           <div class="avatar">{{ initials(p.display_name) }}</div>\
-          <span class="name">{{ p.display_name }}</span>\
+          <div style="flex:1;min-width:0">\
+            <span class="name">{{ p.display_name }}</span>\
+            <div v-if="p.questions && p.questions.length" class="participant-questions">\
+              <div v-for="(q, i) in p.questions" :key="i" class="pq-item">{{ q }}</div>\
+            </div>\
+          </div>\
           <button class="icon danger" @click="removeParticipant(p.id)" title="Remover">&#10005;</button>\
         </div>\
       </div>\
@@ -1257,4 +1355,6 @@ var App = {
 </div>'
 };
 
-createApp(App).mount("#app");
+var _app = createApp(App);
+_app.component("participant-view", ParticipantView);
+_app.mount("#app");

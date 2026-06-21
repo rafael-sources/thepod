@@ -18,6 +18,12 @@ bp = Blueprint("queue_api", __name__)
 
 
 def _serialize_participant(row):
+    import json as _json
+    questions = []
+    try:
+        questions = _json.loads(row["questions"] or "[]")
+    except (ValueError, TypeError):
+        pass
     return {
         "id": row["id"],
         "event_id": row["event_id"],
@@ -27,6 +33,7 @@ def _serialize_participant(row):
         "queue_position": row["queue_position"],
         "is_preconnected": row["is_preconnected"],
         "is_censored": row["is_censored"],
+        "questions": questions,
         "requested_at": row["requested_at"],
         "approved_at": row["approved_at"],
         "turn_started_at": row["turn_started_at"],
@@ -137,6 +144,39 @@ def my_status(eid):
         db.close()
 
 
+@bp.put("/api/events/<int:eid>/my-questions")
+def update_my_questions(eid):
+    import json as _json
+    token = request.args.get("token", "")
+    if not token:
+        return jsonify({"error": "token requerido"}), 400
+
+    data = request.get_json(silent=True) or {}
+    raw = data.get("questions", [])
+    if not isinstance(raw, list):
+        return jsonify({"error": "questions debe ser una lista"}), 400
+
+    questions = [str(q).strip() for q in raw[:3] if str(q).strip()]
+
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT * FROM participants WHERE event_id = ? AND access_token = ?",
+            (eid, token),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "participante no encontrado"}), 404
+
+        db.execute(
+            "UPDATE participants SET questions = ? WHERE id = ?",
+            (_json.dumps(questions), row["id"]),
+        )
+        db.commit()
+        return jsonify({"questions": questions})
+    finally:
+        db.close()
+
+
 # ── Host-only endpoints ──────────────────────────────────────────────
 
 @bp.get("/api/events/<int:eid>/queue")
@@ -234,6 +274,8 @@ def next_turn(eid):
         if err:
             return err
 
+        room_name = ev["livekit_room_name"] or room_name_for_event(eid)
+
         # Mark current on_air as done
         current = db.execute(
             "SELECT * FROM participants WHERE event_id = ? AND status = 'on_air'",
@@ -244,6 +286,8 @@ def next_turn(eid):
                 "UPDATE participants SET status = 'done', turn_ended_at = CURRENT_TIMESTAMP, queue_position = NULL WHERE id = ?",
                 (current["id"],),
             )
+            cur_identity = current["livekit_identity"] or f"participant_{current['id']}"
+            update_participant_permissions(room_name, cur_identity, can_publish=False)
 
         # Get next in queue
         nxt = db.execute(
@@ -258,6 +302,9 @@ def next_turn(eid):
             "UPDATE participants SET status = 'on_air', turn_started_at = CURRENT_TIMESTAMP, queue_position = NULL WHERE id = ?",
             (nxt["id"],),
         )
+        nxt_identity = nxt["livekit_identity"] or f"participant_{nxt['id']}"
+        update_participant_permissions(room_name, nxt_identity, can_publish=True)
+
         _compact_queue(db, eid)
         _update_preconnect_flags(db, eid)
         db.commit()
@@ -276,6 +323,8 @@ def skip_to_participant(eid, pid):
         if err:
             return err
 
+        room_name = ev["livekit_room_name"] or room_name_for_event(eid)
+
         part = db.execute("SELECT * FROM participants WHERE id = ? AND event_id = ?", (pid, eid)).fetchone()
         if not part:
             return jsonify({"error": "participante no encontrado"}), 404
@@ -292,11 +341,16 @@ def skip_to_participant(eid, pid):
                 "UPDATE participants SET status = 'done', turn_ended_at = CURRENT_TIMESTAMP, queue_position = NULL WHERE id = ?",
                 (current["id"],),
             )
+            cur_identity = current["livekit_identity"] or f"participant_{current['id']}"
+            update_participant_permissions(room_name, cur_identity, can_publish=False)
 
         db.execute(
             "UPDATE participants SET status = 'on_air', turn_started_at = CURRENT_TIMESTAMP, queue_position = NULL WHERE id = ?",
             (pid,),
         )
+        part_identity = part["livekit_identity"] or f"participant_{pid}"
+        update_participant_permissions(room_name, part_identity, can_publish=True)
+
         _compact_queue(db, eid)
         _update_preconnect_flags(db, eid)
         db.commit()
@@ -405,10 +459,9 @@ def remove_from_queue(eid, pid):
         db.commit()
 
         # Remove from LiveKit room
-        room_name = ev["livekit_room_name"]
+        room_name = ev["livekit_room_name"] or room_name_for_event(eid)
         identity = part["livekit_identity"] or f"participant_{pid}"
-        if room_name:
-            lk_remove_participant(room_name, identity)
+        lk_remove_participant(room_name, identity)
 
         return jsonify({"ok": True})
     finally:
