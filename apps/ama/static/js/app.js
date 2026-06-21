@@ -591,7 +591,10 @@ var HostView = {
       <select v-model="selectedMic">\
         <option v-for="d in devices.mics" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Mic " + d.deviceId.slice(0,6) }}</option>\
       </select>\
-      <button class="primary" @click="startEvent" style="margin-top:8px">Entrar al evento</button>\
+      <div v-if="eventData.status === \'finished\'" style="margin-top:12px;padding:10px;background:var(--ink-hover);border-radius:8px;text-align:center">\
+        <span class="muted">Este evento ya finalizo</span>\
+      </div>\
+      <button v-else class="primary" @click="startEvent" style="margin-top:8px">Entrar al evento</button>\
       <button class="ghost" @click="$props.onBack">Volver</button>\
     </div>\
   </div>\
@@ -619,7 +622,6 @@ var HostView = {
   <div class="controls-bar">\
     <button class="primary" @click="nextTurnAction" :disabled="!inQueueOnly.length">Siguiente &#9654;</button>\
     <button v-if="currentParticipant && !currentParticipant.is_censored" class="danger" @click="censorParticipant(currentParticipant.id)">Censurar</button>\
-    <button v-if="currentParticipant && currentParticipant.is_censored" @click="uncensorParticipant(currentParticipant.id)">Quitar censura</button>\
     <button v-if="currentParticipant" class="danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar participante">Expulsar</button>\
     <span class="spacer"></span>\
     <button v-if="!isRecording" @click="startRecording">&#9679; Grabar</button>\
@@ -1245,7 +1247,6 @@ var EmbedHostView = {
           </div>\
           <span class="on-air-badge" style="font-size:10px;padding:2px 8px">EN VIVO</span>\
           <button v-if="!currentParticipant.is_censored" class="icon danger" @click="censorParticipant(currentParticipant.id)" title="Censurar">&#128263;</button>\
-          <button v-else class="icon" @click="uncensorParticipant(currentParticipant.id)" title="Quitar censura" style="color:var(--signal-cool)">&#128264;</button>\
           <button class="icon danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar">&#10005;</button>\
         </div>\
       </div>\
