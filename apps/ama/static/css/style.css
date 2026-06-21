@@ -571,6 +571,91 @@ label {
 
 * { box-sizing: border-box; }
 
+/* Spectator view */
+.spectator-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--ink);
+}
+.spec-video-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+.spec-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.spec-overlay-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  pointer-events: none;
+}
+.spec-badge {
+  background: var(--signal);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  animation: pulse-badge 2s infinite;
+}
+@keyframes pulse-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.spec-viewers {
+  font-size: 12px;
+  color: var(--paper-soft);
+}
+.spec-overlay-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 14px;
+  background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  color: var(--paper);
+  pointer-events: none;
+}
+.spec-like-counter {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--signal);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+.spec-like-float {
+  position: absolute;
+  bottom: 20%;
+  font-size: 28px;
+  color: var(--signal);
+  pointer-events: none;
+  animation: like-float 1.2s ease-out forwards;
+  opacity: 0;
+}
+@keyframes like-float {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  50%  { opacity: 0.8; transform: translateY(-60px) scale(1.3); }
+  100% { opacity: 0; transform: translateY(-120px) scale(0.8); }
+}
+
 /* Participant questions (host-side) */
 .participant-questions {
   margin-top: 4px;

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS events (
     shared_project_id TEXT,
     prodpod_session_id INTEGER,
     branding_json TEXT,
+    like_count INTEGER DEFAULT 0,
+    spectator_count INTEGER DEFAULT 0,
     host_username TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     started_at TIMESTAMP,
@@ -81,6 +83,13 @@ def _migrate(conn):
     cols = {r[1] for r in cur.fetchall()}
     if "questions" not in cols:
         conn.execute("ALTER TABLE participants ADD COLUMN questions TEXT DEFAULT '[]'")
+        conn.commit()
+
+    cur = conn.execute("PRAGMA table_info(events)")
+    ecols = {r[1] for r in cur.fetchall()}
+    if "like_count" not in ecols:
+        conn.execute("ALTER TABLE events ADD COLUMN like_count INTEGER DEFAULT 0")
+        conn.execute("ALTER TABLE events ADD COLUMN spectator_count INTEGER DEFAULT 0")
         conn.commit()
 
 def event_dir(event_id: int) -> Path:

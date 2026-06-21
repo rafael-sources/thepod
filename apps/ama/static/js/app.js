@@ -215,6 +215,7 @@ var DashboardView = {
         <div class="event-status" :class="e.status">{{ e.status }}</div>\
         <h3>{{ e.title }}</h3>\
         <p class="event-desc">{{ e.description || "Sin descripcion" }}</p>\
+        <div v-if="e.like_count || e.spectator_count" class="event-meta" style="margin-top:4px">&#10084; {{ e.like_count || 0 }} &middot; &#128065; {{ e.spectator_count || 0 }}</div>\
         <div class="event-meta">{{ fmtDate(e.created_at) }}</div>\
         <button v-if="e.status === \'created\'" class="icon danger" @click.stop="deleteEvent(e.id)" title="Eliminar" style="position:absolute;top:12px;right:12px">&#10005;</button>\
       </div>\
@@ -238,6 +239,8 @@ var HostView = {
     var chatInput = ref("");
     var currentParticipant = ref(null);
     var isRecording = ref(false);
+    var likeCount = ref(0);
+    var spectatorCount = ref(0);
     var pollTimer = ref(null);
     var chatPollTimer = ref(null);
 
@@ -248,6 +251,10 @@ var HostView = {
 
     var joinLink = computed(function () {
       return window.location.origin + "/join/" + eventData.value.id;
+    });
+
+    var watchLink = computed(function () {
+      return window.location.origin + "/watch/" + eventData.value.id;
     });
 
     async function listDevices() {
@@ -360,6 +367,9 @@ var HostView = {
         } catch (e) { window.toast({ type: "error", text: e.message }); }
       }
       await connectToRoom();
+      if (!isRecording.value) {
+        try { await startRecording(); } catch (_) {}
+      }
     }
 
     async function finishEvent() {
@@ -395,10 +405,19 @@ var HostView = {
       try { requests.value = await api("/api/events/" + eventData.value.id + "/requests"); } catch (_) {}
     }
 
+    async function loadStats() {
+      try {
+        var info = await api("/api/events/" + eventData.value.id + "/public-info");
+        likeCount.value = info.like_count || 0;
+        spectatorCount.value = info.spectator_count || 0;
+      } catch (_) {}
+    }
+
     function startPolling() {
       loadQueue();
       loadRequests();
-      pollTimer.value = setInterval(function () { loadQueue(); loadRequests(); }, 3000);
+      loadStats();
+      pollTimer.value = setInterval(function () { loadQueue(); loadRequests(); loadStats(); }, 3000);
     }
 
     function stopPolling() {
@@ -538,7 +557,13 @@ var HostView = {
 
     function copyJoinLink() {
       navigator.clipboard.writeText(joinLink.value).then(function () {
-        window.toast({ type: "success", text: "Link copiado" });
+        window.toast({ type: "success", text: "Link de participante copiado" });
+      });
+    }
+
+    function copyWatchLink() {
+      navigator.clipboard.writeText(watchLink.value).then(function () {
+        window.toast({ type: "success", text: "Link de espectador copiado" });
       });
     }
 
@@ -562,7 +587,7 @@ var HostView = {
     return {
       eventData: eventData, phase: phase, connected: connected,
       queue: queue, requests: requests, chatMessages: chatMessages, chatInput: chatInput,
-      currentParticipant: currentParticipant, isRecording: isRecording,
+      currentParticipant: currentParticipant, isRecording: isRecording, likeCount: likeCount, spectatorCount: spectatorCount,
       devices: devices, selectedCamera: selectedCamera, selectedMic: selectedMic,
       joinLink: joinLink, inQueueOnly: inQueueOnly,
       startEvent: startEvent, finishEvent: finishEvent,
@@ -570,7 +595,7 @@ var HostView = {
       nextTurnAction: nextTurnAction, skipTo: skipTo, removeParticipant: removeParticipant,
       censorParticipant: censorParticipant, uncensorParticipant: uncensorParticipant,
       startRecording: startRecording, stopRecording: stopRecording,
-      sendChat: sendChat, copyJoinLink: copyJoinLink, initials: initials,
+      sendChat: sendChat, copyJoinLink: copyJoinLink, copyWatchLink: copyWatchLink, initials: initials,
     };
   },
   template: '\
@@ -591,11 +616,19 @@ var HostView = {
       <select v-model="selectedMic">\
         <option v-for="d in devices.mics" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Mic " + d.deviceId.slice(0,6) }}</option>\
       </select>\
-      <div v-if="eventData.status === \'finished\'" style="margin-top:12px;padding:10px;background:var(--ink-hover);border-radius:8px;text-align:center">\
-        <span class="muted">Este evento ya finalizo</span>\
+      <div v-if="eventData.status === \'finished\'" style="margin-top:12px;padding:12px;background:var(--ink-hover);border-radius:8px">\
+        <div style="text-align:center;margin-bottom:8px"><span class="muted">Evento finalizado</span></div>\
+        <div style="display:flex;gap:16px;justify-content:center;font-size:13px">\
+          <span>&#10084; {{ eventData.like_count || 0 }} likes</span>\
+          <span>&#128065; {{ eventData.spectator_count || 0 }} espectadores</span>\
+        </div>\
       </div>\
       <button v-else class="primary" @click="startEvent" style="margin-top:8px">Entrar al evento</button>\
-      <button class="ghost" @click="$props.onBack">Volver</button>\
+      <div style="display:flex;gap:8px;margin-top:8px">\
+        <button class="ghost" style="flex:1" @click="copyJoinLink" title="Copiar link de participante">&#128279; Link participar</button>\
+        <button class="ghost" style="flex:1" @click="copyWatchLink" title="Copiar link de espectador">&#128065; Link ver</button>\
+      </div>\
+      <button class="ghost" @click="$props.onBack" style="margin-top:4px">Volver</button>\
     </div>\
   </div>\
 </div>\
@@ -605,8 +638,11 @@ var HostView = {
     <h2 style="font-size:16px;margin:0">{{ eventData.title }}</h2>\
     <span class="event-status" :class="eventData.status" style="margin-left:8px">{{ eventData.status }}</span>\
     <span v-if="isRecording" class="rec-indicator" style="margin-left:12px"><span class="rec-dot"></span> REC</span>\
+    <span v-if="spectatorCount" class="muted" style="margin-left:12px;font-size:12px">&#128065; {{ spectatorCount }}</span>\
+    <span v-if="likeCount" class="muted" style="margin-left:8px;font-size:12px">&#10084; {{ likeCount }}</span>\
     <span class="spacer"></span>\
-    <button class="ghost" @click="copyJoinLink" title="Copiar link de acceso">&#128279; Link</button>\
+    <button class="ghost" @click="copyJoinLink" title="Copiar link de participante">&#128279; Participar</button>\
+    <button class="ghost" @click="copyWatchLink" title="Copiar link de espectador">&#128065; Ver</button>\
   </div>\
   <div class="video-area">\
     <div class="video-card" :class="currentParticipant ? \'split\' : \'host-solo\'">\
@@ -1295,13 +1331,163 @@ var EmbedHostView = {
 </div>'
 };
 
+// ── SpectatorView ───────────────────────────────────────────────────
+
+var SpectatorView = {
+  props: { eventId: [Number, String] },
+  setup: function (props) {
+    var eventInfo = ref(null);
+    var loading = ref(true);
+    var error = ref("");
+    var room = ref(null);
+    var connected = ref(false);
+    var likeCount = ref(0);
+    var spectatorCount = ref(0);
+    var likeBurst = ref([]);
+    var _burstId = 0;
+    var pollTimer = ref(null);
+
+    async function loadEvent() {
+      loading.value = true;
+      try {
+        eventInfo.value = await api("/api/events/" + props.eventId + "/public-info");
+        likeCount.value = eventInfo.value.like_count || 0;
+        spectatorCount.value = eventInfo.value.spectator_count || 0;
+        if (eventInfo.value.status === "active") {
+          await connectToRoom();
+        }
+      } catch (e) {
+        error.value = "Evento no encontrado";
+      }
+      loading.value = false;
+    }
+
+    async function connectToRoom() {
+      try {
+        var tokenData = await api("/api/events/" + props.eventId + "/spectator-token", { method: "POST" });
+        var wsUrl = await getLivekitWsUrl();
+        var newRoom = new LK.Room({ adaptiveStream: true, dynacast: true });
+
+        newRoom.on(LK.RoomEvent.TrackSubscribed, function (track) {
+          if (track.kind === LK.Track.Kind.Video) {
+            nextTick(function () {
+              var el = document.getElementById("spec-video");
+              if (el) track.attach(el);
+            });
+          } else if (track.kind === LK.Track.Kind.Audio) {
+            var a = track.attach();
+            document.body.appendChild(a);
+          }
+        });
+
+        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) {
+          track.detach().forEach(function (el) { el.remove(); });
+        });
+
+        newRoom.on(LK.RoomEvent.DataReceived, function (payload) {
+          var msg = _decodeMsg(payload);
+          if (msg && msg.type === "event_ended") {
+            eventInfo.value.status = "finished";
+            if (newRoom) newRoom.disconnect();
+          }
+        });
+
+        newRoom.on(LK.RoomEvent.Disconnected, function () {
+          connected.value = false;
+        });
+
+        await newRoom.connect(wsUrl, tokenData.token);
+        room.value = newRoom;
+        connected.value = true;
+
+        pollTimer.value = setInterval(pollLikes, 5000);
+      } catch (e) {
+        error.value = "Error al conectar: " + e.message;
+      }
+    }
+
+    async function pollLikes() {
+      try {
+        var info = await api("/api/events/" + props.eventId + "/public-info");
+        likeCount.value = info.like_count || 0;
+        spectatorCount.value = info.spectator_count || 0;
+        if (info.status !== "active") {
+          eventInfo.value.status = info.status;
+          if (room.value) { room.value.disconnect(); room.value = null; }
+          connected.value = false;
+          if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null; }
+        }
+      } catch (_) {}
+    }
+
+    async function sendLike() {
+      var id = ++_burstId;
+      likeBurst.value.push({ id: id, x: 20 + Math.random() * 60 });
+      setTimeout(function () {
+        likeBurst.value = likeBurst.value.filter(function (b) { return b.id !== id; });
+      }, 1200);
+      try {
+        var res = await api("/api/events/" + props.eventId + "/like", { method: "POST" });
+        likeCount.value = res.like_count;
+      } catch (_) {}
+    }
+
+    function leave() {
+      if (room.value) { room.value.disconnect(); room.value = null; }
+      connected.value = false;
+      if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null; }
+      eventInfo.value.status = "left";
+    }
+
+    onMounted(loadEvent);
+    onBeforeUnmount(function () {
+      if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null; }
+      if (room.value) { room.value.disconnect(); room.value = null; }
+    });
+
+    return {
+      eventInfo: eventInfo, loading: loading, error: error,
+      connected: connected, likeCount: likeCount, spectatorCount: spectatorCount,
+      likeBurst: likeBurst, sendLike: sendLike, leave: leave,
+    };
+  },
+  template: '\
+<div class="spectator-view">\
+  <div v-if="loading" class="loading" style="padding:40px">Cargando...</div>\
+  <div v-else-if="error && !eventInfo" class="participant-status"><p class="error-text">{{ error }}</p></div>\
+  <div v-else-if="eventInfo && eventInfo.status !== \'active\' && !connected" class="participant-status" style="text-align:center">\
+    <h1 class="brand" style="margin-bottom:16px">ama<span class="brand-accent">Pod</span></h1>\
+    <h2>{{ eventInfo.title }}</h2>\
+    <p class="muted">{{ eventInfo.status === "finished" ? "Este evento ya finalizo" : "El evento aun no comienza" }}</p>\
+  </div>\
+  <template v-else>\
+    <div class="spec-video-wrap" @click="sendLike">\
+      <video id="spec-video" autoplay muted playsinline></video>\
+      <div class="spec-overlay-top">\
+        <span class="brand" style="font-size:14px">ama<span class="brand-accent">Pod</span></span>\
+        <span class="spec-badge">EN VIVO</span>\
+        <span class="spec-viewers">&#128065; {{ spectatorCount }}</span>\
+      </div>\
+      <div class="spec-overlay-bottom">\
+        <h3 style="margin:0;font-size:15px">{{ eventInfo.title }}</h3>\
+      </div>\
+      <div class="spec-like-counter">&#10084; {{ likeCount }}</div>\
+      <div v-for="b in likeBurst" :key="b.id" class="spec-like-float" :style="{ left: b.x + \'%\' }">&#10084;</div>\
+    </div>\
+    <div style="text-align:center;padding:8px">\
+      <button class="ghost" @click="leave" style="font-size:13px">Salir</button>\
+    </div>\
+  </template>\
+</div>'
+};
+
 // ── App ──────────────────────────────────────────────────────────────
 
 var App = {
   components: {
     LoginView: LoginView, DashboardView: DashboardView, HostView: HostView,
     JoinView: JoinView, ParticipantView: ParticipantView, EmbedHostView: EmbedHostView,
-    ToastHost: ToastHost,
+    SpectatorView: SpectatorView, ToastHost: ToastHost,
   },
   setup: function () {
     var state = reactive({
@@ -1310,6 +1496,7 @@ var App = {
       activeEvent: null,
       joinEventId: null,
       embedEventId: null,
+      watchEventId: null,
     });
 
     function parseRoute() {
@@ -1317,6 +1504,8 @@ var App = {
       var m;
       m = path.match(/^\/join\/(\d+)$/);
       if (m) { state.joinEventId = parseInt(m[1]); state.route = "join"; return; }
+      m = path.match(/^\/watch\/(\d+)$/);
+      if (m) { state.watchEventId = parseInt(m[1]); state.route = "watch"; return; }
       m = path.match(/^\/embed\/(\d+)$/);
       if (m) { state.embedEventId = parseInt(m[1]); state.route = "embed"; return; }
     }
@@ -1351,6 +1540,7 @@ var App = {
   <dashboard-view v-else-if="state.route === \'dashboard\'" :user="state.user" @open-event="openEvent" :on-logout="logout" />\
   <host-view v-else-if="state.route === \'host\'" :event="state.activeEvent" :user="state.user" :on-back="backToDashboard" />\
   <join-view v-else-if="state.route === \'join\'" :event-id="state.joinEventId" />\
+  <spectator-view v-else-if="state.route === \'watch\'" :event-id="state.watchEventId" />\
   <embed-host-view v-else-if="state.route === \'embed\'" :event-id="state.embedEventId" :user="state.user" />\
   <div v-else class="loading">Cargando...</div>\
 </div>'

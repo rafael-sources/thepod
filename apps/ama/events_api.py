@@ -23,6 +23,8 @@ def _serialize_event(row):
         "shared_project_id": row["shared_project_id"],
         "prodpod_session_id": row["prodpod_session_id"],
         "branding_json": row["branding_json"],
+        "like_count": row["like_count"],
+        "spectator_count": row["spectator_count"],
         "host_username": row["host_username"],
         "created_at": row["created_at"],
         "started_at": row["started_at"],
@@ -37,12 +39,19 @@ def public_event_info(eid):
         row = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
         if not row:
             return jsonify({"error": "evento no encontrado"}), 404
+        pcount = db.execute(
+            "SELECT COUNT(*) AS c FROM participants WHERE event_id = ? AND status NOT IN ('rejected')",
+            (eid,),
+        ).fetchone()["c"]
         return jsonify({
             "id": row["id"],
             "title": row["title"],
             "description": row["description"],
             "status": row["status"],
             "host_username": row["host_username"],
+            "like_count": row["like_count"],
+            "spectator_count": row["spectator_count"],
+            "participant_count": pcount,
         })
     finally:
         db.close()
@@ -197,6 +206,49 @@ def finish_event(eid):
         db.commit()
         row = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
         return jsonify(_serialize_event(row))
+    finally:
+        db.close()
+
+
+@bp.post("/api/events/<int:eid>/like")
+def like_event(eid):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+        if not row:
+            return jsonify({"error": "evento no encontrado"}), 404
+        db.execute("UPDATE events SET like_count = like_count + 1 WHERE id = ?", (eid,))
+        db.commit()
+        row = db.execute("SELECT like_count FROM events WHERE id = ?", (eid,)).fetchone()
+        return jsonify({"like_count": row["like_count"]})
+    finally:
+        db.close()
+
+
+@bp.post("/api/events/<int:eid>/spectator-token")
+def spectator_token(eid):
+    from livekit_service import generate_participant_token
+    import uuid
+    db = get_db()
+    try:
+        ev = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+        if not ev:
+            return jsonify({"error": "evento no encontrado"}), 404
+        if ev["status"] != "active":
+            return jsonify({"error": "el evento no esta activo"}), 400
+
+        room_name = ev["livekit_room_name"] or room_name_for_event(eid)
+        identity = f"spectator_{uuid.uuid4().hex[:8]}"
+        token = generate_participant_token(
+            room_name, identity, "Espectador",
+            is_host=False, can_publish=False,
+        )
+        db.execute(
+            "UPDATE events SET spectator_count = spectator_count + 1 WHERE id = ?",
+            (eid,),
+        )
+        db.commit()
+        return jsonify({"token": token, "room_name": room_name})
     finally:
         db.close()
 
