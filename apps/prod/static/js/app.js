@@ -687,6 +687,10 @@ var StudioView = {
     var triggerStats = reactive({ count: 0 });
     var exportStatus = ref("");
     var exporting = ref(false);
+    var allExported = computed(function () {
+      var recs = finishedRecordings.value;
+      return recs.length > 0 && recs.every(function (r) { return !!r.exported_to_postpod_at; });
+    });
 
     // Live streams (RTMP to YouTube/Twitch via LiveKit Egress)
     var streams = ref([]);
@@ -1085,7 +1089,7 @@ var StudioView = {
         exportStatus.value = "enviando pistas a postPod…";
         var r = await api("/api/sessions/" + props.session.id + "/recordings/export-to-postpod", { method: "POST" });
         if (r.exported === 0 && r.failed === 0) {
-          exportStatus.value = "sin pistas nuevas para enviar";
+          exportStatus.value = "✓ Todas las pistas ya fueron enviadas a postPod";
         } else {
           exportStatus.value = "✓ " + r.exported + " enviada(s)" +
             (r.failed ? " · " + r.failed + " falló" : "") +
@@ -2010,7 +2014,7 @@ var StudioView = {
       sendBackstage: sendBackstage, chatChannel: chatChannel,
       finishedRecordings: finishedRecordings, loadRecordings: loadRecordings,
       triggerStats: triggerStats,
-      exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting,
+      exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting, allExported: allExported,
       showDiagnostic: showDiagnostic,
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
       streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
@@ -2357,9 +2361,10 @@ var StudioView = {
               <a v-if="finishedRecordings.length" :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
                  class="btn-secondary" download>↓ ZIP</a>
               <button v-if="isHost" class="btn-export"
+                      :class="{ exported: allExported }"
                       :disabled="exporting || !finishedRecordings.length" @click="exportToPostpod"
                       title="Enviar pistas a postPod para editar">
-                {{ exporting ? "↗ enviando…" : "↗ Enviar a postPod" }}
+                {{ exporting ? "↗ enviando…" : allExported ? "✓ Ya enviado a postPod" : "↗ Enviar a postPod" }}
               </button>
             </div>
           </div>

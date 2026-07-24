@@ -1332,6 +1332,7 @@ a.mark:hover { opacity: 0.8; }
 }
 .btn-export:hover:not(:disabled) { filter: brightness(1.12); }
 .btn-export:disabled { opacity: 0.55; cursor: progress; }
+.btn-export.exported { background: var(--ink-muted, #555); color: var(--signal-cool, #8fbf6c); }
 
 .export-status {
   font-family: var(--font-mono);
