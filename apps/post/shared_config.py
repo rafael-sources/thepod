@@ -25,7 +25,7 @@ def _default_config():
         "cookie_domain": None,   # e.g. ".podpod.tudominio.com" in prod
         "postpod_url": "http://127.0.0.1:5000",
         "prodpod_url": "http://127.0.0.1:5002",
-        "amapod_url": "http://127.0.0.1:5003",
+        "amapod_url":  "http://127.0.0.1:5004",
     }
 
 

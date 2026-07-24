@@ -762,6 +762,23 @@ def import_track_from_prodpod():
             meta = m2
     slug = meta["slug"]
 
+    # Idempotency: skip if this original_name was already imported
+    db = get_db(slug)
+    try:
+        dup = db.execute(
+            "SELECT id FROM media_files WHERE original_name = ?",
+            (original_name,),
+        ).fetchone()
+    finally:
+        db.close()
+    if dup:
+        return jsonify({
+            "project": _summarize_project(meta),
+            "duplicate": True,
+            "message": f"'{original_name}' ya fue importado",
+            "existing_file_id": dup["id"],
+        }), 200
+
     # Save under the project's media folder
     filename = f"{uuid.uuid4().hex}{incoming_ext}"
     dest_dir = PROJECTS_DIR / slug / "media" / file_type
