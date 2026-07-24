@@ -205,6 +205,16 @@ def finish_event(eid):
         )
         db.commit()
         row = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+
+        # Auto-export recording to postPod (best-effort, don't block finish)
+        if row["recording_file"]:
+            try:
+                from integrations import _do_export_to_postpod
+                _do_export_to_postpod(eid)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Auto-export to postPod failed: %s", e)
+
         return jsonify(_serialize_event(row))
     finally:
         db.close()

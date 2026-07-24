@@ -1,11 +1,19 @@
 """Integrations blueprint — cross-app communication for the podpod suite."""
 
+import logging
+import os
+import uuid
+from pathlib import Path
+
+import requests as http_requests
 from flask import Blueprint, jsonify, request
 
 from auth import require_auth, current_user
-from config import INTEGRATION_SECRET, AMAPOD_URL
+from config import INTEGRATION_SECRET, AMAPOD_URL, POSTPOD_URL
 from db import get_db
 from livekit_service import create_room, room_name_for_event
+
+log = logging.getLogger(__name__)
 
 bp = Blueprint("integrations", __name__)
 
@@ -61,36 +69,56 @@ def export_to_postpod():
     if not eid:
         return jsonify({"error": "event_id requerido"}), 400
 
+    result, status = _do_export_to_postpod(eid)
+    return jsonify(result), status
+
+
+def _do_export_to_postpod(eid):
+    """Export recording to postPod. Returns (result_dict, status_code)."""
     db = get_db()
     try:
         ev = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
         if not ev:
-            return jsonify({"error": "evento no encontrado"}), 404
+            return {"error": "evento no encontrado"}, 404
 
-        # Gather chat messages
-        messages = db.execute(
-            "SELECT * FROM chat_messages WHERE event_id = ? AND is_approved = 1 ORDER BY created_at ASC",
-            (eid,),
-        ).fetchall()
+        recording_path = ev["recording_file"]
+        if not recording_path or not os.path.isfile(recording_path):
+            return {"error": "no hay archivo de grabacion disponible"}, 400
 
-        export_data = {
-            "event_id": eid,
-            "title": ev["title"],
-            "recording_file": ev["recording_file"],
-            "chat_messages": [
-                {
-                    "sender_name": m["sender_name"],
-                    "message": m["message"],
-                    "is_host": m["is_host"],
-                    "created_at": m["created_at"],
-                }
-                for m in messages
-            ],
-        }
+        spid = ev["shared_project_id"]
+        if not spid:
+            spid = uuid.uuid4().hex
+            db.execute("UPDATE events SET shared_project_id = ? WHERE id = ?", (spid, eid))
+            db.commit()
 
-        # In a real implementation, this would POST to postPod's API.
-        # For now, return the data that would be sent.
-        return jsonify({"exported": True, "data": export_data})
+        endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-track"
+        headers = {"X-PodPod-Secret": INTEGRATION_SECRET}
+
+        original_name = f"amapod_{ev['title']}_{eid}.mp4"
+        try:
+            with open(recording_path, "rb") as fh:
+                resp = http_requests.post(
+                    endpoint,
+                    headers=headers,
+                    data={
+                        "shared_project_id": spid,
+                        "original_name": original_name,
+                        "track_type": "video",
+                        "participant_name": ev["host_username"],
+                        "project_name": ev["title"],
+                        "owner_username": ev["host_username"],
+                    },
+                    files={"file": (original_name, fh, "video/mp4")},
+                    timeout=120,
+                )
+            if resp.status_code not in (200, 201):
+                log.warning("postPod export failed: %s %s", resp.status_code, resp.text[:200])
+                return {"error": f"postPod respondio {resp.status_code}"}, 502
+
+            return {"exported": True, "postpod_response": resp.json()}, 200
+        except http_requests.RequestException as e:
+            log.warning("postPod export request failed: %s", e)
+            return {"error": str(e)}, 502
     finally:
         db.close()
 

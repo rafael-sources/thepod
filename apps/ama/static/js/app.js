@@ -658,6 +658,7 @@ var HostView = {
   <div class="controls-bar">\
     <button class="primary" @click="nextTurnAction" :disabled="!inQueueOnly.length">Siguiente &#9654;</button>\
     <button v-if="currentParticipant && !currentParticipant.is_censored" class="danger" @click="censorParticipant(currentParticipant.id)">Censurar</button>\
+    <button v-if="currentParticipant && currentParticipant.is_censored" @click="uncensorParticipant(currentParticipant.id)">Quitar censura</button>\
     <button v-if="currentParticipant" class="danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar participante">Expulsar</button>\
     <span class="spacer"></span>\
     <button v-if="!isRecording" @click="startRecording">&#9679; Grabar</button>\
@@ -919,6 +920,7 @@ var ParticipantView = {
           }
           if (msg.type === "uncensor" && msg.participant_id === pdata.value.id) {
             isCensored.value = false;
+            enablePublish();
           }
           if (msg.type === "event_ended") {
             pdata.value.status = "left";
@@ -1283,6 +1285,7 @@ var EmbedHostView = {
           </div>\
           <span class="on-air-badge" style="font-size:10px;padding:2px 8px">EN VIVO</span>\
           <button v-if="!currentParticipant.is_censored" class="icon danger" @click="censorParticipant(currentParticipant.id)" title="Censurar">&#128263;</button>\
+          <button v-else class="icon" @click="uncensorParticipant(currentParticipant.id)" title="Quitar censura" style="color:var(--signal-cool)">&#128264;</button>\
           <button class="icon danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar">&#10005;</button>\
         </div>\
       </div>\
