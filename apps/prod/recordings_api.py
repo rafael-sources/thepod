@@ -312,7 +312,15 @@ def upload_recording(sid):
                 "SELECT id FROM participants WHERE session_id=? AND username=?",
                 (sid, username),
             ).fetchone()
-            participant_id = p["id"] if p else None
+            if not p:
+                cur = db.execute(
+                    "INSERT INTO participants (session_id, username, display_name, role) VALUES (?, ?, ?, 'host')",
+                    (sid, username, username.title()),
+                )
+                db.commit()
+                participant_id = cur.lastrowid
+            else:
+                participant_id = p["id"]
 
         f = request.files.get("file")
         if not f or not f.filename:
@@ -401,15 +409,25 @@ def export_recordings_to_postpod(sid):
             db.execute("UPDATE sessions SET shared_project_id=? WHERE id=?", (spid, sid))
             db.commit()
 
+        # Mark pending rows as "exporting" atomically to prevent duplicate
+        # exports when the button is clicked multiple times.
+        sentinel = f"_exporting_{uuid.uuid4().hex[:8]}"
+        db.execute(
+            "UPDATE recordings SET exported_to_postpod_at = ? "
+            "WHERE session_id = ? AND exported_to_postpod_at IS NULL",
+            (sentinel, sid),
+        )
+        db.commit()
+
         rows = db.execute(
             """
             SELECT r.*, COALESCE(p.display_name, p.username, 'anon') AS participant_name
             FROM recordings r
             LEFT JOIN participants p ON p.id = r.participant_id
-            WHERE r.session_id=? AND r.exported_to_postpod_at IS NULL
+            WHERE r.session_id=? AND r.exported_to_postpod_at = ?
             ORDER BY r.created_at
             """,
-            (sid,),
+            (sid, sentinel),
         ).fetchall()
         pending = [dict(r) for r in rows]
     finally:
@@ -484,6 +502,12 @@ def export_recordings_to_postpod(sid):
             if resp.status_code not in (200, 201):
                 failed += 1
                 errors.append({"recording_id": r["id"], "status": resp.status_code, "body": resp.text[:200]})
+                db = get_db()
+                try:
+                    db.execute("UPDATE recordings SET exported_to_postpod_at=NULL WHERE id=?", (r["id"],))
+                    db.commit()
+                finally:
+                    db.close()
                 continue
             data = resp.json()
             if not project_info:
@@ -502,6 +526,12 @@ def export_recordings_to_postpod(sid):
         except requests.RequestException as e:
             failed += 1
             errors.append({"recording_id": r["id"], "error": str(e)})
+            db = get_db()
+            try:
+                db.execute("UPDATE recordings SET exported_to_postpod_at=NULL WHERE id=?", (r["id"],))
+                db.commit()
+            finally:
+                db.close()
 
     # Ship chapter markers as postPod moments
     chapters_sent = 0
