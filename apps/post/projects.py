@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request, send_file
 from slugify import slugify
 
 from auth import current_user, require_auth
-from config import MEDIA_TYPES, PROJECTS_DIR
+from config import ALLOWED_EXTS, MEDIA_TYPES, PROJECTS_DIR, ext_to_type
 from db import get_db
 
 
@@ -175,9 +175,24 @@ def import_project_endpoint():
     if "file" not in request.files:
         return jsonify({"error": "archivo requerido"}), 400
     f = request.files["file"]
-    if not f.filename or not f.filename.endswith(".zip"):
-        return jsonify({"error": "debe ser un archivo .zip"}), 400
+    if not f.filename:
+        return jsonify({"error": "archivo requerido"}), 400
 
+    ext = Path(f.filename).suffix.lower()
+
+    if ext == ".zip":
+        return _import_zip(f)
+
+    file_type = ext_to_type(ext)
+    if not file_type:
+        return jsonify({
+            "error": f"extensión no soportada: {ext}",
+            "allowed": {k: sorted(v) for k, v in ALLOWED_EXTS.items()},
+        }), 400
+    return _import_media_file(f, ext, file_type)
+
+
+def _import_zip(f):
     import tempfile
     from project_io import import_project, unique_import_slug, validate_import_zip
 
@@ -210,6 +225,44 @@ def import_project_endpoint():
         return jsonify({"slug": slug, "meta": result["meta"]}), 201
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+def _import_media_file(f, ext, file_type):
+    import uuid
+    from files import _probe_duration, _generate_thumbnail, _generate_end_thumbnail, _generate_waveform
+
+    original_name = f.filename
+    project_name = Path(original_name).stem
+    meta = _create_project_internal(project_name, owner_username=current_user())
+    slug = meta["slug"]
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest_dir = PROJECTS_DIR / slug / "media" / file_type
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / filename
+    f.save(str(dest))
+
+    size_bytes = dest.stat().st_size
+    duration = _probe_duration(dest) if file_type in ("video", "audio") else None
+
+    if file_type == "video":
+        _generate_thumbnail(dest, duration)
+        _generate_end_thumbnail(dest, duration)
+    if file_type in ("video", "audio"):
+        _generate_waveform(dest, duration)
+
+    db = get_db(slug)
+    try:
+        db.execute(
+            "INSERT INTO media_files (filename, original_name, file_type, duration, size_bytes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (filename, original_name, file_type, duration, size_bytes),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    return jsonify({"slug": slug, "meta": meta}), 201
 
 
 # ---------------------------------------------------------------------------

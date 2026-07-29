@@ -403,8 +403,8 @@ var ProjectListView = {
         </div>
         <div class="spacer"></div>
         <button class="primary" @click="showCreate = true">＋ Nuevo proyecto</button>
-        <button class="ghost" @click="$refs.importInput.click()" title="Importar proyecto desde .zip">⇧ Importar</button>
-        <input ref="importInput" type="file" accept=".zip" style="display:none" @change="importProject">
+        <button class="ghost" @click="$refs.importInput.click()" title="Importar proyecto (.zip) o archivo de medios (.mp4, .webm, .mp3, etc.)">⇧ Importar</button>
+        <input ref="importInput" type="file" accept=".zip,video/*,audio/*,image/*" style="display:none" @change="importProject">
       </div>
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="loading" class="muted">Cargando sesiones…</div>
