@@ -253,11 +253,18 @@ def _import_media_file(f, ext, file_type):
 
     db = get_db(slug)
     try:
-        db.execute(
+        cur = db.execute(
             "INSERT INTO media_files (filename, original_name, file_type, duration, size_bytes) "
             "VALUES (?, ?, ?, ?, ?)",
             (filename, original_name, file_type, duration, size_bytes),
         )
+        media_file_id = cur.lastrowid
+        if file_type in ("video", "audio"):
+            db.execute(
+                "INSERT INTO timeline_clips (position, media_file_id, label, start_offset, end_offset, track) "
+                "VALUES (0, ?, ?, 0, ?, 1)",
+                (media_file_id, original_name, duration),
+            )
         db.commit()
     finally:
         db.close()
