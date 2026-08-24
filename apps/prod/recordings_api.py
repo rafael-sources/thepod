@@ -451,7 +451,7 @@ def export_recordings_to_postpod(sid):
     # postPod classifies by extension so both land as 'video'. That's OK for
     # now since .webm isn't in the audio ALLOWED_EXTS; postPod places them as
     # video and the editor can still use them as audio sources.
-    for r in pending:
+    for idx, r in enumerate(pending):
         fpath = (base / r["filename"]).resolve()
         if not str(fpath).startswith(str(base) + os.sep) or not fpath.is_file():
             failed += 1
@@ -496,6 +496,7 @@ def export_recordings_to_postpod(sid):
                         "project_name": sess["title"],
                         "owner_username": session_owner,
                         "extra_hosts": extra_hosts,
+                        "track_number": str(idx + 1),
                     },
                     files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
                     timeout=120,
