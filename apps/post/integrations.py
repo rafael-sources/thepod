@@ -788,12 +788,15 @@ def import_track_from_prodpod():
 
     size_bytes = dest.stat().st_size
 
-    # Duration: prefer uploader's hint when ffprobe can't read webm properly
+    # Duration: prefer uploader's hint when ffprobe returns garbage
+    # (Safari MediaRecorder writes wrong video stream duration in mp4)
     probed = _probe_duration(dest) if file_type in ("video", "audio") else None
     try:
         hinted = float(request.form.get("duration_seconds") or 0) or None
     except ValueError:
         hinted = None
+    if probed and hinted and probed > hinted * 10:
+        probed = None
     duration = probed or hinted
 
     thumbnail_url = None
@@ -836,6 +839,29 @@ def import_track_from_prodpod():
         file_id = cur.lastrowid
     finally:
         db.close()
+
+    # Auto-place on timeline if track_number was provided by prodPod
+    track_number = request.form.get("track_number")
+    if track_number and track_type == "video":
+        try:
+            tn = int(track_number)
+            tdb = get_db(slug)
+            try:
+                existing = tdb.execute(
+                    "SELECT id FROM timeline_clips WHERE media_file_id=?", (file_id,)
+                ).fetchone()
+                if not existing:
+                    pos = tdb.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM timeline_clips").fetchone()[0]
+                    tdb.execute(
+                        "INSERT INTO timeline_clips (position, media_file_id, label, start_offset, end_offset, track, volume) "
+                        "VALUES (?, ?, ?, 0, NULL, ?, 1.0)",
+                        (pos, file_id, original_name, tn),
+                    )
+                    tdb.commit()
+            finally:
+                tdb.close()
+        except (ValueError, Exception):
+            pass
 
     # After a participant video arrives, (re)build the hstack composite if
     # we now have 2+ source videos. Best-effort — errors don't fail the upload.

@@ -21,15 +21,24 @@ def _probe_duration(path: Path) -> float | None:
         result = subprocess.run(
             [
                 "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", str(path),
+                "-show_format", "-show_streams", str(path),
             ],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
             return None
         info = json.loads(result.stdout)
-        dur = info.get("format", {}).get("duration")
-        return float(dur) if dur is not None else None
+        fmt_dur = info.get("format", {}).get("duration")
+        dur = float(fmt_dur) if fmt_dur is not None else None
+        # Safari MediaRecorder writes wrong duration in mp4 video stream;
+        # if format duration looks absurd (>24h), fall back to audio stream.
+        if dur and dur > 86400:
+            for s in info.get("streams", []):
+                if s.get("codec_type") == "audio" and s.get("duration"):
+                    audio_dur = float(s["duration"])
+                    if audio_dur < 86400:
+                        return audio_dur
+        return dur
     except (subprocess.SubprocessError, json.JSONDecodeError, ValueError):
         return None
 
