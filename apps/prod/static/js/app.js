@@ -275,10 +275,14 @@ function _mountRemoteVideo(identity, track) {
   el.style.width = "100%";
   el.style.height = "100%";
   el.style.objectFit = "cover";
-  nextTick(function () {
+  var attempts = 0;
+  function tryMount() {
     var host = document.querySelector('[data-remote-id="' + identity + '"]');
-    if (host) { host.innerHTML = ""; host.appendChild(el); }
-  });
+    if (host) { host.innerHTML = ""; host.appendChild(el); return; }
+    attempts++;
+    if (attempts < 20) setTimeout(tryMount, 250);
+  }
+  nextTick(tryMount);
   return el;
 }
 
@@ -3463,7 +3467,7 @@ var DirectorView = {
         ifbStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         var audioTrack = ifbStream.getAudioTracks()[0];
         ifbTrack = new LK.LocalAudioTrack(audioTrack);
-        await room.localParticipant.publishTrack(ifbTrack, { name: "ifb_audio", stream: "ifb" });
+        await room.localParticipant.publishTrack(ifbTrack, { name: "ifb_audio", stream: "ifb", source: LK.Track.Source.Microphone });
       } catch (e) {
         if (window.toast) window.toast({ type: "error", text: "No se pudo activar el micrófono IFB: " + e.message });
         ifbActive.value = false;
@@ -3555,14 +3559,16 @@ var DirectorView = {
           var id = participant.identity;
           if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0, speaking: false };
           if (track.kind === LK.Track.Kind.Video) {
-            nextTick(function () {
+            var vidEl = track.attach();
+            vidEl.style.width = "100%"; vidEl.style.height = "100%"; vidEl.style.objectFit = "cover";
+            var dirAttempts = 0;
+            function tryMountDir() {
               var container = document.querySelector('[data-director-feed="' + id + '"]');
-              if (container) {
-                var el = track.attach();
-                el.style.width = "100%"; el.style.height = "100%"; el.style.objectFit = "cover";
-                container.innerHTML = ""; container.appendChild(el);
-              }
-            });
+              if (container) { container.innerHTML = ""; container.appendChild(vidEl); return; }
+              dirAttempts++;
+              if (dirAttempts < 20) setTimeout(tryMountDir, 250);
+            }
+            nextTick(tryMountDir);
           } else if (track.kind === LK.Track.Kind.Audio) {
             var a = track.attach(); a.volume = 1.0;
             document.body.appendChild(a);

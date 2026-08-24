@@ -385,10 +385,16 @@ def create_invite(sid):
             return jsonify({"error": f"sesión llena (máx {limit})"}), 409
 
         token = secrets.token_urlsafe(32)
+        from config import USER_PROFILES
+        username = None
+        for uname, profile in USER_PROFILES.items():
+            if uname.lower() == display_name.lower() or profile.get("display_name", "").lower() == display_name.lower():
+                username = uname
+                break
         cur = db.execute(
-            "INSERT INTO participants (session_id, display_name, invite_token, role) "
-            "VALUES (?, ?, ?, ?)",
-            (sid, display_name, token, role),
+            "INSERT INTO participants (session_id, username, display_name, invite_token, role) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sid, username, display_name, token, role),
         )
         db.commit()
         from integrations import _public_base_url
