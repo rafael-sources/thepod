@@ -322,14 +322,18 @@ function _decodeMsg(payload) {
 /* Track-based recorder: records a MediaStream into a single webm blob. */
 function _startRecorder(stream, onComplete, timesliceMs, audioOnly) {
   var types = audioOnly
-    ? ["audio/webm;codecs=opus", "audio/webm"]
-    : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+    ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+    : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm",
+       "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4"];
   var mime = types.find(function (t) { return window.MediaRecorder && MediaRecorder.isTypeSupported(t); });
+  var fallback = audioOnly ? "audio/webm" : "video/webm";
   var rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  var actualMime = mime || fallback;
   var chunks = [];
   rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
   rec.onstop = function () {
-    var blob = new Blob(chunks, { type: mime || (audioOnly ? "audio/webm" : "video/webm") });
+    var blob = new Blob(chunks, { type: actualMime });
+    blob._ext = actualMime.indexOf("mp4") !== -1 ? "mp4" : "webm";
     onComplete(blob);
   };
   rec.start(timesliceMs || 1000);
@@ -1303,8 +1307,7 @@ var StudioView = {
         }
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
-        // Host (session creator) decides when to fire the countdown
-        if (props.user.username === props.session.created_by) maybeFireCountdown();
+        if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
       } else if (msg.type === "countdown_start") {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
@@ -1327,7 +1330,7 @@ var StudioView = {
         var idx = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
         if (idx !== -1) activeOverlays.splice(idx, 1);
       } else if (msg.type === "director_cue") {
-        var cueMap = { "WRAP UP": "wrap-up", "NEXT TOPIC": "next-topic", "BREAK": "break", "SPEED UP": "speed-up", "SLOW DOWN": "slow-down", "AD READ": "ad-read", "CUSTOM": "custom" };
+        var cueMap = { "CERRAR TEMA": "wrap-up", "SIGUIENTE TEMA": "next-topic", "PAUSA": "break", "MÁS RÁPIDO": "speed-up", "MÁS LENTO": "slow-down", "LEER ANUNCIO": "ad-read", "CUSTOM": "custom" };
         if (msg.target === "all" || msg.target === myIdentity.value) {
           activeCue.value = { cue: msg.cue, text: msg.text || "", cssClass: cueMap[msg.cue] || "custom" };
           clearTimeout(cueTimer);
@@ -1336,9 +1339,13 @@ var StudioView = {
       } else if (msg.type === "ifb_start") {
         if (msg.targets === "all_hosts" || (Array.isArray(msg.targets) && msg.targets.indexOf(myIdentity.value) !== -1)) {
           ifbActive.value = true;
+          var ifbAudio = document.querySelector('audio[data-ifb="1"]');
+          if (ifbAudio) ifbAudio.volume = 1.0;
         }
       } else if (msg.type === "ifb_stop") {
         ifbActive.value = false;
+        var ifbAudio2 = document.querySelector('audio[data-ifb="1"]');
+        if (ifbAudio2) ifbAudio2.volume = 0;
       } else if (msg.type === "force_mute") {
         if (msg.target === myIdentity.value && room) {
           room.localParticipant.setMicrophoneEnabled(false);
@@ -1479,6 +1486,15 @@ var StudioView = {
         });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           var id = participant.identity;
+          if (id.startsWith("director_")) {
+            if (track.kind === LK.Track.Kind.Audio) {
+              var ifbEl = track.attach();
+              ifbEl.dataset.ifb = "1";
+              ifbEl.volume = ifbActive.value ? 1.0 : 0;
+              document.body.appendChild(ifbEl);
+            }
+            return;
+          }
           if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0, speaking: false };
           // ScreenShare arrives as a video track with source=ScreenShare. We
           // mount it into a dedicated big card on top of the participant grid.
@@ -1497,13 +1513,6 @@ var StudioView = {
             });
             return;
           }
-          if (track.kind === LK.Track.Kind.Audio && pub && pub.trackName === "ifb_audio") {
-            var ifbEl = track.attach();
-            ifbEl.dataset.ifb = "1";
-            ifbEl.volume = 1.0;
-            document.body.appendChild(ifbEl);
-            return;
-          }
           if (track.kind === LK.Track.Kind.Video) {
             _mountRemoteVideo(id, track);
           } else if (track.kind === LK.Track.Kind.Audio) {
@@ -1517,9 +1526,10 @@ var StudioView = {
           }
         });
         newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track, pub, participant) {
-          if (pub && pub.trackName === "ifb_audio") {
+          if (participant && participant.identity && participant.identity.startsWith("director_")) {
             track.detach().forEach(function (el) { el.remove(); });
             ifbActive.value = false;
+            document.querySelectorAll('audio[data-ifb="1"]').forEach(function (el) { el.remove(); });
             return;
           }
           track.detach().forEach(function (el) { el.remove(); });
@@ -1625,6 +1635,25 @@ var StudioView = {
 
         await loadParticipants();
         await loadChat();
+
+        // Mount tracks from participants already in the room
+        function mountExistingRemotes() {
+          if (!room) return;
+          room.remoteParticipants.forEach(function (p) {
+            var id = p.identity;
+            if (id.startsWith("director_")) return;
+            p.trackPublications.forEach(function (pub) {
+              if (!pub.track || pub.track.kind !== LK.Track.Kind.Video) return;
+              if (pub.source === LK.Track.Source.ScreenShare) return;
+              var host = document.querySelector('[data-remote-id="' + id + '"]');
+              if (host && !host.querySelector("video")) {
+                _mountRemoteVideo(id, pub.track);
+              }
+            });
+          });
+        }
+        setTimeout(mountExistingRemotes, 1500);
+        setTimeout(mountExistingRemotes, 4000);
       } catch (e) {
         error.value = "No se pudo conectar al estudio: " + e.message;
       } finally {
@@ -1670,6 +1699,8 @@ var StudioView = {
         try { el.pause(); } catch (_) {}
         try { el.remove(); } catch (_) {}
       });
+      // Notify server we're leaving
+      try { await fetch("/api/sessions/" + props.session.id + "/leave", { method: "POST" }); } catch (_) {}
       // Disconnect the room. LiveKit unpublishes and stops its own
       // mediaStreamTracks cleanly so the browser releases the camera/mic.
       if (room) {
@@ -1696,6 +1727,10 @@ var StudioView = {
     }
 
     /* ---------- recording (ready + countdown + sync start) ---------- */
+
+    function _hasDirector() {
+      return participants.value.some(function(p) { return p.role === "director"; });
+    }
 
     function connectedIdentities() {
       var ids = [];
@@ -1814,9 +1849,9 @@ var StudioView = {
     }
 
     async function uploadRecording(blob, trackType) {
-      if (practiceMode.value) return;  // ensayo: descartar el blob
+      if (practiceMode.value) return;
       try {
-        var ext = (trackType === "soundboard") ? "webm" : "webm";
+        var ext = blob._ext || "webm";
         var form = new FormData();
         form.append("file", blob, trackType + "." + ext);
         form.append("track_type", trackType);
@@ -1832,7 +1867,7 @@ var StudioView = {
       ownReady.value = !ownReady.value;
       readyMap[myIdentity.value] = ownReady.value;
       sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
-      if (props.user.username === props.session.created_by) maybeFireCountdown();
+      if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
     }
 
     async function stopRecording() {
@@ -1924,7 +1959,15 @@ var StudioView = {
       startPrejoinPreview();
       window.addEventListener("keydown", onKey);
     });
+    function _beaconLeave() {
+      try {
+        navigator.sendBeacon("/api/sessions/" + props.session.id + "/leave",
+          new Blob([JSON.stringify({})] , { type: "application/json" }));
+      } catch (_) {}
+    }
+    window.addEventListener("beforeunload", _beaconLeave);
     onBeforeUnmount(function () {
+      window.removeEventListener("beforeunload", _beaconLeave);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("message", handleAmaMessage);
       if (timerHandle) clearInterval(timerHandle);
@@ -2289,7 +2332,7 @@ var StudioView = {
               <div class="label"><span>{{ user.display_name || user.username }}</span><span class="role-chip">TÚ</span></div>
               <div v-if="localMuted" class="muted-icon">🔇</div>
             </div>
-            <template v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected')" :key="'side-' + p.id">
+            <template v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected' && pp.role !== 'director')" :key="'side-' + p.id">
               <div class="participant-card thumb-card"
                    :class="{ speaking: remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].speaking, hand: handsRaised['participant_' + p.id] }"
                    @click="pinSpotlight('participant_' + p.id)">
@@ -2324,7 +2367,7 @@ var StudioView = {
             <div class="vu" :style="'--vu:' + localMeter"></div>
           </div>
 
-          <div v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected')"
+          <div v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected' && pp.role !== 'director')"
                :key="p.id"
                class="participant-card"
                :class="{ speaking: remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].speaking,
@@ -2871,7 +2914,8 @@ var GuestStudioView = {
         var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
         if (oi !== -1) activeOverlays.splice(oi, 1);
       } else if (msg.type === "director_cue") {
-        activeCue.value = msg;
+        var gCueMap = { "CERRAR TEMA": "wrap-up", "SIGUIENTE TEMA": "next-topic", "PAUSA": "break", "MÁS RÁPIDO": "speed-up", "MÁS LENTO": "slow-down", "LEER ANUNCIO": "ad-read" };
+        activeCue.value = { cue: msg.cue, cssClass: gCueMap[msg.cue] || "custom" };
         if (cueTimer) clearTimeout(cueTimer);
         cueTimer = setTimeout(function () { activeCue.value = null; }, 8000);
       } else if (msg.type === "ifb_start") {
@@ -2965,8 +3009,9 @@ var GuestStudioView = {
 
     async function uploadRecording(blob, trackType) {
       try {
+        var ext = blob._ext || "webm";
         var form = new FormData();
-        form.append("file", blob, trackType + ".webm");
+        form.append("file", blob, trackType + "." + ext);
         form.append("track_type", trackType);
         form.append("token", props.inviteToken);
         form.append("duration_seconds", String(timecode.value));
@@ -3001,13 +3046,8 @@ var GuestStudioView = {
         });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           var id = participant.identity;
-          if (track.kind === LK.Track.Kind.Audio && pub.trackName === "ifb_audio") {
-            var ifbEl = track.attach(); ifbEl.volume = 1.0;
-            ifbEl.id = "ifb-audio-guest";
-            document.body.appendChild(ifbEl);
-            return;
-          }
           if (id.startsWith("director_")) return;
+          if (pub.trackName === "ifb_audio") return;
           if (!remoteMap[id]) remoteMap[id] = { name: participant.name || id, meter: 0 };
           if (track.kind === LK.Track.Kind.Video) {
             _mountRemoteVideo(id, track);
@@ -3085,6 +3125,27 @@ var GuestStudioView = {
         attachLocal();
         setTimeout(attachLocal, 200);
         setTimeout(attachLocal, 800);
+
+        // Mount tracks from participants already in the room
+        function mountExistingRemotes() {
+          if (!room) return;
+          room.remoteParticipants.forEach(function (p) {
+            var id = p.identity;
+            if (id.startsWith("director_")) return;
+            if (!remoteMap[id]) remoteMap[id] = { name: p.name || id, meter: 0 };
+            p.trackPublications.forEach(function (pub) {
+              if (!pub.track) return;
+              if (pub.track.kind === LK.Track.Kind.Video) {
+                var host = document.querySelector('[data-remote-id="' + id + '"]');
+                if (host && !host.querySelector("video")) {
+                  _mountRemoteVideo(id, pub.track);
+                }
+              }
+            });
+          });
+        }
+        setTimeout(mountExistingRemotes, 1500);
+        setTimeout(mountExistingRemotes, 4000);
       } catch (e) {
         error.value = "Error de conexión: " + e.message;
       } finally {
@@ -3109,6 +3170,14 @@ var GuestStudioView = {
       if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
       if (countdownHandle) { clearTimeout(countdownHandle); countdownHandle = null; }
       if (localMeterStop) { localMeterStop(); localMeterStop = null; }
+      // Notify server we're leaving
+      try {
+        await fetch("/api/sessions/" + props.joinData.session_id + "/leave-by-participant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ participant_id: props.joinData.participant_id, token: props.inviteToken }),
+        });
+      } catch (_) {}
       // Disconnect first (LK stops its tracks cleanly), then drop the
       // wrapper without re-stopping tracks — see StudioView rationale.
       if (room) { try { await room.disconnect(); } catch (_) {} }
@@ -3117,7 +3186,14 @@ var GuestStudioView = {
     }
 
     onMounted(function () { loadSounds(); });
-    onBeforeUnmount(function () { if (timerHandle) clearInterval(timerHandle); if (room) room.disconnect().catch(function () {}); });
+    onBeforeUnmount(function () {
+      if (timerHandle) clearInterval(timerHandle);
+      try {
+        navigator.sendBeacon("/api/sessions/" + props.joinData.session_id + "/leave-by-participant",
+          new Blob([JSON.stringify({ participant_id: props.joinData.participant_id, token: props.inviteToken })], { type: "application/json" }));
+      } catch (_) {}
+      if (room) room.disconnect().catch(function () {});
+    });
 
     return { localVideoEl: localVideoEl, error: error, busy: busy, connected: connected,
              localMuted: localMuted, localCamOff: localCamOff, remoteMap: remoteMap,
@@ -3208,7 +3284,7 @@ var GuestStudioView = {
             </template>
           </div>
         </div>
-        <div v-if="activeCue" class="director-cue" :class="(activeCue.cue || '').toLowerCase().replace(/ /g, '-')">
+        <div v-if="activeCue" class="director-cue" :class="activeCue.cssClass">
           {{ activeCue.cue }}
         </div>
       </div>
@@ -3347,6 +3423,12 @@ var DirectorView = {
     var myIdentity = ref("");
     var streams = ref([]);
 
+    // Recording control
+    var recording = ref(props.session.status === "recording");
+    var readyMap = reactive({});
+    var countdown = ref(null);
+    var countdownHandle = null;
+
     // Injection forms
     var injectType = ref("banner");
     var injectFields = reactive({
@@ -3457,35 +3539,38 @@ var DirectorView = {
 
     // --- IFB Push-to-Talk ---
     var ifbStream = null;
-    var ifbTrack = null;
+    var ifbRawTrack = null;
+    var ifbPublished = false;
     var ifbActive = ref(false);
 
-    async function startIFB(targets) {
-      sendData({ type: "ifb_start", targets: targets });
-      ifbActive.value = true;
+    async function ensureIFBTrack() {
+      if (ifbPublished) return true;
       try {
         ifbStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        var audioTrack = ifbStream.getAudioTracks()[0];
-        ifbTrack = new LK.LocalAudioTrack(audioTrack);
-        await room.localParticipant.publishTrack(ifbTrack, { name: "ifb_audio", stream: "ifb", source: LK.Track.Source.Microphone });
+        ifbRawTrack = ifbStream.getAudioTracks()[0];
+        ifbRawTrack.enabled = false;
+        var lkTrack = new LK.LocalAudioTrack(ifbRawTrack);
+        await room.localParticipant.publishTrack(lkTrack, { name: "ifb_audio", stream: "ifb" });
+        ifbPublished = true;
+        return true;
       } catch (e) {
         if (window.toast) window.toast({ type: "error", text: "No se pudo activar el micrófono IFB: " + e.message });
-        ifbActive.value = false;
+        return false;
       }
     }
 
+    async function startIFB(targets) {
+      var ok = await ensureIFBTrack();
+      if (!ok) return;
+      ifbRawTrack.enabled = true;
+      ifbActive.value = true;
+      sendData({ type: "ifb_start", targets: targets });
+    }
+
     function stopIFB() {
-      sendData({ type: "ifb_stop" });
+      if (ifbRawTrack) ifbRawTrack.enabled = false;
       ifbActive.value = false;
-      if (ifbTrack) {
-        try { room.localParticipant.unpublishTrack(ifbTrack); } catch (_) {}
-        ifbTrack.stop();
-        ifbTrack = null;
-      }
-      if (ifbStream) {
-        ifbStream.getTracks().forEach(function (t) { t.stop(); });
-        ifbStream = null;
-      }
+      sendData({ type: "ifb_stop" });
     }
 
     // --- Sound trigger ---
@@ -3531,6 +3616,49 @@ var DirectorView = {
       }
     }
 
+    // --- Recording control ---
+    function allParticipantsReady() {
+      var connected = participants.value.filter(function(p) {
+        return p.status === "connected" && p.role !== "director";
+      });
+      if (connected.length === 0) return false;
+      return connected.every(function(p) { return !!readyMap["participant_" + p.id]; });
+    }
+
+    async function startRecording() {
+      if (recording.value || countdown.value !== null) return;
+      var startAt = Date.now() + 3500;
+      sendData({ type: "countdown_start", start_at_ms: startAt });
+      function tick() {
+        var rem = startAt - Date.now();
+        if (rem <= 0) {
+          countdown.value = 0;
+          recording.value = true;
+          try { api("/api/sessions/" + props.session.id + "/start", { method: "POST" }); } catch (_) {}
+          var started = Date.now();
+          if (timerHandle) clearInterval(timerHandle);
+          timerHandle = setInterval(function () {
+            timecode.value = Math.floor((Date.now() - started) / 1000);
+          }, 1000);
+          countdownHandle = setTimeout(function () { countdown.value = null; }, 700);
+          return;
+        }
+        countdown.value = Math.ceil(rem / 1000);
+        countdownHandle = setTimeout(tick, 100);
+      }
+      tick();
+    }
+
+    async function stopRecording() {
+      if (!recording.value) return;
+      try { await api("/api/sessions/" + props.session.id + "/stop", { method: "POST" }); } catch (_) {}
+      sendData({ type: "recording_stop" });
+      recording.value = false;
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+      timecode.value = 0;
+      Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
+    }
+
     // --- Connect to LiveKit ---
     async function connect() {
       try {
@@ -3546,6 +3674,9 @@ var DirectorView = {
               playingPad[s.id] = true;
               setTimeout(function () { playingPad[s.id] = false; }, 400);
             }
+          }
+          if (msg.type === "ready_toggle") {
+            readyMap[msg.identity] = !!msg.ready;
           }
           if (msg.type === "director_chat" && msg.text) {
             directorChat.value.push({ id: msg.id, author: msg.author, text: msg.text });
@@ -3591,6 +3722,29 @@ var DirectorView = {
         connected.value = true;
         if (window.toast) window.toast({ type: "success", text: "Conectado al Control Room" });
 
+        // Mount tracks from participants already in the room
+        room.remoteParticipants.forEach(function (p) {
+          var id = p.identity;
+          if (!remoteMap[id]) remoteMap[id] = { name: p.name || id, meter: 0, speaking: false };
+          p.trackPublications.forEach(function (pub) {
+            if (pub.track && pub.track.kind === LK.Track.Kind.Video) {
+              var vidEl = pub.track.attach();
+              vidEl.style.width = "100%"; vidEl.style.height = "100%"; vidEl.style.objectFit = "cover";
+              var att = 0;
+              function tryM() {
+                var container = document.querySelector('[data-director-feed="' + id + '"]');
+                if (container) { container.innerHTML = ""; container.appendChild(vidEl); return; }
+                att++;
+                if (att < 20) setTimeout(tryM, 250);
+              }
+              nextTick(tryM);
+            } else if (pub.track && pub.track.kind === LK.Track.Kind.Audio) {
+              var a = pub.track.attach(); a.volume = 1.0;
+              document.body.appendChild(a);
+            }
+          });
+        });
+
         // Start timecode
         if (props.session.started_at) {
           var started = new Date(props.session.started_at + "Z").getTime();
@@ -3618,6 +3772,8 @@ var DirectorView = {
       participants: participants, remoteMap: remoteMap,
       activeOverlays: activeOverlays, removeOverlay: removeOverlay,
       timecode: timecode, formatTC: formatTC, streams: streams,
+      recording: recording, readyMap: readyMap, countdown: countdown,
+      allParticipantsReady: allParticipantsReady, startRecording: startRecording, stopRecording: stopRecording,
       injectType: injectType, injectFields: injectFields, injectOverlay: injectOverlay,
       expandedSection: expandedSection,
       sendCue: sendCue, cueTarget: cueTarget,
@@ -3638,6 +3794,13 @@ var DirectorView = {
         <div v-for="st in streams" :key="st.id" class="stream-badge" :class="st.status === \'active\' ? \'live\' : \'off\'">\
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
+        <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
+                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'\'">● GRABAR</button>\
+        <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
+          {{ countdown === 0 ? "¡REC!" : countdown }}\
+        </span>\
+        <button v-else-if="recording" class="ghost" @click="stopRecording"\
+                style="flex-shrink:0;color:var(--signal);border-color:var(--signal);">■ DETENER</button>\
         <button v-if="!connected" class="primary" @click="connect" style="flex-shrink:0;">🟢 Conectar</button>\
         <button v-else class="ghost" @click="disconnect" style="flex-shrink:0;">Desconectar</button>\
       </div>\
@@ -3646,9 +3809,11 @@ var DirectorView = {
         <div class="eyebrow" style="padding:0 0 6px 2px;">PARTICIPANTES</div>\
         <div v-for="p in participants.filter(function(x){ return x.role !== \'director\'; })" :key="p.id" class="cr-participant">\
           <div class="cr-p-head">\
-            <div class="cr-p-thumb" :data-director-feed="\'participant_\' + p.id"></div>\
+            <div class="cr-p-thumb" :data-director-thumb="\'participant_\' + p.id"></div>\
             <div class="cr-p-info">\
-              <div class="cr-p-name">{{ p.display_name }}</div>\
+              <div class="cr-p-name">{{ p.display_name }}\
+                <span v-if="readyMap[\'participant_\' + p.id]" style="color:var(--signal);font-size:9px;font-weight:700;margin-left:4px;">LISTO</span>\
+              </div>\
               <div class="cr-p-role">{{ p.role }}</div>\
             </div>\
           </div>\
@@ -3696,48 +3861,36 @@ var DirectorView = {
       <div class="cr-right">\
         <div class="eyebrow" style="padding:0 0 6px 2px;">INYECTAR OVERLAY</div>\
 \
+        <select v-model="injectType" class="input" style="font-size:11px;padding:4px 6px;margin-bottom:6px;">\
+          <option value="banner">Banner</option>\
+          <option value="segment">Segmento</option>\
+          <option value="comment">Comentario</option>\
+          <option value="countdown">Countdown</option>\
+          <option value="sponsor">Sponsor</option>\
+        </select>\
         <div class="cr-section">\
-          <div class="cr-section-head" @click="expandedSection = expandedSection === \'banner\' ? \'\' : \'banner\'">BANNER ▾</div>\
-          <div v-if="expandedSection === \'banner\'" class="cr-section-body">\
-            <div class="form-row"><input v-model="injectFields.name" placeholder="Nombre" class="input" /></div>\
-            <div class="form-row"><input v-model="injectFields.title" placeholder="Título" class="input" /></div>\
-            <button class="cr-inject-btn" @click="injectType = \'banner\'; injectOverlay()">Inyectar Banner</button>\
-          </div>\
-        </div>\
-\
-        <div class="cr-section">\
-          <div class="cr-section-head" @click="expandedSection = expandedSection === \'segment\' ? \'\' : \'segment\'">SEGMENTO ▾</div>\
-          <div v-if="expandedSection === \'segment\'" class="cr-section-body">\
-            <div class="form-row"><input v-model="injectFields.title" placeholder="Título segmento" class="input" /></div>\
-            <div class="form-row"><input v-model="injectFields.subtitle" placeholder="Subtítulo" class="input" /></div>\
-            <button class="cr-inject-btn" @click="injectType = \'segment\'; injectOverlay()">Inyectar Segmento</button>\
-          </div>\
-        </div>\
-\
-        <div class="cr-section">\
-          <div class="cr-section-head" @click="expandedSection = expandedSection === \'comment\' ? \'\' : \'comment\'">COMENTARIO ▾</div>\
-          <div v-if="expandedSection === \'comment\'" class="cr-section-body">\
-            <div class="form-row"><input v-model="injectFields.author" placeholder="@usuario" class="input" /></div>\
-            <div class="form-row"><input v-model="injectFields.text" placeholder="Texto del comentario" class="input" /></div>\
-            <button class="cr-inject-btn" @click="injectType = \'comment\'; injectOverlay()">Inyectar Comentario</button>\
-          </div>\
-        </div>\
-\
-        <div class="cr-section">\
-          <div class="cr-section-head" @click="expandedSection = expandedSection === \'countdown\' ? \'\' : \'countdown\'">COUNTDOWN ▾</div>\
-          <div v-if="expandedSection === \'countdown\'" class="cr-section-body">\
-            <div class="form-row"><input v-model.number="injectFields.seconds" type="number" placeholder="Segundos" class="input" /></div>\
-            <div class="form-row"><input v-model="injectFields.label" placeholder="Etiqueta" class="input" /></div>\
-            <button class="cr-inject-btn" @click="injectType = \'countdown\'; injectOverlay()">Inyectar Countdown</button>\
-          </div>\
-        </div>\
-\
-        <div class="cr-section">\
-          <div class="cr-section-head" @click="expandedSection = expandedSection === \'sponsor\' ? \'\' : \'sponsor\'">SPONSOR ▾</div>\
-          <div v-if="expandedSection === \'sponsor\'" class="cr-section-body">\
-            <div class="form-row"><input v-model="injectFields.sponsor_name" placeholder="Nombre sponsor" class="input" /></div>\
-            <div class="form-row"><input v-model="injectFields.sponsor_copy" placeholder="Copy" class="input" /></div>\
-            <button class="cr-inject-btn" @click="injectType = \'sponsor\'; injectOverlay()">Inyectar Sponsor</button>\
+          <div class="cr-section-body">\
+            <template v-if="injectType === \'banner\'">\
+              <div class="form-row"><input v-model="injectFields.name" placeholder="Nombre" class="input" /></div>\
+              <div class="form-row"><input v-model="injectFields.title" placeholder="Título" class="input" /></div>\
+            </template>\
+            <template v-else-if="injectType === \'segment\'">\
+              <div class="form-row"><input v-model="injectFields.title" placeholder="Título segmento" class="input" /></div>\
+              <div class="form-row"><input v-model="injectFields.subtitle" placeholder="Subtítulo" class="input" /></div>\
+            </template>\
+            <template v-else-if="injectType === \'comment\'">\
+              <div class="form-row"><input v-model="injectFields.author" placeholder="@usuario" class="input" /></div>\
+              <div class="form-row"><input v-model="injectFields.text" placeholder="Texto del comentario" class="input" /></div>\
+            </template>\
+            <template v-else-if="injectType === \'countdown\'">\
+              <div class="form-row"><input v-model.number="injectFields.seconds" type="number" placeholder="Segundos" class="input" /></div>\
+              <div class="form-row"><input v-model="injectFields.label" placeholder="Etiqueta" class="input" /></div>\
+            </template>\
+            <template v-else-if="injectType === \'sponsor\'">\
+              <div class="form-row"><input v-model="injectFields.sponsor_name" placeholder="Nombre sponsor" class="input" /></div>\
+              <div class="form-row"><input v-model="injectFields.sponsor_copy" placeholder="Copy" class="input" /></div>\
+            </template>\
+            <button class="cr-inject-btn" @click="injectOverlay()">Inyectar {{ injectType }}</button>\
           </div>\
         </div>\
 \
@@ -3757,31 +3910,32 @@ var DirectorView = {
           </select>\
         </div>\
         <div class="cr-cues">\
-          <button class="cr-cue-btn wrap-up" @click="sendCue(\'WRAP UP\')">WRAP UP</button>\
-          <button class="cr-cue-btn next-topic" @click="sendCue(\'NEXT TOPIC\')">NEXT TOPIC</button>\
-          <button class="cr-cue-btn break" @click="sendCue(\'BREAK\')">BREAK</button>\
-          <button class="cr-cue-btn speed-up" @click="sendCue(\'SPEED UP\')">SPEED UP</button>\
-          <button class="cr-cue-btn slow-down" @click="sendCue(\'SLOW DOWN\')">SLOW DOWN</button>\
-          <button class="cr-cue-btn ad-read" @click="sendCue(\'AD READ\')">AD READ</button>\
+          <button class="cr-cue-btn wrap-up" @click="sendCue(\'CERRAR TEMA\')">CERRAR TEMA</button>\
+          <button class="cr-cue-btn next-topic" @click="sendCue(\'SIGUIENTE TEMA\')">SIGUIENTE TEMA</button>\
+          <button class="cr-cue-btn break" @click="sendCue(\'PAUSA\')">PAUSA</button>\
+          <button class="cr-cue-btn speed-up" @click="sendCue(\'MÁS RÁPIDO\')">MÁS RÁPIDO</button>\
+          <button class="cr-cue-btn slow-down" @click="sendCue(\'MÁS LENTO\')">MÁS LENTO</button>\
+          <button class="cr-cue-btn ad-read" @click="sendCue(\'LEER ANUNCIO\')">LEER ANUNCIO</button>\
         </div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
           <button v-for="s in sessionSounds" :key="s.id" class="ghost"\
-                  :style="\'background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);\'"\
+                  :style="\'background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);\'"\
                   @click="triggerSound(s)">{{ s.name }}</button>\
         </div>\
         <div v-if="directorSounds.length" style="margin-top:6px;">\
           <div class="eyebrow" style="padding:0 0 4px 2px;font-size:9px;color:var(--signal-cyan);">DIRECTOR ONLY</div>\
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
             <button v-for="s in directorSounds" :key="s.id" class="ghost"\
-                    :style="\'border:1px solid var(--signal-cyan);background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);\'"\
+                    :style="\'border:1px solid var(--signal-cyan);background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);\'"\
                     @click="triggerSound(s)">{{ s.name }}</button>\
           </div>\
         </div>\
       </div>\
 \
       <div class="cr-bottom">\
+        <span v-if="recording" style="color:var(--signal);font-weight:700;font-family:var(--font-mono);font-size:12px;margin-right:8px;">● REC</span>\
         <div class="timecode">{{ formatTC(timecode) }}</div>\
         <div v-for="st in streams" :key="st.id" class="stream-badge" :class="st.status === \'active\' ? \'live\' : \'off\'">\
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\

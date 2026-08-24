@@ -460,7 +460,8 @@ def export_recordings_to_postpod(sid):
 
         # Name as sent to postPod (human readable)
         pname = re.sub(r"[^A-Za-z0-9_-]+", "_", r["participant_name"] or "anon").strip("_") or "anon"
-        original_name = f"{pname}_{r['track_type']}_{r['id']}.webm"
+        file_ext = Path(r["filename"]).suffix or ".webm"
+        original_name = f"{pname}_{r['track_type']}_{r['id']}{file_ext}"
 
         # Owner of this prodPod session is the host. Co-host usernames go in
         # extra_hosts so postPod grants them visibility too.

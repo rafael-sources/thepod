@@ -91,7 +91,6 @@ def generate_participant_token(
     """
     Create a JWT access token the browser uses to join the LiveKit room.
     `is_host` gets extra grants (record, can-update-metadata).
-    `is_director` can publish audio (IFB push-to-talk) but not video.
     """
     from livekit import api
 
@@ -102,8 +101,6 @@ def generate_participant_token(
         can_subscribe=True,
         can_publish_data=True,
     )
-    if is_director:
-        grants.can_publish_sources = ["microphone"]
     if is_host:
         grants.room_admin = True
         grants.room_record = True

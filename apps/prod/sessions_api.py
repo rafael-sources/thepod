@@ -306,8 +306,9 @@ def delete_session(sid):
 def start_recording(sid):
     db = get_db()
     try:
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede iniciar la grabación"}), 403
+        username = current_user()
+        if not _is_host(db, sid, username) and not _is_director(db, sid, username):
+            return jsonify({"error": "solo el host o director puede iniciar la grabación"}), 403
         db.execute(
             "UPDATE sessions SET status='recording', started_at=datetime('now'), updated_at=datetime('now') "
             "WHERE id=?",
@@ -326,8 +327,9 @@ def start_recording(sid):
 def stop_recording(sid):
     db = get_db()
     try:
-        if not _is_host(db, sid, current_user()):
-            return jsonify({"error": "solo el host puede detener la grabación"}), 403
+        username = current_user()
+        if not _is_host(db, sid, username) and not _is_director(db, sid, username):
+            return jsonify({"error": "solo el host o director puede detener la grabación"}), 403
         db.execute(
             "UPDATE sessions SET status='finished', finished_at=datetime('now'), updated_at=datetime('now') "
             "WHERE id=?",
@@ -353,10 +355,35 @@ def stop_recording(sid):
 def list_participants(sid):
     db = get_db()
     try:
-        _load_session(db, sid)
+        sess = _load_session(db, sid)
         rows = db.execute(
             "SELECT * FROM participants WHERE session_id=? ORDER BY id", (sid,)
         ).fetchall()
+
+        from livekit_service import list_participants as lk_list
+        live_ids = set()
+        if sess["livekit_room_name"]:
+            try:
+                for lp in lk_list(sess["livekit_room_name"]):
+                    live_ids.add(lp.identity)
+            except Exception:
+                pass
+
+        if live_ids:
+            for r in rows:
+                identity = f"participant_{r['id']}"
+                dir_identity = f"director_{r['id']}"
+                is_live = identity in live_ids or dir_identity in live_ids
+                if r["status"] == "connected" and not is_live:
+                    db.execute(
+                        "UPDATE participants SET status='disconnected', left_at=datetime('now') WHERE id=?",
+                        (r["id"],),
+                    )
+            db.commit()
+            rows = db.execute(
+                "SELECT * FROM participants WHERE session_id=? ORDER BY id", (sid,)
+            ).fetchall()
+
         return jsonify([_serialize_participant(r) for r in rows])
     finally:
         db.close()
@@ -417,6 +444,48 @@ def remove_participant(sid, pid):
         if not (_is_host(db, sid, username) or _is_director(db, sid, username)):
             return jsonify({"error": "solo el host puede remover"}), 403
         db.execute("DELETE FROM participants WHERE id=? AND session_id=?", (pid, sid))
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/sessions/<int:sid>/leave")
+@require_auth
+def leave_session(sid):
+    db = get_db()
+    try:
+        username = current_user()
+        db.execute(
+            "UPDATE participants SET status='disconnected', left_at=datetime('now') "
+            "WHERE session_id=? AND username=? AND status IN ('connected','active')",
+            (sid, username),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/sessions/<int:sid>/leave-by-participant")
+def leave_by_participant(sid):
+    data = request.get_json(silent=True) or {}
+    pid = data.get("participant_id")
+    token = data.get("token", "")
+    if not pid:
+        return jsonify({"error": "participant_id requerido"}), 400
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT id FROM participants WHERE id=? AND session_id=? AND invite_token=?",
+            (pid, sid, token),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "no encontrado"}), 404
+        db.execute(
+            "UPDATE participants SET status='disconnected', left_at=datetime('now') WHERE id=?",
+            (pid,),
+        )
         db.commit()
     finally:
         db.close()
