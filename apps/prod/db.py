@@ -191,7 +191,47 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "sound_effects", "director_only", "director_only INTEGER DEFAULT 0")
     _ensure_column(conn, "sound_triggers", "triggered_by", "triggered_by TEXT")
     _ensure_column(conn, "chat_messages", "target_username", "target_username TEXT")
+    _migrate_participants_check(conn)
     return conn
+
+
+def _migrate_participants_check(conn):
+    """Recreate participants table if CHECK constraint doesn't include 'director'."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='participants'"
+    ).fetchone()
+    if not row:
+        return
+    if "'director'" in row["sql"] or '"director"' in row["sql"]:
+        return
+    conn.executescript("""
+        ALTER TABLE participants RENAME TO _participants_old;
+        CREATE TABLE participants (
+            id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id                 INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+            username                   TEXT,
+            display_name               TEXT NOT NULL,
+            invite_token               TEXT UNIQUE NOT NULL,
+            role                       TEXT NOT NULL DEFAULT 'guest'
+                CHECK(role IN ('host', 'co-host', 'guest', 'director')),
+            status                     TEXT NOT NULL DEFAULT 'invited'
+                CHECK(status IN ('invited', 'connected', 'active', 'disconnected', 'left')),
+            joined_at                  TEXT,
+            left_at                    TEXT,
+            recording_video_path       TEXT,
+            recording_audio_path       TEXT,
+            recording_duration_seconds INTEGER,
+            microphone_device          TEXT,
+            camera_device              TEXT,
+            audio_level_peak           REAL,
+            is_muted                   INTEGER DEFAULT 0,
+            is_camera_off              INTEGER DEFAULT 0,
+            created_at                 TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(session_id);
+        INSERT INTO participants SELECT * FROM _participants_old;
+        DROP TABLE _participants_old;
+    """)
 
 
 def session_dir(session_id: int) -> Path:
