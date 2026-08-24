@@ -1326,6 +1326,14 @@ var StudioView = {
         disconnect();
       } else if (msg.type === "overlay_inject") {
         activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload, file_path: msg.file_path });
+        var _ovDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
+        var _ovMs = _ovDur[msg.event_type] || 10000;
+        if (_ovMs > 0) {
+          setTimeout(function () {
+            var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
+            if (oi !== -1) activeOverlays.splice(oi, 1);
+          }, _ovMs);
+        }
       } else if (msg.type === "overlay_remove") {
         var idx = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
         if (idx !== -1) activeOverlays.splice(idx, 1);
@@ -1620,6 +1628,8 @@ var StudioView = {
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack)        localStream = new MediaStream([camTrack]);
+        else if (micTrack)        localStream = new MediaStream([micTrack]);
+        if (!localStream && window.toast) window.toast({ type: "warn", text: "No se pudo capturar stream local para grabación" });
         if (micTrack) {
           localMeterStop = _attachMeter({ mediaStreamTrack: micTrack }, function (lvl) {
             localMeter.value = lvl;
@@ -2910,6 +2920,14 @@ var GuestStudioView = {
         leave();
       } else if (msg.type === "overlay_inject") {
         activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload });
+        var _gOvDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
+        var _gOvMs = _gOvDur[msg.event_type] || 10000;
+        if (_gOvMs > 0) {
+          setTimeout(function () {
+            var gi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
+            if (gi !== -1) activeOverlays.splice(gi, 1);
+          }, _gOvMs);
+        }
       } else if (msg.type === "overlay_remove") {
         var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
         if (oi !== -1) activeOverlays.splice(oi, 1);
@@ -2960,6 +2978,9 @@ var GuestStudioView = {
       timerHandle = setInterval(function () { timecode.value = (Date.now() - start) / 1000; }, 250);
       if (!recorder && localStream) {
         recorder = _startRecorder(localStream, function (blob) { uploadRecording(blob, "video"); }, 1000);
+        if (window.toast) window.toast({ type: "success", text: "Grabación local iniciada" });
+      } else if (!localStream) {
+        if (window.toast) window.toast({ type: "error", text: "ERROR: no hay stream local — tu grabación NO se está capturando" });
       }
     }
 
@@ -2967,7 +2988,11 @@ var GuestStudioView = {
       if (!recording.value) return;
       recording.value = false;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
+      if (recorder) {
+        try { recorder.stop(); } catch (_) {}
+        recorder = null;
+        if (window.toast) window.toast({ type: "info", text: "Grabación finalizada, subiendo…" });
+      }
       flushTriggerLog();
       recordingStartedAtMs = null;
       ownReady.value = false;
@@ -3010,15 +3035,25 @@ var GuestStudioView = {
     async function uploadRecording(blob, trackType) {
       try {
         var ext = blob._ext || "webm";
+        var sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+        if (window.toast) window.toast({ type: "info", text: "Subiendo " + trackType + " (" + sizeMB + " MB)…" });
         var form = new FormData();
         form.append("file", blob, trackType + "." + ext);
         form.append("track_type", trackType);
         form.append("token", props.inviteToken);
         form.append("duration_seconds", String(timecode.value));
-        await fetch("/api/sessions/" + props.joinData.session_id + "/recordings?token=" + encodeURIComponent(props.inviteToken), {
+        var resp = await fetch("/api/sessions/" + props.joinData.session_id + "/recordings?token=" + encodeURIComponent(props.inviteToken), {
           method: "POST", body: form,
         });
-      } catch (e) { error.value = e.message; }
+        if (resp.ok) {
+          if (window.toast) window.toast({ type: "success", text: "Grabación subida correctamente (" + sizeMB + " MB)" });
+        } else {
+          if (window.toast) window.toast({ type: "error", text: "Error al subir grabación: " + resp.status });
+        }
+      } catch (e) {
+        error.value = e.message;
+        if (window.toast) window.toast({ type: "error", text: "Error de red al subir: " + e.message });
+      }
     }
 
     async function connect() {
@@ -3108,6 +3143,8 @@ var GuestStudioView = {
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack) localStream = new MediaStream([camTrack]);
+        else if (micTrack) localStream = new MediaStream([micTrack]);
+        if (!localStream && window.toast) window.toast({ type: "warn", text: "No se pudo capturar stream local para grabación" });
         if (micTrack) {
           localMeterStop = _attachMeter({ mediaStreamTrack: micTrack }, function (lvl) { localMeter.value = lvl; });
         }
@@ -3490,9 +3527,18 @@ var DirectorView = {
         var res = await api("/api/sessions/" + props.session.id + "/director/inject", {
           method: "POST", body: { event_type: t, payload: payload },
         });
-        sendData({ type: "overlay_inject", event_type: t, payload: payload, event_id: res.event_id });
-        activeOverlays.push({ event_id: res.event_id, event_type: t, payload: payload });
-        if (window.toast) window.toast({ type: "success", text: "Overlay inyectado" });
+        var evId = res.event_id;
+        sendData({ type: "overlay_inject", event_type: t, payload: payload, event_id: evId });
+        activeOverlays.push({ event_id: evId, event_type: t, payload: payload });
+        var _dOvDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
+        var _dOvMs = _dOvDur[t] || 10000;
+        if (_dOvMs > 0) {
+          setTimeout(function () {
+            var di = activeOverlays.findIndex(function (o) { return o.event_id === evId; });
+            if (di !== -1) activeOverlays.splice(di, 1);
+          }, _dOvMs);
+        }
+        if (window.toast) window.toast({ type: "success", text: "Overlay inyectado (" + Math.round((_dOvMs || 10000) / 1000) + "s)" });
       } catch (e) {
         if (window.toast) window.toast({ type: "error", text: e.message });
       }
