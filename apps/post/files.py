@@ -30,8 +30,6 @@ def _probe_duration(path: Path) -> float | None:
         info = json.loads(result.stdout)
         fmt_dur = info.get("format", {}).get("duration")
         dur = float(fmt_dur) if fmt_dur is not None else None
-        # Safari MediaRecorder writes wrong duration in mp4 video stream;
-        # if format duration looks absurd (>24h), fall back to audio stream.
         if dur and dur > 86400:
             for s in info.get("streams", []):
                 if s.get("codec_type") == "audio" and s.get("duration"):
@@ -41,6 +39,39 @@ def _probe_duration(path: Path) -> float | None:
         return dur
     except (subprocess.SubprocessError, json.JSONDecodeError, ValueError):
         return None
+
+
+def _remux_if_broken_mp4(path: Path) -> bool:
+    """Safari MediaRecorder writes mp4 with wildly wrong video-stream duration.
+    Remux in-place with ffmpeg -c copy to fix the container metadata.
+    Returns True if the file was remuxed."""
+    if path.suffix.lower() != ".mp4":
+        return False
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json",
+             "-show_format", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if probe.returncode != 0:
+            return False
+        fmt_dur = json.loads(probe.stdout).get("format", {}).get("duration")
+        if fmt_dur is None or float(fmt_dur) < 86400:
+            return False
+        fixed = path.with_suffix(".fixed.mp4")
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(path),
+             "-c", "copy", "-movflags", "+faststart", str(fixed)],
+            capture_output=True, text=True, timeout=600,
+        )
+        if r.returncode == 0 and fixed.exists() and fixed.stat().st_size > 0:
+            path.unlink()
+            fixed.rename(path)
+            return True
+        fixed.unlink(missing_ok=True)
+        return False
+    except (subprocess.SubprocessError, json.JSONDecodeError, ValueError, OSError):
+        return False
 
 
 def _thumbnail_path(video_path: Path) -> Path:
@@ -237,6 +268,7 @@ def upload_file(slug):
     dest = dest_dir / filename
     f.save(str(dest))
 
+    _remux_if_broken_mp4(dest)
     size_bytes = dest.stat().st_size
     duration = _probe_duration(dest) if file_type in ("video", "audio") else None
 

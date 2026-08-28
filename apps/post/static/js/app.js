@@ -1956,7 +1956,7 @@ var FilesPanel = {
       <div v-if="tab === 'local'">
         <div v-if="localFiles.length === 0" class="muted" style="padding: 8px 4px;">Sin archivos todavía.</div>
         <div class="file-list">
-          <div v-for="f in localFiles" :key="f.id" class="file-row" @click="addToTimeline(f)">
+          <div v-for="f in localFiles" :key="f.id" class="file-row">
             <div v-if="f.thumbnail_url" class="thumb-mini" :style="{ backgroundImage: 'url(' + f.thumbnail_url + ')' }"></div>
             <span v-else :class="['type-pill', f.file_type]">{{ f.file_type }}</span>
             <div class="name">
@@ -1966,11 +1966,12 @@ var FilesPanel = {
               </div>
             </div>
             <div class="actions">
+              <button v-if="f.file_type !== 'image'" class="icon ghost" @click.stop="addToTimeline(f)" title="Agregar al timeline">+</button>
               <button v-if="f.file_type === 'video'" class="track-btn" :class="'track-' + nextTrack"
-                      @click="cycleTrack" :title="'Pista destino: T' + nextTrack + ' (click para cambiar)'">T{{ nextTrack }}</button>
-              <button v-if="f.file_type !== 'image'" class="icon ghost" @click="openCaptionsModal(f, $event)" title="Generar captions con Whisper">🎙</button>
-              <button class="icon ghost" @click="makeGlobal(f, $event)" title="Mover a globales">⇪</button>
-              <button class="icon danger" @click="removeFile(f, $event)" title="Eliminar">✕</button>
+                      @click.stop="cycleTrack" :title="'Pista destino: T' + nextTrack + ' (click para cambiar)'">T{{ nextTrack }}</button>
+              <button v-if="f.file_type !== 'image'" class="icon ghost" @click.stop="openCaptionsModal(f, $event)" title="Generar captions con Whisper">🎙</button>
+              <button class="icon ghost" @click.stop="makeGlobal(f, $event)" title="Mover a globales">⇪</button>
+              <button class="icon danger" @click.stop="removeFile(f, $event)" title="Eliminar">✕</button>
             </div>
           </div>
         </div>

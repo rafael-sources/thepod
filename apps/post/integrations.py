@@ -15,7 +15,7 @@ from flask import Blueprint, jsonify, request
 
 from config import ALLOWED_EXTS, INTEGRATION_SECRET, PROJECTS_DIR, ext_to_type
 from db import get_db
-from files import _generate_thumbnail, _generate_waveform, _peaks_path, _probe_duration, _project_file_url
+from files import _generate_thumbnail, _generate_waveform, _peaks_path, _probe_duration, _project_file_url, _remux_if_broken_mp4
 from projects import _create_project_internal, _read_meta, find_project_by_shared_id
 
 
@@ -786,11 +786,10 @@ def import_track_from_prodpod():
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / filename
     f.save(str(dest))
+    _remux_if_broken_mp4(dest)
 
     size_bytes = dest.stat().st_size
 
-    # Duration: prefer uploader's hint when ffprobe returns garbage
-    # (Safari MediaRecorder writes wrong video stream duration in mp4)
     probed = _probe_duration(dest) if file_type in ("video", "audio") else None
     try:
         hinted = float(request.form.get("duration_seconds") or 0) or None

@@ -159,6 +159,9 @@ def _get_fw_model(model_name: str):
     from faster_whisper import WhisperModel
     from config import BASE_DIR
     whisper_cache = str(BASE_DIR / ".whisper_models")
+    os.environ.setdefault("HF_HOME", whisper_cache)
+    os.environ.setdefault("XDG_CACHE_HOME", whisper_cache)
+    os.environ.setdefault("HF_HUB_CACHE", whisper_cache)
     with _fw_model_lock:
         if model_name not in _fw_model_cache:
             _fw_model_cache[model_name] = WhisperModel(
