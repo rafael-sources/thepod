@@ -5,6 +5,7 @@ same shared INTEGRATION_SECRET as the other apps.
 
 import json as _json
 import secrets
+import shutil
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -13,7 +14,7 @@ from flask import Blueprint, jsonify, request
 
 from config import INTEGRATION_SECRET, MAX_SESSION_PARTICIPANTS, PARTICIPANT_ROLES, USER_PROFILES
 from db import get_db, session_dir
-from livekit_service import create_room, room_name_for_session
+from livekit_service import create_room, delete_room, room_name_for_session
 from shared_config import load_shared_config
 
 
@@ -268,10 +269,11 @@ def import_from_prepod():
             if grole not in PARTICIPANT_ROLES:
                 grole = "guest"
             gtoken = secrets.token_urlsafe(32)
+            rsvp_url = (g.get("rsvp_url") or "").strip() or None
             db.execute(
-                "INSERT INTO participants (session_id, display_name, invite_token, role, status) "
-                "VALUES (?, ?, ?, ?, 'invited')",
-                (sid, gname, gtoken, grole),
+                "INSERT INTO participants (session_id, display_name, invite_token, role, status, source_rsvp_url) "
+                "VALUES (?, ?, ?, ?, 'invited', ?)",
+                (sid, gname, gtoken, grole, rsvp_url),
             )
             guest_invites.append({
                 "name": gname,
@@ -369,3 +371,43 @@ def sync_directors():
         return jsonify({"ok": True, "synced": count})
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Cascade delete: prePod deleted an episode → remove matching session(s)
+# ---------------------------------------------------------------------------
+
+@bp.post("/api/integrations/prepod/delete-episode")
+def delete_episode_cascade():
+    err = _require_shared_secret()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    source_slug = (data.get("source_slug") or "").strip()
+    source_episode_id = data.get("source_episode_id")
+    if not source_slug or source_episode_id is None:
+        return jsonify({"error": "source_slug y source_episode_id requeridos"}), 400
+
+    db = get_db()
+    deleted = []
+    try:
+        rows = db.execute(
+            "SELECT * FROM sessions WHERE source_slug=? AND source_episode_id=?",
+            (source_slug, source_episode_id),
+        ).fetchall()
+        for row in rows:
+            sid = row["id"]
+            sdir = session_dir(sid)
+            if sdir.exists():
+                shutil.rmtree(sdir)
+            db.execute("DELETE FROM sessions WHERE id=?", (sid,))
+            deleted.append({"id": sid, "title": row["title"]})
+            if row["livekit_room_name"]:
+                try:
+                    delete_room(row["livekit_room_name"])
+                except Exception:
+                    pass
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"ok": True, "deleted_sessions": deleted})

@@ -191,6 +191,7 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "sound_effects", "director_only", "director_only INTEGER DEFAULT 0")
     _ensure_column(conn, "sound_triggers", "triggered_by", "triggered_by TEXT")
     _ensure_column(conn, "chat_messages", "target_username", "target_username TEXT")
+    _ensure_column(conn, "participants", "source_rsvp_url", "source_rsvp_url TEXT")
     _migrate_participants_check(conn)
     return conn
 

@@ -72,7 +72,7 @@ def debug_room_state(sid):
 # ---------------------------------------------------------------------------
 
 def _serialize_session(row):
-    return {
+    d = {
         "id": row["id"],
         "title": row["title"],
         "description": row["description"] or "",
@@ -88,10 +88,19 @@ def _serialize_session(row):
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    keys = row.keys()
+    if "source_url" in keys:
+        d["source_url"] = row["source_url"]
+    if "source_slug" in keys:
+        d["source_slug"] = row["source_slug"]
+    if "source_episode_id" in keys:
+        d["source_episode_id"] = row["source_episode_id"]
+    return d
 
 
 def _serialize_participant(row):
-    return {
+    from integrations import _public_base_url
+    d = {
         "id": row["id"],
         "session_id": row["session_id"],
         "username": row["username"],
@@ -103,7 +112,12 @@ def _serialize_participant(row):
         "is_muted": bool(row["is_muted"]),
         "is_camera_off": bool(row["is_camera_off"]),
         "avatar_color": (USER_PROFILES.get(row["username"]) or {}).get("avatar_color", "#c7b894"),
+        "invite_url": f"{_public_base_url()}/invite/{row['invite_token']}",
     }
+    keys = row.keys()
+    if "source_rsvp_url" in keys:
+        d["source_rsvp_url"] = row["source_rsvp_url"]
+    return d
 
 
 def _load_session(db, sid):

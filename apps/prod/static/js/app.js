@@ -319,8 +319,9 @@ function _decodeMsg(payload) {
   try { return JSON.parse(new TextDecoder().decode(payload)); } catch (_) { return null; }
 }
 
-/* Track-based recorder: records a MediaStream into a single webm blob. */
-function _startRecorder(stream, onComplete, timesliceMs, audioOnly) {
+/* Track-based recorder: records a MediaStream into a single webm blob.
+   onChunk(blob) is called with each chunk for incremental upload. */
+function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk) {
   var types = audioOnly
     ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
     : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm",
@@ -329,13 +330,20 @@ function _startRecorder(stream, onComplete, timesliceMs, audioOnly) {
   var fallback = audioOnly ? "audio/webm" : "video/webm";
   var rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
   var actualMime = mime || fallback;
+  var ext = actualMime.indexOf("mp4") !== -1 ? "mp4" : "webm";
   var chunks = [];
-  rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.ondataavailable = function (e) {
+    if (e.data && e.data.size) {
+      chunks.push(e.data);
+      if (onChunk) onChunk(e.data);
+    }
+  };
   rec.onstop = function () {
     var blob = new Blob(chunks, { type: actualMime });
-    blob._ext = actualMime.indexOf("mp4") !== -1 ? "mp4" : "webm";
+    blob._ext = ext;
     onComplete(blob);
   };
+  rec._ext = ext;
   rec.start(timesliceMs || 1000);
   return rec;
 }
@@ -1816,13 +1824,75 @@ var StudioView = {
     }
 
     function startLocalRecorders() {
+      if (room) {
+        var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+        var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
+        var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
+        else if (camTrack) localStream = new MediaStream([camTrack]);
+        else if (micTrack) localStream = new MediaStream([micTrack]);
+        if (!camTrack && micTrack && window.toast) {
+          window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — cámara no disponible" });
+        }
+      }
       if (!recorder && localStream) {
-        recorder = _startRecorder(localStream, function (blob) { uploadRecording(blob, "video"); }, 1000);
+        _hostChunkQueue = [];
+        _hostStreamExt = ".webm";
+        recorder = _startRecorder(localStream, function () {}, 1000, false, function (data) {
+          _hostChunkQueue.push(data);
+        });
+        _hostStreamExt = recorder._ext ? ("." + recorder._ext) : ".webm";
+        hostUploadStatus.state = "streaming";
+        hostStreamedBytes.value = 0;
+        _hostChunkTimer = setInterval(function () { _flushHostChunks(false); }, 10000);
       }
     }
 
-    function stopLocalRecorders() {
+    var _hostChunkQueue = [];
+    var _hostChunkUploading = false;
+    var _hostChunkTimer = null;
+    var _hostStreamExt = ".webm";
+    var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
+    var hostStreamedBytes = ref(0);
+
+    async function _flushHostChunks(finalize) {
+      if (_hostChunkUploading && !finalize) return;
+      if (!_hostChunkQueue.length && !finalize) return;
+      _hostChunkUploading = true;
+      var blob = new Blob(_hostChunkQueue);
+      _hostChunkQueue = [];
+      var form = new FormData();
+      if (blob.size > 0) form.append("chunk", blob, "chunk" + _hostStreamExt);
+      form.append("track_type", "video");
+      form.append("ext", _hostStreamExt);
+      if (finalize) {
+        form.append("finalize", "1");
+        form.append("duration_seconds", String(timecode.value));
+      }
+      try {
+        var resp = await fetch("/api/sessions/" + props.session.id + "/recordings/stream", {
+          method: "POST", credentials: "same-origin", body: form,
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
+          if (finalize) {
+            hostUploadStatus.state = "done";
+            hostUploadStatus.sizeMB = (hostStreamedBytes.value / (1024 * 1024)).toFixed(1);
+          }
+        }
+      } catch (e) {
+        if (finalize) { hostUploadStatus.state = "error"; hostUploadStatus.error = e.message; }
+      }
+      _hostChunkUploading = false;
+    }
+
+    async function stopLocalRecorders() {
       if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
+      if (_hostChunkTimer) { clearInterval(_hostChunkTimer); _hostChunkTimer = null; }
+      hostUploadStatus.state = "finalizing";
+      await _flushHostChunks(true);
     }
 
     async function markChapter() {
@@ -1891,12 +1961,12 @@ var StudioView = {
       } catch (e) { error.value = e.message; }
     }
 
-    function finishRecording() {
+    async function finishRecording() {
       if (!recording.value) return;
       recording.value = false;
       if (!practiceMode.value) sessionEnded.value = true;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      stopLocalRecorders();
+      await stopLocalRecorders();
       flushTriggerLog();
       recordingStartedAtMs = null;
       // Restore the original tab title
@@ -1934,6 +2004,11 @@ var StudioView = {
     async function copyInvite(link) {
       try { await navigator.clipboard.writeText(link.invite_url); podSwal.toast("Link copiado", "success"); }
       catch (_) { await podSwal.prompt("Copia este link:", link.invite_url); }
+    }
+
+    async function copyRsvpLink(p) {
+      try { await navigator.clipboard.writeText(p.source_rsvp_url); podSwal.toast("Link RSVP copiado", "success"); }
+      catch (_) { await podSwal.prompt("Copia este link RSVP:", p.source_rsvp_url); }
     }
 
     async function kickParticipant(p) {
@@ -2060,7 +2135,7 @@ var StudioView = {
       toggleReady: toggleReady, stopRecording: stopRecording,
       ownReady: ownReady, readyMap: readyMap, countdown: countdown, myIdentity: myIdentity,
       showInvite: showInvite, inviteForm: inviteForm, inviteLinks: inviteLinks,
-      createInvite: createInvite, copyInvite: copyInvite, kickParticipant: kickParticipant,
+      createInvite: createInvite, copyInvite: copyInvite, copyRsvpLink: copyRsvpLink, kickParticipant: kickParticipant,
       sounds: sounds, playingPad: playingPad, triggerSound: triggerSound,
       padPlayState: padPlayState, padVolumes: padVolumes, setPadVolume: setPadVolume,
       stopAllSounds: stopAllSounds, onPadDrop: onPadDrop,
@@ -2072,6 +2147,7 @@ var StudioView = {
       finishedRecordings: finishedRecordings, loadRecordings: loadRecordings,
       triggerStats: triggerStats,
       exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting, allExported: allExported,
+      hostUploadStatus: hostUploadStatus, hostStreamedBytes: hostStreamedBytes,
       showDiagnostic: showDiagnostic,
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
       streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
@@ -2110,6 +2186,10 @@ var StudioView = {
         <button class="ghost" @click="safeBack">← Sesiones</button>
         <h3>{{ session.title }}</h3>
         <span class="badge-id">#{{ session.id }}</span>
+        <a v-if="session.source_url && session.source_slug && session.source_episode_id"
+           :href="session.source_url + '/#/podcasts/' + session.source_slug + '/episodes/' + session.source_episode_id"
+           target="_blank" class="ghost" style="font-size:11px;padding:3px 8px;margin-left:6px;text-decoration:none;"
+           title="Abrir episodio en prePod">📋 prePod</a>
         <div class="spacer"></div>
         <div class="timecode mono">{{ formatTC(timecode) }}</div>
         <div v-if="connected" class="vu-master">
@@ -2166,6 +2246,19 @@ var StudioView = {
         <button v-if="!connected" class="primary" style="margin-left: 8px; padding: 6px 14px;" @click="connect" :disabled="busy" title="Conectar este navegador a la sala de LiveKit">
           {{ busy ? "Conectando…" : "🟢 Conectar" }}
         </button>
+      </div>
+
+      <div v-if="hostUploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
+        Subiendo en tiempo real · {{ (hostStreamedBytes / (1024*1024)).toFixed(1) }} MB enviados
+      </div>
+      <div v-if="hostUploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
+        ⏳ Finalizando subida — no cierres esta pestaña…
+      </div>
+      <div v-if="hostUploadStatus.state === 'done'" class="upload-banner" style="background:#1a3a1a;border-bottom:2px solid #4a4;padding:8px 16px;text-align:center;font-weight:700;color:#6c6;">
+        ✓ Grabación del host subida correctamente ({{ hostUploadStatus.sizeMB }} MB)
+      </div>
+      <div v-if="hostUploadStatus.state === 'error'" class="upload-banner" style="background:#5a1a1a;border-bottom:2px solid red;padding:8px 16px;text-align:center;font-weight:700;color:#f66;">
+        ✕ Error al subir grabación: {{ hostUploadStatus.error }}
       </div>
 
       <div v-if="activeCue" class="director-cue" :class="activeCue.cssClass">
@@ -2513,10 +2606,16 @@ var StudioView = {
             <div class="spacer"></div>
             <button class="icon ghost" @click="showInvite = true" title="Invitar">＋</button>
           </div>
-          <div v-for="p in participants" :key="p.id" class="invite-row">
+          <div v-for="p in participants" :key="p.id" class="invite-row" style="flex-wrap:wrap;">
             <span class="who">{{ p.display_name }}</span>
             <span class="status-chip" :class="p.status">{{ p.status }}</span>
             <button v-if="p.username !== user.username" class="icon danger" @click="kickParticipant(p)" title="Quitar">✕</button>
+            <div v-if="isHost && (p.invite_url || p.source_rsvp_url)" style="width:100%;display:flex;gap:4px;margin-top:2px;">
+              <button v-if="p.invite_url" class="ghost" style="font-size:10px;padding:1px 6px;"
+                      @click="copyInvite(p)" title="Copiar link de invitación prodPod">📎 Invite</button>
+              <button v-if="p.source_rsvp_url" class="ghost" style="font-size:10px;padding:1px 6px;"
+                      @click="copyRsvpLink(p)" title="Copiar link RSVP de prePod">📋 RSVP</button>
+            </div>
           </div>
         </div>
 
@@ -2968,6 +3067,19 @@ var GuestStudioView = {
       tick();
     }
 
+    function _rebuildLocalStream() {
+      if (!room) return { hasCam: false, hasMic: false };
+      var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
+      var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
+      var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+      var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+      if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
+      else if (camTrack) localStream = new MediaStream([camTrack]);
+      else if (micTrack) localStream = new MediaStream([micTrack]);
+      else localStream = null;
+      return { hasCam: !!camTrack, hasMic: !!micTrack };
+    }
+
     function beginRecordingNow() {
       recording.value = true;
       recordingStartedAtMs = Date.now();
@@ -2976,23 +3088,31 @@ var GuestStudioView = {
       if (timerHandle) clearInterval(timerHandle);
       var start = recordingStartedAtMs;
       timerHandle = setInterval(function () { timecode.value = (Date.now() - start) / 1000; }, 250);
+      var caps = _rebuildLocalStream();
+      recordingCaps.hasCam = caps.hasCam;
+      recordingCaps.hasMic = caps.hasMic;
       if (!recorder && localStream) {
-        recorder = _startRecorder(localStream, function (blob) { uploadRecording(blob, "video"); }, 1000);
-        if (window.toast) window.toast({ type: "success", text: "Grabación local iniciada" });
+        recorder = _startRecorder(localStream, function () {}, 1000, false, _onRecordingChunk);
+        _streamExt = recorder._ext ? ("." + recorder._ext) : ".webm";
+        _startChunkStreaming();
+        if (!caps.hasCam) {
+          if (window.toast) window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });
+        }
       } else if (!localStream) {
         if (window.toast) window.toast({ type: "error", text: "ERROR: no hay stream local — tu grabación NO se está capturando" });
       }
     }
 
-    function finishRecording() {
+    async function finishRecording() {
       if (!recording.value) return;
       recording.value = false;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       if (recorder) {
         try { recorder.stop(); } catch (_) {}
         recorder = null;
-        if (window.toast) window.toast({ type: "info", text: "Grabación finalizada, subiendo…" });
       }
+      uploadStatus.state = "finalizing";
+      await _stopChunkStreaming();
       flushTriggerLog();
       recordingStartedAtMs = null;
       ownReady.value = false;
@@ -3032,27 +3152,115 @@ var GuestStudioView = {
       sendData({ type: "sound_trigger", filename: s.filename, key: s.shortcut_key });
     }
 
+    var uploadStatus = reactive({ state: "idle", percent: 0, sizeMB: "", error: "" });
+    var recordingCaps = reactive({ hasCam: true, hasMic: true });
+    var streamedBytes = ref(0);
+
+    function _preventClose(e) { e.preventDefault(); e.returnValue = ""; }
+
+    var _chunkQueue = [];
+    var _chunkUploading = false;
+    var _chunkFlushTimer = null;
+    var _streamExt = ".webm";
+
+    function _onRecordingChunk(data) {
+      _chunkQueue.push(data);
+    }
+
+    async function _flushChunks(finalize) {
+      if (_chunkUploading && !finalize) return;
+      if (!_chunkQueue.length && !finalize) return;
+      _chunkUploading = true;
+      var blob = new Blob(_chunkQueue);
+      _chunkQueue = [];
+      var form = new FormData();
+      if (blob.size > 0) form.append("chunk", blob, "chunk" + _streamExt);
+      form.append("token", props.inviteToken);
+      form.append("track_type", "video");
+      form.append("ext", _streamExt);
+      if (finalize) {
+        form.append("finalize", "1");
+        form.append("duration_seconds", String(timecode.value));
+      }
+      try {
+        var resp = await fetch("/api/sessions/" + props.joinData.session_id + "/recordings/stream", {
+          method: "POST", body: form,
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
+          if (finalize) {
+            uploadStatus.state = "done";
+            uploadStatus.sizeMB = (streamedBytes.value / (1024 * 1024)).toFixed(1);
+            window.removeEventListener("beforeunload", _preventClose);
+          }
+        }
+      } catch (e) {
+        if (finalize) {
+          uploadStatus.state = "error";
+          uploadStatus.error = "Error al finalizar: " + e.message;
+        }
+      }
+      _chunkUploading = false;
+    }
+
+    function _startChunkStreaming() {
+      window.addEventListener("beforeunload", _preventClose);
+      uploadStatus.state = "streaming";
+      streamedBytes.value = 0;
+      _chunkFlushTimer = setInterval(function () { _flushChunks(false); }, 10000);
+    }
+
+    async function _stopChunkStreaming() {
+      if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
+      await _flushChunks(true);
+    }
+
     async function uploadRecording(blob, trackType) {
       try {
         var ext = blob._ext || "webm";
         var sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-        if (window.toast) window.toast({ type: "info", text: "Subiendo " + trackType + " (" + sizeMB + " MB)…" });
+        uploadStatus.state = "uploading";
+        uploadStatus.percent = 0;
+        uploadStatus.sizeMB = sizeMB;
+        uploadStatus.error = "";
+        window.addEventListener("beforeunload", _preventClose);
+
         var form = new FormData();
         form.append("file", blob, trackType + "." + ext);
         form.append("track_type", trackType);
         form.append("token", props.inviteToken);
         form.append("duration_seconds", String(timecode.value));
-        var resp = await fetch("/api/sessions/" + props.joinData.session_id + "/recordings?token=" + encodeURIComponent(props.inviteToken), {
-          method: "POST", body: form,
+
+        var xhr = new XMLHttpRequest();
+        var uploadUrl = "/api/sessions/" + props.joinData.session_id + "/recordings?token=" + encodeURIComponent(props.inviteToken);
+        await new Promise(function (resolve, reject) {
+          xhr.upload.onprogress = function (ev) {
+            if (ev.lengthComputable) uploadStatus.percent = Math.round(ev.loaded / ev.total * 100);
+          };
+          xhr.onload = function () {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              uploadStatus.state = "done";
+              resolve();
+            } else {
+              uploadStatus.state = "error";
+              uploadStatus.error = "Error " + xhr.status;
+              reject(new Error("upload failed: " + xhr.status));
+            }
+          };
+          xhr.onerror = function () {
+            uploadStatus.state = "error";
+            uploadStatus.error = "Error de red";
+            reject(new Error("network error"));
+          };
+          xhr.open("POST", uploadUrl);
+          xhr.send(form);
         });
-        if (resp.ok) {
-          if (window.toast) window.toast({ type: "success", text: "Grabación subida correctamente (" + sizeMB + " MB)" });
-        } else {
-          if (window.toast) window.toast({ type: "error", text: "Error al subir grabación: " + resp.status });
-        }
+        window.removeEventListener("beforeunload", _preventClose);
       } catch (e) {
-        error.value = e.message;
-        if (window.toast) window.toast({ type: "error", text: "Error de red al subir: " + e.message });
+        window.removeEventListener("beforeunload", _preventClose);
+        uploadStatus.state = "error";
+        uploadStatus.error = e.message;
       }
     }
 
@@ -3240,6 +3448,7 @@ var GuestStudioView = {
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
              toggleReady: toggleReady, ownReady: ownReady, readyMap: readyMap, countdown: countdown,
              myIdentity: myIdentity, practiceMode: practiceMode,
+             uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes,
              activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
   },
   template: `
@@ -3260,6 +3469,21 @@ var GuestStudioView = {
         </button>
         <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
         <span v-if="connected && recording" class="tally live"><span class="dot"></span>ON AIR</span>
+      </div>
+      <div v-if="recording && !recordingCaps.hasCam" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
+        ⚠ GRABANDO SOLO AUDIO — tu cámara no está disponible
+      </div>
+      <div v-if="uploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
+        Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados
+      </div>
+      <div v-if="uploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
+        ⏳ Finalizando subida — no cierres esta pestaña…
+      </div>
+      <div v-if="uploadStatus.state === 'done'" class="upload-banner" style="background:#1a3a1a;border-bottom:2px solid #4a4;padding:8px 16px;text-align:center;font-weight:700;color:#6c6;">
+        ✓ Grabación subida correctamente ({{ uploadStatus.sizeMB }} MB) — puedes cerrar esta pestaña
+      </div>
+      <div v-if="uploadStatus.state === 'error'" class="upload-banner" style="background:#5a1a1a;border-bottom:2px solid red;padding:8px 16px;text-align:center;font-weight:700;color:#f66;">
+        ✕ Error al subir: {{ uploadStatus.error }} — NO cierres la pestaña
       </div>
       <div class="studio-main">
         <div v-if="error" class="error" style="font-size: 16px; padding: 14px; background: #5a1a1a; color: #fff; border: 2px solid red;">⚠️ {{ error }}</div>

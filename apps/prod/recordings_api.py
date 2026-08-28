@@ -280,6 +280,91 @@ def save_sound_triggers(sid):
         db.close()
 
 
+@bp.post("/api/sessions/<int:sid>/recordings/stream")
+def stream_recording_chunk(sid):
+    """Accept a chunk of recording data and append to a streaming file.
+    When finalize=1, register the completed file in the DB."""
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+
+        token = request.args.get("token") or request.form.get("token")
+        p = None
+        if token:
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone()
+        if not p:
+            username = current_user()
+            if username:
+                p = db.execute(
+                    "SELECT id FROM participants WHERE session_id=? AND username=?",
+                    (sid, username),
+                ).fetchone()
+        if not p:
+            return jsonify({"error": "no autorizado"}), 401
+        participant_id = p["id"]
+
+        track_type = (request.form.get("track_type") or "video").strip().lower()
+        ext = request.form.get("ext") or ".webm"
+        if not ext.startswith("."):
+            ext = "." + ext
+
+        dest_dir = session_dir(sid) / "recordings"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        streaming_name = f"p{participant_id}_{track_type}_streaming{ext}"
+        streaming_path = dest_dir / streaming_name
+
+        finalize = request.form.get("finalize") == "1"
+
+        chunk = request.files.get("chunk")
+        if chunk:
+            with open(str(streaming_path), "ab") as out:
+                while True:
+                    buf = chunk.stream.read(65536)
+                    if not buf:
+                        break
+                    out.write(buf)
+
+        if finalize:
+            if not streaming_path.exists():
+                return jsonify({"error": "no hay datos de streaming"}), 400
+            fname = f"p{participant_id}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
+            final_path = dest_dir / fname
+            streaming_path.rename(final_path)
+
+            if ext == ".webm":
+                _remux_webm(final_path)
+
+            dur = 0.0
+            try:
+                dur = float(request.form.get("duration_seconds") or 0)
+            except ValueError:
+                pass
+            probed = _probe_duration(final_path)
+            if probed and probed > 0:
+                dur = probed
+
+            size = final_path.stat().st_size
+            mime, _ = mimetypes.guess_type(str(final_path))
+            cur = db.execute(
+                "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
+                "duration_seconds, size_bytes, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (sid, participant_id, track_type, fname, str(final_path), dur, size, mime or "video/webm"),
+            )
+            db.commit()
+            row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
+            return jsonify({"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}), 201
+
+        size = streaming_path.stat().st_size if streaming_path.exists() else 0
+        return jsonify({"ok": True, "bytes_received": size})
+    finally:
+        db.close()
+
+
 @bp.post("/api/sessions/<int:sid>/recordings")
 def upload_recording(sid):
     """
