@@ -3978,7 +3978,7 @@ var DirectorView = {
     // --- Recording control ---
     function allParticipantsReady() {
       var hosts = participants.value.filter(function(p) {
-        return p.status === "connected" && (p.role === "host" || p.role === "co-host");
+        return p.role === "host" || p.role === "co-host";
       });
       if (hosts.length === 0) return false;
       return hosts.every(function(p) { return !!readyMap["participant_" + p.id]; });
@@ -4161,7 +4161,8 @@ var DirectorView = {
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
         <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
-                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'\'"\
+                :disabled="!allParticipantsReady()"\
+                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
                 :title="allParticipantsReady() ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
         <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
           {{ countdown === 0 ? "¡REC!" : countdown }}\
