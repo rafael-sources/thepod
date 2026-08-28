@@ -331,22 +331,23 @@ def stream_recording_chunk(sid):
 
         if finalize:
             if not streaming_path.exists():
+                existing = db.execute(
+                    "SELECT * FROM recordings WHERE session_id=? AND participant_id=? AND track_type=?",
+                    (sid, participant_id, track_type),
+                ).fetchone()
+                if existing:
+                    return jsonify({"finalized": True, "recording": _serialize_recording(existing),
+                                    "size_bytes": existing["size_bytes"]}), 201
                 return jsonify({"error": "no hay datos de streaming"}), 400
             fname = f"p{participant_id}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
             final_path = dest_dir / fname
             streaming_path.rename(final_path)
-
-            if ext == ".webm":
-                _remux_webm(final_path)
 
             dur = 0.0
             try:
                 dur = float(request.form.get("duration_seconds") or 0)
             except ValueError:
                 pass
-            probed = _probe_duration(final_path)
-            if probed and probed > 0:
-                dur = probed
 
             size = final_path.stat().st_size
             mime, _ = mimetypes.guess_type(str(final_path))

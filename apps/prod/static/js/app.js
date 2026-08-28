@@ -1894,7 +1894,9 @@ var StudioView = {
           _hostChunkQueue.splice(0, pending.length);
           _hostRetryCount = 0;
           var data = await resp.json();
-          hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
+          if (!finalize) {
+            hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
+          }
           sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: hostStreamedBytes.value });
           if (finalize) {
             hostUploadStatus.state = "done";
@@ -3258,7 +3260,9 @@ var GuestStudioView = {
           _chunkQueue.splice(0, pending.length);
           _chunkRetries.value = 0;
           var data = await resp.json();
-          streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
+          if (!finalize) {
+            streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
+          }
           sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: streamedBytes.value });
           if (finalize) {
             uploadStatus.state = "done";
@@ -3854,6 +3858,28 @@ var DirectorView = {
       } catch (_) {}
     }
 
+    // --- Export to postPod ---
+    var exportStatus = ref("");
+    var exporting = ref(false);
+    async function exportToPostpod() {
+      if (exporting.value) return;
+      exporting.value = true;
+      exportStatus.value = "enviando pistas a postPod…";
+      try {
+        var r = await api("/api/sessions/" + props.session.id + "/recordings/export-to-postpod", { method: "POST" });
+        if (r.exported === 0 && r.failed === 0) {
+          exportStatus.value = "✓ Ya enviadas a postPod";
+        } else {
+          exportStatus.value = "✓ " + r.exported + " enviada(s)" + (r.failed ? " · " + r.failed + " falló" : "");
+        }
+      } catch (e) {
+        exportStatus.value = "❌ " + e.message;
+      } finally {
+        exporting.value = false;
+        setTimeout(function () { exportStatus.value = ""; }, 8000);
+      }
+    }
+
     // --- IFB Push-to-Talk ---
     var ifbStream = null;
     var ifbRawTrack = null;
@@ -4103,6 +4129,7 @@ var DirectorView = {
       ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
       directorChat: directorChat, directorChatInput: directorChatInput, sendDirectorChat: sendDirectorChat,
       participantUploads: participantUploads,
+      exportToPostpod: exportToPostpod, exporting: exporting, exportStatus: exportStatus,
     };
   },
   template: '\
@@ -4253,6 +4280,11 @@ var DirectorView = {
           <span v-else-if="u.state === \'error\'" style="color:#f66;font-weight:700;">✕ Error</span>\
           <span v-else style="color:var(--paper-dim);">{{ u.state }}</span>\
         </div>\
+        <button class="ghost" :disabled="exporting" @click="exportToPostpod"\
+                style="margin-top:8px;width:100%;font-size:11px;padding:6px 0;border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--accent);">\
+          {{ exporting ? "enviando…" : "↗ Enviar a postPod" }}\
+        </button>\
+        <div v-if="exportStatus" style="font-size:10px;margin-top:4px;color:var(--paper-dim);">{{ exportStatus }}</div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
