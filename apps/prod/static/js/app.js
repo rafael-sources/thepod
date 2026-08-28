@@ -671,6 +671,13 @@ var StudioView = {
     var countdown = ref(null);       // null | 3 | 2 | 1 | 0
     var countdownHandle = null;
 
+    var participantUploads = reactive({});
+    var guestCuesVisible = ref(true);
+    function toggleGuestCues() {
+      guestCuesVisible.value = !guestCuesVisible.value;
+      sendData({ type: "cue_visibility", show: guestCuesVisible.value });
+    }
+
     var showInvite = ref(false);
     var inviteForm = reactive({ display_name: "", role: "guest" });
     var inviteLinks = ref([]);
@@ -1313,6 +1320,8 @@ var StudioView = {
           chat.value.push({ id: msg.id, author: msg.author, text: msg.text, ts: msg.ts });
           scrollChatBottom();
         }
+      } else if (msg.type === "upload_status") {
+        participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0 };
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
         if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
@@ -1859,7 +1868,10 @@ var StudioView = {
     var hostStreamedBytes = ref(0);
 
     async function _flushHostChunks(finalize) {
-      if (_hostChunkUploading && !finalize) return;
+      if (_hostChunkUploading) {
+        if (!finalize) return;
+        while (_hostChunkUploading) { await new Promise(function (r) { setTimeout(r, 100); }); }
+      }
       if (!_hostChunkQueue.length && !finalize) return;
       _hostChunkUploading = true;
       var pending = _hostChunkQueue.slice();
@@ -1883,6 +1895,7 @@ var StudioView = {
           _hostRetryCount = 0;
           var data = await resp.json();
           hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
+          sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: hostStreamedBytes.value });
           if (finalize) {
             hostUploadStatus.state = "done";
             hostUploadStatus.sizeMB = (hostStreamedBytes.value / (1024 * 1024)).toFixed(1);
@@ -1892,22 +1905,29 @@ var StudioView = {
         }
       } catch (e) {
         _hostRetryCount++;
-        if (finalize && _hostRetryCount > 10) {
+        if (finalize && _hostRetryCount > 5) {
           hostUploadStatus.state = "error";
           hostUploadStatus.error = e.message;
+          sendData({ type: "upload_status", identity: myIdentity.value, state: "error", bytes: hostStreamedBytes.value });
         }
       }
       _hostChunkUploading = false;
       if (finalize && hostUploadStatus.state !== "done" && hostUploadStatus.state !== "error") {
-        var delay = Math.min(2000 * Math.pow(1.5, _hostRetryCount - 1), 30000);
+        var delay = Math.min(500 * Math.pow(1.5, _hostRetryCount - 1), 5000);
         await new Promise(function (r) { setTimeout(r, delay); });
         return _flushHostChunks(true);
       }
     }
 
     async function stopLocalRecorders() {
-      if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
       if (_hostChunkTimer) { clearInterval(_hostChunkTimer); _hostChunkTimer = null; }
+      if (recorder) {
+        await new Promise(function (resolve) {
+          recorder.onstop = resolve;
+          try { recorder.stop(); } catch (_) { resolve(); }
+        });
+        recorder = null;
+      }
       hostUploadStatus.state = "finalizing";
       await _flushHostChunks(true);
     }
@@ -2165,6 +2185,8 @@ var StudioView = {
       triggerStats: triggerStats,
       exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting, allExported: allExported,
       hostUploadStatus: hostUploadStatus, hostStreamedBytes: hostStreamedBytes,
+      participantUploads: participantUploads,
+      guestCuesVisible: guestCuesVisible, toggleGuestCues: toggleGuestCues,
       showDiagnostic: showDiagnostic,
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
       streamStatus: streamStatus, streamBusy: streamBusy, activeStreams: activeStreams,
@@ -2644,6 +2666,24 @@ var StudioView = {
           </div>
         </div>
 
+        <div v-if="isHost && Object.keys(participantUploads).length">
+          <div class="sb-head"><span class="label">Subidas invitados</span></div>
+          <div v-for="(u, id) in participantUploads" :key="id" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;padding:0 2px;">
+            <span style="min-width:24px;">{{ id.replace('participant_', 'P') }}</span>
+            <span v-if="u.state === 'streaming'" style="color:var(--accent);">↑ {{ (u.bytes / (1024*1024)).toFixed(1) }} MB</span>
+            <span v-else-if="u.state === 'done'" style="color:#6c6;font-weight:700;">✓ {{ (u.bytes / (1024*1024)).toFixed(1) }} MB</span>
+            <span v-else-if="u.state === 'error'" style="color:#f66;font-weight:700;">✕ Error</span>
+            <span v-else style="color:var(--paper-dim);">{{ u.state }}</span>
+          </div>
+        </div>
+
+        <div v-if="isHost" style="padding:4px 2px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--paper-dim);cursor:pointer;">
+            <input type="checkbox" :checked="guestCuesVisible" @change="toggleGuestCues" style="margin:0;" />
+            Invitados ven cues
+          </label>
+        </div>
+
         <div v-if="sponsorMarkers.length" class="sponsor-teleprompter">
           <div class="sb-head">
             <span class="label">📢 Sponsors</span>
@@ -2956,6 +2996,10 @@ var GuestStudioView = {
     var cueTimer = null;
     var ifbActive = ref(false);
     var directorConnected = ref(false);
+    var guestCuesVisible = ref(true);
+    var postRecording = computed(function () {
+      return !recording.value && (uploadStatus.state === "finalizing" || uploadStatus.state === "done" || uploadStatus.state === "error");
+    });
 
     async function loadSounds() {
       try {
@@ -3048,10 +3092,14 @@ var GuestStudioView = {
         var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
         if (oi !== -1) activeOverlays.splice(oi, 1);
       } else if (msg.type === "director_cue") {
+        if (!guestCuesVisible.value) return;
         var gCueMap = { "CERRAR TEMA": "wrap-up", "SIGUIENTE TEMA": "next-topic", "PAUSA": "break", "MÁS RÁPIDO": "speed-up", "MÁS LENTO": "slow-down", "LEER ANUNCIO": "ad-read" };
         activeCue.value = { cue: msg.cue, cssClass: gCueMap[msg.cue] || "custom" };
         if (cueTimer) clearTimeout(cueTimer);
         cueTimer = setTimeout(function () { activeCue.value = null; }, 8000);
+      } else if (msg.type === "cue_visibility") {
+        guestCuesVisible.value = !!msg.show;
+        if (!msg.show) activeCue.value = null;
       } else if (msg.type === "ifb_start") {
         ifbActive.value = true;
       } else if (msg.type === "ifb_stop") {
@@ -3124,23 +3172,20 @@ var GuestStudioView = {
       if (!recording.value) return;
       recording.value = false;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+      if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
       if (recorder) {
-        try { recorder.stop(); } catch (_) {}
+        await new Promise(function (resolve) {
+          recorder.onstop = resolve;
+          try { recorder.stop(); } catch (_) { resolve(); }
+        });
         recorder = null;
       }
       uploadStatus.state = "finalizing";
-      await _stopChunkStreaming();
+      await _flushChunks(true);
       flushTriggerLog();
       recordingStartedAtMs = null;
       ownReady.value = false;
       Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
-    }
-
-    function toggleReady() {
-      if (recording.value || countdown.value !== null) return;
-      ownReady.value = !ownReady.value;
-      readyMap[myIdentity.value] = ownReady.value;
-      sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
     }
 
     async function sendChat() {
@@ -3186,7 +3231,10 @@ var GuestStudioView = {
     }
 
     async function _flushChunks(finalize) {
-      if (_chunkUploading && !finalize) return;
+      if (_chunkUploading) {
+        if (!finalize) return;
+        while (_chunkUploading) { await new Promise(function (r) { setTimeout(r, 100); }); }
+      }
       if (!_chunkQueue.length && !finalize) return;
       _chunkUploading = true;
       var pending = _chunkQueue.slice();
@@ -3211,6 +3259,7 @@ var GuestStudioView = {
           _chunkRetries.value = 0;
           var data = await resp.json();
           streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
+          sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: streamedBytes.value });
           if (finalize) {
             uploadStatus.state = "done";
             uploadStatus.sizeMB = (streamedBytes.value / (1024 * 1024)).toFixed(1);
@@ -3221,14 +3270,15 @@ var GuestStudioView = {
         }
       } catch (e) {
         _chunkRetries.value++;
-        if (finalize && _chunkRetries.value > 10) {
+        if (finalize && _chunkRetries.value > 5) {
           uploadStatus.state = "error";
           uploadStatus.error = "Error al finalizar: " + e.message;
+          sendData({ type: "upload_status", identity: myIdentity.value, state: "error", bytes: streamedBytes.value });
         }
       }
       _chunkUploading = false;
       if (finalize && uploadStatus.state !== "done" && uploadStatus.state !== "error") {
-        var delay = Math.min(2000 * Math.pow(1.5, _chunkRetries.value - 1), 30000);
+        var delay = Math.min(500 * Math.pow(1.5, _chunkRetries.value - 1), 5000);
         await new Promise(function (r) { setTimeout(r, delay); });
         return _flushChunks(true);
       }
@@ -3240,59 +3290,6 @@ var GuestStudioView = {
       streamedBytes.value = 0;
       _chunkRetries.value = 0;
       _chunkFlushTimer = setInterval(function () { _flushChunks(false); }, 10000);
-    }
-
-    async function _stopChunkStreaming() {
-      if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
-      await _flushChunks(true);
-    }
-
-    async function uploadRecording(blob, trackType) {
-      try {
-        var ext = blob._ext || "webm";
-        var sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-        uploadStatus.state = "uploading";
-        uploadStatus.percent = 0;
-        uploadStatus.sizeMB = sizeMB;
-        uploadStatus.error = "";
-        window.addEventListener("beforeunload", _preventClose);
-
-        var form = new FormData();
-        form.append("file", blob, trackType + "." + ext);
-        form.append("track_type", trackType);
-        form.append("token", props.inviteToken);
-        form.append("duration_seconds", String(timecode.value));
-
-        var xhr = new XMLHttpRequest();
-        var uploadUrl = "/api/sessions/" + props.joinData.session_id + "/recordings?token=" + encodeURIComponent(props.inviteToken);
-        await new Promise(function (resolve, reject) {
-          xhr.upload.onprogress = function (ev) {
-            if (ev.lengthComputable) uploadStatus.percent = Math.round(ev.loaded / ev.total * 100);
-          };
-          xhr.onload = function () {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              uploadStatus.state = "done";
-              resolve();
-            } else {
-              uploadStatus.state = "error";
-              uploadStatus.error = "Error " + xhr.status;
-              reject(new Error("upload failed: " + xhr.status));
-            }
-          };
-          xhr.onerror = function () {
-            uploadStatus.state = "error";
-            uploadStatus.error = "Error de red";
-            reject(new Error("network error"));
-          };
-          xhr.open("POST", uploadUrl);
-          xhr.send(form);
-        });
-        window.removeEventListener("beforeunload", _preventClose);
-      } catch (e) {
-        window.removeEventListener("beforeunload", _preventClose);
-        uploadStatus.state = "error";
-        uploadStatus.error = e.message;
-      }
     }
 
     async function connect() {
@@ -3422,6 +3419,9 @@ var GuestStudioView = {
         }
         setTimeout(mountExistingRemotes, 1500);
         setTimeout(mountExistingRemotes, 4000);
+        ownReady.value = true;
+        readyMap[myIdentity.value] = true;
+        sendData({ type: "ready_toggle", identity: myIdentity.value, ready: true });
       } catch (e) {
         error.value = "Error de conexión: " + e.message;
       } finally {
@@ -3477,9 +3477,9 @@ var GuestStudioView = {
              sounds: sounds, playingPad: playingPad, triggerSound: triggerSound,
              chat: chat, chatInput: chatInput, sendChat: sendChat,
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
-             toggleReady: toggleReady, ownReady: ownReady, readyMap: readyMap, countdown: countdown,
-             myIdentity: myIdentity, practiceMode: practiceMode,
+             countdown: countdown, myIdentity: myIdentity, practiceMode: practiceMode,
              uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
+             postRecording: postRecording,
              activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
   },
   template: `
@@ -3493,34 +3493,39 @@ var GuestStudioView = {
           <span class="vu-label">MIC</span>
           <div class="vu-h" :style="'--vu:' + localMeter"></div>
         </div>
-        <button v-if="connected && !recording && countdown === null" class="primary rec-btn"
-                @click="toggleReady"
-                :style="ownReady ? 'background: var(--signal); color:#fff;' : ''">
-          {{ ownReady ? "✓ Listo" : "● Prepararse" }}
-        </button>
         <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
         <span v-if="connected && recording" class="tally live"><span class="dot"></span>ON AIR</span>
       </div>
       <div v-if="recording && !recordingCaps.hasCam" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
         ⚠ GRABANDO SOLO AUDIO — tu cámara no está disponible
       </div>
-      <div v-if="uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
+      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
         Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados
       </div>
-      <div v-if="uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
+      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
         ⚠ Conexión inestable — reintentando subida (tu grabación local sigue activa)
       </div>
-      <div v-if="uploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
-        ⏳ Finalizando subida — no cierres esta pestaña…
+      <div v-if="postRecording" style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);">
+        <div v-if="uploadStatus.state === 'finalizing'" style="text-align:center;">
+          <div style="font-size:48px;margin-bottom:16px;">⏳</div>
+          <h2 style="margin:0 0 8px;color:var(--paper);">Finalizando subida…</h2>
+          <p class="muted" style="font-size:14px;">No cierres esta pestaña. Tu grabación se está procesando.</p>
+        </div>
+        <div v-else-if="uploadStatus.state === 'done'" style="text-align:center;">
+          <div style="font-size:64px;margin-bottom:16px;">✓</div>
+          <h2 style="margin:0 0 8px;color:#6c6;">Grabación subida correctamente</h2>
+          <p class="muted" style="margin-bottom:32px;font-size:14px;">{{ uploadStatus.sizeMB }} MB enviados</p>
+          <button class="primary" @click="leave" style="padding:18px 64px;font-size:20px;border-radius:var(--r-lg);">SALIR</button>
+        </div>
+        <div v-else-if="uploadStatus.state === 'error'" style="text-align:center;">
+          <div style="font-size:48px;margin-bottom:16px;">✕</div>
+          <h2 style="margin:0 0 8px;color:#f66;">Error al subir grabación</h2>
+          <p style="color:#f66;margin-bottom:16px;font-size:14px;">{{ uploadStatus.error }}</p>
+          <p class="muted" style="font-size:13px;">NO cierres esta pestaña — contacta al equipo técnico.</p>
+        </div>
       </div>
-      <div v-if="uploadStatus.state === 'done'" class="upload-banner" style="background:#1a3a1a;border-bottom:2px solid #4a4;padding:8px 16px;text-align:center;font-weight:700;color:#6c6;">
-        ✓ Grabación subida correctamente ({{ uploadStatus.sizeMB }} MB) — puedes cerrar esta pestaña
-      </div>
-      <div v-if="uploadStatus.state === 'error'" class="upload-banner" style="background:#5a1a1a;border-bottom:2px solid red;padding:8px 16px;text-align:center;font-weight:700;color:#f66;">
-        ✕ Error al subir: {{ uploadStatus.error }} — NO cierres la pestaña
-      </div>
-      <div class="studio-main">
-        <div v-if="error" class="error" style="font-size: 16px; padding: 14px; background: #5a1a1a; color: #fff; border: 2px solid red;">⚠️ {{ error }}</div>
+      <div v-if="!postRecording" class="studio-main">
+        <div v-if="error" class="error" style="font-size: 16px; padding: 14px; background: #5a1a1a; color: #fff; border: 2px solid red;">⚠ {{ error }}</div>
         <div v-if="!connected && !busy" class="prejoin">
           <div class="prejoin-card">
             <div class="prejoin-controls" style="text-align: center;">
@@ -3542,7 +3547,6 @@ var GuestStudioView = {
             <div class="label">
               <span>{{ joinData.display_name }}</span>
               <span class="role-chip">TÚ</span>
-              <span v-if="ownReady && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
             <div v-if="localMuted" class="muted-icon">🔇</div>
             <div class="vu" :style="'--vu:' + localMeter"></div>
@@ -3551,7 +3555,6 @@ var GuestStudioView = {
             <div :data-remote-id="id" style="width:100%; height:100%;"></div>
             <div class="label">
               <span>{{ t.name || id }}</span>
-              <span v-if="readyMap[id] && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
             <div class="vu" :style="'--vu:' + (t.meter || 0)"></div>
           </div>
@@ -3583,7 +3586,7 @@ var GuestStudioView = {
           {{ activeCue.cue }}
         </div>
       </div>
-      <aside class="studio-side">
+      <aside v-if="!postRecording" class="studio-side">
         <div>
           <div class="sb-head"><span class="label">Soundboard</span><span class="tiny">teclas</span></div>
           <div class="sb-grid">
@@ -3610,7 +3613,7 @@ var GuestStudioView = {
           </div>
         </div>
       </aside>
-      <div class="controls-bar">
+      <div v-if="!postRecording" class="controls-bar">
         <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
         <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
         <span v-if="ifbActive" class="ifb-indicator">IFB</span>
@@ -3743,6 +3746,16 @@ var DirectorView = {
 
     // Collapsed sections
     var expandedSection = ref("banner");
+
+    // Cue visibility for guests
+    var guestCuesVisible = ref(true);
+    function toggleGuestCues() {
+      guestCuesVisible.value = !guestCuesVisible.value;
+      sendData({ type: "cue_visibility", show: guestCuesVisible.value });
+    }
+
+    // Upload status monitoring
+    var participantUploads = reactive({});
 
     function formatTC(s) {
       var h = Math.floor(s / 3600); var m = Math.floor((s % 3600) / 60); var sec = s % 60;
@@ -3982,6 +3995,9 @@ var DirectorView = {
           if (msg.type === "ready_toggle") {
             readyMap[msg.identity] = !!msg.ready;
           }
+          if (msg.type === "upload_status") {
+            participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0 };
+          }
           if (msg.type === "director_chat" && msg.text) {
             directorChat.value.push({ id: msg.id, author: msg.author, text: msg.text });
             nextTick(function () {
@@ -4081,10 +4097,12 @@ var DirectorView = {
       injectType: injectType, injectFields: injectFields, injectOverlay: injectOverlay,
       expandedSection: expandedSection,
       sendCue: sendCue, cueTarget: cueTarget,
+      guestCuesVisible: guestCuesVisible, toggleGuestCues: toggleGuestCues,
       forceMute: forceMute, kickParticipant: kickParticipant,
       sounds: sounds, sessionSounds: sessionSounds, directorSounds: directorSounds, triggerSound: triggerSound, playingPad: playingPad,
       ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
       directorChat: directorChat, directorChatInput: directorChatInput, sendDirectorChat: sendDirectorChat,
+      participantUploads: participantUploads,
     };
   },
   template: '\
@@ -4220,6 +4238,20 @@ var DirectorView = {
           <button class="cr-cue-btn speed-up" @click="sendCue(\'MÁS RÁPIDO\')">MÁS RÁPIDO</button>\
           <button class="cr-cue-btn slow-down" @click="sendCue(\'MÁS LENTO\')">MÁS LENTO</button>\
           <button class="cr-cue-btn ad-read" @click="sendCue(\'LEER ANUNCIO\')">LEER ANUNCIO</button>\
+        </div>\
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--paper-dim);cursor:pointer;">\
+          <input type="checkbox" :checked="guestCuesVisible" @change="toggleGuestCues" style="margin:0;" />\
+          Invitados ven cues\
+        </label>\
+\
+        <div class="eyebrow" style="padding:10px 0 6px 2px;">SUBIDAS</div>\
+        <div v-if="Object.keys(participantUploads).length === 0" style="font-size:11px;color:var(--paper-dim);">Sin datos aún</div>\
+        <div v-for="(u, id) in participantUploads" :key="id" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;">\
+          <span>{{ id.replace(\'participant_\', \'P\') }}</span>\
+          <span v-if="u.state === \'streaming\'" style="color:var(--accent);">↑ {{ (u.bytes / (1024*1024)).toFixed(1) }} MB</span>\
+          <span v-else-if="u.state === \'done\'" style="color:#6c6;font-weight:700;">✓ {{ (u.bytes / (1024*1024)).toFixed(1) }} MB</span>\
+          <span v-else-if="u.state === \'error\'" style="color:#f66;font-weight:700;">✕ Error</span>\
+          <span v-else style="color:var(--paper-dim);">{{ u.state }}</span>\
         </div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
