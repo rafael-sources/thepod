@@ -4036,6 +4036,7 @@ var DirectorView = {
           }
           if (msg.type === "ready_toggle") {
             readyMap[msg.identity] = !!msg.ready;
+            loadParticipants();
           }
           if (msg.type === "upload_status") {
             participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0 };
@@ -4160,8 +4161,7 @@ var DirectorView = {
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
         <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
-                :disabled="!allParticipantsReady()"\
-                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
+                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'\'"\
                 :title="allParticipantsReady() ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
         <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
           {{ countdown === 0 ? "¡REC!" : countdown }}\
