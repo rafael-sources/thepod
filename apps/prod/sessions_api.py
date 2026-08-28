@@ -689,6 +689,25 @@ def _probe_audio_duration(path):
         return None
 
 
+def _normalize_loudness(path, target_lufs=-20):
+    import subprocess
+    from pathlib import Path
+    fixed = Path(str(path) + ".norm" + Path(path).suffix)
+    try:
+        r = subprocess.run(
+            ["ffmpeg", "-y", "-i", str(path),
+             "-af", f"loudnorm=I={target_lufs}:TP=-1.5:LRA=11",
+             "-ar", "44100", "-b:a", "192k", str(fixed)],
+            capture_output=True, timeout=30,
+        )
+        if r.returncode == 0 and fixed.exists() and fixed.stat().st_size > 0:
+            Path(path).unlink()
+            fixed.rename(path)
+    except (subprocess.SubprocessError, OSError):
+        if fixed.exists():
+            fixed.unlink(missing_ok=True)
+
+
 @bp.post("/api/sessions/<int:sid>/sounds/<int:sound_id>/upload")
 @require_auth
 def upload_sound(sid, sound_id):
@@ -742,6 +761,9 @@ def upload_sound(sid, sound_id):
             return jsonify({
                 "error": f"duración {dur:.1f}s supera el máximo de {MAX_SOUND_DURATION_SECONDS}s",
             }), 413
+
+        _normalize_loudness(dest)
+        size = dest.stat().st_size
 
         # Remove previous custom file (don't touch defaults in static/sounds)
         if not row["is_default"] and row["filename"]:

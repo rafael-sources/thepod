@@ -208,6 +208,8 @@ def import_from_prepod():
                         local.write_bytes(resp.read())
                 except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
                     continue
+                from sessions_api import _normalize_loudness
+                _normalize_loudness(local)
                 db.execute(
                     "INSERT INTO sound_effects (session_id, name, filename, shortcut_key, color, "
                     "duration_seconds, file_size_bytes, is_default) "
