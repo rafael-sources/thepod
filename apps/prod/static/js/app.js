@@ -2562,7 +2562,7 @@ var StudioView = {
               <button class="btn-secondary" @click="loadRecordings" title="Recargar lista de pistas">↻ Recargar</button>
               <a v-if="finishedRecordings.length" :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
                  class="btn-secondary" download>↓ ZIP</a>
-              <button v-if="sessionEnded && allUploadsComplete" class="btn-export"
+              <button v-if="finishedRecordings.length && !recording" class="btn-export"
                       :class="{ exported: allExported }"
                       :disabled="exporting || !finishedRecordings.length" @click="exportToPostpod"
                       title="Enviar pistas a postPod para editar">
