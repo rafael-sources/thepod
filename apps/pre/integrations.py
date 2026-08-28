@@ -155,7 +155,7 @@ def _serialize_episode_payload(slug: str, ep_id: int):
             (ep_id,),
         ).fetchall()
         guest_rows = db.execute(
-            "SELECT id, name, email, role, bio, "
+            "SELECT id, name, email, role, bio, rsvp_token, "
             "social_instagram, social_twitter, social_youtube, social_tiktok, photo_filename "
             "FROM episode_guests WHERE episode_id=?",
             (ep_id,),
@@ -248,7 +248,7 @@ def _serialize_episode_payload(slug: str, ep_id: int):
                 "script": [dict(r) for r in script_rows],
                 "ideas": [dict(r) for r in idea_rows],
                 "links": [dict(r) for r in link_rows],
-                "guests": [dict(r) for r in guest_rows],
+                "guests": [{**dict(r), "rsvp_url": f"{base}/rsvp/{r['rsvp_token']}" if r["rsvp_token"] else None} for r in guest_rows],
                 "blocks": [{**dict(r), "sponsor_logo_url": (f"{base}/media/podcasts/{slug}/sponsors/{r['sponsor_logo']}" if r["sponsor_logo"] else None)} for r in block_rows],
                 "sponsors": [{**dict(r), "logo_url": (f"{base}/media/podcasts/{slug}/sponsors/{r['logo_filename']}" if r["logo_filename"] else None)} for r in sponsor_rows],
             },

@@ -25,6 +25,7 @@ def _serialize(row: dict) -> dict:
     return {
         "username":      row["username"],
         "display_name":  row["display_name"],
+        "email":         row.get("email") or "",
         "avatar_color":  row["avatar_color"],
         "is_admin":      row["is_admin"],
         "max_podcasts":  row["max_podcasts"],
@@ -67,6 +68,7 @@ def create_user_endpoint():
         row = create_user(
             username, password,
             display_name=body.get("display_name"),
+            email=body.get("email"),
             avatar_color=body.get("avatar_color"),
             is_admin=is_admin,
             max_podcasts=max_podcasts,
@@ -107,14 +109,16 @@ def update_user_endpoint(username):
         fields["display_name"] = (body["display_name"] or username).strip().title()
     if "avatar_color" in body:
         fields["avatar_color"] = (body["avatar_color"] or "").strip() or None
+    if "email" in body:
+        fields["email"] = (body["email"] or "").strip() or None
 
     if "is_admin" in body:
         wanted = bool(body["is_admin"])
         if not wanted and existing["is_admin"]:
             if admins_count_excluding(username) == 0:
-                return jsonify({"error": "no podés dejar al sistema sin admins"}), 400
+                return jsonify({"error": "no puedes dejar al sistema sin admins"}), 400
             if username == current_user():
-                return jsonify({"error": "no podés sacarte tu propio rol de admin"}), 400
+                return jsonify({"error": "no puedes quitarte tu propio rol de admin"}), 400
         fields["is_admin"] = 1 if wanted else 0
         if wanted:
             fields["max_podcasts"] = None
@@ -149,12 +153,12 @@ def delete_user_endpoint(username):
         return jsonify({"error": "solo admins"}), 403
     username = (username or "").strip().lower()
     if username == current_user():
-        return jsonify({"error": "no podés borrar tu propio usuario"}), 400
+        return jsonify({"error": "no puedes borrar tu propio usuario"}), 400
     existing = get_user(username)
     if not existing:
         return jsonify({"error": "usuario no encontrado"}), 404
     if existing["is_admin"] and admins_count_excluding(username) == 0:
-        return jsonify({"error": "no podés borrar al último admin"}), 400
+        return jsonify({"error": "no puedes borrar al último admin"}), 400
     try:
         delete_user_by_name(username)
     except ValueError as e:

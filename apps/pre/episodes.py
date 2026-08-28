@@ -4,6 +4,7 @@ All endpoints scoped under `/api/podcasts/<slug>/`.
 """
 
 import json as _json
+import logging
 import threading
 
 from flask import Blueprint, abort, jsonify, request, session
@@ -336,11 +337,53 @@ def delete_episode(slug, ep_id):
         row = db.execute("SELECT id FROM episodes WHERE id=?", (ep_id,)).fetchone()
         if not row:
             return jsonify({"error": "episodio no encontrado"}), 404
+
+        podcast = db.execute(
+            "SELECT shared_project_id FROM podcast_meta WHERE slug=?", (slug,)
+        ).fetchone()
+        spid = podcast["shared_project_id"] if podcast else None
+
         db.execute("DELETE FROM episodes WHERE id=?", (ep_id,))
         db.commit()
-        return jsonify({"ok": True})
     finally:
         db.close()
+
+    if spid:
+        threading.Thread(
+            target=_cascade_delete_episode,
+            args=(slug, ep_id, spid),
+            daemon=True,
+        ).start()
+
+    return jsonify({"ok": True})
+
+
+def _cascade_delete_episode(source_slug, source_episode_id, shared_project_id):
+    from integrations import _http_json
+    from shared_config import load_shared_config
+    cfg = load_shared_config()
+    secret = cfg.get("integration_secret", "")
+    headers = {"X-PodPod-Secret": secret}
+    body = {
+        "source_slug": source_slug,
+        "source_episode_id": source_episode_id,
+        "shared_project_id": shared_project_id,
+    }
+
+    for label, key in [("prodPod", "prodpod_url"), ("postPod", "postpod_url")]:
+        base = (cfg.get(key) or "").rstrip("/")
+        if not base:
+            continue
+        try:
+            _http_json(
+                "POST",
+                f"{base}/api/integrations/prepod/delete-episode",
+                body=body,
+                headers=headers,
+                timeout=10,
+            )
+        except Exception as e:
+            logging.warning("Cascade delete to %s failed: %s", label, e)
 
 
 # ---------------------------------------------------------------------------

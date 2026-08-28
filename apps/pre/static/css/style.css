@@ -2186,3 +2186,19 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 .publish-btn:hover { opacity: 0.9; }
 .publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .publish-status { margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-3, #6c757d); }
+
+/* Distribution Panel */
+.dist-feed-box { background: var(--ink-bg, #1a1a2e); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+.dist-platforms { display: flex; flex-direction: column; gap: 12px; }
+.dist-card { border: 1px solid var(--ink-line, #2a2a3e); border-radius: 10px; padding: 16px; background: var(--ink-bg, #1a1a2e); }
+.dist-card-header { display: flex; align-items: center; gap: 10px; }
+.dist-card-header strong { font-size: 14px; }
+.dist-platform-icon { font-size: 18px; }
+.dist-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; margin-left: auto; }
+.dist-badge--not_configured { background: var(--ink-line, #2a2a3e); color: var(--paper-dim, #888); }
+.dist-badge--pending { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
+.dist-badge--connected { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.dist-card-body { margin-top: 8px; }
+.dist-steps { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.dist-step { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.dist-step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent, #5a8bff); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
