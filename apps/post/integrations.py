@@ -5,6 +5,7 @@ require a shared secret (`INTEGRATION_SECRET`) in the `X-PodPod-Secret`
 header.
 """
 
+import shutil
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -1100,3 +1101,33 @@ def import_director_asset():
         "filename": safe_name,
         "size": dest.stat().st_size,
     }), 201
+
+
+# ---------------------------------------------------------------------------
+# Cascade delete: prePod deleted an episode → remove matching project
+# ---------------------------------------------------------------------------
+
+@bp.post("/api/integrations/prepod/delete-episode")
+def delete_episode_cascade():
+    err = _require_shared_secret()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    shared_project_id = (data.get("shared_project_id") or "").strip()
+    source_episode_id = data.get("source_episode_id")
+    if not shared_project_id:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+
+    meta = find_project_by_shared_id(shared_project_id)
+    if not meta:
+        return jsonify({"ok": True, "deleted": False, "reason": "no project found"})
+
+    ep_id = ((meta.get("source_info") or {}).get("episode") or {}).get("id")
+    if source_episode_id is not None and ep_id is not None and int(ep_id) != int(source_episode_id):
+        return jsonify({"ok": True, "deleted": False, "reason": "episode id mismatch"})
+
+    slug = meta["slug"]
+    project_dir = PROJECTS_DIR / slug
+    if project_dir.exists():
+        shutil.rmtree(project_dir)
+    return jsonify({"ok": True, "deleted": True, "slug": slug})
