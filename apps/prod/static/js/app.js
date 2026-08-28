@@ -3977,11 +3977,11 @@ var DirectorView = {
 
     // --- Recording control ---
     function allParticipantsReady() {
-      var connected = participants.value.filter(function(p) {
-        return p.status === "connected" && p.role !== "director";
+      var hosts = participants.value.filter(function(p) {
+        return p.status === "connected" && (p.role === "host" || p.role === "co-host");
       });
-      if (connected.length === 0) return false;
-      return connected.every(function(p) { return !!readyMap["participant_" + p.id]; });
+      if (hosts.length === 0) return false;
+      return hosts.every(function(p) { return !!readyMap["participant_" + p.id]; });
     }
 
     async function startRecording() {
