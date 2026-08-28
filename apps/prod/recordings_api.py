@@ -320,14 +320,24 @@ def stream_recording_chunk(sid):
 
         finalize = request.form.get("finalize") == "1"
 
+        already_finalized = db.execute(
+            "SELECT id FROM recordings WHERE session_id=? AND participant_id=? AND track_type=?",
+            (sid, participant_id, track_type),
+        ).fetchone()
+
         chunk = request.files.get("chunk")
-        if chunk:
+        if chunk and not already_finalized:
             with open(str(streaming_path), "ab") as out:
                 while True:
                     buf = chunk.stream.read(65536)
                     if not buf:
                         break
                     out.write(buf)
+
+        if already_finalized and finalize:
+            return jsonify({"finalized": True, "size_bytes": 0}), 201
+        if already_finalized:
+            return jsonify({"ok": True, "bytes_received": 0}), 200
 
         if finalize:
             if not streaming_path.exists():
@@ -516,15 +526,21 @@ def export_recordings_to_postpod(sid):
     """
     Push every not-yet-exported recording of this session to postPod, where
     they land as media files of the matching shared_project_id project.
-    Host-only, idempotent per file via exported_to_postpod_at.
+    Host or director, idempotent per file via exported_to_postpod_at.
     """
     db = get_db()
     try:
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
         if not sess:
             return jsonify({"error": "sesión no encontrada"}), 404
-        if sess["created_by"] != current_user():
-            return jsonify({"error": "sólo el host puede exportar"}), 403
+        username = current_user()
+        is_host = sess["created_by"] == username
+        is_director = bool(db.execute(
+            "SELECT 1 FROM participants WHERE session_id=? AND username=? AND role='director'",
+            (sid, username),
+        ).fetchone())
+        if not is_host and not is_director:
+            return jsonify({"error": "sólo el host o director puede exportar"}), 403
         spid = sess["shared_project_id"]
         if not spid:
             # Auto-generate and persist a shared_project_id so postPod can

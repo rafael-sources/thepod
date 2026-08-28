@@ -672,6 +672,10 @@ var StudioView = {
     var countdownHandle = null;
 
     var participantUploads = reactive({});
+    var allUploadsComplete = computed(function () {
+      var keys = Object.keys(participantUploads);
+      return keys.length > 0 && keys.every(function (k) { return participantUploads[k].state === "done"; });
+    });
     var guestCuesVisible = ref(true);
     function toggleGuestCues() {
       guestCuesVisible.value = !guestCuesVisible.value;
@@ -2050,10 +2054,17 @@ var StudioView = {
       catch (_) { await podSwal.prompt("Copia este link RSVP:", p.source_rsvp_url); }
     }
 
+    async function forceMute(p) {
+      try {
+        await api("/api/sessions/" + props.session.id + "/participants/" + p.id + "/force-mute", { method: "POST" });
+        sendData({ type: "force_mute", target: "participant_" + p.id });
+        if (window.toast) window.toast({ type: "info", text: p.display_name + " muteado" });
+      } catch (_) {}
+    }
+
     async function kickParticipant(p) {
       if (!await podSwal.confirm("¿Quitar a " + p.display_name + "?")) return;
       try {
-        // Signal first so they disconnect gracefully
         sendData({ type: "kick", target_identity: "participant_" + p.id });
         await api("/api/sessions/" + props.session.id + "/participants/" + p.id, { method: "DELETE" });
         await loadParticipants();
@@ -2174,7 +2185,7 @@ var StudioView = {
       toggleReady: toggleReady, stopRecording: stopRecording,
       ownReady: ownReady, readyMap: readyMap, countdown: countdown, myIdentity: myIdentity,
       showInvite: showInvite, inviteForm: inviteForm, inviteLinks: inviteLinks,
-      createInvite: createInvite, copyInvite: copyInvite, copyRsvpLink: copyRsvpLink, kickParticipant: kickParticipant,
+      createInvite: createInvite, copyInvite: copyInvite, copyRsvpLink: copyRsvpLink, forceMute: forceMute, kickParticipant: kickParticipant,
       sounds: sounds, playingPad: playingPad, triggerSound: triggerSound,
       padPlayState: padPlayState, padVolumes: padVolumes, setPadVolume: setPadVolume,
       stopAllSounds: stopAllSounds, onPadDrop: onPadDrop,
@@ -2187,7 +2198,7 @@ var StudioView = {
       triggerStats: triggerStats,
       exportToPostpod: exportToPostpod, exportStatus: exportStatus, exporting: exporting, allExported: allExported,
       hostUploadStatus: hostUploadStatus, hostStreamedBytes: hostStreamedBytes,
-      participantUploads: participantUploads,
+      participantUploads: participantUploads, allUploadsComplete: allUploadsComplete,
       guestCuesVisible: guestCuesVisible, toggleGuestCues: toggleGuestCues,
       showDiagnostic: showDiagnostic,
       streams: streams, rtmpPresets: rtmpPresets, showStream: showStream, streamForm: streamForm,
@@ -2551,7 +2562,7 @@ var StudioView = {
               <button class="btn-secondary" @click="loadRecordings" title="Recargar lista de pistas">↻ Recargar</button>
               <a v-if="finishedRecordings.length" :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
                  class="btn-secondary" download>↓ ZIP</a>
-              <button class="btn-export"
+              <button v-if="sessionEnded && allUploadsComplete" class="btn-export"
                       :class="{ exported: allExported }"
                       :disabled="exporting || !finishedRecordings.length" @click="exportToPostpod"
                       title="Enviar pistas a postPod para editar">
@@ -2650,6 +2661,7 @@ var StudioView = {
           <div v-for="p in participants" :key="p.id" class="invite-row" style="flex-wrap:wrap;">
             <span class="who">{{ p.display_name }}</span>
             <span class="status-chip" :class="p.status">{{ p.status }}</span>
+            <button v-if="p.username !== user.username" class="icon ghost" @click="forceMute(p)" title="Mutear" style="font-size:11px;">🔇</button>
             <button v-if="p.username !== user.username" class="icon danger" @click="kickParticipant(p)" title="Quitar">✕</button>
             <div v-if="isHost && (p.invite_url || p.source_rsvp_url)" style="width:100%;display:flex;gap:4px;margin-top:2px;">
               <button v-if="p.invite_url" class="ghost" style="font-size:10px;padding:1px 6px;"
@@ -3188,6 +3200,10 @@ var GuestStudioView = {
       recordingStartedAtMs = null;
       ownReady.value = false;
       Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
+      if (room) {
+        try { await room.localParticipant.setCameraEnabled(false); } catch (_) {}
+        try { await room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+      }
     }
 
     async function sendChat() {
@@ -4144,7 +4160,9 @@ var DirectorView = {
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
         <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
-                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'\'">● GRABAR</button>\
+                :disabled="!allParticipantsReady()"\
+                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
+                :title="allParticipantsReady() ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
         <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
           {{ countdown === 0 ? "¡REC!" : countdown }}\
         </span>\
