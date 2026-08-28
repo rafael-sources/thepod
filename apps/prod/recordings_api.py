@@ -463,12 +463,50 @@ def list_recordings(sid):
     try:
         if not _is_session_member(db, sid, current_user()):
             return jsonify({"error": "no autorizado"}), 401
+        _recover_orphaned_streams(db, sid)
         rows = db.execute(
             "SELECT * FROM recordings WHERE session_id=? ORDER BY created_at", (sid,)
         ).fetchall()
         return jsonify([_serialize_recording(r) for r in rows])
     finally:
         db.close()
+
+
+def _recover_orphaned_streams(db, sid):
+    rec_dir = session_dir(sid) / "recordings"
+    if not rec_dir.exists():
+        return
+    for f in rec_dir.glob("*_streaming.*"):
+        parts = f.stem.split("_")
+        if len(parts) < 3:
+            continue
+        try:
+            pid = int(parts[0].lstrip("p"))
+        except ValueError:
+            continue
+        track_type = parts[1]
+        already = db.execute(
+            "SELECT id FROM recordings WHERE session_id=? AND participant_id=? AND track_type=?",
+            (sid, pid, track_type),
+        ).fetchone()
+        if already:
+            f.unlink(missing_ok=True)
+            continue
+        ext = f.suffix
+        fname = f"p{pid}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
+        final = rec_dir / fname
+        f.rename(final)
+        if ext == ".webm":
+            _remux_webm(final)
+        dur = _probe_duration(final)
+        size = final.stat().st_size
+        mime, _ = mimetypes.guess_type(str(final))
+        db.execute(
+            "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
+            "duration_seconds, size_bytes, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (sid, pid, track_type, fname, str(final), dur, size, mime or "video/webm"),
+        )
+        db.commit()
 
 
 @bp.post("/api/sessions/<int:sid>/recordings/export-to-postpod")

@@ -1838,6 +1838,7 @@ var StudioView = {
       }
       if (!recorder && localStream) {
         _hostChunkQueue = [];
+        _hostRetryCount = 0;
         _hostStreamExt = ".webm";
         recorder = _startRecorder(localStream, function () {}, 1000, false, function (data) {
           _hostChunkQueue.push(data);
@@ -1853,6 +1854,7 @@ var StudioView = {
     var _hostChunkUploading = false;
     var _hostChunkTimer = null;
     var _hostStreamExt = ".webm";
+    var _hostRetryCount = 0;
     var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
     var hostStreamedBytes = ref(0);
 
@@ -1860,10 +1862,12 @@ var StudioView = {
       if (_hostChunkUploading && !finalize) return;
       if (!_hostChunkQueue.length && !finalize) return;
       _hostChunkUploading = true;
-      var blob = new Blob(_hostChunkQueue);
-      _hostChunkQueue = [];
+      var pending = _hostChunkQueue.slice();
       var form = new FormData();
-      if (blob.size > 0) form.append("chunk", blob, "chunk" + _hostStreamExt);
+      if (pending.length) {
+        var blob = new Blob(pending);
+        form.append("chunk", blob, "chunk" + _hostStreamExt);
+      }
       form.append("track_type", "video");
       form.append("ext", _hostStreamExt);
       if (finalize) {
@@ -1875,17 +1879,30 @@ var StudioView = {
           method: "POST", credentials: "same-origin", body: form,
         });
         if (resp.ok) {
+          _hostChunkQueue.splice(0, pending.length);
+          _hostRetryCount = 0;
           var data = await resp.json();
           hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
           if (finalize) {
             hostUploadStatus.state = "done";
             hostUploadStatus.sizeMB = (hostStreamedBytes.value / (1024 * 1024)).toFixed(1);
           }
+        } else {
+          _hostRetryCount++;
         }
       } catch (e) {
-        if (finalize) { hostUploadStatus.state = "error"; hostUploadStatus.error = e.message; }
+        _hostRetryCount++;
+        if (finalize && _hostRetryCount > 10) {
+          hostUploadStatus.state = "error";
+          hostUploadStatus.error = e.message;
+        }
       }
       _hostChunkUploading = false;
+      if (finalize && hostUploadStatus.state !== "done" && hostUploadStatus.state !== "error") {
+        var delay = Math.min(2000 * Math.pow(1.5, _hostRetryCount - 1), 30000);
+        await new Promise(function (r) { setTimeout(r, delay); });
+        return _flushHostChunks(true);
+      }
     }
 
     async function stopLocalRecorders() {
@@ -3162,6 +3179,7 @@ var GuestStudioView = {
     var _chunkUploading = false;
     var _chunkFlushTimer = null;
     var _streamExt = ".webm";
+    var _chunkRetries = ref(0);
 
     function _onRecordingChunk(data) {
       _chunkQueue.push(data);
@@ -3171,10 +3189,12 @@ var GuestStudioView = {
       if (_chunkUploading && !finalize) return;
       if (!_chunkQueue.length && !finalize) return;
       _chunkUploading = true;
-      var blob = new Blob(_chunkQueue);
-      _chunkQueue = [];
+      var pending = _chunkQueue.slice();
       var form = new FormData();
-      if (blob.size > 0) form.append("chunk", blob, "chunk" + _streamExt);
+      if (pending.length) {
+        var blob = new Blob(pending);
+        form.append("chunk", blob, "chunk" + _streamExt);
+      }
       form.append("token", props.inviteToken);
       form.append("track_type", "video");
       form.append("ext", _streamExt);
@@ -3187,6 +3207,8 @@ var GuestStudioView = {
           method: "POST", body: form,
         });
         if (resp.ok) {
+          _chunkQueue.splice(0, pending.length);
+          _chunkRetries.value = 0;
           var data = await resp.json();
           streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
           if (finalize) {
@@ -3194,20 +3216,29 @@ var GuestStudioView = {
             uploadStatus.sizeMB = (streamedBytes.value / (1024 * 1024)).toFixed(1);
             window.removeEventListener("beforeunload", _preventClose);
           }
+        } else {
+          _chunkRetries.value++;
         }
       } catch (e) {
-        if (finalize) {
+        _chunkRetries.value++;
+        if (finalize && _chunkRetries.value > 10) {
           uploadStatus.state = "error";
           uploadStatus.error = "Error al finalizar: " + e.message;
         }
       }
       _chunkUploading = false;
+      if (finalize && uploadStatus.state !== "done" && uploadStatus.state !== "error") {
+        var delay = Math.min(2000 * Math.pow(1.5, _chunkRetries.value - 1), 30000);
+        await new Promise(function (r) { setTimeout(r, delay); });
+        return _flushChunks(true);
+      }
     }
 
     function _startChunkStreaming() {
       window.addEventListener("beforeunload", _preventClose);
       uploadStatus.state = "streaming";
       streamedBytes.value = 0;
+      _chunkRetries.value = 0;
       _chunkFlushTimer = setInterval(function () { _flushChunks(false); }, 10000);
     }
 
@@ -3448,7 +3479,7 @@ var GuestStudioView = {
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
              toggleReady: toggleReady, ownReady: ownReady, readyMap: readyMap, countdown: countdown,
              myIdentity: myIdentity, practiceMode: practiceMode,
-             uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes,
+             uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
              activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
   },
   template: `
@@ -3473,8 +3504,11 @@ var GuestStudioView = {
       <div v-if="recording && !recordingCaps.hasCam" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
         ⚠ GRABANDO SOLO AUDIO — tu cámara no está disponible
       </div>
-      <div v-if="uploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
+      <div v-if="uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
         Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados
+      </div>
+      <div v-if="uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
+        ⚠ Conexión inestable — reintentando subida (tu grabación local sigue activa)
       </div>
       <div v-if="uploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
         ⏳ Finalizando subida — no cierres esta pestaña…
