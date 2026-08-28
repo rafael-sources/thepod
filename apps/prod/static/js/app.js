@@ -4298,11 +4298,11 @@ var DirectorView = {
           <span v-else-if="u.state === \'error\'" style="color:#f66;font-weight:700;">✕ Error</span>\
           <span v-else style="color:var(--paper-dim);">{{ u.state }}</span>\
         </div>\
-        <button v-if="!directorConnected" class="ghost" :disabled="exporting" @click="exportToPostpod"\
+        <button v-if="!recording && allUploadsComplete" class="ghost" :disabled="exporting" @click="exportToPostpod"\
                 style="margin-top:8px;width:100%;font-size:11px;padding:6px 0;border:1px solid var(--accent);border-radius:var(--r-sm);color:var(--accent);">\
           {{ exporting ? "enviando…" : "↗ Enviar a postPod" }}\
         </button>\
-        <div v-if="!directorConnected && exportStatus" style="font-size:10px;margin-top:4px;color:var(--paper-dim);">{{ exportStatus }}</div>\
+        <div v-if="exportStatus" style="font-size:10px;margin-top:4px;color:var(--paper-dim);">{{ exportStatus }}</div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
