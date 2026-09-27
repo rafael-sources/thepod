@@ -219,3 +219,84 @@ def test_upload_episode_media_missing_file(client, tmp_path):
     result = episodes.upload_episode_media(slug, ep_id, tmp_path / "no-existe.mp3")
     assert result["ok"] is False
     assert result["error"].startswith("Archivo no encontrado")
+
+
+class _InlineThread:
+    """Replaces threading.Thread so jobs run synchronously in tests."""
+
+    def __init__(self, target=None, daemon=None, name=None):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+
+def _finished_upload(client, content=b"mp3data", filename="final.mp3"):
+    upload_id = _init_upload(client, filename=filename, size=len(content))
+    client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=content)
+    assert client.post(f"/api/mac/uploads/{upload_id}/finish").status_code == 200
+    return upload_id
+
+
+def test_publish_audio_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file",
+               return_value={"ok": True, "url": "https://media.example/test-pod/ep007-test-pod.mp3"}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+
+    assert resp.status_code == 202
+    job_id = resp.get_json()["job_id"]
+
+    job = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["media_url"].endswith(".mp3")
+
+    conn = db_mod.get_db(slug)
+    row = conn.execute("SELECT status, media_url FROM episodes WHERE id=?", (ep_id,)).fetchone()
+    conn.close()
+    assert row["status"] == "published"
+
+    # Upload consumed after a successful publish.
+    assert not (mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.mp3").exists()
+
+
+def test_publish_audio_job_error(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file", return_value={"ok": False, "error": "rsync falló"}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "error"
+    assert "rsync" in job["error"]
+
+
+def test_publish_audio_requires_finished_upload(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _init_upload(client)  # never finished
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+    assert resp.status_code == 404
+
+
+def test_publish_audio_denies_foreign_podcast(client):
+    slug, ep_id = _make_podcast()
+    conn = db_mod.get_db(slug)
+    conn.execute("UPDATE podcast_meta SET owner_username='otra' WHERE slug=?", (slug,))
+    conn.commit()
+    conn.close()
+    upload_id = _finished_upload(client)
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+    assert resp.status_code == 403

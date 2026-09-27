@@ -282,3 +282,57 @@ def finish_upload(upload_id):
         meta["stored_name"] = stored.name
         _write_meta(upload_id, meta)
         return jsonify({"ok": True, "size": actual})
+
+
+# ---------------------------------------------------------------------------
+# Publicación
+# ---------------------------------------------------------------------------
+
+def _parse_publish_payload():
+    """Valida el cuerpo común {slug, episode_id, upload_id}.
+    Returns (slug, episode_id, upload_path, meta, None) o (None, None, None, None, error_response)."""
+    data = request.get_json(silent=True) or {}
+    slug = (data.get("slug") or "").strip()
+    episode_id = data.get("episode_id")
+    upload_id = (data.get("upload_id") or "").strip()
+    if not slug or not isinstance(episode_id, int) or not upload_id:
+        return None, None, None, None, (jsonify(
+            {"error": "slug, episode_id (int) y upload_id son requeridos"}), 400)
+
+    denied = _podcast_access_error(slug)
+    if denied:
+        return None, None, None, None, denied
+
+    path, meta = _resolve_upload(upload_id)
+    if not path:
+        return None, None, None, None, (jsonify(
+            {"error": "upload no encontrado o incompleto"}), 404)
+
+    return slug, episode_id, path, {"upload_id": upload_id, **meta}, None
+
+
+@bp.post("/publish/audio")
+@require_auth
+def publish_audio():
+    slug, episode_id, path, meta, error = _parse_publish_payload()
+    if error:
+        return error
+
+    job_id = _create_job()
+
+    def _run():
+        _update_job(job_id, status="running", progress=0.1)
+        try:
+            from episodes import upload_episode_media
+            result = upload_episode_media(slug, episode_id, path)
+        except Exception as e:
+            result = {"ok": False, "error": f"error inesperado: {str(e)[:300]}"}
+        if result["ok"]:
+            _update_job(job_id, status="done", progress=1.0,
+                        result={"media_url": result["media_url"]})
+            _delete_upload(meta["upload_id"])
+        else:
+            _update_job(job_id, status="error", error=result["error"])
+
+    threading.Thread(target=_run, daemon=True, name=f"mac-audio-{job_id}").start()
+    return jsonify({"job_id": job_id}), 202
