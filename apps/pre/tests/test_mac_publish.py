@@ -211,3 +211,11 @@ def test_upload_episode_media_missing_episode(client, tmp_path):
     result = episodes.upload_episode_media(slug, 999, media)
     assert result["ok"] is False
     assert "no encontrado" in result["error"]
+
+
+def test_upload_episode_media_missing_file(client, tmp_path):
+    import episodes
+    slug, ep_id = _make_podcast()
+    result = episodes.upload_episode_media(slug, ep_id, tmp_path / "no-existe.mp3")
+    assert result["ok"] is False
+    assert result["error"].startswith("Archivo no encontrado")
