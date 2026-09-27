@@ -15,8 +15,30 @@ final class PreModel: ObservableObject {
     @Published var open: PreEpisode?
     @Published var showArchived = false
     @Published var configuring = false
+    @Published var logo: NSImage?
 
     var podcast: PrePodcast? { podcasts.first { $0.slug == slug } }
+    /// Color del podcast (branding) o el azul de prePod.
+    var accent: Color { Color.podcast(podcast?.colorPrimary) }
+
+    /// El próximo episodio por grabar: el más cercano desde hoy; si no hay, el atrasado más reciente.
+    var nextUp: PreEpisode? {
+        let pending = episodes.filter { [.idea, .planning, .scripted].contains($0.statusValue) && $0.scheduled != nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        if let n = pending.filter({ $0.scheduled! >= today }).min(by: { $0.scheduled! < $1.scheduled! }) { return n }
+        return pending.max(by: { $0.scheduled! < $1.scheduled! })
+    }
+
+    func loadLogo() {
+        let s = slug
+        logo = nil
+        guard !s.isEmpty else { return }
+        Task {
+            guard let cfg = try? await api.podcastConfig(s), let u = cfg.logoUrl, !u.isEmpty,
+                  let d = try? await api.media(u), let img = NSImage(data: d), s == slug else { return }
+            logo = img
+        }
+    }
     private let api = PrePodClient.shared
 
     func load() {
@@ -28,6 +50,7 @@ final class PreModel: ObservableObject {
                 podcasts = try await api.prePodcasts()
                 if podcast == nil { slug = podcasts.first?.slug ?? "" }
                 try await loadEpisodes()
+                loadLogo()
                 error = nil
             } catch { self.error = error.localizedDescription }
         }
@@ -41,6 +64,7 @@ final class PreModel: ObservableObject {
     func select(_ s: String) {
         slug = s
         open = nil
+        loadLogo()
         Task { do { try await loadEpisodes() } catch { self.error = error.localizedDescription } }
     }
 
@@ -136,12 +160,15 @@ struct SectionSwitcher: View {
 
 struct PreHomeView: View {
     @EnvironmentObject var app: AppModel
-    @StateObject private var model = PreModel()
+    @StateObject private var model: PreModel
     @State private var newTitle = ""
     @State private var creating = false
     @State private var templates: [ShowTemplate] = []
     @State private var templateId = -1          // -1 = la de por defecto, 0 = sin plantilla
-    @State private var showCalendar = false
+    @AppStorage("preVistaCalendario") private var showCalendar = false
+    @State private var dropTarget: EpisodeStatus?
+
+    @MainActor init(model: PreModel? = nil) { _model = StateObject(wrappedValue: model ?? PreModel()) }
 
     var body: some View {
         Group {
@@ -158,7 +185,7 @@ struct PreHomeView: View {
                 board
             }
         }
-        .tint(.prePod)
+        .tint(model.accent)
         .onAppear { if model.podcasts.isEmpty { model.load() } }
         .alert("Algo salió mal", isPresented: Binding(get: { model.error != nil && !model.podcasts.isEmpty },
                                                       set: { if !$0 { model.error = nil } })) {
@@ -167,18 +194,16 @@ struct PreHomeView: View {
     }
 
     private var board: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text("thePod").font(.system(size: 40, weight: .black, design: .rounded))
                 SectionSwitcher()
                 Spacer()
                 if model.loading { ProgressView().controlSize(.small) }
-                Button { model.load() } label: { Label("Actualizar", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.bordered)
+                Button { model.load() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.bordered).help("Actualizar")
                 SettingsLink { Label("Ajustes", systemImage: "gearshape") }.buttonStyle(.bordered)
             }
-            Text("Preproducción: planea tus episodios, el guion, el rundown y los invitados. Todo queda guardado en prePod.")
-                .foregroundStyle(Theme.secondary)
 
             if model.podcasts.isEmpty {
                 Card {
@@ -190,51 +215,122 @@ struct PreHomeView: View {
                     }
                 }
             } else {
+                podcastBanner
+                if let next = model.nextUp {
+                    NextUpCard(model: model, episode: next).id(next.id)
+                }
                 HStack(spacing: 12) {
-                    Picker("Podcast", selection: Binding(get: { model.slug }, set: { model.select($0) })) {
-                        ForEach(model.podcasts) { Text($0.name).tag($0.slug) }
-                    }
-                    .frame(maxWidth: 340)
-                    Button { model.configuring = true } label: { Label("Configurar podcast", systemImage: "slider.horizontal.3") }
-                    Toggle("Mostrar archivados", isOn: $model.showArchived).toggleStyle(.checkbox)
-                    Spacer()
                     Picker("", selection: $showCalendar) {
                         Label("Tablero", systemImage: "rectangle.split.3x1").tag(false)
                         Label("Calendario", systemImage: "calendar").tag(true)
                     }
-                    .pickerStyle(.segmented).labelsHidden().frame(width: 220)
-                    Button {
-                        creating = true
-                        Task {
-                            templates = (try? await PrePodClient.shared.templates(model.slug)) ?? []
-                            templateId = templates.first(where: \.isDefault)?.id ?? 0
-                        }
-                    } label: { Label("Nuevo episodio", systemImage: "plus") }
-                        .buttonStyle(.borderedProminent)
-                        .popover(isPresented: $creating) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Nuevo episodio").font(.headline)
-                                TextField("Título", text: $newTitle).frame(width: 300)
-                                    .onSubmit(createNow)
-                                if !templates.isEmpty {
-                                    Picker("Plantilla", selection: $templateId) {
-                                        ForEach(templates) { t in Text(t.name + (t.isDefault ? " (por defecto)" : "")).tag(t.id) }
-                                        Text("Sin plantilla").tag(0)
-                                    }
-                                    .frame(width: 300)
-                                }
-                                HStack { Spacer(); Button("Crear", action: createNow).buttonStyle(.borderedProminent) }
-                            }
-                            .padding(16)
-                        }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 230)
+                    Spacer()
+                    if !showCalendar {
+                        Toggle("Ver archivados", isOn: $model.showArchived).toggleStyle(.checkbox)
+                            .foregroundStyle(Theme.secondary)
+                    }
                 }
-                if showCalendar { PreCalendarView(model: model) } else { columns }
+                if showCalendar { ScrollView { PreCalendarView(model: model).padding(.bottom, 8) } } else { columns }
             }
         }
         .padding(28)
     }
 
+    // Logo, nombre (menú para cambiar de podcast) y acciones principales
+    private var podcastBanner: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14).fill(model.accent.gradient)
+                if let img = model.logo {
+                    Image(nsImage: img).resizable().scaledToFill()
+                } else {
+                    Text(String(model.podcast?.name.prefix(1) ?? "?"))
+                        .font(.system(size: 30, weight: .black, design: .rounded)).foregroundStyle(.white)
+                }
+            }
+            .frame(width: 68, height: 68)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 4) {
+                Menu {
+                    ForEach(model.podcasts) { p in
+                        Button { model.select(p.slug) } label: {
+                            if p.slug == model.slug { Label(p.name, systemImage: "checkmark") } else { Text(p.name) }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(model.podcast?.name ?? "Elige un podcast").font(.system(size: 26, weight: .bold, design: .rounded))
+                        if model.podcasts.count > 1 {
+                            Image(systemName: "chevron.down").font(.callout.bold()).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                }
+                .menuStyle(.button).buttonStyle(.plain).fixedSize()
+                .help("Cambiar de podcast")
+                Text(summary).font(.callout).foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
+            }
+            Spacer()
+            Button { model.configuring = true } label: { Label("Configurar podcast", systemImage: "slider.horizontal.3") }
+                .buttonStyle(.bordered).controlSize(.large)
+            Button { openCreate() } label: { Label("Nuevo episodio", systemImage: "plus") }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .keyboardShortcut("n", modifiers: .command)
+                .popover(isPresented: $creating, arrowEdge: .bottom) { createPopover }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(LinearGradient(colors: [model.accent.opacity(0.22), Theme.panel], startPoint: .leading, endPoint: .trailing))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(model.accent.opacity(0.35)))
+    }
+
+    private var summary: String {
+        let active = model.episodes.filter { ![.published, .archived].contains($0.statusValue) }.count
+        let published = model.episodes.filter { $0.statusValue == .published }.count
+        var parts = ["\(active) en preparación", "\(published) publicados"]
+        if let t = model.podcast?.tagline, !t.isEmpty, t.count <= 90 { parts.insert(t, at: 0) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var createPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Nuevo episodio").font(.title3.bold())
+            TextField("¿De qué va a tratar?", text: $newTitle)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 320)
+                .onSubmit(createNow)
+            if !templates.isEmpty {
+                Picker("Plantilla", selection: $templateId) {
+                    ForEach(templates) { t in Text(t.name + (t.isDefault ? " (por defecto)" : "")).tag(t.id) }
+                    Text("Sin plantilla").tag(0)
+                }
+                .frame(width: 320)
+                Text("La plantilla trae el rundown y el guion base, para no empezar de cero.")
+                    .font(.caption).foregroundStyle(Theme.secondary).frame(width: 320, alignment: .leading)
+            }
+            HStack {
+                Spacer()
+                Button("Cancelar") { creating = false }
+                Button("Crear", action: createNow).buttonStyle(.borderedProminent)
+                    .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(18)
+    }
+
+    private func openCreate() {
+        creating = true
+        Task {
+            templates = (try? await PrePodClient.shared.templates(model.slug)) ?? []
+            templateId = templates.first(where: \.isDefault)?.id ?? 0
+        }
+    }
+
     private func createNow() {
+        guard !newTitle.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         model.create(title: newTitle, templateId: templates.isEmpty ? nil : templateId)
         newTitle = ""
         creating = false
@@ -243,68 +339,198 @@ struct PreHomeView: View {
     private var columns: some View {
         let statuses = EpisodeStatus.allCases.filter { model.showArchived || $0 != .archived }
         return ScrollView(.horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(statuses) { st in
-                    let items = model.episodes.filter { $0.statusValue == st }
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label(st.title, systemImage: st.symbol).font(.callout.bold())
-                            Spacer()
-                            Text("\(items.count)").font(.caption).foregroundStyle(Theme.secondary)
-                        }
-                        ScrollView {
-                            VStack(spacing: 8) {
-                                ForEach(items) { e in
-                                    EpisodeCardView(episode: e)
-                                        .onTapGesture { model.open = e }
-                                        .draggable(String(e.id))
-                                        .contextMenu {
-                                            Button("Abrir") { model.open = e }
-                                            Menu("Mover a") {
-                                                ForEach(EpisodeStatus.allCases) { s in Button(s.title) { model.move(e.id, to: s) } }
-                                            }
-                                            Divider()
-                                            Button("Eliminar episodio", role: .destructive) { model.delete(e.id) }
-                                        }
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(statuses) { st in column(st) }
+            }
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func column(_ st: EpisodeStatus) -> some View {
+        let items = model.episodes.filter { $0.statusValue == st }
+            .sorted { ($0.scheduled ?? .distantFuture, $0.id) < ($1.scheduled ?? .distantFuture, $1.id) }
+        let targeted = dropTarget == st
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 7) {
+                    Image(systemName: st.symbol).foregroundStyle(st.color)
+                    Text(st.title).font(.headline)
+                    Spacer()
+                    Text("\(items.count)")
+                        .font(.caption.bold().monospacedDigit())
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(st.color.opacity(0.2)))
+                        .foregroundStyle(st.color)
+                }
+                Text(st.hint).font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ScrollView {
+                VStack(spacing: 9) {
+                    ForEach(items) { e in
+                        EpisodeCardView(episode: e)
+                            .onTapGesture { model.open = e }
+                            .draggable(String(e.id))
+                            .contextMenu {
+                                Button("Abrir") { model.open = e }
+                                Menu("Mover a") {
+                                    ForEach(EpisodeStatus.allCases) { s in Button(s.title) { model.move(e.id, to: s) } }
                                 }
-                                if items.isEmpty {
-                                    Text("Arrastra aquí").font(.caption).foregroundStyle(Theme.secondary.opacity(0.6))
-                                        .frame(maxWidth: .infinity, minHeight: 60)
-                                }
+                                Divider()
+                                Button("Eliminar episodio", role: .destructive) { model.delete(e.id) }
                             }
-                        }
                     }
-                    .padding(10)
-                    .frame(width: 230)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
-                    .dropDestination(for: String.self) { ids, _ in
-                        for id in ids.compactMap(Int.init) { model.move(id, to: st) }
-                        return true
+                    if items.isEmpty {
+                        Text("Arrastra un episodio aquí")
+                            .font(.caption).foregroundStyle(Theme.secondary.opacity(0.7))
+                            .frame(maxWidth: .infinity, minHeight: 70)
+                            .background(RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Theme.stroke, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                     }
                 }
+                .padding(.bottom, 4)
             }
+        }
+        .padding(12)
+        .frame(width: 250)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: 14).fill(targeted ? st.color.opacity(0.14) : Theme.panel)
+        )
+        .overlay(alignment: .top) {
+            UnevenRoundedRectangle(topLeadingRadius: 14, topTrailingRadius: 14).fill(st.color).frame(height: 3)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(targeted ? st.color : .clear, lineWidth: 1.5))
+        .animation(.easeOut(duration: 0.15), value: targeted)
+        .dropDestination(for: String.self) { ids, _ in
+            for id in ids.compactMap(Int.init) { model.move(id, to: st) }
+            return true
+        } isTargeted: { on in
+            if on { dropTarget = st } else if dropTarget == st { dropTarget = nil }
         }
     }
 }
 
 struct EpisodeCardView: View {
     let episode: PreEpisode
+    @State private var hover = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let n = episode.episodeNumber {
-                Text("EP \(n)").font(.caption2.bold()).foregroundStyle(Color.prePod)
+        let st = episode.statusValue
+        HStack(spacing: 0) {
+            Rectangle().fill(st.color).frame(width: 4)
+            VStack(alignment: .leading, spacing: 7) {
+                if let n = episode.episodeNumber {
+                    Text("EP \(n)").font(.caption2.weight(.heavy)).foregroundStyle(st.color)
+                }
+                Text(episode.title).font(.callout.weight(.semibold)).lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let w = episode.whenText {
+                    HStack(spacing: 6) {
+                        Label(w, systemImage: "calendar").font(.caption).foregroundStyle(Theme.secondary)
+                        if let r = episode.relativeWhen, st != .published, st != .archived {
+                            Text(r).font(.caption2.bold())
+                                .foregroundStyle(episode.isLate ? Color.red : st.color)
+                        }
+                    }
+                }
             }
-            Text(episode.title).font(.callout.weight(.semibold)).lineLimit(3)
-            if let w = episode.whenText {
-                Label(w, systemImage: "calendar").font(.caption).foregroundStyle(Theme.secondary)
+            .padding(10)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(hover ? Color(white: 1, opacity: 0.14) : Theme.panelStrong))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(episode.isLate ? Color.red.opacity(0.5) : Theme.stroke))
+        .shadow(color: .black.opacity(hover ? 0.35 : 0), radius: 8, y: 3)
+        .scaleEffect(hover ? 1.015 : 1)
+        .animation(.easeOut(duration: 0.12), value: hover)
+        .onHover { hover = $0 }
+        .contentShape(Rectangle())
+        .help(episode.isLate ? "La fecha de grabación ya pasó" : "Abrir")
+    }
+}
+
+/// El próximo episodio a grabar, con lo que ya está listo y lo que falta.
+struct NextUpCard: View {
+    @ObservedObject var model: PreModel
+    let episode: PreEpisode
+    @State private var sections: Int?
+    @State private var blocks: Int?
+    @State private var minutes = 0
+    @State private var guests: [PreGuest] = []
+
+    var body: some View {
+        let st = episode.statusValue
+        HStack(alignment: .center, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Chip(text: episode.isLate ? "Atrasado" : "Próxima grabación",
+                         symbol: episode.isLate ? "exclamationmark.triangle.fill" : "mic.fill",
+                         color: episode.isLate ? .red : model.accent, filled: true)
+                    if let r = episode.relativeWhen { Text(r.capitalizedFirst).font(.headline).foregroundStyle(episode.isLate ? .red : .white) }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if let n = episode.episodeNumber {
+                        Text("EP \(n)").font(.title3.weight(.heavy)).foregroundStyle(model.accent)
+                    }
+                    Text(episode.title).font(.system(size: 22, weight: .bold, design: .rounded)).lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    if let w = episode.whenText { Label(w, systemImage: "calendar").foregroundStyle(Theme.secondary) }
+                    Chip(text: st.title, symbol: st.symbol, color: st.color)
+                }
+                .font(.callout)
             }
+            Spacer()
+            HStack(spacing: 10) {
+                check("Guion", sections.map { $0 == 0 ? "vacío" : plural($0, "sección", "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
+                check("Rundown", blocks.map { $0 == 0 ? "vacío" : plural($0, "bloque", "bloques") + (minutes > 0 ? " · \(minutes) min" : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
+                check("Invitados", guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
+            }
+            Button { model.open = episode } label: {
+                Label("Abrir", systemImage: "arrow.right").labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.borderedProminent).controlSize(.large)
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(episode.isLate ? Color.red.opacity(0.5) : model.accent.opacity(0.5), lineWidth: 1.2))
+        .task { await load() }
+    }
+
+    private var confirmed: Int { guests.filter { $0.rsvpStatus == "yes" }.count }
+    private var guestsText: String? {
+        guests.isEmpty ? (sections == nil ? nil : "nadie aún") : "\(confirmed) de \(guests.count) confirmados"
+    }
+
+    private func check(_ title: String, _ detail: String?, ok: Bool, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: detail == nil ? symbol : (ok ? "checkmark.circle.fill" : "circle.dashed"))
+                    .foregroundStyle(detail == nil ? Theme.secondary : (ok ? Theme.good : .orange))
+                Text(title).font(.callout.weight(.semibold))
+            }
+            Text(detail ?? "…").font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.panelStrong))
-        .contentShape(Rectangle())
+        .frame(width: 150, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panelStrong))
     }
+
+    private func load() async {
+        let api = PrePodClient.shared
+        async let s = try? api.script(model.slug, episode.id)
+        async let b = try? api.blocks(model.slug, episode.id)
+        async let g = try? api.guests(model.slug, episode.id)
+        let (ss, bb, gg) = await (s, b, g)
+        sections = ss?.count ?? 0
+        blocks = bb?.count ?? 0
+        minutes = Int((bb ?? []).compactMap(\.durationEstimate).reduce(0, +).rounded())
+        guests = gg ?? []
+    }
+}
+
+extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
 // MARK: - Episodio
@@ -312,62 +538,164 @@ struct EpisodeCardView: View {
 struct PreEpisodeView: View {
     @ObservedObject var model: PreModel
     @State var episode: PreEpisode
-    @State private var tab = 0
+    @AppStorage("prePestana") private var tab = 0
     @State private var date = Date()
     @State private var hasDate = false
     @State private var saver = Debouncer()
+    @State private var counts: [Int: String] = [:]
+    @State private var done: Set<Int> = []
+
+    private struct Page { let title: String; let symbol: String; let help: String }
+    private let pages = [
+        Page(title: "Guion", symbol: "text.page", help: "Lo que se va a decir, por partes. Escribe libre: se guarda solo."),
+        Page(title: "Rundown", symbol: "list.bullet.rectangle", help: "El orden del episodio, bloque por bloque, con sus minutos."),
+        Page(title: "Invitados", symbol: "person.2", help: "Quién participa. Invítalos y mándales el correo de preparación."),
+        Page(title: "Ideas", symbol: "lightbulb", help: "Temas y preguntas propuestos por el equipo. Vota las mejores."),
+        Page(title: "Publicación", symbol: "paperplane", help: "Descripción, notas y links que salen al publicar."),
+    ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 240)
+                .background(Color.black.opacity(0.25))
+            Divider()
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                PreHeader(symbol: pages[tab].symbol, title: pages[tab].title, subtitle: pages[tab].help, color: model.accent)
+                Group {
+                    switch tab {
+                    case 0: ScriptTab(slug: model.slug, episodeId: episode.id)
+                    case 1: RundownTab(slug: model.slug, episodeId: episode.id)
+                    case 2: GuestsTab(slug: model.slug, episodeId: episode.id)
+                    case 3: IdeasTab(slug: model.slug, episodeId: episode.id)
+                    default: PublicationTab(model: model, episode: $episode, saver: saver)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .onAppear { loadDate(); if !(0..<pages.count).contains(tab) { tab = 0 } }
+        .onChange(of: model.open) { _, o in
+            // Al guardar, prePod devuelve el episodio: tomar su fecha y estado sin tocar lo que se está escribiendo
+            guard let o, o.id == episode.id else { return }
+            episode.scheduledAt = o.scheduledAt
+            episode.scheduledDate = o.scheduledDate
+            episode.status = o.status
+        }
+        .task(id: tab) { await loadCounts() }
+    }
+
+    private var sidebar: some View {
+        let st = episode.statusValue
+        return VStack(alignment: .leading, spacing: 6) {
             Button { model.open = nil } label: { Label("Episodios", systemImage: "chevron.left") }
                 .buttonStyle(.plain).foregroundStyle(Theme.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                if let n = episode.episodeNumber { Text("EP \(n)").font(.title3.bold()).foregroundStyle(Color.prePod) }
-                TextField("Título", text: $episode.title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .onChange(of: episode.title) { _, v in saver.run("title") { await model.save(episode.id, ["title": v]) } }
+                .padding(.top, 28).padding(.bottom, 14)
+            HStack(spacing: 8) {
+                if let n = episode.episodeNumber { Text("EP \(n)").font(.headline.weight(.heavy)).foregroundStyle(model.accent) }
+                Chip(text: st.title, symbol: st.symbol, color: st.color)
             }
-            HStack(spacing: 18) {
-                Picker("Estado", selection: Binding(get: { episode.statusValue }, set: { s in
-                    episode.status = s.rawValue
-                    Task { await model.save(episode.id, ["status": s.rawValue]) }
-                })) {
-                    ForEach(EpisodeStatus.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+            Text(episode.title.isEmpty ? "Sin título" : episode.title).font(.headline).lineLimit(3)
+            if let w = episode.whenText {
+                HStack(spacing: 6) {
+                    Label(w, systemImage: "calendar")
+                    if let r = episode.relativeWhen { Text("· " + r).foregroundStyle(episode.isLate ? .red : Theme.secondary) }
                 }
-                .frame(width: 230)
-                Toggle("Fecha de grabación", isOn: $hasDate).toggleStyle(.checkbox)
-                    .onChange(of: hasDate) { _, on in saveDate(on ? date : nil) }
+                .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            Spacer().frame(height: 14)
+            ForEach(pages.indices, id: \.self) { i in
+                Button { tab = i } label: {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle().fill(tab == i ? model.accent : Theme.panelStrong).frame(width: 28, height: 28)
+                            if done.contains(i) && tab != i {
+                                Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(Theme.good)
+                            } else {
+                                Image(systemName: pages[i].symbol).font(.caption.bold())
+                                    .foregroundStyle(tab == i ? .black : .white)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(pages[i].title).font(.body.weight(tab == i ? .semibold : .regular))
+                            if let c = counts[i] { Text(c).font(.caption2).foregroundStyle(Theme.secondary) }
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 7).padding(.horizontal, 8)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(tab == i ? Theme.panelStrong : .clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("Título del episodio", text: $episode.title)
+                .textFieldStyle(.plain)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .onChange(of: episode.title) { _, v in saver.run("title") { await model.save(episode.id, ["title": v]) } }
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(EpisodeStatus.allCases) { s in
+                        Button { setStatus(s) } label: { Label(s.title, systemImage: s.symbol) }
+                    }
+                } label: {
+                    Chip(text: episode.statusValue.title, symbol: episode.statusValue.symbol, color: episode.statusValue.color, filled: true)
+                }
+                .menuStyle(.button).buttonStyle(.plain).fixedSize()
+                .help("Cambiar el estado")
+                Divider().frame(height: 18)
+                Image(systemName: "calendar").foregroundStyle(Theme.secondary)
                 if hasDate {
                     DatePicker("", selection: $date, displayedComponents: [.date, .hourAndMinute]).labelsHidden()
                         .onChange(of: date) { _, d in saveDate(d) }
+                    Button { hasDate = false; saveDate(nil) } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(Theme.secondary).help("Quitar la fecha")
+                } else {
+                    Button("Poner fecha de grabación") { hasDate = true; saveDate(date) }
+                        .buttonStyle(.link)
                 }
                 Spacer()
             }
-            Picker("", selection: $tab) {
-                Text("Guion").tag(0)
-                Text("Rundown").tag(1)
-                Text("Invitados").tag(2)
-                Text("Ideas").tag(3)
-                Text("Publicación").tag(4)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 620)
-
-            Group {
-                switch tab {
-                case 0: ScriptTab(slug: model.slug, episodeId: episode.id)
-                case 1: RundownTab(slug: model.slug, episodeId: episode.id)
-                case 2: GuestsTab(slug: model.slug, episodeId: episode.id)
-                case 3: IdeasTab(slug: model.slug, episodeId: episode.id)
-                default: PublicationTab(model: model, episode: $episode, saver: saver)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(28)
-        .onAppear(perform: loadDate)
+    }
+
+    private func setStatus(_ s: EpisodeStatus) {
+        episode.status = s.rawValue
+        Task { await model.save(episode.id, ["status": s.rawValue]) }
+    }
+
+    /// Resumen corto debajo de cada pestaña del lado izquierdo.
+    private func loadCounts() async {
+        let api = PrePodClient.shared
+        async let s = try? api.script(model.slug, episode.id)
+        async let b = try? api.blocks(model.slug, episode.id)
+        async let g = try? api.guests(model.slug, episode.id)
+        let (ss, bb, gg) = await (s, b, g)
+        var c: [Int: String] = [:]
+        var d: Set<Int> = []
+        if let ss { c[0] = ss.isEmpty ? "Vacío" : plural(ss.count, "sección", "secciones"); if ss.contains(where: { !$0.content.isEmpty }) { d.insert(0) } }
+        if let bb {
+            let m = Int(bb.compactMap(\.durationEstimate).reduce(0, +).rounded())
+            c[1] = bb.isEmpty ? "Vacío" : plural(bb.count, "bloque", "bloques") + (m > 0 ? " · \(m) min" : "")
+            if !bb.isEmpty { d.insert(1) }
+        }
+        if let gg {
+            let ok = gg.filter { $0.rsvpStatus == "yes" }.count
+            c[2] = gg.isEmpty ? "Nadie todavía" : "\(ok) de \(gg.count) confirmados"
+            if !gg.isEmpty && ok == gg.count { d.insert(2) }
+        }
+        if !(episode.description ?? "").isEmpty { d.insert(4) }
+        counts = c
+        done = d
     }
 
     private static let isoLocal: DateFormatter = {
@@ -424,9 +752,9 @@ struct ScriptTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(sections.count) secciones · ~\(totalMinutes) min").font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(sections.count, "sección", "secciones") + (totalMinutes > 0 ? " · ~\(totalMinutes) min" : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
-                Button { add() } label: { Label("Agregar sección", systemImage: "plus") }
+                Button { add() } label: { Label("Agregar sección", systemImage: "plus") }.buttonStyle(.borderedProminent)
             }
             if let error { Text(error).foregroundStyle(.orange).font(.caption) }
             ScrollView {
@@ -434,6 +762,9 @@ struct ScriptTab: View {
                     ForEach($sections) { $s in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
+                                Text("\(s.position + 1)").font(.caption.bold().monospacedDigit())
+                                    .foregroundStyle(Theme.secondary).frame(width: 18)
+                                if !s.speaker.isEmpty { Avatar(name: s.speaker, size: 24) }
                                 TextField("Quién habla", text: $s.speaker).frame(maxWidth: 220)
                                     .onChange(of: s.speaker) { _, v in save(s.id, ["speaker": v]) }
                                 TextField("min", value: Binding(get: { s.estimatedDuration.map { $0 / 60 } },
@@ -450,11 +781,16 @@ struct ScriptTab: View {
                             TextEditor(text: $s.content)
                                 .font(.body)
                                 .scrollContentBackground(.hidden)
-                                .frame(minHeight: 70)
+                                .frame(maxWidth: .infinity, minHeight: 70)
                                 .onChange(of: s.content) { _, v in save(s.id, ["content": v]) }
                         }
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.stroke))
+                    }
+                    if sections.isEmpty {
+                        EmptyHint(symbol: "text.page", title: "El guion está vacío",
+                                  text: "Toca “Agregar sección” y escribe qué se dice en cada parte. No hace falta que sea perfecto.")
                     }
                 }
             }
@@ -504,20 +840,32 @@ struct RundownTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(blocks.count) bloques · ~\(totalMinutes) min").font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(blocks.count, "bloque", "bloques") + (totalMinutes > 0 ? " · ~\(totalMinutes) min" : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
                 Menu {
-                    ForEach(BlockKind.allCases) { k in Button(k.title) { add(k) } }
+                    ForEach(BlockKind.allCases) { k in Button { add(k) } label: { Label(k.title, systemImage: k.symbol) } }
                 } label: { Label("Agregar bloque", systemImage: "plus") }
+                .menuStyle(.button).buttonStyle(.borderedProminent)
                 .fixedSize()
             }
             if let error { Text(error).foregroundStyle(.orange).font(.caption) }
+            if totalMinutes > 0 { proportionBar }
+            if blocks.isEmpty {
+                EmptyHint(symbol: "list.bullet.rectangle", title: "El rundown está vacío",
+                          text: "Toca “Agregar bloque” y arma el orden: intro, segmentos, entrevista, sponsor, cierre.")
+            }
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(Array($blocks.enumerated()), id: \.element.id) { i, $b in
+                        let kind = BlockKind(rawValue: b.kind) ?? .custom
                         HStack(spacing: 10) {
                             Text(clock(start(of: i))).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 44)
-                            Picker("", selection: Binding(get: { BlockKind(rawValue: b.kind) ?? .custom }, set: { k in
+                            ZStack {
+                                Circle().fill(kind.color.opacity(0.22))
+                                Image(systemName: kind.symbol).font(.caption.bold()).foregroundStyle(kind.color)
+                            }
+                            .frame(width: 28, height: 28)
+                            Picker("", selection: Binding(get: { kind }, set: { k in
                                 b.kind = k.rawValue; save(b.id, ["kind": k.rawValue])
                             })) { ForEach(BlockKind.allCases) { Text($0.title).tag($0) } }
                                 .labelsHidden().frame(width: 120)
@@ -543,7 +891,10 @@ struct RundownTab: View {
                         }
                         .buttonStyle(.borderless)
                         .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 9).fill(b.kind == "sponsor" ? Color.purple.opacity(0.18) : Theme.panel))
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                        .overlay(alignment: .leading) {
+                            UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10).fill(kind.color).frame(width: 4)
+                        }
                     }
                 }
             }
@@ -552,6 +903,34 @@ struct RundownTab: View {
     }
 
     private var totalMinutes: Int { Int(blocks.compactMap(\.durationEstimate).reduce(0, +).rounded()) }
+
+    /// El episodio de un vistazo: cada bloque ocupa lo que dura.
+    private var proportionBar: some View {
+        let total = max(1, blocks.compactMap(\.durationEstimate).reduce(0, +))
+        return VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(blocks) { b in
+                        let k = BlockKind(rawValue: b.kind) ?? .custom
+                        let w = max(4, geo.size.width * (b.durationEstimate ?? 0) / total - 2)
+                        RoundedRectangle(cornerRadius: 4).fill(k.color.gradient)
+                            .frame(width: (b.durationEstimate ?? 0) > 0 ? w : 0)
+                            .overlay {
+                                if w > 60 { Text(b.title).font(.caption2.bold()).foregroundStyle(.black.opacity(0.75)).lineLimit(1).padding(.horizontal, 4) }
+                            }
+                            .help("\(b.title) · \(Int(b.durationEstimate ?? 0)) min")
+                    }
+                }
+            }
+            .frame(height: 26)
+            HStack {
+                Text("0:00"); Spacer(); Text("\(totalMinutes) min")
+            }
+            .font(.caption2.monospacedDigit()).foregroundStyle(Theme.secondary)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+    }
     private func start(of i: Int) -> Double { blocks.prefix(i).compactMap(\.durationEstimate).reduce(0, +) * 60 }
     private func clock(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
@@ -603,6 +982,11 @@ struct GuestsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             if let error { Text(error).foregroundStyle(.orange).font(.caption) }
             HStack {
+                if !guests.isEmpty {
+                    let ok = guests.filter { $0.rsvpStatus == "yes" }.count
+                    Chip(text: "\(ok) de \(guests.count) confirmados", symbol: "checkmark.circle.fill",
+                         color: ok == guests.count ? Theme.good : .orange)
+                }
                 if let note { Text(note).foregroundStyle(Theme.secondary).font(.caption) }
                 Spacer()
                 Button { sendPrep() } label: { Label("Enviar correo de preparación", systemImage: "envelope") }
@@ -613,6 +997,12 @@ struct GuestsTab: View {
                 VStack(spacing: 8) {
                     ForEach($guests) { $g in
                         HStack(spacing: 10) {
+                            Avatar(name: g.name, size: 34)
+                                .overlay(alignment: .bottomTrailing) {
+                                    Image(systemName: RSVP.symbol(g.rsvpStatus)).font(.system(size: 12))
+                                        .foregroundStyle(RSVP.color(g.rsvpStatus))
+                                        .background(Circle().fill(Theme.background).padding(-1))
+                                }
                             TextField("Nombre", text: $g.name).frame(width: 180)
                                 .onChange(of: g.name) { _, v in save(g.id, ["name": v]) }
                             Picker("", selection: $g.role) {
@@ -627,6 +1017,7 @@ struct GuestsTab: View {
                                 Text("Tal vez").tag("maybe"); Text("No viene").tag("no")
                             }
                             .labelsHidden().frame(width: 130)
+                            .tint(RSVP.color(g.rsvpStatus))
                             .onChange(of: g.rsvpStatus) { _, v in save(g.id, ["rsvp_status": v]) }
                             Button("Invitar") { invite(g) }
                                 .disabled(g.email.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -634,13 +1025,17 @@ struct GuestsTab: View {
                             Spacer()
                             Button(role: .destructive) { remove(g) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                         }
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 9).fill(Theme.panel))
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+                    }
+                    if guests.isEmpty {
+                        EmptyHint(symbol: "person.2", title: "Todavía no hay nadie",
+                                  text: "Agrega a los conductores e invitados abajo. Con su correo puedes invitarlos y mandarles la preparación.")
                     }
                 }
             }
             Card {
-                Text("Agregar a alguien").font(.headline)
+                Label("Agregar a alguien", systemImage: "person.badge.plus").font(.headline)
                 HStack {
                     TextField("Nombre", text: $newName).frame(width: 180)
                     Picker("", selection: $newRole) {

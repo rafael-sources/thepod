@@ -13,10 +13,8 @@ struct IdeasTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Temas, preguntas o chistes para el episodio. Vota los mejores y márcalos como aceptados.")
-                .font(.caption).foregroundStyle(Theme.secondary)
             HStack {
-                TextField("Nueva idea", text: $text).textFieldStyle(.roundedBorder).onSubmit(add)
+                TextField("Escribe una idea, una pregunta o un tema…", text: $text).textFieldStyle(.roundedBorder).onSubmit(add)
                 Button("Agregar", action: add).buttonStyle(.borderedProminent)
                     .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -46,16 +44,27 @@ struct IdeasTab: View {
                             Button(role: .destructive) { remove(idea) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                         }
                         .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(idea.status == "accepted" ? Color.prePod.opacity(0.15) : Theme.panel))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+                        .overlay(alignment: .leading) {
+                            UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12)
+                                .fill(ideaColor(idea.status)).frame(width: 4)
+                        }
+                        .opacity(idea.status == "rejected" ? 0.6 : 1)
                     }
-                    if ideas.isEmpty { Text("Todavía no hay ideas.").foregroundStyle(Theme.secondary) }
+                    if ideas.isEmpty {
+                        EmptyHint(symbol: "lightbulb", title: "Todavía no hay ideas",
+                                  text: "Cualquiera del equipo puede proponer. Las más votadas suben arriba.")
+                    }
                 }
             }
         }
         .task { await load() }
     }
 
-    private func load() async { do { ideas = try await api.ideas(slug, episodeId) } catch { self.error = error.localizedDescription } }
+    private func ideaColor(_ s: String) -> Color {
+        s == "accepted" ? Theme.good : (s == "rejected" ? Color(white: 0.45) : EpisodeStatus.idea.color)
+    }
+    private func load() async { do { ideas = try await api.ideas(slug, episodeId).sorted { $0.votes > $1.votes } } catch { self.error = error.localizedDescription } }
     private func run(_ op: @escaping () async throws -> Void) {
         Task { do { try await op(); await load(); error = nil } catch { self.error = error.localizedDescription } }
     }
@@ -87,52 +96,70 @@ struct PublicationTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if let error { Text(error).font(.caption).foregroundStyle(.orange) }
-                Text("Descripción").font(.headline)
-                Text("De qué trata el episodio. Sale al publicar y en tu página.").font(.caption).foregroundStyle(Theme.secondary)
-                TextEditor(text: Binding(get: { episode.description ?? "" }, set: { episode.description = $0 }))
-                    .scrollContentBackground(.hidden).padding(8)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
-                    .frame(minHeight: 120)
-                    .onChange(of: episode.description) { _, v in saver.run("desc") { await model.save(episode.id, ["description": v ?? ""]) } }
-
-                Text("Dónde escucharlo").font(.headline)
-                ForEach(platforms, id: \.0) { key, title in
-                    HStack {
-                        Text(title).frame(width: 130, alignment: .leading)
-                        TextField("Link", text: Binding(get: { links[key] ?? "" }, set: { links[key] = $0 }))
-                            .onSubmit { saveLink(key) }
-                        Button("Guardar") { saveLink(key) }.controlSize(.small)
+                Card {
+                    Label("Descripción", systemImage: "text.alignleft").font(.headline)
+                    Text("De qué trata el episodio. Sale al publicar y en tu página.").font(.caption).foregroundStyle(Theme.secondary)
+                    TextEditor(text: Binding(get: { episode.description ?? "" }, set: { episode.description = $0 }))
+                        .scrollContentBackground(.hidden).padding(8)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                        .frame(minHeight: 110)
+                        .onChange(of: episode.description) { _, v in saver.run("desc") { await model.save(episode.id, ["description": v ?? ""]) } }
+                }
+                Card {
+                    Label("Dónde escucharlo", systemImage: "link").font(.headline)
+                    Text("Pega el link de cada plataforma cuando el episodio ya esté publicado.").font(.caption).foregroundStyle(Theme.secondary)
+                    ForEach(platforms, id: \.0) { key, title in
+                        HStack(spacing: 10) {
+                            Image(systemName: icon(key)).foregroundStyle(color(key)).frame(width: 20)
+                            Text(title).frame(width: 120, alignment: .leading)
+                            TextField("https://…", text: Binding(get: { links[key] ?? "" }, set: { links[key] = $0 }))
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit { saveLink(key) }
+                            Button("Guardar") { saveLink(key) }
+                        }
                     }
                 }
-
-                HStack {
-                    Text("Resumen de postPod").font(.headline)
-                    Spacer()
-                    Button { sync() } label: { Label(syncing ? "Actualizando…" : "Traer de postPod", systemImage: "arrow.triangle.2.circlepath") }
-                        .disabled(syncing)
+                HStack(alignment: .top, spacing: 14) {
+                    Card {
+                        HStack {
+                            Label("Resumen de postPod", systemImage: "sparkles").font(.headline)
+                            Spacer()
+                            Button { sync() } label: { Label(syncing ? "Actualizando…" : "Traer de postPod", systemImage: "arrow.triangle.2.circlepath") }
+                                .disabled(syncing)
+                        }
+                        if let s = episode.aiSummary, !s.isEmpty {
+                            Text(s).textSelection(.enabled).foregroundStyle(Theme.secondary)
+                        } else {
+                            Text("Aparece cuando el episodio se edita en postPod.").font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        HStack {
+                            Label("Notas del episodio", systemImage: "doc.plaintext").font(.headline)
+                            Spacer()
+                            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(notes, forType: .string) } label: {
+                                Label("Copiar", systemImage: "doc.on.doc")
+                            }
+                            .disabled(notes.isEmpty)
+                        }
+                        Text("Capítulos, invitados y links, listos para pegar en YouTube o Spotify.").font(.caption).foregroundStyle(Theme.secondary)
+                        Text(notes.isEmpty ? "—" : notes)
+                            .font(.callout).textSelection(.enabled)
+                            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                    }
                 }
-                if let s = episode.aiSummary, !s.isEmpty {
-                    Text(s).textSelection(.enabled).foregroundStyle(Theme.secondary)
-                } else {
-                    Text("Aparece cuando el episodio se edita en postPod.").font(.caption).foregroundStyle(Theme.secondary)
-                }
-
-                HStack {
-                    Text("Notas del episodio").font(.headline)
-                    Spacer()
-                    Button("Copiar") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(notes, forType: .string) }
-                        .disabled(notes.isEmpty)
-                }
-                Text("Capítulos, invitados y links, listos para pegar en YouTube o Spotify.").font(.caption).foregroundStyle(Theme.secondary)
-                Text(notes.isEmpty ? "—" : notes)
-                    .font(.callout).textSelection(.enabled)
-                    .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
             }
         }
         .task { await load() }
     }
 
+    private func icon(_ k: String) -> String {
+        ["youtube": "play.rectangle.fill", "spotify": "dot.radiowaves.left.and.right", "apple_podcasts": "headphones", "website": "globe"][k] ?? "link"
+    }
+    private func color(_ k: String) -> Color {
+        ["youtube": Color.red, "spotify": Color.green, "apple_podcasts": Color.purple][k] ?? Color.prePod
+    }
     private func load() async {
         do {
             let ls = try await api.links(model.slug, episode.id)
@@ -167,6 +194,7 @@ struct PublicationTab: View {
 
 struct PreCalendarView: View {
     @ObservedObject var model: PreModel
+    @State private var dropDay: Date?
     @State private var month = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date())) ?? Date()
     private let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.locale = Locale(identifier: "es"); c.firstWeekday = 2; return c }()
 
@@ -188,29 +216,56 @@ struct PreCalendarView: View {
                 ForEach(days, id: \.self) { d in
                     let inMonth = cal.isDate(d, equalTo: month, toGranularity: .month)
                     let eps = episodes(on: d)
+                    let today = cal.isDateInToday(d)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(cal.component(.day, from: d))")
                             .font(.caption.bold())
-                            .foregroundStyle(cal.isDateInToday(d) ? Color.prePod : (inMonth ? .primary : Theme.secondary.opacity(0.5)))
+                            .padding(.horizontal, today ? 6 : 0).padding(.vertical, today ? 1 : 0)
+                            .background(Capsule().fill(today ? model.accent : .clear))
+                            .foregroundStyle(today ? Color.black : (inMonth ? .primary : Theme.secondary.opacity(0.5)))
                         ForEach(eps) { e in
-                            Text(e.episodeNumber.map { "Ep \($0) · \(e.title)" } ?? e.title)
-                                .font(.caption2).lineLimit(2)
-                                .padding(4).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 5).fill(Color.prePod.opacity(0.25)))
-                                .onTapGesture { model.open = e }
+                            let st = e.statusValue
+                            HStack(spacing: 4) {
+                                Image(systemName: st.symbol).font(.system(size: 9, weight: .bold)).foregroundStyle(st.color)
+                                Text(e.episodeNumber.map { "Ep \($0) · \(e.title)" } ?? e.title)
+                                    .font(.caption2).lineLimit(2)
+                            }
+                            .padding(4).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(st.color.opacity(0.22)))
+                            .contentShape(Rectangle())
+                            .onTapGesture { model.open = e }
+                            .draggable(String(e.id))
+                            .help(st.title)
                         }
                         Spacer(minLength: 0)
                     }
                     .padding(6)
-                    .frame(minHeight: 86, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(inMonth ? Theme.panel : Color.clear))
+                    .frame(maxWidth: .infinity, minHeight: 86, alignment: .topLeading)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(dropDay == d ? model.accent.opacity(0.25) : (inMonth ? Theme.panel : Color.clear)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(today ? model.accent.opacity(0.6) : .clear))
+                    .dropDestination(for: String.self) { ids, _ in
+                        for id in ids.compactMap(Int.init) { schedule(id, on: d) }
+                        return true
+                    } isTargeted: { on in
+                        if on { dropDay = d } else if dropDay == d { dropDay = nil }
+                    }
                 }
             }
             let undated = model.episodes.filter { day(of: $0) == nil && $0.statusValue != .published && $0.statusValue != .archived }
             if !undated.isEmpty {
-                Text("Sin fecha").font(.headline).padding(.top, 6)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Sin fecha").font(.headline)
+                    Text("Arrastra uno a un día para ponerle fecha de grabación.").font(.caption).foregroundStyle(Theme.secondary)
+                }
+                .padding(.top, 6)
                 ScrollView(.horizontal) {
-                    HStack { ForEach(undated) { e in EpisodeCardView(episode: e).frame(width: 200).onTapGesture { model.open = e } } }
+                    HStack {
+                        ForEach(undated) { e in
+                            EpisodeCardView(episode: e).frame(width: 200)
+                                .onTapGesture { model.open = e }
+                                .draggable(String(e.id))
+                        }
+                    }
                 }
             }
         }
@@ -219,6 +274,15 @@ struct PreCalendarView: View {
     private var title: String {
         let f = DateFormatter(); f.locale = Locale(identifier: "es"); f.dateFormat = "LLLL yyyy"
         return f.string(from: month).capitalized
+    }
+    /// Pone la fecha de grabación; si ya tenía hora, la conserva.
+    private func schedule(_ id: Int, on d: Date) {
+        guard let e = model.episodes.first(where: { $0.id == id }) else { return }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+        let day = f.string(from: d)
+        var fields: [String: Any] = ["scheduled_date": day]
+        if let at = e.scheduledAt, at.count >= 16 { fields["scheduled_at"] = day + String(at.dropFirst(10).prefix(6)) }
+        Task { await model.save(id, fields) }
     }
     private func shift(_ n: Int) { month = cal.date(byAdding: .month, value: n, to: month) ?? month }
     private var gridDays: [Date] {

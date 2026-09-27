@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import AppKit
 
 /// Headless end-to-end run used for development:
@@ -8,7 +9,57 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot")
+    }
+
+    /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
+    @MainActor
+    static func preSnapshot(_ dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let d = UserDefaults.standard
+        let oldTab = d.object(forKey: "prePestana"), oldCal = d.object(forKey: "preVistaCalendario")
+        d.set(0, forKey: "prePestana"); d.set(false, forKey: "preVistaCalendario")
+        let oldPod = d.object(forKey: "prePodcast")
+        let model = PreModel()
+        if let j = CommandLine.arguments.firstIndex(of: "--podcast"), CommandLine.arguments.count > j + 1 {
+            model.slug = CommandLine.arguments[j + 1]
+        }
+        let host = NSHostingView(rootView: PreHomeView(model: model)
+            .environmentObject(AppModel())
+            .frame(width: 1440, height: 900)
+            .background(Theme.background)
+            .preferredColorScheme(.dark))
+        host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        win.appearance = NSAppearance(named: .darkAqua)
+        win.contentView = host
+        win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+        win.orderFrontRegardless()
+        func shot(_ name: String) {
+            host.layoutSubtreeIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+            print("snapshot \(name)")
+        }
+        func wait(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }
+        Task { @MainActor in
+            await wait(7)
+            print("podcasts: " + model.podcasts.map { "\($0.slug) (\($0.name))" }.joined(separator: ", "))
+            shot("1-tablero")
+            d.set(true, forKey: "preVistaCalendario"); await wait(2); shot("2-calendario")
+            d.set(false, forKey: "preVistaCalendario")
+            if let e = model.nextUp ?? model.episodes.first(where: { $0.statusValue != .archived }) {
+                model.open = e
+                for (i, n) in ["3-guion", "4-rundown", "5-invitados", "6-ideas", "7-publicacion"].enumerated() {
+                    d.set(i, forKey: "prePestana"); await wait(4); shot(n)
+                }
+            }
+            if let oldPod { d.set(oldPod, forKey: "prePodcast") } else { d.removeObject(forKey: "prePodcast") }
+            if let oldTab { d.set(oldTab, forKey: "prePestana") } else { d.removeObject(forKey: "prePestana") }
+            if let oldCal { d.set(oldCal, forKey: "preVistaCalendario") } else { d.removeObject(forKey: "preVistaCalendario") }
+            fflush(stdout); exit(0)
+        }
     }
 
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
@@ -81,6 +132,11 @@ enum SelfTest {
         if args.contains("--render") { render(); return }
         if args.contains("--prepod-test") { prepodTest(); return }
         if args.contains("--postpod-test") { postpodTest(); return }
+        if let i = args.firstIndex(of: "--pre-snapshot"), args.count > i + 1 {
+            let dir = URL(fileURLWithPath: args[i + 1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { preSnapshot(dir) }   // después de esconder la ventana normal
+            return
+        }
         if args.contains("--update-test") {          // qué versión publica el servidor (no baja nada)
             Updater.shared.check()
             Task { @MainActor in
