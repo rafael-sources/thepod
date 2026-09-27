@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -238,6 +238,17 @@ enum SelfTest {
         }
         if let i = args.firstIndex(of: "--rec-test"), args.count > i + 1, let sid = Int(args[i + 1]) {
             recTest(sid)
+            return
+        }
+        if let i = args.firstIndex(of: "--prod-recs"), args.count > i + 1, let sid = Int(args[i + 1]) {
+            Task { @MainActor in             // solo lectura: grabaciones, momentos y personas de una sala
+                for path in ["/api/sessions/\(sid)/recordings", "/api/sessions/\(sid)/chapter-markers",
+                             "/api/sessions/\(sid)/participants", "/api/sessions/\(sid)/sound-triggers/stats"] {
+                    let d = (try? await ProdPodClient.shared.get(path)) ?? Data()
+                    print("== \(path)\n\(String(data: d, encoding: .utf8) ?? "")")
+                }
+                fflush(stdout); exit(0)
+            }
             return
         }
         if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod

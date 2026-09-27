@@ -101,6 +101,22 @@ private struct SessionCard: View {
     let session: ProdPodClient.Session
     let enter: () -> Void
     @State private var hover = false
+    @State private var sending = false
+    @State private var result: String?
+
+    private func export() {
+        sending = true
+        Task {
+            defer { sending = false }
+            do {
+                let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
+                if let e = r["error"] as? String { result = e; return }
+                let n = r["exported"] as? Int ?? 0
+                result = n > 0 ? "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post: “En postPod web” → Traer a la Mac."
+                               : "Ya estaba en postPod."
+            } catch { result = error.localizedDescription }
+        }
+    }
 
     var body: some View {
         let (label, color): (String, Color) = {
@@ -122,8 +138,14 @@ private struct SessionCard: View {
                 Label("\(live.joined(separator: ", ")) \(live.count == 1 ? "está" : "están") en la sala", systemImage: "person.wave.2.fill")
                     .font(.caption).foregroundStyle(Color.prodPod)
             }
+            if let r = result { Text(r).font(.caption).foregroundStyle(Theme.good) }
             HStack {
                 Spacer()
+                if session.status == "finished" && session.created_by == PrePodClient.username {
+                    Button { export() } label: { Label(sending ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill") }
+                        .disabled(sending)
+                        .help("Manda las pistas de esta grabación a postPod")
+                }
                 Button(action: enter) { Label("Entrar", systemImage: "arrow.right") }
                     .buttonStyle(.borderedProminent)
             }

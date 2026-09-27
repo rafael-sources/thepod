@@ -76,11 +76,16 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
                 let db = CMVideoFormatDescriptionGetDimensions(b.formatDescription)
                 return Int(da.width) * Int(da.height) < Int(db.width) * Int(db.height)
             }
+        // La cámara queda bloqueada hasta después de arrancar: si no, macOS vuelve a su modo automático
+        // y con poca luz baja a 15 cuadros por segundo.
         try device.lockForConfiguration()
         if let best { device.activeFormat = best }
-        device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 30)
-        device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 30)
-        device.unlockForConfiguration()
+        let fps30 = CMTime(value: 1, timescale: 30)
+        let canDo30 = device.activeFormat.videoSupportedFrameRateRanges.contains { $0.minFrameDuration <= fps30 && $0.maxFrameDuration >= fps30 }
+        if canDo30 {
+            device.activeVideoMinFrameDuration = fps30
+            device.activeVideoMaxFrameDuration = fps30
+        }
 
         let vOut = AVCaptureVideoDataOutput()
         vOut.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange]
@@ -93,6 +98,11 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         session.commitConfiguration()
         audioConnection = aOut.connection(with: .audio)
         session.startRunning()
+        if canDo30 {
+            device.activeVideoMinFrameDuration = fps30
+            device.activeVideoMaxFrameDuration = fps30
+        }
+        device.unlockForConfiguration()
 
         let d = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
         return Size(width: d.width, height: d.height)
