@@ -15,7 +15,7 @@ import subprocess
 import threading
 from typing import Any
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, abort, jsonify, request, send_file
 
 from auth import require_auth
 from config import PROJECTS_DIR
@@ -23,6 +23,11 @@ from db import get_db
 
 
 bp = Blueprint("captions", __name__)
+
+
+def _ensure_project(slug):
+    if not (PROJECTS_DIR / slug).exists():
+        abort(404, description="proyecto no encontrado")
 
 
 # Curated set of languages — whisper accepts more, but these cover 99% of
@@ -513,3 +518,153 @@ def get_transcript(slug, file_id):
         return send_file(str(target), mimetype="application/json")
     except OSError:
         return jsonify({"error": "no se pudo leer el transcript"}), 500
+
+
+# ── Subtitle style ───────────────────────────────────────────────
+
+
+@bp.get("/api/projects/<slug>/subtitle-style")
+@require_auth
+def get_subtitle_style(slug):
+    _ensure_project(slug)
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT * FROM subtitle_styles WHERE name='default'").fetchone()
+        if not row:
+            db.execute("INSERT INTO subtitle_styles (name) VALUES ('default')")
+            db.commit()
+            row = db.execute("SELECT * FROM subtitle_styles WHERE name='default'").fetchone()
+        return jsonify({
+            "id": row["id"],
+            "font_family": row["font_family"],
+            "font_size": row["font_size"],
+            "text_color": row["text_color"],
+            "outline_color": row["outline_color"],
+            "background_color": row["background_color"],
+            "highlight_color": row["highlight_color"],
+            "position": row["position"],
+        })
+    finally:
+        db.close()
+
+
+@bp.put("/api/projects/<slug>/subtitle-style")
+@require_auth
+def update_subtitle_style(slug):
+    _ensure_project(slug)
+    data = request.get_json(silent=True) or {}
+    allowed = {"font_family", "font_size", "text_color", "outline_color",
+               "background_color", "highlight_color", "position"}
+    valid_values = {
+        "font_family": {"sans-serif", "serif", "mono", "display"},
+        "font_size": {"small", "medium", "large"},
+        "position": {"top", "center", "bottom"},
+    }
+    updates = {}
+    for k, v in data.items():
+        if k not in allowed:
+            continue
+        if k in valid_values and v not in valid_values[k]:
+            return jsonify({"error": f"valor inválido para {k}: {v}"}), 400
+        updates[k] = v
+    if not updates:
+        return jsonify({"error": "no hay campos válidos para actualizar"}), 400
+
+    db = get_db(slug)
+    try:
+        row = db.execute("SELECT id FROM subtitle_styles WHERE name='default'").fetchone()
+        if not row:
+            db.execute("INSERT INTO subtitle_styles (name) VALUES ('default')")
+            db.commit()
+            row = db.execute("SELECT id FROM subtitle_styles WHERE name='default'").fetchone()
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        vals = list(updates.values()) + [row["id"]]
+        db.execute(f"UPDATE subtitle_styles SET {set_clause} WHERE id=?", vals)
+        db.commit()
+        updated = db.execute("SELECT * FROM subtitle_styles WHERE id=?", (row["id"],)).fetchone()
+        return jsonify({
+            "id": updated["id"],
+            "font_family": updated["font_family"],
+            "font_size": updated["font_size"],
+            "text_color": updated["text_color"],
+            "outline_color": updated["outline_color"],
+            "background_color": updated["background_color"],
+            "highlight_color": updated["highlight_color"],
+            "position": updated["position"],
+        })
+    finally:
+        db.close()
+
+
+# ── Word editing ─────────────────────────────────────────────────
+
+
+def _regenerate_srt_from_words(words, srt_path):
+    if not words:
+        return
+    segments = []
+    current = [words[0]]
+    for w in words[1:]:
+        gap = w["s"] - current[-1]["e"]
+        if gap > 0.8 or len(current) >= 12:
+            segments.append(current)
+            current = [w]
+        else:
+            current.append(w)
+    if current:
+        segments.append(current)
+
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        s = seg[0]["s"]
+        e = seg[-1]["e"]
+        text = " ".join(w["w"] for w in seg)
+        lines.append(str(i))
+        lines.append(f"{_format_srt_timestamp(s)} --> {_format_srt_timestamp(e)}")
+        lines.append(text)
+        lines.append("")
+    srt_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+@bp.patch("/api/projects/<slug>/files/<int:file_id>/captions/<lang>/words")
+@require_auth
+def patch_words(slug, file_id, lang):
+    _ensure_project(slug)
+    mf = _media_file_row(slug, file_id)
+    if not mf:
+        return jsonify({"error": "archivo no encontrado"}), 404
+    language = lang.strip().lower()
+    media_dir = _media_path(slug, mf).parent
+    words_path = media_dir / _words_filename_for(mf, language)
+    if not words_path.is_file():
+        return jsonify({"error": "words.json no encontrado — genera captions primero"}), 404
+
+    data = request.get_json(silent=True) or {}
+    edits = data.get("edits")
+    if not isinstance(edits, list) or not edits:
+        return jsonify({"error": "edits[] requerido"}), 400
+
+    payload = json.loads(words_path.read_text(encoding="utf-8"))
+    words = payload.get("words", [])
+    changed = 0
+    for edit in edits:
+        idx = edit.get("index")
+        new_word = edit.get("w")
+        if not isinstance(idx, int) or idx < 0 or idx >= len(words):
+            continue
+        if not isinstance(new_word, str) or not new_word.strip():
+            continue
+        words[idx]["w"] = new_word.strip()
+        changed += 1
+
+    if changed == 0:
+        return jsonify({"error": "ningún edit válido"}), 400
+
+    payload["words"] = words
+    words_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    srt_path = media_dir / _srt_filename_for(mf, language)
+    if srt_path.is_file():
+        _regenerate_srt_from_words(words, srt_path)
+
+    return jsonify({"ok": True, "changed": changed})
