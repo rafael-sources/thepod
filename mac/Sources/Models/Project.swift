@@ -37,6 +37,7 @@ struct Project: Codable, Identifiable, Equatable {
     var sponsors: [Sponsor] = []
     var segments: [Segment] = []        // script blocks with timing (prePod "blocks")
     var showSponsors: Bool = true
+    var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
     var reels: [Reel] = []
     var aiSummary: String?
@@ -311,6 +312,13 @@ struct EpisodeInfo: Codable, Equatable {
     var scheduledDate: String?
     var script: [ScriptItem] = []
     var links: [String] = []
+    // Where this episode lives in prePod (for publishing)
+    var prepodURL: String?
+    var prepodSlug: String?
+    var prepodEpisodeId: Int?
+    // Last publish results
+    var publishedAudioURL: String?
+    var publishedYouTubeURL: String?
 }
 
 /// One piece of the prePod script (free-form: title and/or text).
@@ -377,6 +385,7 @@ extension Project {
         sponsors = try c.decodeIfPresent([Sponsor].self, forKey: .sponsors) ?? []
         segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
         showSponsors = try c.decodeIfPresent(Bool.self, forKey: .showSponsors) ?? true
+        sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)

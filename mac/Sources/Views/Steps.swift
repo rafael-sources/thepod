@@ -686,6 +686,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            PrePodSettingsSection()
             Section("Transcripción (en tu Mac)") {
                 Picker("Modelo de voz", selection: $whisperModel) {
                     Text("Preciso (recomendado, ~600 MB)").tag(Transcriber.defaultModel)
@@ -706,6 +707,6 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 520)
+        .frame(width: 540, height: 640)
     }
 }

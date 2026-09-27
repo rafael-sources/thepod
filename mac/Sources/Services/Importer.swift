@@ -116,6 +116,11 @@ enum Importer {
 
         var project = Project(id: slug, name: name, createdAt: Date(), importedFrom: "postpod-bundle")
         if let source = meta["source"] as? [String: Any] {
+            project.episode.prepodURL = (source["source_url"] as? String) ?? (meta["source_url"] as? String)
+            if (source["app"] as? String) == "prepod" {
+                project.episode.prepodSlug = (source["podcast"] as? [String: Any])?["slug"] as? String
+                project.episode.prepodEpisodeId = ((source["episode"] as? [String: Any])?["id"] as? NSNumber)?.intValue
+            }
             if let podcast = source["podcast"] as? [String: Any] {
                 project.podcastName = podcast["name"] as? String
                 project.episode.podcastDescription = podcast["description"] as? String
@@ -261,6 +266,21 @@ enum Importer {
             project.cuts = try db.query("SELECT * FROM transcript_cuts ORDER BY start_seconds").compactMap { r in
                 guard let s = r.double("start_seconds"), let e = r.double("end_seconds"), e > s else { return nil }
                 return Cut(start: s, end: e, kind: .imported, label: r.string("label") ?? "Corte de postPod web")
+            }
+        }
+
+        // Sound effects library (bundle v2: global_audio/ + podcast sounds/)
+        for dir in ["global_audio", "sounds"] {
+            let src = root.appendingPathComponent(dir)
+            let files = ((try? fm.contentsOfDirectory(atPath: src.path)) ?? [])
+                .filter { ["mp3", "wav", "m4a", "aac"].contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
+            guard !files.isEmpty else { continue }
+            let dest = folder.appendingPathComponent("sfx", isDirectory: true)
+            try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+            for f in files {
+                let to = dest.appendingPathComponent(f)
+                if !fm.fileExists(atPath: to.path) { try? fm.copyItem(at: src.appendingPathComponent(f), to: to) }
+                if !project.sfxLibrary.contains("sfx/\(f)") { project.sfxLibrary.append("sfx/\(f)") }
             }
         }
 
@@ -491,7 +511,7 @@ enum Importer {
         for item in list {
             if let s = item as? String { out.append(ScriptItem(title: "", text: s)); continue }
             guard let d = item as? [String: Any] else { continue }
-            let title = str(d, ["title", "heading", "name", "section", "label"])
+            let title = str(d, ["title", "heading", "speaker", "name", "section", "label"])
             var text = str(d, ["text", "content", "body", "notes", "description", "script"])
             if text.isEmpty, let children = d["items"] ?? d["children"] ?? d["lines"] {
                 text = parseScript(children).map { $0.title.isEmpty ? $0.text : "\($0.title): \($0.text)" }.joined(separator: "\n")

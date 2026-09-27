@@ -17,8 +17,10 @@ struct ProjectView: View {
                     case .overview: OverviewStep(session: session)
                     case .fix: FixStep(session: session)
                     case .captions: CaptionsStep(session: session)
+                    case .sounds: SoundsStep(session: session)
                     case .reels: ReelsStep(session: session)
                     case .export: ExportStep(session: session)
+                    case .publish: PublishStep(session: session)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -98,8 +100,10 @@ struct ProjectView: View {
         case .overview: return true
         case .fix: return p.fix.lastRun != nil
         case .captions: return p.isTranscribed
+        case .sounds: return !p.audioLane.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
         case .export: return !session.lastExports.isEmpty
+        case .publish: return p.episode.publishedAudioURL != nil || p.episode.publishedYouTubeURL != nil
         }
     }
 }

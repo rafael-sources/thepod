@@ -61,15 +61,17 @@ final class AppModel: ObservableObject {
 }
 
 enum Step: String, CaseIterable, Identifiable {
-    case overview, fix, captions, reels, export
+    case overview, fix, captions, sounds, reels, export, publish
     var id: String { rawValue }
     var title: String {
         switch self {
         case .overview: return "Tu grabación"
         case .fix: return "Arreglar"
         case .captions: return "Subtítulos"
+        case .sounds: return "Efectos"
         case .reels: return "Reels"
         case .export: return "Exportar"
+        case .publish: return "Publicar"
         }
     }
     var symbol: String {
@@ -77,8 +79,10 @@ enum Step: String, CaseIterable, Identifiable {
         case .overview: return "person.2.wave.2"
         case .fix: return "wand.and.stars"
         case .captions: return "captions.bubble"
+        case .sounds: return "speaker.wave.3"
         case .reels: return "iphone.gen3"
         case .export: return "square.and.arrow.up"
+        case .publish: return "paperplane"
         }
     }
     var number: Int { (Step.allCases.firstIndex(of: self) ?? 0) + 1 }
@@ -386,6 +390,96 @@ final class ProjectSession: ObservableObject {
             }
             refreshExports()
             return urls
+    }
+
+    // MARK: Sound effects
+
+    func addSound(_ rel: String, at timeline: Double) async {
+        var p = project
+        let mediaId: Int
+        if let existing = p.media.first(where: { $0.file == rel }) {
+            mediaId = existing.id
+        } else {
+            let url = ProjectStore.url(rel, in: p.id)
+            let d = (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 1
+            mediaId = (p.media.map(\.id).max() ?? 0) + 1
+            p.media.append(SourceMedia(id: mediaId, originalName: (rel as NSString).lastPathComponent, file: rel, kind: .audio,
+                                       duration: d.isFinite ? d : 1, hasAudio: true, hasVideo: false))
+        }
+        let len = p.mediaItem(mediaId)?.duration ?? 1
+        let id = (p.audioLane.map(\.id).max() ?? 0) + 1
+        p.audioLane.append(AudioLaneClip(id: id, mediaId: mediaId, tlStart: max(0, timeline), srcIn: 0, srcOut: len, volume: 0.8))
+        project = p
+    }
+
+    /// Current playhead in TIMELINE time.
+    var playheadTimeline: Double {
+        let t = player.currentTime().seconds
+        guard let b = built, t.isFinite else { return 0 }
+        return EditEngine.toTimeline(t, keep: b.keep)
+    }
+
+    // MARK: Publishing (via prePod)
+
+    @Published var publishStatus: PrePodClient.PublishStatus?
+    @Published var publishNote: String?
+
+    func latestExport(suffix: String, ext: String) -> URL? {
+        refreshExports()
+        return lastExports.first { $0.pathExtension == ext && $0.lastPathComponent.contains("_\(suffix)_") }
+    }
+
+    func loadPublishStatus() {
+        guard let slug = project.episode.prepodSlug, let ep = project.episode.prepodEpisodeId else { return }
+        Task {
+            do {
+                publishStatus = try await PrePodClient.shared.status(slug: slug, episodeId: ep)
+                publishNote = nil
+            } catch {
+                publishNote = error.localizedDescription
+            }
+        }
+    }
+
+    func publishAudio() {
+        guard let slug = project.episode.prepodSlug, let ep = project.episode.prepodEpisodeId else { return }
+        run("Publicando en Spotify y Apple") { [self] in
+            var file = latestExport(suffix: "audio", ext: "mp3")
+            if file == nil { file = try await performExport(format: .audio) }
+            guard let file else { return }
+            report("Publicando en Spotify y Apple", "Subiendo el MP3 a prePod…", 0)
+            let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
+                self?.reportAsync("Publicando en Spotify y Apple", "Subiendo el MP3 a prePod…", f)
+            }
+            report("Publicando en Spotify y Apple", "Poniéndolo en el feed…", nil)
+            let job = try await PrePodClient.shared.publishAudio(slug: slug, episodeId: ep, uploadId: upload)
+            let result = try await PrePodClient.shared.wait(job: job) { [weak self] f in
+                self?.reportAsync("Publicando en Spotify y Apple", "Poniéndolo en el feed…", f)
+            }
+            project.episode.publishedAudioURL = result["media_url"]
+            loadPublishStatus()
+        }
+    }
+
+    func publishYouTube(title: String, description: String, privacy: String) {
+        guard let slug = project.episode.prepodSlug, let ep = project.episode.prepodEpisodeId else { return }
+        run("Subiendo a YouTube") { [self] in
+            var file = latestExport(suffix: "youtube", ext: "mp4")
+            if file == nil { file = try await performExport(format: .landscape) }
+            guard let file else { return }
+            report("Subiendo a YouTube", "Enviando el video a prePod…", 0)
+            let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
+                self?.reportAsync("Subiendo a YouTube", "Enviando el video a prePod…", f)
+            }
+            report("Subiendo a YouTube", "prePod lo está subiendo a tu canal…", 0)
+            let job = try await PrePodClient.shared.publishYouTube(slug: slug, episodeId: ep, uploadId: upload,
+                                                                   title: title, description: description, privacy: privacy)
+            let result = try await PrePodClient.shared.wait(job: job) { [weak self] f in
+                self?.reportAsync("Subiendo a YouTube", "prePod lo está subiendo a tu canal…", f)
+            }
+            project.episode.publishedYouTubeURL = result["video_url"] ?? result["url"]
+            loadPublishStatus()
+        }
     }
 
     // MARK: Transcript editing
