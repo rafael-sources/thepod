@@ -7,7 +7,7 @@ struct JobState: Equatable {
     var fraction: Double? = nil      // nil = indeterminate
 }
 
-enum AppSection: String { case pre, post }
+enum AppSection: String { case pre, prod, post }
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -15,6 +15,10 @@ final class AppModel: ObservableObject {
     @Published var section: AppSection = AppSection(rawValue: UserDefaults.standard.string(forKey: "seccion") ?? "") ?? .post {
         didSet { UserDefaults.standard.set(section.rawValue, forKey: "seccion") }
     }
+    /// Sala de prodPod que se pidió abrir desde pre ("Ir a grabar").
+    @Published var prodRequest: Int?
+    /// La sala abierta en prod (sigue conectada aunque cambies a pre o post).
+    @Published var studio: ProdStudio?
     @Published var projects: [Project] = []
     @Published var session: ProjectSession?
     @Published var importJob: JobState?

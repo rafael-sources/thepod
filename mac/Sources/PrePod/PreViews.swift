@@ -130,7 +130,10 @@ final class Debouncer {
     }
 }
 
-extension Color { static let prePod = Color(red: 0.353, green: 0.545, blue: 1.0) }
+extension Color {
+    static let prePod = Color(red: 0.353, green: 0.545, blue: 1.0)
+    static let prodPod = Color(red: 1.0, green: 0.30, blue: 0.30)     // luz roja de "al aire"
+}
 
 // MARK: - Selector pre · post
 
@@ -139,6 +142,7 @@ struct SectionSwitcher: View {
     var body: some View {
         HStack(spacing: 4) {
             chip(.pre, "pre", .prePod)
+            chip(.prod, "prod", .prodPod)
             chip(.post, "post", Theme.accent)
         }
         .padding(3)
@@ -146,7 +150,12 @@ struct SectionSwitcher: View {
     }
     private func chip(_ s: AppSection, _ label: String, _ color: Color) -> some View {
         Button { app.section = s } label: {
-            Text(label)
+            HStack(spacing: 5) {
+                if s == .prod, app.studio?.phase == .inRoom {
+                    Circle().fill(app.section == s ? Color.black : Color.prodPod).frame(width: 7, height: 7)
+                }
+                Text(label)
+            }
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .padding(.horizontal, 14).padding(.vertical, 5)
                 .foregroundStyle(app.section == s ? Color.black : color)
@@ -543,6 +552,8 @@ struct PreEpisodeView: View {
     @State private var hasDate = false
     @State private var saver = Debouncer()
     @State private var counts: [Int: String] = [:]
+    @State private var sending = false
+    @EnvironmentObject private var app: AppModel
     @State private var done: Set<Int> = []
 
     private struct Page { let title: String; let symbol: String; let help: String }
@@ -664,7 +675,26 @@ struct PreEpisodeView: View {
                         .buttonStyle(.link)
                 }
                 Spacer()
+                Button { goRecord() } label: {
+                    Label(sending ? "Preparando la sala…" : "Ir a grabar", systemImage: "record.circle")
+                }
+                .buttonStyle(.borderedProminent).tint(.prodPod).controlSize(.large)
+                .disabled(sending)
+                .help("Abre la sala de grabación de este episodio en prod")
             }
+        }
+    }
+
+    /// Crea (o encuentra) la sala de prodPod del episodio y la abre en prod.
+    private func goRecord() {
+        sending = true
+        Task {
+            defer { sending = false }
+            do {
+                let sid = try await PrePodClient.shared.sendToProdPod(slug: model.slug, episodeId: episode.id)
+                app.prodRequest = sid
+                app.section = .prod
+            } catch { model.error = error.localizedDescription }
         }
     }
 

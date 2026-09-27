@@ -123,6 +123,16 @@ actor PrePodClient {
 
     func resetSession() { loggedIn = false; cookies = [:] }
 
+    /// Crea (o encuentra) la sala de grabación de prodPod para un episodio. Devuelve el número de sesión.
+    func sendToProdPod(slug: String, episodeId: Int) async throws -> Int {
+        let d = try await send("POST", "/api/podcasts/\(slug)/episodes/\(episodeId)/send-to-prodpod", json: [:])
+        guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let sid = (o["prodpod_session_id"] as? Int) ?? Int("\(o["prodpod_session_id"] ?? "")") else {
+            throw Failure(message: "prodPod no devolvió la sala del episodio")
+        }
+        return sid
+    }
+
     // MARK: Reads
 
     func podcasts() async throws -> [PodcastRef] {

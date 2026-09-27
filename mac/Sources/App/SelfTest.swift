@@ -9,7 +9,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -58,6 +58,48 @@ enum SelfTest {
             if let oldPod { d.set(oldPod, forKey: "prePodcast") } else { d.removeObject(forKey: "prePodcast") }
             if let oldTab { d.set(oldTab, forKey: "prePestana") } else { d.removeObject(forKey: "prePestana") }
             if let oldCal { d.set(oldCal, forKey: "preVistaCalendario") } else { d.removeObject(forKey: "preVistaCalendario") }
+            fflush(stdout); exit(0)
+        }
+    }
+
+    /// Capturas de prod sin cámara ni micrófono (no pide permisos, no entra a ninguna sala).
+    @MainActor
+    static func prodSnapshot(_ dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let app = AppModel()
+        let host = NSHostingView(rootView: ProdHomeView().environmentObject(app)
+            .frame(width: 1440, height: 900).background(Theme.background).preferredColorScheme(.dark))
+        host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        win.appearance = NSAppearance(named: .darkAqua)
+        win.contentView = host
+        win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+        win.orderFrontRegardless()
+        func shot(_ name: String) {
+            host.layoutSubtreeIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+            print("snapshot \(name)")
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            shot("1-salas")
+            if let s = try? await ProdPodClient.shared.sessions().first(where: { $0.status != "finished" }) {
+                let st = ProdStudio(session: s)
+                st.cameras = AVDevices.cameras
+                st.mics = AVDevices.microphones
+                st.cameraId = st.cameras.first?.uniqueID ?? ""
+                st.micId = st.mics.first?.uniqueID ?? ""
+                st.previewReady = true
+                st.camOn = false
+                st.micLevel = -30
+                await st.loadParticipants()
+                app.studio = st
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                shot("2-antes-de-entrar")
+                app.studio = nil
+            }
             fflush(stdout); exit(0)
         }
     }
@@ -135,6 +177,11 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--pre-snapshot"), args.count > i + 1 {
             let dir = URL(fileURLWithPath: args[i + 1])
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { preSnapshot(dir) }   // después de esconder la ventana normal
+            return
+        }
+        if let i = args.firstIndex(of: "--prod-snapshot"), args.count > i + 1 {
+            let dir = URL(fileURLWithPath: args[i + 1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { prodSnapshot(dir) }
             return
         }
         if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod

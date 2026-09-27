@@ -16,6 +16,23 @@ actor ProdPodClient {
         var status: String?
         var created_by: String?
         var live_participants: [String]?
+        var description: String?
+        var source_slug: String?
+        var source_episode_id: Int?
+        var created_at: String?
+        var finished_at: String?
+    }
+
+    struct Person: Decodable, Identifiable, Hashable {
+        let id: Int
+        var username: String?
+        var display_name: String
+        var role: String
+        var status: String?
+        var invite_url: String?
+        var roleTitle: String {
+            ["host": "Conductor", "co-host": "Conductor", "guest": "Invitado", "director": "Director"][role] ?? role
+        }
     }
 
     struct JoinInfo: Decodable {
@@ -92,6 +109,10 @@ actor ProdPodClient {
     }
 
     func leave(_ id: Int) async { _ = try? await send("POST", "/api/sessions/\(id)/leave") }
+
+    func participants(_ id: Int) async throws -> [Person] {
+        try JSONDecoder().decode([Person].self, from: await send("GET", "/api/sessions/\(id)/participants"))
+    }
 
     func invite(_ id: Int, name: String = "Invitado") async throws -> Invite {
         try JSONDecoder().decode(Invite.self, from: await send("POST", "/api/sessions/\(id)/invite", json: ["display_name": name]))
