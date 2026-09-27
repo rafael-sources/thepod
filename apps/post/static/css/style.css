@@ -2646,3 +2646,41 @@ a.mark:hover { opacity: 0.8; }
   color: #FFD700;
   transform: scale(1.1);
 }
+
+/* ── Layout template selector ──────────────────────── */
+.layout-selector {
+  display: flex;
+  gap: 4px;
+}
+.layout-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  background: var(--ink-raised);
+  border: 1px solid var(--ink-line-2);
+  border-radius: var(--r-md);
+  color: var(--paper-soft);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+  font-size: 11px;
+}
+.layout-btn:hover {
+  background: var(--ink-hover);
+  border-color: var(--ink-line);
+}
+.layout-btn.active {
+  background: var(--signal-dim);
+  border-color: var(--signal);
+  color: var(--signal);
+}
+.layout-icon {
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+.layout-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

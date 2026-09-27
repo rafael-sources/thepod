@@ -3388,11 +3388,12 @@ var ExportModal = {
     const enhanceSpeech = ref(localStorage.getItem("postpod.enhanceSpeech") === "1");
     watch(enhanceSpeech, (v) => localStorage.setItem("postpod.enhanceSpeech", v ? "1" : "0"));
 
-    const spotlight = ref(localStorage.getItem("postpod.spotlight") === "1");
-    watch(spotlight, (v) => localStorage.setItem("postpod.spotlight", v ? "1" : "0"));
-
-    const verticalCenterSpotlight = ref(localStorage.getItem("postpod.verticalCenterSpotlight") === "1");
-    watch(verticalCenterSpotlight, (v) => localStorage.setItem("postpod.verticalCenterSpotlight", v ? "1" : "0"));
+    const layoutTemplate = ref(localStorage.getItem("postpod.layoutTemplate") || "side_by_side");
+    watch(layoutTemplate, (v) => localStorage.setItem("postpod.layoutTemplate", v));
+    const pipCorner = ref(localStorage.getItem("postpod.pipCorner") || "bottom_right");
+    watch(pipCorner, (v) => localStorage.setItem("postpod.pipCorner", v));
+    const pipMainTrack = ref(parseInt(localStorage.getItem("postpod.pipMainTrack") || "1", 10));
+    watch(pipMainTrack, (v) => localStorage.setItem("postpod.pipMainTrack", String(v)));
 
     const useBackground = ref(localStorage.getItem("postpod.useBackground") === "1");
     watch(useBackground, (v) => localStorage.setItem("postpod.useBackground", v ? "1" : "0"));
@@ -3460,8 +3461,13 @@ var ExportModal = {
         }
         if (generateNotes.value) body.generate_notes = true;
         if (enhanceSpeech.value) body.enhance_speech = true;
-        if (spotlight.value) body.spotlight = true;
-        if (verticalCenterSpotlight.value && isVerticalPreset.value) body.vertical_center_spotlight = true;
+        if (props.hasMultitrack) {
+          body.layout_template = layoutTemplate.value;
+          if (layoutTemplate.value === "pip") {
+            body.pip_corner = pipCorner.value;
+            body.pip_main_track = pipMainTrack.value;
+          }
+        }
         if (useBackground.value) body.use_background = true;
         if (momentBanner.value) {
           body.moment_banner = true;
@@ -3558,7 +3564,7 @@ var ExportModal = {
     return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, notesUrl,
              start, cancel, reset, loadHistory, showAllHistory,
              burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions,
-             generateNotes, enhanceSpeech, spotlight, verticalCenterSpotlight, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
+             generateNotes, enhanceSpeech, layoutTemplate, pipCorner, pipMainTrack, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
@@ -3602,14 +3608,50 @@ var ExportModal = {
               <input type="checkbox" v-model="enhanceSpeech">
               Audio profesional (denoise + EQ + normalize)
             </label>
-            <label v-if="hasMultitrack" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
-              <input type="checkbox" v-model="spotlight">
-              Spotlight (speaker activo 70/30)
-            </label>
-            <label v-if="hasMultitrack && spotlight && isVerticalPreset" style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 18px;">
-              <input type="checkbox" v-model="verticalCenterSpotlight">
-              Centrar speaker activo (un solo track)
-            </label>
+            <div v-if="hasMultitrack" style="margin-top:6px;">
+              <div class="style-label" style="margin-bottom:6px;">Composición</div>
+              <div class="layout-selector">
+                <button v-for="lt in [
+                  { id: 'side_by_side', label: 'Lado a lado', icon: '[▪▪]' },
+                  { id: 'spotlight', label: 'Spotlight', icon: '[▪▫]' },
+                  { id: 'pip', label: 'PiP', icon: '[▪°]' },
+                  { id: 'solo', label: 'Solo speaker', icon: '[▪]' },
+                ]" :key="lt.id"
+                        class="layout-btn" :class="{ active: layoutTemplate === lt.id }"
+                        @click="layoutTemplate = lt.id"
+                        :title="lt.label">
+                  <span class="layout-icon mono">{{ lt.icon }}</span>
+                  <span class="layout-label">{{ lt.label }}</span>
+                </button>
+              </div>
+              <div v-if="layoutTemplate === 'pip'" style="margin-top:6px;display:flex;gap:12px;align-items:center;">
+                <div>
+                  <span class="style-label">Esquina</span>
+                  <div style="display:flex;gap:3px;margin-top:3px;">
+                    <button v-for="c in [
+                      { id: 'top_left', label: '↖' },
+                      { id: 'top_right', label: '↗' },
+                      { id: 'bottom_left', label: '↙' },
+                      { id: 'bottom_right', label: '↘' },
+                    ]" :key="c.id"
+                            class="kbd" :class="{ active: pipCorner === c.id }"
+                            @click="pipCorner = c.id"
+                            style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+                      {{ c.label }}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <span class="style-label">Track principal</span>
+                  <div style="display:flex;gap:3px;margin-top:3px;">
+                    <button class="kbd" :class="{ active: pipMainTrack === 1 }"
+                            @click="pipMainTrack = 1">1</button>
+                    <button class="kbd" :class="{ active: pipMainTrack === 2 }"
+                            @click="pipMainTrack = 2">2</button>
+                  </div>
+                </div>
+              </div>
+            </div>
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px;">
               <input type="checkbox" v-model="useBackground">
               Fondo de marca (sin barras negras)
