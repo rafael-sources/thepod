@@ -41,6 +41,9 @@ def _serialize_job(row):
         "banner_position": row["banner_position"] if "banner_position" in keys else "bottom",
         "vertical_center_spotlight": bool(row["vertical_center_spotlight"]) if "vertical_center_spotlight" in keys else False,
         "director_overlays": bool(row["director_overlays"]) if "director_overlays" in keys else False,
+        "layout_template": row["layout_template"] if "layout_template" in keys else "side_by_side",
+        "pip_corner": row["pip_corner"] if "pip_corner" in keys else "bottom_right",
+        "pip_main_track": row["pip_main_track"] if "pip_main_track" in keys else 1,
     }
 
 
@@ -83,6 +86,19 @@ def create_export(slug):
     vertical_center_spotlight = 1 if data.get("vertical_center_spotlight") else 0
     director_overlays = 1 if data.get("director_overlays") else 0
 
+    layout_template = (data.get("layout_template") or "side_by_side").strip().lower()
+    if layout_template not in ("side_by_side", "spotlight", "pip", "solo"):
+        layout_template = "side_by_side"
+    pip_corner = (data.get("pip_corner") or "bottom_right").strip().lower()
+    if pip_corner not in ("top_left", "top_right", "bottom_left", "bottom_right"):
+        pip_corner = "bottom_right"
+    try:
+        pip_main_track = int(data.get("pip_main_track", 1))
+    except (TypeError, ValueError):
+        pip_main_track = 1
+    if pip_main_track not in (1, 2):
+        pip_main_track = 1
+
     # Optional partial-range export: render only the segment [range_start,
     # range_end] of the final timeline. Internal cuts/transcript_cuts/zooms
     # within the range are preserved — only material outside the range is
@@ -115,11 +131,11 @@ def create_export(slug):
             "INSERT INTO export_jobs (preset_id, status, burn_captions_json, "
             "generate_notes, enhance_speech, range_start, range_end, spotlight, "
             "use_background, moment_banner, banner_position, vertical_center_spotlight, "
-            "director_overlays) "
-            "VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "director_overlays, layout_template, pip_corner, pip_main_track) "
+            "VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (preset_id, burn_json, generate_notes, enhance_speech, range_start, range_end,
              spotlight, use_background, moment_banner, banner_position, vertical_center_spotlight,
-             director_overlays),
+             director_overlays, layout_template, pip_corner, pip_main_track),
         )
         db.commit()
         job_id = cur.lastrowid

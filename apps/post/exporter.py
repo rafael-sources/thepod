@@ -1834,6 +1834,21 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
         if pw and ph and pw >= ph:
             vertical_center_spotlight = False
 
+    pip = False
+    if layout_template == "side_by_side":
+        spotlight = False
+        vertical_center_spotlight = False
+    elif layout_template == "spotlight":
+        spotlight = True
+        vertical_center_spotlight = False
+    elif layout_template == "pip":
+        spotlight = False
+        vertical_center_spotlight = False
+        pip = True
+    elif layout_template == "solo":
+        spotlight = False
+        vertical_center_spotlight = True
+
     clips, flat_ops, all_have_audio, total_duration, moments, audio_lane = _load_timeline_state(slug)
     if not clips:
         raise ValueError("el timeline está vacío")
