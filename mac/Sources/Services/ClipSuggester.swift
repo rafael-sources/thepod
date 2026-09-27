@@ -148,6 +148,8 @@ enum Keychain {
 
     /// One-time move of settings saved under the app's previous identifier.
     static func migrateLegacy() {
+        guard !UserDefaults.standard.bool(forKey: "legacyMigrated") else { return }
+        UserDefaults.standard.set(true, forKey: "legacyMigrated")
         let legacy = "com.example" + ".postpodapp"
         let d = UserDefaults.standard
         if let old = d.persistentDomain(forName: legacy) {
@@ -172,7 +174,20 @@ enum Keychain {
         set { set(newValue, for: "anthropic-api-key") }
     }
 
+    // Se lee del llavero una sola vez por cuenta y se guarda en memoria: cada lectura al llavero puede
+    // hacer que macOS pida la clave de la Mac, y la app consulta la contraseña en muchos lugares.
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: String?] = [:]
+
     static func get(_ account: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let hit = cache[account] { return hit }
+        let value = read(account)
+        cache[account] = .some(value)
+        return value
+    }
+
+    private static func read(_ account: String) -> String? {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecAttrAccount as String: account, kSecReturnData as String: true,
                                 kSecMatchLimit as String: kSecMatchLimitOne]
@@ -182,6 +197,7 @@ enum Keychain {
     }
 
     static func set(_ value: String?, for account: String) {
+        lock.lock(); cache[account] = .some(value?.isEmpty == false ? value : nil); lock.unlock()
         let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                    kSecAttrAccount as String: account]
         SecItemDelete(base as CFDictionary)

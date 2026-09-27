@@ -20,7 +20,8 @@ La vista previa y la exportación usan **la misma composición** (`CompositionBu
 ```bash
 brew install xcodegen
 cd macos
-zsh scripts/build-ffmpeg.sh   # una sola vez: compila ffmpeg/ffprobe en Vendor/ffmpeg (≈10 min)
+zsh scripts/make-signing-cert.sh   # una sola vez: certificado propio para firmar siempre igual
+zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg/ffprobe en Vendor/ffmpeg (≈10 min)
 xcodegen generate
 open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
 ```
@@ -28,6 +29,16 @@ open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'pla
 Requisitos: macOS 15+, Apple Silicon y Xcode 16 o posterior. La primera transcripción descarga el modelo de Whisper (~600 MB) a `~/Library/Application Support/postPod/whisper`.
 
 Los proyectos se guardan en `~/Movies/postPod/<slug>/` (`project.json`, `media/`, `exports/`, `cache/`).
+
+## Firma
+
+Sin cuenta de Apple Developer, la app se firma con un certificado propio ("postPod Local Signing", creado por
+`scripts/make-signing-cert.sh` en el llavero de la Mac que compila). Lo importante es que **siempre sea el mismo**:
+el llavero de macOS reconoce la app por su firma, y si la firma cambia en cada compilación vuelve a pedir la clave
+de la Mac para leer la contraseña de prePod/postPod. Con la firma estable, se autoriza una vez ("Permitir siempre")
+y queda así también en las actualizaciones. Macs ajenas la ven como "desarrollador no identificado" la primera vez.
+
+Para publicar una versión en thePod: `zsh scripts/package-dmg.sh` (deja `build/postPod-<versión>.dmg` y `build/postPod.json`).
 
 ## ffmpeg dentro de la app
 
