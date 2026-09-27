@@ -8,7 +8,7 @@ cd "$ROOT"
 zsh scripts/build-ffmpeg.sh >/dev/null
 xcodegen generate -q >/dev/null 2>&1
 xcodebuild -project PostPodApp.xcodeproj -scheme PostPodApp -configuration Release \
-  -destination 'platform=macOS,arch=arm64' -derivedDataPath build.noindex/dd-release build > build/release.log 2>&1 \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath build.noindex/dd-release CURRENT_PROJECT_VERSION=$(date +%Y%m%d%H%M) build > build/release.log 2>&1 \
   || { grep -E "error:" build/release.log | head; exit 1; }
 APP=build.noindex/dd-release/Build/Products/Release/thePod.app
 # Que las copias de compilación no aparezcan como apps en la Mac (solo la de Aplicaciones)

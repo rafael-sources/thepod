@@ -692,6 +692,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             PrePodSettingsSection()
+            UpdateSettingsSection()
             Section("Al abrir") {
                 Toggle("Sonido y animación de thePod al abrir la app", isOn: $introEnabled)
             }

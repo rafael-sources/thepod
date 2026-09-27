@@ -44,14 +44,19 @@ struct RootView: View {
     var body: some View {
         ZStack {
             content
+            VStack { Spacer(); HStack { Spacer(); UpdateBanner() } }
             if showIntro && introEnabled {
                 IntroView {
                     withAnimation(.easeOut(duration: 0.45)) { showIntro = false }
                     app.introDone = true
+                    if Updater.checkOnLaunch { Updater.shared.check(quiet: true) }
                 }
                     .transition(.opacity)
                     .zIndex(1)
             }
+        }
+        .onAppear {
+            if !(showIntro && introEnabled), Updater.checkOnLaunch, !SelfTest.isRequested { Updater.shared.check(quiet: true) }
         }
     }
 
