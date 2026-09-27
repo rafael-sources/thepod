@@ -16,46 +16,23 @@ struct SoundsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 14) {
-                StepHeader(title: "Efectos de sonido", subtitle: "Pon el video donde quieras el efecto, elige un sonido y toca “Poner aquí”.")
-                if session.project.sfxLibrary.isEmpty {
+                StepHeader(title: "Efectos de sonido",
+                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas y, si quieres, agregas más.")
+                Text("En tu episodio").font(.headline)
+                if session.project.audioLane.isEmpty {
                     Card {
-                        Label("Este paquete no trae la librería de efectos", systemImage: "speaker.slash").font(.headline)
-                        Text("Vuelve a exportar el episodio desde postPod (el paquete nuevo incluye los efectos) o arrastra aquí tus propios MP3.")
+                        Label("Este episodio no tiene efectos puestos en postPod", systemImage: "speaker.slash")
+                        Text("Los sonidos que se tocan en vivo en prodPod, o que pones en la línea de audio de postPod, llegan aquí solos en su momento. Si los agregas en la web, usa “Traer de nuevo”.")
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
                 } else {
-                    TextField("Buscar sonido…", text: $filter).textFieldStyle(.roundedBorder)
-                    ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                            ForEach(library, id: \.self) { rel in
-                                VStack(spacing: 8) {
-                                    Text(name(rel)).font(.callout.bold()).lineLimit(1)
-                                    HStack(spacing: 6) {
-                                        Button { preview(rel) } label: { Image(systemName: "play.fill") }
-                                            .help("Escuchar")
-                                        Button("Poner aquí") {
-                                            let t = session.playheadTimeline
-                                            Task { await session.addSound(rel, at: t) }
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                    }
-                                    .controlSize(.small)
-                                }
-                                .padding(10)
-                                .frame(maxWidth: .infinity)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 320)
-                }
-                if !session.project.audioLane.isEmpty {
-                    Text("En tu episodio").font(.headline)
+                    Text("\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "efecto" : "efectos"). Toca la hora para oírlo en el video.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
                     ScrollView {
                         LazyVStack(spacing: 6) {
                             ForEach($session.project.audioLane) { $clip in
                                 HStack {
-                                    Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)) }
+                                    Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
                                         .buttonStyle(.link).monospacedDigit()
                                     Text(session.project.mediaItem(clip.mediaId).map { name($0.file) } ?? "Sonido").lineLimit(1)
                                     Spacer()
@@ -63,12 +40,49 @@ struct SoundsStep: View {
                                     Slider(value: $clip.volume, in: 0...1.5).frame(width: 110)
                                     Button { session.project.audioLane.removeAll { $0.id == clip.id } } label: { Image(systemName: "trash") }
                                         .buttonStyle(.borderless)
+                                        .help("Quitar este efecto")
                                 }
                                 .padding(8)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
                             }
                         }
                     }
+                    .frame(maxHeight: 260)
+                }
+
+                if !session.project.sfxLibrary.isEmpty {
+                    DisclosureGroup("Agregar otro efecto") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Pon el video donde lo quieres, elige un sonido y toca “Poner aquí”.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                            TextField("Buscar sonido…", text: $filter).textFieldStyle(.roundedBorder)
+                            ScrollView {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                                    ForEach(library, id: \.self) { rel in
+                                        VStack(spacing: 8) {
+                                            Text(name(rel)).font(.callout.bold()).lineLimit(1)
+                                            HStack(spacing: 6) {
+                                                Button { preview(rel) } label: { Image(systemName: "play.fill") }
+                                                    .help("Escuchar")
+                                                Button("Poner aquí") {
+                                                    let t = session.playheadTimeline
+                                                    Task { await session.addSound(rel, at: t) }
+                                                }
+                                                .buttonStyle(.borderedProminent)
+                                            }
+                                            .controlSize(.small)
+                                        }
+                                        .padding(10)
+                                        .frame(maxWidth: .infinity)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 260)
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.headline)
                 }
                 Spacer(minLength: 0)
             }
