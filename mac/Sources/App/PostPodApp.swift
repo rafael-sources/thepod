@@ -27,8 +27,15 @@ struct PostPodApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("Importar grabación…") { Panels.chooseImport { app.importItems($0) } }
                     .keyboardShortcut("o")
+                Divider()
+                OpenProbeButton()
             }
         }
+
+        Window("Prueba de sala", id: "prueba-sala") {
+            RoomProbeView()
+        }
+        .windowStyle(.hiddenTitleBar)
 
         Settings {
             SettingsView()
@@ -102,5 +109,13 @@ enum Panels {
         panel.allowedContentTypes = [.zip, .movie, .audio, .folder, .mpeg4Movie, .quickTimeMovie]
         panel.allowsOtherFileTypes = true
         if panel.runModal() == .OK { done(panel.urls) }
+    }
+}
+
+/// Archivo → Prueba de sala… (abre la ventana de prueba de prodPod)
+struct OpenProbeButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Prueba de sala…") { openWindow(id: "prueba-sala") }
     }
 }

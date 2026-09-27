@@ -9,7 +9,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -135,6 +135,17 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--pre-snapshot"), args.count > i + 1 {
             let dir = URL(fileURLWithPath: args[i + 1])
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { preSnapshot(dir) }   // después de esconder la ventana normal
+            return
+        }
+        if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod
+            Task { @MainActor in
+                do {
+                    let list = try await ProdPodClient.shared.sessions()
+                    print("OK prodPod sesiones=\(list.count)")
+                    for s in list.prefix(8) { print("  #\(s.id) · \(s.title) · \(s.status ?? "-")") }
+                } catch { print("ERROR \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
             return
         }
         if args.contains("--update-test") {          // qué versión publica el servidor (no baja nada)
