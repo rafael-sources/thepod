@@ -397,9 +397,14 @@ def publish_youtube():
         except Exception as e:
             result = {"ok": False, "error": f"error inesperado: {str(e)[:300]}"}
         if result["ok"]:
-            _save_episode_link(slug, episode_id, "youtube", result["url"])
-            _update_job(job_id, status="done", progress=1.0,
-                        result={"video_url": result["url"], "video_id": result["video_id"]})
+            job_result = {"video_url": result["url"], "video_id": result["video_id"]}
+            try:
+                _save_episode_link(slug, episode_id, "youtube", result["url"])
+            except Exception as e:
+                # El video ya está publicado en YouTube; registra el fallo del link
+                # pero termina el job para que el cliente no espere para siempre.
+                job_result["warning"] = f"link no guardado: {str(e)[:200]}"
+            _update_job(job_id, status="done", progress=1.0, result=job_result)
             _delete_upload(meta["upload_id"])
         else:
             _release_upload_claim(meta["upload_id"])

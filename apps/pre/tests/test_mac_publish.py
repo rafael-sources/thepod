@@ -466,3 +466,22 @@ def test_publish_youtube_error_releases_claim(client):
          patch("youtube_publish._upload_video", return_value={"ok": False, "error": "cuota superada"}):
         assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202
         assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202
+
+
+def test_publish_youtube_link_failure_still_completes_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("mac_publish._save_episode_link", side_effect=RuntimeError("db bloqueada")), \
+         patch("youtube_publish._upload_video",
+               return_value={"ok": True, "video_id": "abc", "url": "https://www.youtube.com/watch?v=abc"}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id, "title": "t",
+        })
+
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["video_url"].endswith("abc")
+    assert "link no guardado" in job["result"]["warning"]
