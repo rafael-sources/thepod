@@ -24,7 +24,9 @@ actor Transcriber {
     private func load(status: @escaping @Sendable (String) -> Void) async throws -> WhisperKit {
         let model = modelName
         if let pipe, loadedModel == model { return pipe }
-        status("Preparando el modelo de voz (la primera vez se descarga, ~600 MB)…")
+        let firstTime = !FileManager.default.fileExists(atPath: Self.modelsFolder.appendingPathComponent("models").path)
+        status(firstTime ? "Preparando la transcripción por primera vez (necesita internet y tarda unos minutos; solo pasa una vez)…"
+                         : "Preparando la transcripción…")
         let config = WhisperKitConfig(model: model, downloadBase: Self.modelsFolder, verbose: false,
                                       logLevel: .error, prewarm: true, load: true, download: true)
         let kit = try await WhisperKit(config)

@@ -73,7 +73,7 @@ struct HomeView: View {
                     .foregroundStyle(Theme.accent)
                 Text("Arrastra aquí tu grabación")
                     .font(.title2.bold())
-                Text("El paquete .zip que descargas de postPod, la carpeta con las pistas de cada persona, o los videos sueltos.")
+                Text("El paquete que descargas de postPod, la carpeta con las pistas de cada persona, o los videos sueltos.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.secondary)
                     .frame(maxWidth: 520)
@@ -173,7 +173,7 @@ struct WebProjectsSection: View {
             switch app.webState {
             case .notConfigured:
                 Card {
-                    Text("Conecta tu cuenta para ver aquí tus episodios de postPod y traerlos sin descargar el .zip a mano.")
+                    Text("Conecta tu cuenta para ver aquí tus episodios de postPod y traerlos sin descargar nada a mano.")
                         .foregroundStyle(Theme.secondary)
                     SettingsLink { Label("Abrir Ajustes", systemImage: "gearshape") }
                 }

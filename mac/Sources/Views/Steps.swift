@@ -689,15 +689,14 @@ struct SettingsView: View {
             PrePodSettingsSection()
             Section("Transcripción (en tu Mac)") {
                 Picker("Modelo de voz", selection: $whisperModel) {
-                    Text("Preciso (recomendado, ~600 MB)").tag(Transcriber.defaultModel)
-                    Text("Rápido (~250 MB)").tag("openai_whisper-small")
+                    Text("Preciso (recomendado)").tag(Transcriber.defaultModel)
+                    Text("Rápido (ocupa menos y termina antes)").tag("openai_whisper-small")
                 }
             }
-            Section("Conversión de video") {
-                if let url = FFmpeg.executableURL {
-                    Label(url.path, systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good)
-                } else {
-                    Label("No se encontró ffmpeg. Instálalo con: brew install ffmpeg", systemImage: "exclamationmark.triangle.fill")
+            if !FFmpeg.isAvailable {
+                Section {
+                    Label("A esta copia de postPod le falta una parte para procesar video. Vuelve a instalar la app.",
+                          systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                 }
             }

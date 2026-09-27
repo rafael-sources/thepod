@@ -17,6 +17,16 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+      # ffmpeg/ffprobe propios (scripts/build-ffmpeg.sh) → Contents/MacOS, firmados al copiar
+      - path: Vendor/ffmpeg
+        optional: true
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
+      - path: Vendor/licenses
+        optional: true
+        buildPhase: resources
     dependencies:
       - package: WhisperKit
         product: WhisperKit

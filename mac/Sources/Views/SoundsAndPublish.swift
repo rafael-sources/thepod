@@ -208,7 +208,7 @@ struct PublishStep: View {
                     }
                 }
                 if !s.hosting_configured {
-                    Label("prePod todavía no tiene configurado el hosting (VPS): no se puede publicar el audio.", systemImage: "exclamationmark.triangle")
+                    Label("Tu podcast todavía no está configurado para publicar en prePod. Hazlo allí una vez y vuelve.", systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange)
                 }
             } else {
@@ -220,7 +220,7 @@ struct PublishStep: View {
     private var audioCard: some View {
         Card {
             Label("Spotify y Apple Podcasts", systemImage: "waveform").font(.headline)
-            Text("Sube el MP3 final a tu hosting y lo agrega al feed RSS. Spotify y Apple lo toman solos en unos minutos u horas.")
+            Text("Publica el episodio en tu podcast. Spotify y Apple Podcasts lo muestran solos en unos minutos u horas.")
                 .font(.caption).foregroundStyle(Theme.secondary)
             if let u = session.project.episode.publishedAudioURL ?? session.publishStatus?.episode?.media_url {
                 Label("Publicado: \(u)", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Theme.good).lineLimit(1)

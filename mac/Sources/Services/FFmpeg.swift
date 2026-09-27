@@ -10,15 +10,17 @@ enum FFmpeg {
         var errorDescription: String? {
             switch self {
             case .notFound:
-                return "No encontramos ffmpeg. Instálalo con Homebrew (brew install ffmpeg) o copia el binario dentro de la app."
+                return "A esta copia de postPod le falta una parte que necesita para procesar video. Vuelve a instalar la app."
             case .failed(let msg):
-                return "ffmpeg falló: \(msg)"
+                return "No se pudo procesar el archivo. (\(msg))"
             }
         }
     }
 
     static var executableURL: URL? {
-        if let bundled = Bundle.main.url(forResource: "ffmpeg", withExtension: nil, subdirectory: "bin"),
+        // La copia que viene dentro de la app (Contents/MacOS/ffmpeg) manda: es la versión con la que se prueba.
+        // Homebrew queda solo como respaldo para compilaciones de desarrollo sin Vendor/ffmpeg.
+        if let bundled = Bundle.main.url(forAuxiliaryExecutable: "ffmpeg"),
            FileManager.default.isExecutableFile(atPath: bundled.path) {
             return bundled
         }

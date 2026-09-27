@@ -18,8 +18,9 @@ La vista previa y la exportación usan **la misma composición** (`CompositionBu
 ## Compilar
 
 ```bash
-brew install xcodegen ffmpeg
+brew install xcodegen
 cd macos
+zsh scripts/build-ffmpeg.sh   # una sola vez: compila ffmpeg/ffprobe en Vendor/ffmpeg (≈10 min)
 xcodegen generate
 open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
 ```
@@ -27,6 +28,24 @@ open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'pla
 Requisitos: macOS 15+, Apple Silicon y Xcode 16 o posterior. La primera transcripción descarga el modelo de Whisper (~600 MB) a `~/Library/Application Support/postPod/whisper`.
 
 Los proyectos se guardan en `~/Movies/postPod/<slug>/` (`project.json`, `media/`, `exports/`, `cache/`).
+
+## ffmpeg dentro de la app
+
+La app lleva su propio `ffmpeg` y `ffprobe` en `Contents/MacOS/`: el usuario no instala nada.
+Los compila `scripts/build-ffmpeg.sh` desde el código fuente oficial, estáticos, arm64 y **LGPL**
+(sin `--enable-gpl` ni `--enable-nonfree`), con VideoToolbox, AudioToolbox y LAME para MP3.
+Las licencias quedan en `Contents/Resources/` (`FFmpeg-LGPLv2.1.txt`, `LAME-COPYING.txt`, `README.txt`).
+
+**Versión fijada** (`FFMPEG_VERSION` en el script, hoy 9.0.2). No hace falta tener la última:
+la app usa funciones que llevan años sin cambiar (decodificar WebM/VP9/Opus, filtros de audio, MP3,
+H.264 por hardware). Se actualiza cuando:
+
+- sale una corrección de seguridad que afecte a lo que usamos (demuxers de Matroska/WebM, MP4, decoders VP8/VP9/Opus/AAC), o
+- necesitamos algo nuevo.
+
+Para actualizar: cambia `FFMPEG_VERSION`, borra `Vendor/ffmpeg`, corre el script, prueba importar un paquete con WebM,
+Arreglar todo y exportar video y MP3, y publica una versión nueva de la app. Si falta `Vendor/ffmpeg`, la app de desarrollo
+usa el de Homebrew como respaldo.
 
 ## Prueba de punta a punta sin interfaz
 
@@ -38,6 +57,6 @@ Importa, arregla, sugiere reels y exporta un 16:9, el primer reel y el MP3. Al f
 
 ## Pendiente / limitaciones conocidas
 
-- ffmpeg se toma de Homebrew. Para distribuirla a otras Macs hay que empaquetar un binario de ffmpeg dentro de `Contents/Resources/bin/`, y firmarla y notarizarla.
+- Para distribuirla a otras Macs sin avisos de seguridad falta firmarla con un Developer ID y notarizarla.
 - Todavía no se aplican los momentos/operaciones del timeline web (zoom, text_overlay, color_effect, jump_to_moment), ni los banners de sponsors ni los overlays del director.
 - Whisper a veces omite las muletillas ("eh", "mmm"). Esas no se pueden cortar si no aparecen en la transcripción.
