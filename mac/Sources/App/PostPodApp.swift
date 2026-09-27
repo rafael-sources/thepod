@@ -58,7 +58,7 @@ struct RootView: View {
 }
 
 enum Theme {
-    static let accent = Color(red: 1.0, green: 0.78, blue: 0.2)
+    static let accent = Color(red: 0.957, green: 0.780, blue: 0.439)   // #F4C770, color de postPod en thePod
     static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
     static let panel = Color(white: 1, opacity: 0.05)
     static let panelStrong = Color(white: 1, opacity: 0.09)
