@@ -2695,3 +2695,22 @@ a.mark:hover { opacity: 0.8; }
   line-height: 1.6;
 }
 .empty-pill strong { color: var(--signal); }
+
+.cc-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+  vertical-align: 1px;
+}
+.icon.cc-done {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.45);
+}

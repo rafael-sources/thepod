@@ -241,6 +241,12 @@ def list_files(slug):
         if r["file_type"] in ("video", "audio"):
             if (src_dir / f"{r['filename']}.peaks.json").is_file():
                 entry["peaks_url"] = _project_peaks_url(slug, r["file_type"], r["filename"])
+            prefix = r["filename"] + "."
+            entry["caption_languages"] = sorted(
+                p.name[len(prefix):-4]
+                for p in src_dir.iterdir()
+                if p.name.startswith(prefix) and p.name.endswith(".srt")
+            ) if src_dir.is_dir() else []
         out.append(entry)
     return jsonify(out)
 

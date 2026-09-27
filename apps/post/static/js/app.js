@@ -1828,6 +1828,7 @@ var FilesPanel = {
           if (j.status === "done" || j.status === "error") {
             clearInterval(captionPoll); captionPoll = null;
             await refreshCaptionList();
+            await load();
             emit("captions-changed");
           }
         } catch (_) {}
@@ -1851,6 +1852,7 @@ var FilesPanel = {
       try {
         await api(`/api/projects/${props.project.slug}/files/${f.id}/captions/${lang}`, { method: "DELETE" });
         await refreshCaptionList();
+        await load();
         emit("captions-changed");
       } catch (e) { error.value = e.message; }
     }
@@ -1874,6 +1876,7 @@ var FilesPanel = {
           method: "PUT", body: fd,
         }).then(r => { if (!r.ok) throw new Error("Error al subir SRT"); return r.json(); });
         await refreshCaptionList();
+        await load();
         emit("captions-changed");
         podSwal.toast("SRT actualizado");
       } catch (e) { error.value = e.message; }
@@ -1992,13 +1995,20 @@ var FilesPanel = {
               <div class="title" :title="f.original_name">{{ f.original_name }}</div>
               <div class="meta">
                 {{ formatSize(f.size_bytes) }}<span v-if="f.duration"> · {{ formatDurationCompact(f.duration) }}</span>
+                <span v-if="f.caption_languages && f.caption_languages.length" class="cc-badge"
+                      :title="'Transcripción disponible: ' + f.caption_languages.join(', ')">CC {{ f.caption_languages.join(', ') }}</span>
               </div>
             </div>
             <div class="actions">
               <button v-if="f.file_type !== 'image'" class="icon ghost" @click.stop="addToTimeline(f)" title="Agregar al timeline">+</button>
               <button v-if="f.file_type === 'video'" class="track-btn" :class="'track-' + nextTrack"
                       @click.stop="cycleTrack" :title="'Pista destino: T' + nextTrack + ' (click para cambiar)'">T{{ nextTrack }}</button>
-              <button v-if="f.file_type !== 'image'" class="icon ghost" @click.stop="openCaptionsModal(f, $event)" title="Generar captions con Whisper">🎙</button>
+              <button v-if="f.file_type !== 'image'" class="icon"
+                      :class="(f.caption_languages && f.caption_languages.length) ? 'cc-done' : 'ghost'"
+                      @click.stop="openCaptionsModal(f, $event)"
+                      :title="(f.caption_languages && f.caption_languages.length)
+                        ? 'Ya existe transcripción (' + f.caption_languages.join(', ') + ') — click para gestionar'
+                        : 'Generar captions con Whisper'">🎙</button>
               <button class="icon ghost" @click.stop="makeGlobal(f, $event)" title="Mover a globales">⇪</button>
               <button class="icon danger" @click.stop="removeFile(f, $event)" title="Eliminar">✕</button>
             </div>
