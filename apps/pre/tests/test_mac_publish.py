@@ -367,3 +367,102 @@ def test_upload_video_missing_file():
         result = youtube_publish._upload_video("pod", "/no/existe.mp4", "title")
     assert result["ok"] is False
     assert "no encontrado" in result["error"].lower()
+
+
+def test_publish_youtube_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, content=b"videodata", filename="final.mp4")
+
+    def fake_upload(slug_, path, title, description="", privacy="public",
+                    category="22", progress_cb=None):
+        if progress_cb:
+            progress_cb(0.5)
+        return {"ok": True, "video_id": "abc123",
+                "url": "https://www.youtube.com/watch?v=abc123"}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("youtube_publish._upload_video", side_effect=fake_upload):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+            "title": "Mi episodio", "description": "desc", "privacy": "unlisted",
+        })
+
+    assert resp.status_code == 202
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["video_url"] == "https://www.youtube.com/watch?v=abc123"
+
+    conn = db_mod.get_db(slug)
+    link = conn.execute(
+        "SELECT url FROM episode_links WHERE episode_id=? AND platform='youtube'", (ep_id,)
+    ).fetchone()
+    conn.close()
+    assert link["url"] == "https://www.youtube.com/watch?v=abc123"
+
+
+def test_publish_youtube_link_is_upserted(client):
+    slug, ep_id = _make_podcast()
+    conn = db_mod.get_db(slug)
+    conn.execute("INSERT INTO episode_links (episode_id, platform, url) VALUES (?, 'youtube', 'https://old')", (ep_id,))
+    conn.commit()
+    conn.close()
+
+    mac_publish._save_episode_link(slug, ep_id, "youtube", "https://new")
+
+    conn = db_mod.get_db(slug)
+    rows = conn.execute(
+        "SELECT url FROM episode_links WHERE episode_id=? AND platform='youtube'", (ep_id,)
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0]["url"] == "https://new"
+
+
+def test_publish_youtube_validates_privacy(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+            "title": "t", "privacy": "secreto",
+        })
+    assert resp.status_code == 400
+
+
+def test_publish_youtube_requires_title(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+        })
+    assert resp.status_code == 400
+
+
+def test_publish_youtube_400_does_not_claim_upload(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+        })
+        assert resp.status_code == 400
+        # Upload must remain publishable after a validation error.
+        with patch("mac_publish.threading.Thread", _NoopThread):
+            resp2 = client.post("/api/mac/publish/youtube", json={
+                "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+                "title": "t",
+            })
+    assert resp2.status_code == 202
+
+
+def test_publish_youtube_error_releases_claim(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id, "title": "t"}
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("youtube_publish._upload_video", return_value={"ok": False, "error": "cuota superada"}):
+        assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202
+        assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202

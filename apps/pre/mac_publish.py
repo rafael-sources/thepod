@@ -351,3 +351,59 @@ def publish_audio():
 
     threading.Thread(target=_run, daemon=True, name=f"mac-audio-{job_id}").start()
     return jsonify({"job_id": job_id}), 202
+
+
+def _save_episode_link(slug: str, episode_id: int, platform: str, url: str):
+    conn = get_db(slug)
+    try:
+        conn.execute(
+            """INSERT INTO episode_links (episode_id, platform, url) VALUES (?, ?, ?)
+               ON CONFLICT(episode_id, platform) DO UPDATE SET url=excluded.url""",
+            (episode_id, platform, url),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@bp.post("/publish/youtube")
+@require_auth
+def publish_youtube():
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title es requerido"}), 400
+    description = data.get("description") or ""
+    privacy = data.get("privacy") or "public"
+    if privacy not in ("public", "unlisted", "private"):
+        return jsonify({"error": "privacy debe ser public, unlisted o private"}), 400
+    category = data.get("category") or "22"
+
+    slug, episode_id, path, meta, error = _parse_publish_payload()
+    if error:
+        return error
+
+    job_id = _create_job()
+
+    def _run():
+        _update_job(job_id, status="running", progress=0.0)
+        try:
+            import youtube_publish
+            result = youtube_publish._upload_video(
+                slug, path, title, description,
+                privacy=privacy, category=category,
+                progress_cb=lambda p: _update_job(job_id, progress=round(float(p), 3)),
+            )
+        except Exception as e:
+            result = {"ok": False, "error": f"error inesperado: {str(e)[:300]}"}
+        if result["ok"]:
+            _save_episode_link(slug, episode_id, "youtube", result["url"])
+            _update_job(job_id, status="done", progress=1.0,
+                        result={"video_url": result["url"], "video_id": result["video_id"]})
+            _delete_upload(meta["upload_id"])
+        else:
+            _release_upload_claim(meta["upload_id"])
+            _update_job(job_id, status="error", error=result["error"])
+
+    threading.Thread(target=_run, daemon=True, name=f"mac-youtube-{job_id}").start()
+    return jsonify({"job_id": job_id}), 202
