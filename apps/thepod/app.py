@@ -88,6 +88,10 @@ def create_app():
                     "tag": "Edición y publicación",
                     "sections": ["overview", "quickstart", "conceptos",
                                  "funcionalidades", "atajos", "integraciones", "faq"]},
+        "amapod":  {"name": "amaPod",  "icon": "❓",
+                    "tag": "Q&A en vivo",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "integraciones", "faq"]},
     }
 
     SECTION_LABELS = {
@@ -106,6 +110,7 @@ def create_app():
             "prepod":  cfg2.get("prepod_url")  or "",
             "prodpod": cfg2.get("prodpod_url") or "",
             "postpod": cfg2.get("postpod_url") or "",
+            "amapod":  cfg2.get("amapod_url")  or "",
         }
 
     @app.get("/docs")
@@ -167,6 +172,11 @@ def create_app():
              "desc": "Editas no-destructivo: cortes, zoom, momentos, subtítulos "
                      "(Whisper), formato vertical TikTok, exportas listo para subir.",
              "url":  cfg2.get("postpod_url") or ""},
+            {"key": "amapod",  "name": "amaPod",  "icon": "❓",
+             "tag":  "Q&A en vivo",
+             "desc": "Abre una sesión de preguntas con tu audiencia: cola dinámica, "
+                     "video en vivo, chat, y grabación automática.",
+             "url":  cfg2.get("amapod_url") or ""},
         ])
 
     return app
