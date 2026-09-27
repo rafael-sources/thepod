@@ -3344,7 +3344,11 @@ var TranscriptEditor = {
         </template>
 
         <div v-else-if="!files.length" class="empty-pill" style="margin-top: 10px;">
-          Genera captions de algún archivo primero (con la versión actual de la app, que ya guarda timestamps por palabra).
+          <strong>Este proyecto todavía no tiene transcripción.</strong><br>
+          Para generarla: en el panel <strong>Archivos</strong> (izquierda), pulsa el botón
+          <span class="kbd">🎙</span> del video o audio que quieras transcribir, elige el idioma
+          y pulsa <em>Generar</em>. Whisper crea los subtítulos con timestamps por palabra
+          (puede tardar varios minutos según la duración). Cuando termine, vuelve a abrir este editor.
         </div>
 
         <div class="row right" style="margin-top: 14px; gap: 8px;">
@@ -4889,7 +4893,7 @@ var ProjectView = {
             <button :disabled="timeline.clips.length === 0" @click="showExport = true" style="margin-left:8px;">
               ⇪ Exportar
             </button>
-            <a :href="'/api/projects/' + slug + '/export-bundle'" class="ghost" style="margin-left:8px; text-decoration:none; display:inline-flex; align-items:center; padding:4px 10px; font-size:12px;" title="Descargar proyecto como .zip">
+            <a :href="'/api/projects/' + project.slug + '/export-bundle'" class="ghost" style="margin-left:8px; text-decoration:none; display:inline-flex; align-items:center; padding:4px 10px; font-size:12px;" title="Descargar proyecto como .zip">
               📦 Proyecto
             </a>
             <button @click="checkMultiTrack(true)" class="ghost" style="margin-left:8px;"

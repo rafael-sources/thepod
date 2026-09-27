@@ -2684,3 +2684,14 @@ a.mark:hover { opacity: 0.8; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+
+.empty-pill {
+  padding: 14px 16px;
+  border: 1px dashed var(--ink-line);
+  border-radius: 8px;
+  background: var(--ink-sunken);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.empty-pill strong { color: var(--signal); }
