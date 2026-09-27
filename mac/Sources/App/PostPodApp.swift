@@ -45,7 +45,10 @@ struct RootView: View {
         ZStack {
             content
             if showIntro && introEnabled {
-                IntroView { withAnimation(.easeOut(duration: 0.45)) { showIntro = false } }
+                IntroView {
+                    withAnimation(.easeOut(duration: 0.45)) { showIntro = false }
+                    app.introDone = true
+                }
                     .transition(.opacity)
                     .zIndex(1)
             }

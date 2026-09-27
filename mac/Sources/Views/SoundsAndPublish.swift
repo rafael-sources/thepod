@@ -338,7 +338,7 @@ struct PrePodSettingsSection: View {
                 }
                 if let result { Text(result).font(.caption).foregroundStyle(ok ? Theme.good : .orange) }
             }
-            Text("La contraseña se guarda en el llavero de macOS.").font(.caption).foregroundStyle(.secondary)
+            Text("La contraseña queda guardada en esta Mac, solo para tu usuario.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

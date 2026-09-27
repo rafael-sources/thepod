@@ -144,7 +144,6 @@ enum ClipSuggester {
 }
 
 enum Keychain {
-    private static let service = "space.aitism.postpod"
 
     /// One-time move of settings saved under the app's previous identifier.
     static func migrateLegacy() {
@@ -156,17 +155,6 @@ enum Keychain {
             for (k, v) in old where d.object(forKey: k) == nil { d.set(v, forKey: k) }
             d.removePersistentDomain(forName: legacy)
         }
-        for account in ["prepod-password", "anthropic-api-key"] {
-            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: legacy,
-                                    kSecAttrAccount as String: account, kSecReturnData as String: true,
-                                    kSecMatchLimit as String: kSecMatchLimitOne]
-            var item: CFTypeRef?
-            guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data,
-                  let value = String(data: data, encoding: .utf8) else { continue }
-            if get(account) == nil { set(value, for: account) }
-            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: legacy,
-                           kSecAttrAccount as String: account] as CFDictionary)
-        }
     }
 
     static var apiKey: String? {
@@ -174,36 +162,54 @@ enum Keychain {
         set { set(newValue, for: "anthropic-api-key") }
     }
 
-    // Se lee del llavero una sola vez por cuenta y se guarda en memoria: cada lectura al llavero puede
-    // hacer que macOS pida la clave de la Mac, y la app consulta la contraseña en muchos lugares.
+    // Sin cuenta de Apple Developer la app va firmada "ad hoc" y su firma cambia en cada versión.
+    // El llavero de macOS ata cada dato a la firma exacta de la app que lo guardó (partition list),
+    // así que con cada versión nueva volvía a pedir la clave de la Mac, aunque se eligiera "Permitir siempre".
+    // Por eso la cuenta se guarda en un archivo propio de postPod, legible solo por tu usuario (0600),
+    // en ~/Library/Application Support/postPod/cuenta.dat. No es cifrado fuerte: lo protege el acceso a tu usuario.
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var cache: [String: String?] = [:]
+    nonisolated(unsafe) private static var cache: [String: String]?
+
+    private static var storeURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("postPod", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("cuenta.dat")
+    }
+
+    private static let mask = Array("postPod·thePod·aitism".utf8)
+    private static func scramble(_ d: Data) -> Data {
+        Data(d.enumerated().map { $0.element ^ mask[$0.offset % mask.count] })
+    }
+
+    private static func loadAll() -> [String: String] {
+        if let cache { return cache }
+        var dict: [String: String] = [:]
+        if let raw = try? Data(contentsOf: storeURL),
+           let obj = try? JSONSerialization.jsonObject(with: scramble(raw)) as? [String: String] {
+            dict = obj
+        }
+        cache = dict
+        return dict
+    }
+
+    private static func saveAll(_ dict: [String: String]) {
+        cache = dict
+        guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return }
+        let url = storeURL
+        try? scramble(data).write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
 
     static func get(_ account: String) -> String? {
         lock.lock(); defer { lock.unlock() }
-        if let hit = cache[account] { return hit }
-        let value = read(account)
-        cache[account] = .some(value)
-        return value
-    }
-
-    private static func read(_ account: String) -> String? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: account, kSecReturnData as String: true,
-                                kSecMatchLimit as String: kSecMatchLimitOne]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let d = item as? Data else { return nil }
-        return String(data: d, encoding: .utf8)
+        return loadAll()[account]
     }
 
     static func set(_ value: String?, for account: String) {
-        lock.lock(); cache[account] = .some(value?.isEmpty == false ? value : nil); lock.unlock()
-        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                   kSecAttrAccount as String: account]
-        SecItemDelete(base as CFDictionary)
-        guard let value, !value.isEmpty else { return }
-        var add = base
-        add[kSecValueData as String] = Data(value.utf8)
-        SecItemAdd(add as CFDictionary, nil)
+        lock.lock(); defer { lock.unlock() }
+        var dict = loadAll()
+        if let value, !value.isEmpty { dict[account] = value } else { dict.removeValue(forKey: account) }
+        saveAll(dict)
     }
 }

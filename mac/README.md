@@ -20,7 +20,6 @@ La vista previa y la exportación usan **la misma composición** (`CompositionBu
 ```bash
 brew install xcodegen
 cd macos
-zsh scripts/make-signing-cert.sh   # una sola vez: certificado propio para firmar siempre igual
 zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg/ffprobe en Vendor/ffmpeg (≈10 min)
 xcodegen generate
 open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
@@ -30,13 +29,13 @@ Requisitos: macOS 15+, Apple Silicon y Xcode 16 o posterior. La primera transcri
 
 Los proyectos se guardan en `~/Movies/postPod/<slug>/` (`project.json`, `media/`, `exports/`, `cache/`).
 
-## Firma
+## Firma y contraseña guardada
 
-Sin cuenta de Apple Developer, la app se firma con un certificado propio ("postPod Local Signing", creado por
-`scripts/make-signing-cert.sh` en el llavero de la Mac que compila). Lo importante es que **siempre sea el mismo**:
-el llavero de macOS reconoce la app por su firma, y si la firma cambia en cada compilación vuelve a pedir la clave
-de la Mac para leer la contraseña de prePod/postPod. Con la firma estable, se autoriza una vez ("Permitir siempre")
-y queda así también en las actualizaciones. Macs ajenas la ven como "desarrollador no identificado" la primera vez.
+Sin cuenta de Apple Developer la app va firmada "ad hoc" y su firma cambia en cada versión. El llavero de macOS ata
+cada dato a la firma exacta de la app que lo guardó, así que pedía la clave de la Mac al abrir cada versión nueva.
+Por eso la cuenta de thePod se guarda en `~/Library/Application Support/postPod/cuenta.dat` (permisos 0600, ofuscado,
+no cifrado fuerte). Con Developer ID se podría volver al llavero.
+Macs ajenas ven la app como "desarrollador no identificado" la primera vez (Privacidad y seguridad → Abrir igualmente).
 
 Para publicar una versión en thePod: `zsh scripts/package-dmg.sh` (deja `build/postPod-<versión>.dmg` y `build/postPod.json`).
 

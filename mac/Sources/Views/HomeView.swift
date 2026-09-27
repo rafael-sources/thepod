@@ -50,7 +50,8 @@ struct HomeView: View {
             .frame(maxWidth: 1200)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { app.reload(); app.loadWebProjects() }
+        .onAppear { app.reload(); if app.introDone { app.loadWebProjects() } }
+        .onChange(of: app.introDone) { _, done in if done { app.loadWebProjects() } }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in app.reload() }
     }
 

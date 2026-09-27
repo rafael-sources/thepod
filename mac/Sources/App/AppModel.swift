@@ -13,6 +13,8 @@ final class AppModel: ObservableObject {
     @Published var session: ProjectSession?
     @Published var importJob: JobState?
     @Published var errorMessage: String?
+    /// true cuando terminó la entrada de thePod (o está apagada): recién ahí se consulta la cuenta.
+    @Published var introDone = SelfTest.isRequested || !UserDefaults.standard.bool(forKey: "introAlAbrir", default: true)
     private var importTask: Task<Void, Never>?
 
     init() { reload() }
@@ -635,5 +637,11 @@ final class ProjectSession: ObservableObject {
             project.cuts.append(Cut(start: max(0, phrase.start - 0.05), end: phrase.end + 0.05, kind: .manual,
                                     label: "“\(phrase.text.prefix(40))…”"))
         }
+    }
+}
+
+extension UserDefaults {
+    func bool(forKey key: String, default value: Bool) -> Bool {
+        object(forKey: key) == nil ? value : bool(forKey: key)
     }
 }
