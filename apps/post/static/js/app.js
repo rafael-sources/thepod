@@ -467,6 +467,9 @@ var VideoPlayer = {
     editingOverlay: Object, // shared ref with OpForm for WYSIWYG text_overlay editing
     liveCaption: String,    // current SRT segment text or null
     captionsEnabled: Boolean,
+    karaokeWords: { type: Array, default: null },
+    karaokeStyle: { type: Object, default: null },
+    karaokeMode: { type: Boolean, default: false },
   },
   emits: ["toggle-captions"],
   setup(props) {
@@ -477,6 +480,24 @@ var VideoPlayer = {
     let jumpCooldownUntil = 0;  // epoch ms, suppresses double-jumps after a jump
 
     const activeClip = computed(() => clipAtTime(props.clips, props.playerState.currentTime, props.moments));
+
+    const karaokeWindow = computed(() => {
+      if (!props.karaokeMode || !props.karaokeWords || !props.karaokeWords.length) return null;
+      const t = props.playerState.currentTime;
+      const words = props.karaokeWords;
+      let best = -1;
+      for (let i = 0; i < words.length; i++) {
+        if (words[i].s <= t && words[i].e >= t) { best = i; break; }
+        if (words[i].s > t) { best = Math.max(0, i - 1); break; }
+      }
+      if (best < 0) best = words.length - 1;
+      const groupStart = Math.max(0, best - 1);
+      const groupEnd = Math.min(words.length, groupStart + 4);
+      return words.slice(groupStart, groupEnd).map(w => ({
+        text: w.w,
+        active: w.s <= t && w.e >= t,
+      }));
+    });
 
     // Preload jump_to_moment targets' media so the jump doesn't lag when it
     // crosses into a different source clip. We keep one hidden <video> per
@@ -1011,6 +1032,7 @@ var VideoPlayer = {
       tc, tcTotal, rangeReadout, activeClip, frameStyle, isVertical, verticalStyle,
       isVerticalSplit, isMultitrackSplit, setSplitPanelEl,
       textOverlayFontFamily, textOverlayShadow, onEditOverlayPointerDown,
+      karaokeWindow,
     };
   },
   template: `
@@ -1060,6 +1082,13 @@ var VideoPlayer = {
           >{{ s.text }}</div>
         </template>
         <div v-if="liveCaption" class="caption-overlay">{{ liveCaption }}</div>
+        <div v-if="karaokeWindow" class="karaoke-overlay"
+             :class="'pos-' + (karaokeStyle?.position || 'center')">
+          <span v-for="(kw, ki) in karaokeWindow" :key="ki"
+                class="karaoke-word" :class="{ active: kw.active }">
+            {{ kw.text }}
+          </span>
+        </div>
         <template v-if="effects && effects.textOverlays && effects.textOverlays.length">
           <div
             v-for="(ov, i) in effects.textOverlays"
