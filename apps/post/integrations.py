@@ -50,7 +50,8 @@ def integration_status():
     spid = request.args.get("shared_project_id")
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
-    meta = find_project_by_shared_id(spid)
+    ep_id = request.args.get("source_episode_id")
+    meta = find_project_by_shared_id(spid, source_episode_id=ep_id)
     if not meta:
         return jsonify({"found": False}), 404
     return jsonify({"found": True, "project": _summarize_project(meta)})
@@ -73,12 +74,12 @@ def import_from_prepod():
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
 
-    existing = find_project_by_shared_id(spid)
-    if existing:
-        return jsonify({"project": _summarize_project(existing), "created": False}), 200
-
     podcast = data.get("podcast") or {}
     episode = data.get("episode") or {}
+
+    existing = find_project_by_shared_id(spid, source_episode_id=episode.get("id"))
+    if existing:
+        return jsonify({"project": _summarize_project(existing), "created": False}), 200
 
     podcast_name = (podcast.get("name") or "").strip() or "Podcast"
     ep_num = episode.get("number")
@@ -514,18 +515,22 @@ def import_chapters_from_prodpod():
     spid = (data.get("shared_project_id") or "").strip()
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
+    src_ep_id = data.get("source_episode_id")
     chapters = data.get("chapters") or []
     if not isinstance(chapters, list):
         return jsonify({"error": "chapters debe ser lista"}), 400
 
-    meta = find_project_by_shared_id(spid)
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+        src_info = {"app": "prodpod",
+                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "auto_created_by": "prodpod_chapters"}
+        if src_ep_id is not None:
+            src_info["episode"] = {"id": src_ep_id}
         meta = _create_project_internal(
             name=project_name, shared_project_id=spid,
-            source_info={"app": "prodpod",
-                         "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                         "auto_created_by": "prodpod_chapters"},
+            source_info=src_info,
         )
     slug = meta["slug"]
 
@@ -605,18 +610,22 @@ def import_sound_triggers_from_prodpod():
     spid = (data.get("shared_project_id") or "").strip()
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
+    src_ep_id = data.get("source_episode_id")
     triggers = data.get("triggers") or []
     if not isinstance(triggers, list):
         return jsonify({"error": "triggers debe ser lista"}), 400
 
-    meta = find_project_by_shared_id(spid)
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+        src_info = {"app": "prodpod",
+                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "auto_created_by": "prodpod_sound_triggers"}
+        if src_ep_id is not None:
+            src_info["episode"] = {"id": src_ep_id}
         meta = _create_project_internal(
             name=project_name, shared_project_id=spid,
-            source_info={"app": "prodpod",
-                         "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                         "auto_created_by": "prodpod_sound_triggers"},
+            source_info=src_info,
         )
     slug = meta["slug"]
 
@@ -736,22 +745,24 @@ def import_track_from_prodpod():
         }), 400
 
     # Find or create the project
-    meta = find_project_by_shared_id(spid)
+    src_ep_id = (request.form.get("source_episode_id") or "").strip() or None
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         project_name = (request.form.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
-        # Owner + extra hosts forwarded by prodPod (originally from prePod's
-        # podcast settings). Defaults to "admin" if not provided.
         owner = (request.form.get("owner_username") or "admin").strip().lower()
         extra_hosts_raw = (request.form.get("extra_hosts") or "").strip()
         extra_hosts = [h.strip().lower() for h in extra_hosts_raw.split(",") if h.strip()]
+        src_info = {
+            "app": "prodpod",
+            "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "auto_created_by": "prodpod_track_import",
+        }
+        if src_ep_id:
+            src_info["episode"] = {"id": int(src_ep_id) if src_ep_id.isdigit() else src_ep_id}
         meta = _create_project_internal(
             name=project_name,
             shared_project_id=spid,
-            source_info={
-                "app": "prodpod",
-                "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "auto_created_by": "prodpod_track_import",
-            },
+            source_info=src_info,
             owner_username=owner,
         )
         # Patch in extra_hosts (the helper doesn't accept it directly).
@@ -901,7 +912,8 @@ def list_exports_by_spid():
     spid = request.args.get("shared_project_id")
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
-    meta = find_project_by_shared_id(spid)
+    src_ep_id = request.args.get("source_episode_id")
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         return jsonify({"error": "proyecto no encontrado"}), 404
     slug = meta["slug"]
@@ -945,7 +957,8 @@ def download_export_by_spid(job_id):
     spid = request.args.get("shared_project_id")
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
-    meta = find_project_by_shared_id(spid)
+    src_ep_id = request.args.get("source_episode_id")
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         return jsonify({"error": "proyecto no encontrado"}), 404
     slug = meta["slug"]
@@ -976,7 +989,8 @@ def delete_export_by_spid(job_id):
     spid = request.args.get("shared_project_id")
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
-    meta = find_project_by_shared_id(spid)
+    src_ep_id = request.args.get("source_episode_id")
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         return jsonify({"error": "proyecto no encontrado"}), 404
     slug = meta["slug"]
@@ -1020,18 +1034,22 @@ def import_director_events():
     spid = (data.get("shared_project_id") or "").strip()
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
+    src_ep_id = data.get("source_episode_id")
     events = data.get("events") or []
     if not isinstance(events, list):
         return jsonify({"error": "events debe ser lista"}), 400
 
-    meta = find_project_by_shared_id(spid)
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+        src_info = {"app": "prodpod",
+                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "auto_created_by": "prodpod_director_events"}
+        if src_ep_id is not None:
+            src_info["episode"] = {"id": src_ep_id}
         meta = _create_project_internal(
             name=project_name, shared_project_id=spid,
-            source_info={"app": "prodpod",
-                         "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                         "auto_created_by": "prodpod_director_events"},
+            source_info=src_info,
         )
     slug = meta["slug"]
 
@@ -1084,7 +1102,8 @@ def import_director_asset():
     if not f or not f.filename:
         return jsonify({"error": "file requerido"}), 400
 
-    meta = find_project_by_shared_id(spid)
+    src_ep_id = (request.form.get("source_episode_id") or "").strip() or None
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         return jsonify({"error": "proyecto no encontrado para shared_project_id"}), 404
     slug = meta["slug"]
@@ -1117,7 +1136,7 @@ def delete_episode_cascade():
     if not shared_project_id:
         return jsonify({"error": "shared_project_id requerido"}), 400
 
-    meta = find_project_by_shared_id(shared_project_id)
+    meta = find_project_by_shared_id(shared_project_id, source_episode_id=source_episode_id)
     if not meta:
         return jsonify({"ok": True, "deleted": False, "reason": "no project found"})
 

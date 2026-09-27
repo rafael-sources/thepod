@@ -1686,6 +1686,11 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
     if not preset:
         raise ValueError(f"preset desconocido: {preset_id}")
 
+    if vertical_center_spotlight:
+        pw, ph = preset.get("width"), preset.get("height")
+        if pw and ph and pw >= ph:
+            vertical_center_spotlight = False
+
     clips, flat_ops, all_have_audio, total_duration, moments, audio_lane = _load_timeline_state(slug)
     if not clips:
         raise ValueError("el timeline está vacío")

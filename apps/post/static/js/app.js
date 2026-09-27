@@ -3289,7 +3289,7 @@ var ExportModal = {
         if (generateNotes.value) body.generate_notes = true;
         if (enhanceSpeech.value) body.enhance_speech = true;
         if (spotlight.value) body.spotlight = true;
-        if (verticalCenterSpotlight.value) body.vertical_center_spotlight = true;
+        if (verticalCenterSpotlight.value && isVerticalPreset.value) body.vertical_center_spotlight = true;
         if (useBackground.value) body.use_background = true;
         if (momentBanner.value) {
           body.moment_banner = true;

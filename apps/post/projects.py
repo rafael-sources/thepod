@@ -28,8 +28,10 @@ def _unique_slug(name: str) -> str:
     return slug
 
 
-def find_project_by_shared_id(shared_project_id: str):
-    """Look up a project by its shared_project_id (linked from prePod/prodPod)."""
+def find_project_by_shared_id(shared_project_id: str, source_episode_id=None):
+    """Look up a project by its shared_project_id (linked from prePod/prodPod).
+    When source_episode_id is given, also match on source.episode.id so that
+    different episodes of the same podcast don't collide."""
     if not shared_project_id:
         return None
     PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,8 +39,14 @@ def find_project_by_shared_id(shared_project_id: str):
         if not entry.is_dir():
             continue
         meta = _read_meta(entry.name)
-        if meta and meta.get("shared_project_id") == shared_project_id:
-            return meta
+        if not meta or meta.get("shared_project_id") != shared_project_id:
+            continue
+        if source_episode_id is not None:
+            src = meta.get("source") or {}
+            ep = src.get("episode") or {}
+            if str(ep.get("id", "")) != str(source_episode_id):
+                continue
+        return meta
     return None
 
 
