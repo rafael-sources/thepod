@@ -150,6 +150,31 @@ def _podcast_access_error(slug: str):
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
+
+def _create_job() -> str:
+    job_id = uuid.uuid4().hex
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "queued", "progress": 0.0, "result": None, "error": None}
+    return job_id
+
+
+def _update_job(job_id: str, **fields):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if job:
+            job.update(fields)
+
+
+@bp.get("/jobs/<job_id>")
+@require_auth
+def get_job(job_id):
+    with _jobs_lock:
+        job = _jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "job no encontrado"}), 404
+        return jsonify(dict(job))
+
+
 _upload_locks: dict[str, threading.Lock] = {}
 _upload_locks_guard = threading.Lock()
 

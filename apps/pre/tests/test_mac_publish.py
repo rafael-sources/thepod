@@ -139,3 +139,24 @@ def test_weird_suffix_falls_back_to_bin(client):
     assert resp.status_code == 200
     stored = mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.bin"
     assert stored.read_bytes() == data
+
+
+def test_job_lifecycle_helpers(client):
+    job_id = mac_publish._create_job()
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body == {"status": "queued", "progress": 0.0, "result": None, "error": None}
+
+    mac_publish._update_job(job_id, status="running", progress=0.5)
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body["status"] == "running"
+    assert body["progress"] == 0.5
+
+    mac_publish._update_job(job_id, status="done", progress=1.0,
+                            result={"media_url": "https://x/y.mp3"})
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body["status"] == "done"
+    assert body["result"]["media_url"] == "https://x/y.mp3"
+
+
+def test_unknown_job_is_404(client):
+    assert client.get("/api/mac/jobs/nope").status_code == 404
