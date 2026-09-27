@@ -123,6 +123,19 @@ CREATE TABLE IF NOT EXISTS project_segments (
     created_at        TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_project_segments_pos ON project_segments(position);
+
+CREATE TABLE IF NOT EXISTS subtitle_styles (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    name             TEXT NOT NULL DEFAULT 'default',
+    font_family      TEXT NOT NULL DEFAULT 'sans-serif',
+    font_size        TEXT NOT NULL DEFAULT 'medium',
+    text_color       TEXT NOT NULL DEFAULT '#FFFFFF',
+    outline_color    TEXT NOT NULL DEFAULT '#000000',
+    background_color TEXT,
+    highlight_color  TEXT NOT NULL DEFAULT '#FFD700',
+    position         TEXT NOT NULL DEFAULT 'bottom',
+    created_at       TEXT DEFAULT (datetime('now'))
+);
 """
 
 
@@ -189,6 +202,12 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
     seg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(project_segments)")}
     if "actual_offset_seconds" not in seg_cols:
         conn.execute("ALTER TABLE project_segments ADD COLUMN actual_offset_seconds REAL")
+    if "layout_template" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN layout_template TEXT DEFAULT 'side_by_side'")
+    if "pip_corner" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN pip_corner TEXT DEFAULT 'bottom_right'")
+    if "pip_main_track" not in ej_cols:
+        conn.execute("ALTER TABLE export_jobs ADD COLUMN pip_main_track INTEGER DEFAULT 1")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS director_events (
             id                       INTEGER PRIMARY KEY AUTOINCREMENT,
