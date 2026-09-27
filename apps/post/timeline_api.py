@@ -1175,3 +1175,149 @@ def place_prodpod_tracks(slug):
         return jsonify({"ok": True, "placed": len(sources)})
     finally:
         db.close()
+
+
+# ── Transcript-based silence detection ───────────────────────────
+
+
+def _detect_silences_from_transcript(slug, min_gap):
+    db = get_db(slug)
+    try:
+        mf = db.execute(
+            "SELECT mf.id, mf.filename, mf.file_type FROM media_files mf "
+            "JOIN timeline_clips tc ON tc.media_file_id = mf.id "
+            "ORDER BY tc.position LIMIT 1"
+        ).fetchone()
+    finally:
+        db.close()
+
+    if not mf:
+        return "none", []
+
+    media_dir = PROJECTS_DIR / slug / "media" / mf["file_type"]
+    words_file = None
+    for candidate in media_dir.glob(f"{mf['filename']}.*.words.json"):
+        words_file = candidate
+        break
+
+    if not words_file or not words_file.is_file():
+        return "none", []
+
+    try:
+        payload = json.loads(words_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "none", []
+
+    words = payload.get("words", [])
+    if len(words) < 2:
+        return "transcript", []
+
+    silences = []
+    for i in range(len(words) - 1):
+        gap_start = words[i]["e"]
+        gap_end = words[i + 1]["s"]
+        gap_dur = gap_end - gap_start
+        if gap_dur >= min_gap:
+            before = " ".join(w["w"] for w in words[max(0, i - 2):i + 1])
+            after = " ".join(w["w"] for w in words[i + 1:i + 4])
+            label = f"...{before} [{gap_dur:.1f}s] {after}..."
+            silences.append({
+                "start": round(gap_start, 3),
+                "end": round(gap_end, 3),
+                "duration": round(gap_dur, 3),
+                "after_word_index": i,
+                "label": label,
+            })
+
+    return "transcript", silences
+
+
+@bp.post("/api/projects/<slug>/silence/detect")
+@require_auth
+def detect_silences(slug):
+    if not (PROJECTS_DIR / slug).exists():
+        abort(404, description="proyecto no encontrado")
+    data = request.get_json(silent=True) or {}
+    min_gap = max(0.3, min(3.0, float(data.get("min_gap", 1.0))))
+    source = (data.get("source") or "auto").strip().lower()
+
+    if source in ("auto", "transcript"):
+        src_used, silences = _detect_silences_from_transcript(slug, min_gap)
+        if src_used == "transcript" or source == "transcript":
+            total_dur = sum(s["duration"] for s in silences)
+            return jsonify({
+                "source_used": "transcript",
+                "silences": silences,
+                "total_duration": round(total_dur, 2),
+                "count": len(silences),
+            })
+
+    db = get_db(slug)
+    try:
+        clip_row = db.execute(
+            "SELECT mf.filename, mf.file_type FROM media_files mf "
+            "JOIN timeline_clips tc ON tc.media_file_id = mf.id "
+            "ORDER BY tc.position LIMIT 1"
+        ).fetchone()
+    finally:
+        db.close()
+    if not clip_row:
+        return jsonify({"source_used": "none", "silences": [], "total_duration": 0, "count": 0})
+
+    path = PROJECTS_DIR / slug / "media" / clip_row["file_type"] / clip_row["filename"]
+    ranges = _silencedetect(path, -30, min_gap)
+    silences = []
+    for (s, e) in ranges:
+        silences.append({
+            "start": round(s, 3),
+            "end": round(e, 3),
+            "duration": round(e - s, 3),
+            "label": f"[{e - s:.1f}s silencio en {s:.1f}s]",
+        })
+    total_dur = sum(s["duration"] for s in silences)
+    return jsonify({
+        "source_used": "audio",
+        "silences": silences,
+        "total_duration": round(total_dur, 2),
+        "count": len(silences),
+    })
+
+
+@bp.post("/api/projects/<slug>/silence/apply")
+@require_auth
+def apply_silences(slug):
+    if not (PROJECTS_DIR / slug).exists():
+        abort(404, description="proyecto no encontrado")
+    data = request.get_json(silent=True) or {}
+    cuts = data.get("cuts")
+    if not isinstance(cuts, list) or not cuts:
+        return jsonify({"error": "cuts[] requerido"}), 400
+
+    db = get_db(slug)
+    try:
+        sorted_cuts = sorted(cuts, key=lambda c: c["start"], reverse=True)
+        total_removed = 0.0
+        splits = 0
+        for cut in sorted_cuts:
+            s = float(cut["start"])
+            e = float(cut["end"])
+            if e <= s:
+                continue
+            result = _remove_silences_in_timeline_range(db, slug, s, e, -30, 0.1)
+            if result:
+                total_removed += result.get("removed_seconds", 0)
+                splits += result.get("splits", 0)
+            db.execute(
+                "INSERT INTO transcript_cuts (start_seconds, end_seconds, label) VALUES (?, ?, ?)",
+                (s, e, cut.get("label", "")),
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    return jsonify({
+        "ok": True,
+        "removed_seconds": round(total_removed, 2),
+        "splits": splits,
+        "cuts_applied": len(sorted_cuts),
+    })
