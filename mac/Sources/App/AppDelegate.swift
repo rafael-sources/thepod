@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "sonidoAlCerrar") }
     }
 
+    /// Cerrar la ventana con la X cierra thePod (y suena igual que con ⌘Q).
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !SelfTest.isRequested }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard Self.soundOnQuit, !SelfTest.isRequested, player == nil,
               let url = Bundle.main.url(forResource: "thepod-logout", withExtension: "wav"),

@@ -139,34 +139,27 @@ final class Updater: ObservableObject {
     private func fetchDMG(_ rel: Release) async throws -> URL {
         var req = try request("GET", "/descargas/thepod-mac")
         req.timeoutInterval = 600
-        let (bytes, resp) = try await session.bytes(for: req)
+        let progress = UpdateProgress { [weak self] f in Task { @MainActor in self?.state = .downloading(f) } }
+        let (tmp, resp) = try await session.download(for: req, delegate: progress)
         absorb(resp)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw PrePodClient.Failure(message: "No se pudo bajar la actualización") }
-        let total = rel.size ?? resp.expectedContentLength
-        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-update-\(UUID().uuidString).dmg")
-        FileManager.default.createFile(atPath: dest.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: dest)
-        defer { try? handle.close() }
-        var hasher = SHA256()
-        var buffer = Data(); buffer.reserveCapacity(1 << 20)
-        var got: Int64 = 0
-        var lastReport = Date.distantPast
-        for try await byte in bytes {
-            buffer.append(byte)
-            if buffer.count >= 1 << 20 {
-                try handle.write(contentsOf: buffer); hasher.update(data: buffer)
-                got += Int64(buffer.count); buffer.removeAll(keepingCapacity: true)
-                if Date().timeIntervalSince(lastReport) > 0.3 {
-                    lastReport = Date()
-                    state = .downloading(total > 0 ? Double(got) / Double(total) : nil)
-                }
-            }
+        let file = FileManager.default.fileExists(atPath: tmp.path) ? tmp : (progress.saved ?? tmp)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            try? FileManager.default.removeItem(at: file)
+            throw PrePodClient.Failure(message: "No se pudo bajar la actualización")
         }
-        if !buffer.isEmpty { try handle.write(contentsOf: buffer); hasher.update(data: buffer) }
-        let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
-        if let expected = rel.sha256, !expected.isEmpty, expected.lowercased() != digest {
-            try? FileManager.default.removeItem(at: dest)
-            throw PrePodClient.Failure(message: "La actualización llegó incompleta. Intenta de nuevo.")
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-update-\(UUID().uuidString).dmg")
+        try FileManager.default.moveItem(at: file, to: dest)
+        // Comprobar que llegó entera (se lee por partes, sin cargar todo en memoria)
+        if let expected = rel.sha256, !expected.isEmpty {
+            let h = try FileHandle(forReadingFrom: dest)
+            defer { try? h.close() }
+            var hasher = SHA256()
+            while let chunk = try h.read(upToCount: 4 << 20), !chunk.isEmpty { hasher.update(data: chunk) }
+            let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+            guard digest == expected.lowercased() else {
+                try? FileManager.default.removeItem(at: dest)
+                throw PrePodClient.Failure(message: "La actualización llegó incompleta. Intenta de nuevo.")
+            }
         }
         return dest
     }
@@ -221,5 +214,22 @@ final class Updater: ObservableObject {
         try? p.run()
         p.waitUntilExit()
         NSApp.terminate(nil)
+    }
+}
+
+private final class UpdateProgress: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    let report: @Sendable (Double?) -> Void
+    var saved: URL?
+    private var last = Date.distantPast
+    init(_ report: @escaping @Sendable (Double?) -> Void) { self.report = report }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard Date().timeIntervalSince(last) > 0.2 else { return }
+        last = Date()
+        report(totalBytesExpectedToWrite > 0 ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) : nil)
+    }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-dl-\(UUID().uuidString).part")
+        if (try? FileManager.default.moveItem(at: location, to: dest)) != nil { saved = dest }
     }
 }
