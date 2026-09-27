@@ -187,7 +187,8 @@ def create_app():
                                username=session.get("username"),
                                mac_app=_mac_info())
 
-    @app.get("/api/descargas/postpod-mac")
+    @app.get("/api/descargas/thepod-mac")
+    @app.get("/api/descargas/postpod-mac")  # alias del nombre anterior
     def descargas_mac_info():
         if not session.get("username"):
             return jsonify({"error": "no autenticado"}), 401
