@@ -19,6 +19,36 @@ postPod recibe las grabaciones de una sesión en vivo (pistas individuales por p
 - **10 presets de export** — YouTube (1080p/4K, 30/60fps), TikTok vertical, Instagram cuadrado, WhatsApp, Podcast MP3/M4A
 - **Análisis con IA** — genera show notes y sugiere clips exportables
 
+## Layouts de composición
+
+| Layout | Descripción | Participantes |
+|--------|-------------|---------------|
+| Lado a lado | `hstack` de las pistas, misma altura | 2 |
+| Grid | Cuadrícula 2×2, panel impar centrado | 3–4 |
+| Spotlight | El speaker activo (detectado por energía RMS) ocupa el área principal | 2+ |
+| PiP | Pista secundaria como picture-in-picture con overlay | 2 |
+| Solo | Una sola pista a pantalla completa | 1 |
+
+Para exports verticales (TikTok/Reels) existe además el modo **center spotlight**: el speaker activo centrado en 9:16 con subtítulos karaoke word-by-word.
+
+## Operaciones sobre momentos
+
+Cada **momento** (marcador en el timeline) puede tener operaciones que se aplican en el export:
+
+`color_effect` (grayscale/sepia/invert) · `subtitle` · `text_overlay` (stickers cómic con fuente, rotación y animación) · `remove_silences` · `jump_to_moment` · `switch_track` (cambio de cámara) · `vertical_split` · `audio_mix` / `audio_replace` (SFX) · `zoom_in` / `zoom_out` · `cut_before` / `cut_after` · `insert_clip` · `switch_video` · `to_vertical`
+
+## Presets de export
+
+| ID | Salida |
+|----|--------|
+| `yt_1080p_30` / `yt_1080p_60` | 1920×1080 mp4 h264, 30/60 fps |
+| `yt_4k_30` / `yt_4k_60` | 3840×2160 mp4 h264, 30/60 fps |
+| `std_hd_24` | 1280×720 mp4, 24 fps |
+| `tiktok_v` | 1080×1920 vertical (Reels/TikTok) |
+| `instagram_sq` | 1080×1080 cuadrado |
+| `whatsapp` | 1280×720 comprimido para compartir |
+| `podcast_mp3` / `podcast_m4a` | Solo audio (MP3 / AAC) |
+
 ## Stack
 
 | Capa | Tecnología |
@@ -57,6 +87,31 @@ gunicorn --workers 1 --threads 8 --bind 0.0.0.0:5000 --timeout 600 'app:create_a
 La primera vez, se crea `~/.podpod/config.json` con claves aleatorias y `~/.podpod/users.db` con usuarios por defecto.
 
 Abrir `http://localhost:5000` en el navegador.
+
+## Atajos de teclado
+
+| Tecla | Acción |
+|-------|--------|
+| `Space` | Play/Pause |
+| `M` | Crear momento en el tiempo actual |
+| `←` / `→` | Seek ±5s |
+| `Shift+←/→` | Seek por frame (±1/30s) |
+| `+` / `-` | Zoom del timeline |
+| `Z` | Zoom a la selección |
+| `Esc` | Limpiar selección |
+| `Del` | Borrar palabras seleccionadas (TranscriptEditor) |
+
+## API
+
+85 endpoints REST en total:
+
+| Grupo | Cantidad | Auth |
+|-------|----------|------|
+| Sesión de usuario (proyectos, timeline, momentos, captions, exports, IA) | 62 | Cookie firmada (`@require_auth`) |
+| Server-to-server (webhooks prePod/prodPod) | 14 | Header `X-PodPod-Secret` |
+| Públicos (login, media con HTTP Range, health) | 9 | — |
+
+El detalle completo de cada endpoint (método, ruta, payload) está en [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) §5.
 
 ## Ecosistema thePod
 
@@ -110,8 +165,8 @@ postpod/
 
 ## Documentación adicional
 
-- [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) — Documento técnico completo (1000+ líneas) para portar post-producción a app nativa macOS: schema, endpoints, pipeline FFmpeg, puntos frágiles
-- [`ESTADO.md`](ESTADO.md) — Estado del proyecto fase por fase
+- [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) — Documento técnico completo (1200+ líneas) para portar post-producción a app nativa macOS: schema SQL de las 13 tablas, los 85 endpoints, pipeline FFmpeg, 21 puntos frágiles, spec del bundle portable y apéndice con ejemplos de datos reales (words.json, params de operaciones, payloads de webhooks, comando FFmpeg, tiempos de procesamiento)
+- [`ESTADO.md`](ESTADO.md) — Historial del proyecto fase por fase (Fase 1 auth/proyectos → Fase 12 features CapCut) + cajón de mejoras pendientes
 
 ## Licencia
 
