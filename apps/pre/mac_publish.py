@@ -412,3 +412,72 @@ def publish_youtube():
 
     threading.Thread(target=_run, daemon=True, name=f"mac-youtube-{job_id}").start()
     return jsonify({"job_id": job_id}), 202
+
+
+# ---------------------------------------------------------------------------
+# Estado de publicación (lectura agregada para la app Mac)
+# ---------------------------------------------------------------------------
+
+@bp.get("/podcasts/<slug>/publish-status")
+@require_auth
+def publish_status(slug):
+    denied = _podcast_access_error(slug)
+    if denied:
+        return denied
+
+    from distribution import PLATFORMS, _ensure_distribution_table, _get_feed_url
+    from hosting import _get_hosting_config
+    from youtube_publish import _get_stored_tokens
+
+    episode_id = request.args.get("episode_id", type=int)
+
+    db = get_db(slug)
+    try:
+        _ensure_distribution_table(db)
+        dist_rows = db.execute(
+            "SELECT platform, status, external_url FROM distribution_platforms"
+        ).fetchall()
+        episode = None
+        links = []
+        if episode_id is not None:
+            episode = db.execute("SELECT * FROM episodes WHERE id=?", (episode_id,)).fetchone()
+            if episode:
+                links = db.execute(
+                    "SELECT platform, url FROM episode_links WHERE episode_id=? ORDER BY platform",
+                    (episode_id,),
+                ).fetchall()
+    finally:
+        db.close()
+
+    if episode_id is not None and not episode:
+        return jsonify({"error": "episodio no encontrado"}), 404
+
+    distribution = {p: {"platform": p, "status": "not_configured", "external_url": None}
+                    for p in PLATFORMS}
+    for row in dist_rows:
+        distribution[row["platform"]] = {
+            "platform": row["platform"],
+            "status": row["status"],
+            "external_url": row["external_url"],
+        }
+
+    tokens = _get_stored_tokens(slug)
+
+    payload = {
+        "feed_url": _get_feed_url(slug),
+        "hosting_configured": _get_hosting_config() is not None,
+        "distribution": list(distribution.values()),
+        "youtube": {
+            "connected": bool(tokens),
+            "channel_name": (tokens or {}).get("channel_name") or "",
+        },
+    }
+    if episode is not None:
+        payload["episode"] = {
+            "title": episode["title"],
+            "number": episode["episode_number"],
+            "status": episode["status"],
+            "media_url": episode["media_url"],
+            "links": [{"platform": lnk["platform"], "url": lnk["url"]} for lnk in links],
+        }
+    return jsonify(payload)

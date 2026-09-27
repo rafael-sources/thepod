@@ -485,3 +485,69 @@ def test_publish_youtube_link_failure_still_completes_job(client):
     assert job["status"] == "done"
     assert job["result"]["video_url"].endswith("abc")
     assert "link no guardado" in job["result"]["warning"]
+
+
+def test_publish_status(client):
+    slug, ep_id = _make_podcast()
+
+    conn = db_mod.get_db(slug)
+    import distribution
+    distribution._ensure_distribution_table(conn)
+    conn.execute(
+        "INSERT INTO distribution_platforms (platform, status, external_url) VALUES ('spotify', 'connected', 'https://open.spotify.com/show/x')"
+    )
+    conn.execute(
+        "UPDATE episodes SET media_url='https://media/x.mp3', status='published' WHERE id=?", (ep_id,)
+    )
+    conn.execute(
+        "INSERT INTO episode_links (episode_id, platform, url) VALUES (?, 'youtube', 'https://youtu.be/x')", (ep_id,)
+    )
+    conn.commit()
+    conn.close()
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config",
+               return_value={"hosting": {"host": "1.2.3.4", "user": "u", "base_url": "https://m", "upload_path": "/x/"}}), \
+         patch("youtube_publish._get_stored_tokens",
+               return_value={"access_token": "a", "refresh_token": "r", "channel_name": "Mi Canal"}), \
+         patch("shared_config.load_shared_config", return_value={}):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status?episode_id={ep_id}")
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["feed_url"].endswith(f"/landing/{slug}/feed.xml")
+    assert body["hosting_configured"] is True
+    platforms = {p["platform"]: p for p in body["distribution"]}
+    assert set(platforms) == {"spotify", "apple", "youtube"}
+    assert platforms["spotify"]["status"] == "connected"
+    assert platforms["spotify"]["external_url"] == "https://open.spotify.com/show/x"
+    assert platforms["apple"]["status"] == "not_configured"
+    assert body["youtube"] == {"connected": True, "channel_name": "Mi Canal"}
+    ep = body["episode"]
+    assert ep["title"] == "Ep 1"
+    assert ep["number"] == 7
+    assert ep["status"] == "published"
+    assert ep["media_url"] == "https://media/x.mp3"
+    assert ep["links"] == [{"platform": "youtube", "url": "https://youtu.be/x"}]
+
+
+def test_publish_status_without_episode(client):
+    slug, _ = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config", return_value={}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status")
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["hosting_configured"] is False
+    assert body["youtube"]["connected"] is False
+    assert "episode" not in body
+
+
+def test_publish_status_unknown_episode(client):
+    slug, _ = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config", return_value={}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status?episode_id=999")
+    assert resp.status_code == 404
