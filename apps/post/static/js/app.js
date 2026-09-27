@@ -3816,7 +3816,14 @@ var SilenceModal = {
 
     onMounted(detect);
 
-    return { minGap, loading, silences, sourceUsed, checked, applying,
+    const sourceLabel = computed(() => {
+      if (sourceUsed.value === "transcript") return "📝 Basado en la transcripción (pausas entre palabras)";
+      if (sourceUsed.value === "audio") return "🔊 Basado en análisis de audio (FFmpeg)";
+      if (sourceUsed.value === "none") return "Sin transcripción ni audio analizable";
+      return "";
+    });
+
+    return { minGap, loading, silences, sourceLabel, checked, applying,
              error, onSliderInput, detect, checkedCount, checkedDuration, apply };
   },
   template: `
@@ -3831,8 +3838,8 @@ var SilenceModal = {
           <input type="range" min="0.3" max="3.0" step="0.1"
                  v-model.number="minGap" @input="onSliderInput"
                  style="width:100%;">
-          <div class="muted" style="font-size:10px;margin-top:2px;">
-            Detectado desde: {{ sourceUsed || '...' }}
+          <div v-if="sourceLabel" style="font-size:12px;margin-top:6px;color:var(--paper,#e8eaf0);opacity:0.85;">
+            {{ sourceLabel }}
           </div>
         </div>
         <div v-if="loading" class="muted" style="padding:16px;text-align:center;">
