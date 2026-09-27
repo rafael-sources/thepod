@@ -1,6 +1,7 @@
 name: PostPodApp
 options:
   bundleIdPrefix: space.aitism
+  developmentLanguage: es
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
