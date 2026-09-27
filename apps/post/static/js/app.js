@@ -5124,7 +5124,7 @@ var App = {
         </div>
         <div class="sibling-apps" v-if="siblingApps">
           <a v-for="a in siblingApps" :key="a.key" :href="a.url" class="sibling-link" :title="'Ir a ' + a.name">
-            <span class="ico">{{ a.icon }}</span>
+            <span class="ico" :data-app="a.key"></span>
             <span>{{ a.name }}</span>
           </a>
         </div>

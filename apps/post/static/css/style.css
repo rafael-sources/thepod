@@ -300,7 +300,16 @@ a.mark:hover { opacity: 0.8; }
   opacity: 0.55; transition: opacity 0.2s; border-bottom: none;
 }
 .sibling-link:hover { opacity: 1; color: var(--signal); }
-.sibling-link .ico { font-size: 13px; }
+.sibling-link .ico {
+  width: 14px; height: 14px; display: inline-block; flex: none;
+  background: currentColor;
+  -webkit-mask: var(--pod-ico) center / contain no-repeat;
+          mask: var(--pod-ico) center / contain no-repeat;
+}
+.sibling-link .ico[data-app="prepod"]  { --pod-ico: url(/static/icons/mono/prepod.svg); }
+.sibling-link .ico[data-app="prodpod"] { --pod-ico: url(/static/icons/mono/prodpod.svg); }
+.sibling-link .ico[data-app="postpod"] { --pod-ico: url(/static/icons/mono/postpod.svg); }
+.sibling-link .ico[data-app="amapod"]  { --pod-ico: url(/static/icons/mono/amapod.svg); }
 
 .tally-light {
   display: inline-flex;
