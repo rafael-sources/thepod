@@ -26,6 +26,7 @@ global/image/
 # Runtime
 *.log
 *.pid
+.whisper_models/
 
 # Secrets / env
 .env
