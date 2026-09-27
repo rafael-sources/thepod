@@ -44,13 +44,17 @@ actor PrePodClient {
     }
     static var isConfigured: Bool { !username.isEmpty && Keychain.get("prepod-password") != nil }
 
+    // Session cookie handled by hand: prePod sets it for the parent domain (.castmedia.space)
+    // and a private HTTPCookieStorage doesn't reliably keep it, so every request after login
+    // arrived without session ("no autenticado").
     private let session: URLSession = {
-        let c = URLSessionConfiguration.default
-        c.httpCookieStorage = HTTPCookieStorage()
-        c.httpCookieAcceptPolicy = .always
+        let c = URLSessionConfiguration.ephemeral
+        c.httpShouldSetCookies = false
+        c.httpCookieAcceptPolicy = .never
         c.timeoutIntervalForRequest = 120
         return URLSession(configuration: c)
     }()
+    private var cookies: [String: String] = [:]
     private var loggedIn = false
 
     // MARK: HTTP
@@ -73,8 +77,15 @@ actor PrePodClient {
             req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             req.httpBody = body
         }
+        if !cookies.isEmpty {
+            req.setValue(cookies.map { "\($0.key)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie")
+        }
         let (data, resp) = try await session.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        let http = resp as? HTTPURLResponse
+        if let http, let headers = http.allHeaderFields as? [String: String], let u = http.url {
+            for c in HTTPCookie.cookies(withResponseHeaderFields: headers, for: u) { cookies[c.name] = c.value }
+        }
+        let code = http?.statusCode ?? 0
         if code == 401, retry, path != "/api/auth/login" {
             loggedIn = false
             return try await send(method, path, json: json, body: body, retry: false)
@@ -94,7 +105,7 @@ actor PrePodClient {
         loggedIn = true
     }
 
-    func resetSession() { loggedIn = false }
+    func resetSession() { loggedIn = false; cookies = [:] }
 
     // MARK: Reads
 

@@ -8,6 +8,21 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
+            || CommandLine.arguments.contains("--prepod-test")
+    }
+
+    /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
+    @MainActor
+    static func prepodTest() {
+        Task { @MainActor in
+            let pw = Keychain.get("prepod-password")
+            print("url=\(PrePodClient.baseURL) user=[\(PrePodClient.username)] pwLen=\(pw?.count ?? -1) pwUTF8=\(pw?.utf8.count ?? -1) nonASCII=\(pw?.unicodeScalars.contains { !$0.isASCII } ?? false)")
+            do {
+                let list = try await PrePodClient.shared.podcasts()
+                print("OK podcasts=\(list.count)")
+            } catch { print("ERROR \(error.localizedDescription)") }
+            fflush(stdout); exit(0)
+        }
     }
 
     /// postPod --render <slug> <start> <end> <landscape|vertical|square>: export a window of an existing project.
@@ -36,6 +51,7 @@ enum SelfTest {
         }
         let args = CommandLine.arguments
         if args.contains("--render") { render(); return }
+        if args.contains("--prepod-test") { prepodTest(); return }
         guard let i = args.firstIndex(of: "--selftest") else { return }
         let inputs = args[(i + 1)...].filter { !$0.hasPrefix("-") }.map { URL(fileURLWithPath: $0) }
         let skipLandscape = args.contains("--no-landscape")
