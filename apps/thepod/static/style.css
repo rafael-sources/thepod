@@ -266,7 +266,7 @@ button { font-family: inherit; }
 
 /* Per-app accent overrides ---------------------------------- */
 .theme-prepod  { --accent: #5a8bff; --accent-soft: rgba(90,139,255,0.14);  --accent-dim: rgba(90,139,255,0.45); }
-.theme-prodpod { --accent: #ff6b6b; --accent-soft: rgba(255,107,107,0.14); --accent-dim: rgba(255,107,107,0.45); }
+.theme-prodpod { --accent: #ff3b3b; --accent-soft: rgba(255,59,59,0.14); --accent-dim: rgba(255,59,59,0.45); }
 .theme-postpod { --accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45); }
 .theme-amapod  { --accent: #14b8a6; --accent-soft: rgba(20,184,166,0.14);  --accent-dim: rgba(20,184,166,0.45); }
 .theme-hub     { --accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45); }
@@ -289,7 +289,8 @@ body.docs {
   background: linear-gradient(to bottom, var(--ink-deep) 70%, transparent);
   backdrop-filter: blur(8px);
 }
-.docs-top .brand a { color: inherit; text-decoration: none; display: flex; gap: 10px; align-items: baseline; }
+.docs-top .brand a { color: inherit; text-decoration: none; display: flex; gap: 10px; align-items: center; }
+.docs-top .brand-disc { width: 22px; height: 22px; display: block; }
 .docs-top .brand .mark { font-family: var(--font-display); font-weight: 800; font-size: 22px; }
 .docs-top .brand .mark em { color: var(--accent); font-style: normal; }
 .docs-top .crumb {
@@ -317,7 +318,9 @@ body.docs {
   text-decoration: none;
   border-radius: 999px;
   transition: all 0.16s ease;
+  display: inline-flex; align-items: center; gap: 7px;
 }
+.app-switch a svg { width: 13px; height: 13px; display: block; flex: none; }
 .app-switch a:hover { color: var(--paper); }
 .app-switch a.active {
   background: var(--accent);
@@ -350,12 +353,12 @@ body.docs {
   font-size: 13.5px;
 }
 .docs-sidebar .app-tag {
-  display: flex; align-items: baseline; gap: 8px;
+  display: flex; align-items: center; gap: 10px;
   margin-bottom: 20px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--ink-line);
 }
-.docs-sidebar .app-tag .icon { font-size: 22px; }
+.docs-sidebar .app-tag img.icon { width: 38px; height: 38px; display: block; flex: none; }
 .docs-sidebar .app-tag .name {
   font-family: var(--font-display);
   font-weight: 600; font-size: 22px;
@@ -778,7 +781,7 @@ kbd {
 }
 .docs-index-card:hover { transform: translateY(-3px); border-color: var(--accent-dim); box-shadow: 0 18px 50px rgba(0,0,0,0.4); }
 .docs-index-card:hover::before { width: 6px; }
-.docs-index-card .icon { font-size: 32px; line-height: 1; }
+.docs-index-card img.icon { width: 48px; height: 48px; display: block; }
 .docs-index-card .name { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 6px 0 2px; letter-spacing: -0.014em; }
 .docs-index-card .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
 .docs-index-card .desc { font-size: 13.5px; line-height: 1.55; color: var(--paper-soft); margin: 14px 0; }
@@ -804,7 +807,7 @@ kbd {
   border-bottom: 0 !important;
 }
 .x-link.prepod  { color: #5a8bff; border-color: rgba(90,139,255,0.35); }
-.x-link.prodpod { color: #ff6b6b; border-color: rgba(255,107,107,0.35); }
+.x-link.prodpod { color: #ff3b3b; border-color: rgba(255,59,59,0.35); }
 .x-link.postpod { color: #f4c770; border-color: rgba(244,199,112,0.35); }
 .x-link.amapod  { color: #14b8a6; border-color: rgba(20,184,166,0.35); }
 .x-link::before { content: "↳"; color: var(--paper-dim); }

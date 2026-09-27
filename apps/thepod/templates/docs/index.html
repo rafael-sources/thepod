@@ -20,7 +20,7 @@
   <div class="docs-index-grid">
 
     <a href="/docs/prepod" class="docs-index-card theme-prepod" style="--accent: #5a8bff; --accent-soft: rgba(90,139,255,0.14); --accent-dim: rgba(90,139,255,0.45);">
-      <span class="icon">🎙</span>
+      <img class="icon" src="{{ url_for('static', filename='icons/prepod.svg') }}" alt="">
       <div class="tag">Preproducción</div>
       <div class="name">prePod</div>
       <p class="desc">Branding del podcast, kanban de episodios, rundown, guion, invitados con RSVP, calendario y plantillas recurrentes.</p>
@@ -29,8 +29,8 @@
       </div>
     </a>
 
-    <a href="/docs/prodpod" class="docs-index-card theme-prodpod" style="--accent: #ff6b6b; --accent-soft: rgba(255,107,107,0.14); --accent-dim: rgba(255,107,107,0.45);">
-      <span class="icon">🔴</span>
+    <a href="/docs/prodpod" class="docs-index-card theme-prodpod" style="--accent: #ff3b3b; --accent-soft: rgba(255,59,59,0.14); --accent-dim: rgba(255,59,59,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/prodpod.svg') }}" alt="">
       <div class="tag">Estudio en vivo</div>
       <div class="name">prodPod</div>
       <p class="desc">Grabación remota WebRTC con video multipista, mic check, soundboard, chat backstage, screen share y RTMP a YouTube/Twitch.</p>
@@ -40,7 +40,7 @@
     </a>
 
     <a href="/docs/postpod" class="docs-index-card theme-postpod" style="--accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45);">
-      <span class="icon">🎬</span>
+      <img class="icon" src="{{ url_for('static', filename='icons/postpod.svg') }}" alt="">
       <div class="tag">Edición y publicación</div>
       <div class="name">postPod</div>
       <p class="desc">Edición no-destructiva, momentos, captions Whisper, edición por transcripción, speech enhancement y export con notas auto.</p>
@@ -50,7 +50,7 @@
     </a>
 
     <a href="/docs/amapod" class="docs-index-card theme-amapod" style="--accent: #14b8a6; --accent-soft: rgba(20,184,166,0.14); --accent-dim: rgba(20,184,166,0.45);">
-      <span class="icon">❓</span>
+      <img class="icon" src="{{ url_for('static', filename='icons/amapod.svg') }}" alt="">
       <div class="tag">Q&amp;A en vivo</div>
       <div class="name">amaPod</div>
       <p class="desc">Eventos AMA con cola de preguntas moderada, participantes sin cuenta, preconexión, chat, espectadores con likes y grabación.</p>
@@ -76,8 +76,8 @@
         <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Episodio + guion + invitados + calendario.</p>
       </div>
       <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
-      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #ff6b6b;">
-        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff6b6b; font-weight: 700;">PRODPOD</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #ff3b3b;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff3b3b; font-weight: 700;">PRODPOD</div>
         <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Grabas</div>
         <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Sesión en vivo, video multipista, marcadores.</p>
       </div>
