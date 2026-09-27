@@ -21,14 +21,9 @@
   </details>
 
   <details>
-    <summary>“No se encontró ffmpeg”</summary>
-    <div class="ans"><p>Instálalo con Homebrew: <code>brew install ffmpeg</code>. La app lo busca en <code>/opt/homebrew/bin</code>.</p></div>
-  </details>
-
-  <details>
     <summary>“Usuario o contraseña inválidos” o no aparecen proyectos en “En postPod web”</summary>
     <div class="ans">
-      <p>Revisa en Ajustes que las direcciones sean las de <code>castmedia.space</code> (la sesión de thePod se comparte en ese dominio) y toca <strong>Guardar y probar</strong>. Si la web te deja entrar con esos mismos datos, la app también debería.</p>
+      <p>Abre Ajustes, revisa tu usuario y contraseña (son los mismos de la web) y toca <strong>Guardar y probar</strong>. Si la web te deja entrar con esos datos, la app también debería.</p>
     </div>
   </details>
 
@@ -39,7 +34,7 @@
 
   <details>
     <summary>La primera transcripción tarda mucho</summary>
-    <div class="ans"><p>La primera vez la app descarga el modelo de transcripción (~600 MB, o ~250 MB en modo Rápido). Queda guardado y las siguientes veces empieza de inmediato.</p></div>
+    <div class="ans"><p>La primera vez la app se prepara para transcribir: necesita internet y tarda unos minutos. Solo pasa una vez; las siguientes empieza de inmediato y funciona sin internet.</p></div>
   </details>
 
   <details>
@@ -54,12 +49,12 @@
 
   <details>
     <summary>¿Dónde quedan mis archivos?</summary>
-    <div class="ans"><p>En <code>~/Movies/postPod/&lt;proyecto&gt;/exports/</code>. En la barra lateral de cada proyecto está el botón <strong>Carpeta de exportados</strong>.</p></div>
+    <div class="ans"><p>En la barra lateral de cada proyecto toca <strong>Carpeta de exportados</strong> y se abre en Finder.</p></div>
   </details>
 
   <details>
-    <summary>“prePod todavía no tiene configurado el hosting”</summary>
-    <div class="ans"><p>Para publicar el audio, prePod necesita el hosting configurado. Hazlo una vez en prePod y vuelve a la app. YouTube funciona aparte, con el canal conectado en prePod.</p></div>
+    <summary>No me deja publicar el audio</summary>
+    <div class="ans"><p>Tu podcast tiene que estar configurado para publicar en prePod. Hazlo una vez allí y vuelve a la app. YouTube funciona aparte: solo necesita tu canal conectado en prePod.</p></div>
   </details>
 </section>
 {% endblock %}

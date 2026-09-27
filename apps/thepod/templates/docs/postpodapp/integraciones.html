@@ -17,15 +17,15 @@
   <p>
     El usuario y la contraseña son los de thePod. La app inicia sesión en prePod y en postPod con esas credenciales
     y solo ve lo que tu cuenta puede ver en la web (tus proyectos, o todos si eres administrador).
-    La contraseña vive en el llavero de macOS.
+    La contraseña queda guardada de forma segura en tu Mac.
   </p>
 </section>
 
 <section id="desde-postpod">
   <h2><span class="num">02</span> Desde postPod</h2>
   <p>
-    <strong>Traer a la Mac</strong> pide a postPod el paquete del proyecto (el mismo <code>.zip</code> que baja el botón de exportar
-    de la web) y lo importa. Del paquete, la app usa:
+    <strong>Traer a la Mac</strong> baja el proyecto desde postPod (lo mismo que el botón de exportar
+    de la web) y lo abre. De ahí, la app usa:
   </p>
   <ul>
     <li><strong>Pistas</strong> de cada participante (video y audio), con su desfase en el tiempo.</li>
@@ -58,13 +58,13 @@
   <table>
     <thead><tr><th>Destino</th><th>Cómo llega</th><th>Qué necesita en prePod</th></tr></thead>
     <tbody>
-      <tr><td>Spotify y Apple Podcasts</td><td>La app sube el MP3; prePod lo aloja y lo agrega al feed RSS. Las plataformas lo leen solas.</td><td>Hosting configurado y el podcast dado de alta con su feed.</td></tr>
+      <tr><td>Spotify y Apple Podcasts</td><td>La app envía el audio a prePod y prePod lo publica en tu podcast. Las plataformas lo muestran solas.</td><td>Tu podcast configurado para publicar.</td></tr>
       <tr><td>YouTube</td><td>La app sube el video 16:9; prePod lo publica en tu canal.</td><td>Canal conectado en Distribución → YouTube.</td></tr>
     </tbody>
   </table>
   <p>
-    Los archivos grandes se suben por partes y se reintentan solos si se corta la conexión.
-    Al terminar, la app muestra el link publicado.
+    Si se corta la conexión mientras sube, la app lo vuelve a intentar sola.
+    Al terminar, te muestra el link publicado.
   </p>
 </section>
 {% endblock %}
