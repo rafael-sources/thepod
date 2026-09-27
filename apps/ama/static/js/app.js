@@ -174,7 +174,7 @@ var DashboardView = {
   <header class="app-header">\
     <span class="brand">ama<span class="brand-accent">Pod</span></span>\
     <div class="sibling-apps">\
-      <a v-for="a in apps" :key="a.key" :href="a.url" class="sibling-link"><span class="ico">{{ a.icon }}</span> {{ a.name }}</a>\
+      <a v-for="a in apps" :key="a.key" :href="a.url" class="sibling-link"><span class="ico" :data-app="a.key"></span> {{ a.name }}</a>\
     </div>\
     <span class="spacer"></span>\
     <div class="user-chip">\
