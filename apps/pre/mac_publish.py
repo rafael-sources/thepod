@@ -20,6 +20,8 @@ se pierden si el servicio se reinicia (el cliente debe reintentar).
 from __future__ import annotations
 
 import json
+import os
+import re
 import threading
 import time
 import uuid
@@ -34,6 +36,7 @@ from db import get_db
 bp = Blueprint("mac_publish", __name__, url_prefix="/api/mac")
 
 CHUNK_MAX = 16 * 1024 * 1024   # 16 MB por chunk
+UPLOAD_MAX = 20 * 1024 ** 3    # 20 GB: tope de tamaño declarado por upload
 UPLOAD_TTL = 24 * 3600         # limpiar uploads abandonados a las 24 h
 
 
@@ -62,7 +65,10 @@ def _read_meta(upload_id: str) -> dict | None:
 
 
 def _write_meta(upload_id: str, meta: dict):
-    _meta_path(upload_id).write_text(json.dumps(meta))
+    p = _meta_path(upload_id)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(meta))
+    os.replace(tmp, p)
 
 
 def _cleanup_stale_uploads():
@@ -84,6 +90,8 @@ def _delete_upload(upload_id: str):
             (_uploads_dir() / name).unlink(missing_ok=True)
         except OSError:
             pass
+    with _upload_locks_guard:
+        _upload_locks.pop(upload_id, None)
 
 
 def _resolve_upload(upload_id: str) -> tuple[Path | None, dict | None]:
@@ -142,6 +150,14 @@ def _podcast_access_error(slug: str):
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
 
+_upload_locks: dict[str, threading.Lock] = {}
+_upload_locks_guard = threading.Lock()
+
+
+def _upload_lock(upload_id: str) -> threading.Lock:
+    with _upload_locks_guard:
+        return _upload_locks.setdefault(upload_id, threading.Lock())
+
 
 # ---------------------------------------------------------------------------
 # Endpoints de subida por partes
@@ -156,6 +172,11 @@ def create_upload():
     size = data.get("size")
     if not filename or not isinstance(size, int) or size <= 0:
         return jsonify({"error": "filename y size (bytes, > 0) son requeridos"}), 400
+    filename = Path(filename).name
+    if not filename or len(filename) > 255:
+        return jsonify({"error": "filename inválido"}), 400
+    if size > UPLOAD_MAX:
+        return jsonify({"error": "size supera el máximo de 20 GB"}), 413
 
     upload_id = uuid.uuid4().hex
     (_uploads_dir() / f"{upload_id}.part").touch()
@@ -172,63 +193,67 @@ def create_upload():
 @bp.put("/uploads/<upload_id>/chunk")
 @require_auth
 def upload_chunk(upload_id):
-    meta = _read_meta(upload_id)
-    if not meta:
-        return jsonify({"error": "upload no encontrado"}), 404
-    if meta.get("complete"):
-        return jsonify({"error": "upload ya finalizado"}), 409
+    with _upload_lock(upload_id):
+        meta = _read_meta(upload_id)
+        if not meta:
+            return jsonify({"error": "upload no encontrado"}), 404
+        if meta.get("complete"):
+            return jsonify({"error": "upload ya finalizado"}), 409
 
-    index = request.args.get("index", type=int)
-    if index is None:
-        return jsonify({"error": "parámetro index requerido"}), 400
-    if index != meta["next_index"]:
-        return jsonify({
-            "error": f"chunk fuera de orden: se esperaba index={meta['next_index']}",
-            "next_index": meta["next_index"],
-        }), 409
+        index = request.args.get("index", type=int)
+        if index is None:
+            return jsonify({"error": "parámetro index requerido"}), 400
+        if index != meta["next_index"]:
+            return jsonify({
+                "error": f"chunk fuera de orden: se esperaba index={meta['next_index']}",
+                "next_index": meta["next_index"],
+            }), 409
 
-    body = request.get_data(cache=False)
-    if not body:
-        return jsonify({"error": "cuerpo binario vacío"}), 400
-    if len(body) > CHUNK_MAX:
-        return jsonify({"error": "el chunk supera el máximo de 16 MB"}), 413
+        body = request.get_data(cache=False)
+        if not body:
+            return jsonify({"error": "cuerpo binario vacío"}), 400
+        if len(body) > CHUNK_MAX:
+            return jsonify({"error": "el chunk supera el máximo de 16 MB"}), 413
 
-    part = _uploads_dir() / f"{upload_id}.part"
-    if not part.is_file():
-        return jsonify({"error": "upload no encontrado"}), 404
-    with part.open("ab") as fh:
-        fh.write(body)
+        part = _uploads_dir() / f"{upload_id}.part"
+        if not part.is_file():
+            return jsonify({"error": "upload no encontrado"}), 404
+        with part.open("ab") as fh:
+            fh.write(body)
 
-    meta["next_index"] = index + 1
-    _write_meta(upload_id, meta)
-    return jsonify({"ok": True, "received": part.stat().st_size})
+        meta["next_index"] = index + 1
+        _write_meta(upload_id, meta)
+        return jsonify({"ok": True, "received": part.stat().st_size})
 
 
 @bp.post("/uploads/<upload_id>/finish")
 @require_auth
 def finish_upload(upload_id):
-    meta = _read_meta(upload_id)
-    if not meta:
-        return jsonify({"error": "upload no encontrado"}), 404
-    if meta.get("complete"):
-        return jsonify({"ok": True, "size": meta["size"]})
+    with _upload_lock(upload_id):
+        meta = _read_meta(upload_id)
+        if not meta:
+            return jsonify({"error": "upload no encontrado"}), 404
+        if meta.get("complete"):
+            return jsonify({"ok": True, "size": meta["size"]})
 
-    part = _uploads_dir() / f"{upload_id}.part"
-    if not part.is_file():
-        return jsonify({"error": "upload no encontrado"}), 404
+        part = _uploads_dir() / f"{upload_id}.part"
+        if not part.is_file():
+            return jsonify({"error": "upload no encontrado"}), 404
 
-    actual = part.stat().st_size
-    if actual != meta["size"]:
-        return jsonify({
-            "error": f"tamaño incorrecto: se esperaban {meta['size']} bytes y llegaron {actual}",
-        }), 400
+        actual = part.stat().st_size
+        if actual != meta["size"]:
+            return jsonify({
+                "error": f"tamaño incorrecto: se esperaban {meta['size']} bytes y llegaron {actual}",
+            }), 400
 
-    # Conservar la extensión original: el nombre final del audio y el mimetype
-    # del video en YouTube dependen del sufijo del archivo.
-    suffix = Path(meta["filename"]).suffix or ".bin"
-    stored = _uploads_dir() / f"{upload_id}{suffix}"
-    part.rename(stored)
-    meta["complete"] = True
-    meta["stored_name"] = stored.name
-    _write_meta(upload_id, meta)
-    return jsonify({"ok": True, "size": actual})
+        # Conservar la extensión original: el nombre final del audio y el mimetype
+        # del video en YouTube dependen del sufijo del archivo.
+        suffix = Path(meta["filename"]).suffix
+        if not re.fullmatch(r"\.[A-Za-z0-9]{1,10}", suffix or ""):
+            suffix = ".bin"
+        stored = _uploads_dir() / f"{upload_id}{suffix}"
+        part.rename(stored)
+        meta["complete"] = True
+        meta["stored_name"] = stored.name
+        _write_meta(upload_id, meta)
+        return jsonify({"ok": True, "size": actual})

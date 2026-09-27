@@ -123,3 +123,19 @@ def test_stale_uploads_are_cleaned_on_init(client):
     assert not old.exists()
     assert not old_meta.exists()
     assert fresh.exists()
+
+
+def test_upload_size_over_cap_is_rejected(client):
+    resp = client.post("/api/mac/uploads",
+                       json={"filename": "big.mp4", "size": mac_publish.UPLOAD_MAX + 1})
+    assert resp.status_code == 413
+
+
+def test_weird_suffix_falls_back_to_bin(client):
+    data = b"xx"
+    upload_id = _init_upload(client, filename="raro.mp3 x", size=len(data))
+    client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=data)
+    resp = client.post(f"/api/mac/uploads/{upload_id}/finish")
+    assert resp.status_code == 200
+    stored = mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.bin"
+    assert stored.read_bytes() == data
