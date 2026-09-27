@@ -24,6 +24,145 @@ from config import PROJECTS_DIR, drawtext_fontfile, find_preset
 from db import get_db
 
 
+SUBTITLE_FONT_MAP = {
+    "sans-serif": "Liberation Sans",
+    "serif": "Liberation Serif",
+    "mono": "Liberation Mono",
+    "display": "Newsreader",
+}
+
+SUBTITLE_SIZE_MAP = {
+    "small":  lambda H: max(16, int(H * 0.028)),
+    "medium": lambda H: max(20, int(H * 0.040)),
+    "large":  lambda H: max(26, int(H * 0.055)),
+}
+
+
+def _hex_to_ass_color(hex_color):
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return "&Hffffff&"
+    r, g, b = h[0:2], h[2:4], h[4:6]
+    return f"&H{b}{g}{r}&"
+
+
+def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label, seek_offset=0.0):
+    if not burn_captions or not W or not H:
+        return [], video_label
+
+    from db import get_db as _get_db
+    db_k = _get_db(slug)
+    try:
+        mf = db_k.execute(
+            "SELECT filename, file_type FROM media_files WHERE id=?",
+            (burn_captions.get("media_file_id"),),
+        ).fetchone()
+    finally:
+        db_k.close()
+    if not mf:
+        return [], video_label
+
+    lang = burn_captions.get("language", "auto")
+    words_path = (
+        PROJECTS_DIR / slug / "media" / mf["file_type"]
+        / f"{mf['filename']}.{lang}.words.json"
+    )
+    if not words_path.is_file():
+        return [], video_label
+
+    try:
+        payload = json.loads(words_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], video_label
+    words = payload.get("words", [])
+    if not words:
+        return [], video_label
+
+    st = style or {}
+    font_file = drawtext_fontfile()
+    font_size = max(30, int(H * 0.08))
+    sz = st.get("font_size", "medium")
+    if sz == "small":
+        font_size = max(24, int(H * 0.06))
+    elif sz == "large":
+        font_size = max(36, int(H * 0.10))
+
+    text_color = (st.get("text_color") or "#FFFFFF").lstrip("#")
+    highlight = (st.get("highlight_color") or "#FFD700").lstrip("#")
+    bg_color = st.get("background_color")
+    pos = st.get("position", "center")
+    if pos == "top":
+        y_expr = str(int(H * 0.10))
+    elif pos == "bottom":
+        y_expr = str(int(H * 0.80))
+    else:
+        y_expr = str(int(H * 0.45))
+
+    groups = []
+    current_group = []
+    for w in words:
+        current_group.append(w)
+        is_punct = w["w"].rstrip().endswith((".", ",", "!", "?", ":", ";"))
+        if len(current_group) >= 4 or (len(current_group) >= 3 and is_punct):
+            groups.append(current_group)
+            current_group = []
+    if current_group:
+        groups.append(current_group)
+
+    parts = []
+    label = video_label
+    uid = 0
+
+    for group in groups:
+        window_start = group[0]["s"] - seek_offset
+        window_end = group[-1]["e"] - seek_offset
+        if window_end <= window_start + 0.01:
+            continue
+
+        full_text = " ".join(w["w"] for w in group)
+        approx_total_w = len(full_text) * font_size * 0.55
+        start_x = max(10, int((W - approx_total_w) / 2))
+
+        if bg_color:
+            bg_hex = bg_color.lstrip("#")
+            uid += 1
+            box_lbl = f"kbg{uid}"
+            box_h = int(font_size * 1.6)
+            box_w = min(W - 20, int(approx_total_w + font_size))
+            box_x = max(10, int((W - box_w) / 2))
+            box_y = int(float(y_expr) - font_size * 0.3)
+            parts.append(
+                f"[{label}]drawbox=x={box_x}:y={box_y}:w={box_w}:h={box_h}"
+                f":color=0x{bg_hex}@0.7:t=fill"
+                f":enable='between(t,{window_start:.3f},{window_end:.3f})'"
+                f"[{box_lbl}]"
+            )
+            label = box_lbl
+
+        cursor_x = start_x
+        for w in group:
+            ws = w["s"] - seek_offset
+            we = w["e"] - seek_offset
+            escaped = _escape_drawtext(w["w"])
+            uid += 1
+            wlbl = f"kw{uid}"
+            fc_expr = (
+                f"if(between(t\\,{ws:.3f}\\,{we:.3f})\\,0x{highlight}\\,0x{text_color})"
+            )
+            parts.append(
+                f"[{label}]drawtext=text='{escaped}'"
+                f"{font_file}:fontsize={font_size}"
+                f":fontcolor_expr='{fc_expr}'"
+                f":x={cursor_x}:y={y_expr}"
+                f":enable='between(t,{window_start:.3f},{window_end:.3f})'"
+                f"[{wlbl}]"
+            )
+            label = wlbl
+            cursor_x += int(len(w["w"]) * font_size * 0.55) + int(font_size * 0.25)
+
+    return parts, label
+
+
 # Track running ffmpeg processes so we can cancel them. Key = (slug, job_id).
 _ACTIVE_JOBS: dict[tuple, subprocess.Popen] = {}
 _ACTIVE_LOCK = threading.Lock()
@@ -1664,7 +1803,11 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                          moment_banner: bool = False,
                          banner_position: str = "bottom",
                          vertical_center_spotlight: bool = False,
-                         director_overlays: bool = False):
+                         director_overlays: bool = False,
+                         subtitle_style: dict | None = None,
+                         layout_template: str = "side_by_side",
+                         pip_corner: str = "bottom_right",
+                         pip_main_track: int = 1):
     """Returns (cmd_list, effective_duration_seconds).
 
     `enhance_speech`: when True, runs the speech track through a small
@@ -2443,32 +2586,54 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
         )
         audio_label = "aloud"
 
-    # Burn-in captions: append a `subtitles=` filter on the final video stream
-    # using the SRT sidecar of the requested media file.
     if video_label and burn_captions:
         from db import get_db as _get_db
-        db = _get_db(slug)
+        db_bc = _get_db(slug)
         try:
-            mf = db.execute(
+            mf = db_bc.execute(
                 "SELECT filename, file_type FROM media_files WHERE id=?",
                 (burn_captions.get("media_file_id"),),
             ).fetchone()
         finally:
-            db.close()
+            db_bc.close()
         if mf:
             srt_path = (
                 PROJECTS_DIR / slug / "media" / mf["file_type"]
                 / f"{mf['filename']}.{burn_captions.get('language')}.srt"
             )
             if srt_path.is_file():
-                # Single-quote-escape the path for the filter expression.
-                srt_arg = str(srt_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
-                parts.append(
-                    f"[{video_label}]subtitles='{srt_arg}'"
-                    f":force_style='Fontsize=22,PrimaryColour=&Hffffff&,OutlineColour=&H000000&,BorderStyle=3,Outline=2'"
-                    f"[vsub]"
-                )
-                video_label = "vsub"
+                is_karaoke = H is not None and W is not None and H > W
+                if is_karaoke:
+                    karaoke_parts, video_label = _build_karaoke_drawtext_chain(
+                        slug, burn_captions, subtitle_style, W, H, video_label,
+                        seek_offset=seek_offset,
+                    )
+                    parts.extend(karaoke_parts)
+                else:
+                    srt_arg = str(srt_path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+                    st = subtitle_style or {}
+                    font_name = SUBTITLE_FONT_MAP.get(st.get("font_family", "sans-serif"), "Liberation Sans")
+                    font_size = SUBTITLE_SIZE_MAP.get(st.get("font_size", "medium"), SUBTITLE_SIZE_MAP["medium"])(H or 1080)
+                    primary = _hex_to_ass_color(st.get("text_color", "#FFFFFF"))
+                    outline_c = _hex_to_ass_color(st.get("outline_color", "#000000"))
+                    bg = st.get("background_color")
+                    border_style = "3" if bg else "1"
+                    pos = st.get("position", "bottom")
+                    alignment = "8" if pos == "top" else "5" if pos == "center" else "2"
+                    force = (
+                        f"Fontname={font_name},Fontsize={font_size},"
+                        f"PrimaryColour={primary},OutlineColour={outline_c},"
+                        f"BorderStyle={border_style},Outline=2,Alignment={alignment}"
+                    )
+                    if bg:
+                        back_c = _hex_to_ass_color(bg)
+                        force += f",BackColour={back_c}"
+                    parts.append(
+                        f"[{video_label}]subtitles='{srt_arg}'"
+                        f":force_style='{force}'"
+                        f"[vsub]"
+                    )
+                    video_label = "vsub"
 
     effective_from_ranges = sum(e - s for s, e in keep_ranges)
 
@@ -2626,7 +2791,8 @@ def run_export(slug: str, job_id: int):
         job = db.execute(
             "SELECT preset_id, burn_captions_json, generate_notes, enhance_speech, "
             "range_start, range_end, spotlight, use_background, moment_banner, "
-            "banner_position, vertical_center_spotlight, director_overlays FROM export_jobs WHERE id=?",
+            "banner_position, vertical_center_spotlight, director_overlays, "
+            "layout_template, pip_corner, pip_main_track FROM export_jobs WHERE id=?",
             (job_id,),
         ).fetchone()
     finally:
@@ -2642,6 +2808,9 @@ def run_export(slug: str, job_id: int):
     banner_position = job["banner_position"] if "banner_position" in job_keys else "bottom"
     vertical_center_spotlight = bool(job["vertical_center_spotlight"]) if "vertical_center_spotlight" in job_keys else False
     director_overlays_flag = bool(job["director_overlays"]) if "director_overlays" in job_keys else False
+    layout_template = job["layout_template"] if "layout_template" in job_keys else "side_by_side"
+    pip_corner = job["pip_corner"] if "pip_corner" in job_keys else "bottom_right"
+    pip_main_track = int(job["pip_main_track"]) if "pip_main_track" in job_keys and job["pip_main_track"] else 1
     preset = find_preset(preset_id)
     if not preset:
         _update_job(slug, job_id, status="error", error_msg=f"preset desconocido: {preset_id}")
@@ -2653,6 +2822,18 @@ def run_export(slug: str, job_id: int):
             burn_captions = json.loads(job["burn_captions_json"])
         except (TypeError, ValueError):
             burn_captions = None
+
+    sub_style = None
+    if burn_captions:
+        db2 = get_db(slug)
+        try:
+            style_row = db2.execute("SELECT * FROM subtitle_styles WHERE name='default'").fetchone()
+            if style_row:
+                sub_style = dict(style_row)
+        except Exception:
+            pass
+        finally:
+            db2.close()
 
     ext = preset["format"]
     exports_dir = PROJECTS_DIR / slug / "exports"
@@ -2673,6 +2854,10 @@ def run_export(slug: str, job_id: int):
             banner_position=banner_position or "bottom",
             vertical_center_spotlight=vertical_center_spotlight,
             director_overlays=director_overlays_flag,
+            subtitle_style=sub_style,
+            layout_template=layout_template,
+            pip_corner=pip_corner,
+            pip_main_track=pip_main_track,
         )
     except Exception as e:
         _update_job(slug, job_id, status="error", error_msg=f"no se pudo construir el comando: {e}")
