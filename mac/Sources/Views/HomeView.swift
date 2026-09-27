@@ -23,9 +23,7 @@ struct HomeView: View {
                     .buttonStyle(.bordered)
                 }
 
-                dropZone
-
-                WebProjectsSection()
+                if let job = app.importJob { importProgress(job) }
 
                 if !app.projects.isEmpty {
                     Text("Tus episodios")
@@ -45,6 +43,10 @@ struct HomeView: View {
                         }
                     }
                 }
+
+                WebProjectsSection()
+
+                dropZone
             }
             .padding(36)
             .frame(maxWidth: 1200)
@@ -55,43 +57,37 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in app.reload() }
     }
 
-    private var dropZone: some View {
-        VStack(spacing: 16) {
-            if let job = app.importJob {
-                VStack(spacing: 14) {
-                    ProgressView(value: job.fraction ?? 0)
-                        .progressViewStyle(.linear)
-                        .frame(maxWidth: 420)
-                    Text(job.title).font(.title3.bold())
-                    Text(job.detail).foregroundStyle(Theme.secondary)
-                    Text("Los videos WebM se convierten una sola vez; luego todo va rápido.")
-                        .font(.caption).foregroundStyle(Theme.secondary)
-                    Button("Cancelar") { app.cancelImport() }
-                }
-            } else {
-                Image(systemName: "tray.and.arrow.down.fill")
-                    .font(.system(size: 46))
-                    .foregroundStyle(Theme.accent)
-                Text("Arrastra aquí tu grabación")
-                    .font(.title2.bold())
-                Text("El paquete que descargas de postPod, la carpeta con las pistas de cada persona, o los videos sueltos.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Theme.secondary)
-                    .frame(maxWidth: 520)
-                Button {
-                    Panels.chooseImport { app.importItems($0) }
-                } label: {
-                    Label("Elegir archivos…", systemImage: "folder")
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+    private func importProgress(_ job: JobState) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(job.title).font(.headline)
+                Spacer()
+                Button("Cancelar") { app.cancelImport() }
             }
+            if let f = job.fraction { ProgressView(value: f) } else { ProgressView().progressViewStyle(.linear) }
+            Text(job.detail).font(.callout).foregroundStyle(Theme.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 260)
-        .padding(24)
-        .background(RoundedRectangle(cornerRadius: 20).fill(targeted ? Theme.accent.opacity(0.12) : Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.5)))
+    }
+
+    /// Opción secundaria: traer archivos sueltos o un paquete descargado a mano.
+    private var dropZone: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "tray.and.arrow.down").font(.title3).foregroundStyle(Theme.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("¿Tienes los archivos en tu Mac?").font(.callout.bold())
+                Text("Arrastra aquí el paquete de postPod, la carpeta con las pistas o los videos sueltos.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            Button("Elegir archivos…") { Panels.chooseImport { app.importItems($0) } }
+                .disabled(app.importJob != nil)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(targeted ? Theme.accent.opacity(0.12) : Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
             .foregroundStyle(targeted ? Theme.accent : Theme.stroke))
         .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
             Task {
