@@ -115,8 +115,23 @@ enum Importer {
         defer { if !finished { try? fm.removeItem(at: folder) } }   // no half-imported leftovers
 
         var project = Project(id: slug, name: name, createdAt: Date(), importedFrom: "postpod-bundle")
-        if let source = meta["source"] as? [String: Any], let podcast = source["podcast"] as? [String: Any] {
-            project.podcastName = podcast["name"] as? String
+        if let source = meta["source"] as? [String: Any] {
+            if let podcast = source["podcast"] as? [String: Any] {
+                project.podcastName = podcast["name"] as? String
+                project.episode.podcastDescription = podcast["description"] as? String
+            }
+            if let ep = source["episode"] as? [String: Any] {
+                project.episode.number = (ep["number"] as? NSNumber)?.intValue
+                project.episode.title = ep["title"] as? String
+                project.episode.description = ep["description"] as? String
+                project.episode.scheduledDate = ep["scheduled_date"] as? String
+                project.episode.script = parseScript(ep["script"])
+                project.episode.links = (ep["links"] as? [Any] ?? []).compactMap { l in
+                    if let s = l as? String { return s }
+                    if let d = l as? [String: Any] { return (d["url"] as? String) ?? (d["href"] as? String) }
+                    return nil
+                }
+            }
         }
 
         // Work on a copy: never touch the user's original bundle.
@@ -246,6 +261,38 @@ enum Importer {
             project.cuts = try db.query("SELECT * FROM transcript_cuts ORDER BY start_seconds").compactMap { r in
                 guard let s = r.double("start_seconds"), let e = r.double("end_seconds"), e > s else { return nil }
                 return Cut(start: s, end: e, kind: .imported, label: r.string("label") ?? "Corte de postPod web")
+            }
+        }
+
+        // Sponsors + script blocks (prePod)
+        if db.tableExists("project_sponsors") {
+            project.sponsors = try db.query("SELECT * FROM project_sponsors ORDER BY position, id").compactMap { r in
+                guard let id = r.int("id"), let n = r.string("name") else { return nil }
+                var logoRel: String?
+                if let logo = r.string("logo_filename") {
+                    for dir in ["sponsors", "branding", "media/image", "director_assets"] {
+                        let src = root.appendingPathComponent("\(dir)/\(logo)")
+                        if fm.fileExists(atPath: src.path) {
+                            let rel = "sponsors/\(logo)"
+                            let dest = folder.appendingPathComponent(rel)
+                            try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                            try? fm.removeItem(at: dest)
+                            try? fm.copyItem(at: src, to: dest)
+                            logoRel = rel
+                            break
+                        }
+                    }
+                }
+                return Sponsor(id: id, name: n, copy: r.string("copy"), url: r.string("url"), logoFile: logoRel)
+            }
+        }
+        if db.tableExists("project_segments") {
+            project.segments = try db.query("SELECT * FROM project_segments ORDER BY position, id").compactMap { r in
+                guard let id = r.int("id") else { return nil }
+                return Segment(id: id, position: r.int("position") ?? 0, kind: r.string("kind") ?? "segment",
+                               title: r.string("title") ?? "", durationEstimate: r.double("duration_estimate"),
+                               sponsorId: r.int("sponsor_id"), notes: r.string("notes"),
+                               actualOffset: r.double("actual_offset_seconds"))
             }
         }
 
@@ -428,6 +475,28 @@ enum Importer {
         while let u = e?.nextObject() as? URL {
             if u.pathComponents.contains("__MACOSX") { continue }
             if isMedia(u) { out.append(u) }
+        }
+        return out
+    }
+
+    /// prePod's script is free-form JSON: strings, or objects with title/text-ish keys, possibly nested.
+    static func parseScript(_ any: Any?) -> [ScriptItem] {
+        func str(_ d: [String: Any], _ keys: [String]) -> String {
+            for k in keys { if let v = d[k] as? String, !v.trimmingCharacters(in: .whitespaces).isEmpty { return v } }
+            return ""
+        }
+        if let s = any as? String, !s.isEmpty { return [ScriptItem(title: "", text: s)] }
+        guard let list = any as? [Any] else { return [] }
+        var out: [ScriptItem] = []
+        for item in list {
+            if let s = item as? String { out.append(ScriptItem(title: "", text: s)); continue }
+            guard let d = item as? [String: Any] else { continue }
+            let title = str(d, ["title", "heading", "name", "section", "label"])
+            var text = str(d, ["text", "content", "body", "notes", "description", "script"])
+            if text.isEmpty, let children = d["items"] ?? d["children"] ?? d["lines"] {
+                text = parseScript(children).map { $0.title.isEmpty ? $0.text : "\($0.title): \($0.text)" }.joined(separator: "\n")
+            }
+            if !title.isEmpty || !text.isEmpty { out.append(ScriptItem(title: title, text: text)) }
         }
         return out
     }

@@ -6,7 +6,27 @@ import AppKit
 /// Imports, fixes (enhance + transcribe + silences/fillers), suggests reels and exports
 /// a landscape video, the first reel (vertical) and the audio. Prints progress and a JSON report.
 enum SelfTest {
-    static var isRequested: Bool { CommandLine.arguments.contains("--selftest") }
+    static var isRequested: Bool {
+        CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
+    }
+
+    /// postPod --render <slug> <start> <end> <landscape|vertical|square>: export a window of an existing project.
+    @MainActor
+    static func render() {
+        let a = CommandLine.arguments
+        guard let i = a.firstIndex(of: "--render"), a.count > i + 4,
+              let s = Double(a[i + 2]), let e = Double(a[i + 3]), let fmt = ExportFormat(rawValue: a[i + 4]) else {
+            print("uso: --render <slug> <inicio> <fin> <formato>"); exit(2)
+        }
+        Task { @MainActor in
+            do {
+                let p = try ProjectStore.load(slug: a[i + 1])
+                let url = try await Exporter.export(project: p, format: fmt, window: (s, e), baseName: "render-test",
+                                                    energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
+                print("OK \(url.path)"); fflush(stdout); exit(0)
+            } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+        }
+    }
 
     @MainActor
     static func run() {
@@ -15,6 +35,7 @@ enum SelfTest {
             NSApplication.shared.windows.forEach { $0.orderOut(nil) }   // headless: no window
         }
         let args = CommandLine.arguments
+        if args.contains("--render") { render(); return }
         guard let i = args.firstIndex(of: "--selftest") else { return }
         let inputs = args[(i + 1)...].filter { !$0.hasPrefix("-") }.map { URL(fileURLWithPath: $0) }
         let skipLandscape = args.contains("--no-landscape")

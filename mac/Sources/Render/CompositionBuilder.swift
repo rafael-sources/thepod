@@ -144,10 +144,17 @@ enum CompositionBuilder {
                 logo: project.showLogo ? project.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) } : nil,
                 background: project.backgroundFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                     .map { img in
-                        img.clampedToExtent().applyingGaussianBlur(sigma: 6).cropped(to: img.extent)
-                            .applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.25])
+                        img.applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.08])
                     },
-                title: project.name)
+                title: project.name,
+                sponsorCards: project.showSponsors ? project.sponsorAppearances().compactMap { a in
+                    // map to output time; if the moment was cut, show it at the next kept instant
+                    let o = EditEngine.toOutput(a.start, keep: keep)
+                        ?? keep.firstIndex { $0.start >= a.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+                    guard let o else { return nil }
+                    return RenderScene.SponsorCard(start: o, end: o + (a.end - a.start), name: a.sponsor.name, copy: a.sponsor.copy,
+                                                   logo: a.sponsor.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) })
+                } : [])
             let vc = AVMutableVideoComposition()
             vc.customVideoCompositorClass = PodCompositor.self
             vc.renderSize = format.renderSize

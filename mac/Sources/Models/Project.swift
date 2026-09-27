@@ -33,6 +33,10 @@ struct Project: Codable, Identifiable, Equatable {
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
 
+    var episode = EpisodeInfo()         // from prePod (via postPod's proyecto.json)
+    var sponsors: [Sponsor] = []
+    var segments: [Segment] = []        // script blocks with timing (prePod "blocks")
+    var showSponsors: Bool = true
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
     var reels: [Reel] = []
     var aiSummary: String?
@@ -212,7 +216,7 @@ struct Reel: Codable, Identifiable, Equatable {
 }
 
 enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
-    case auto, solo, sideBySide, grid, spotlight, pip, stack
+    case auto, solo, sideBySide, grid, spotlight, pip, stack, studio
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -223,6 +227,7 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
         case .spotlight: return "Protagonista"
         case .pip: return "Ventanita"
         case .stack: return "Arriba y abajo"
+        case .studio: return "Estudio"
         }
     }
     var symbol: String {
@@ -234,6 +239,7 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
         case .spotlight: return "rectangle.lefthalf.inset.filled"
         case .pip: return "pip"
         case .stack: return "rectangle.split.1x2"
+        case .studio: return "photo.artframe"
         }
     }
     var help: String {
@@ -245,6 +251,7 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
         case .spotlight: return "Quien habla en grande, el resto al costado"
         case .pip: return "Quien habla en grande, otro en una esquina"
         case .stack: return "Uno arriba y otro abajo (ideal vertical)"
+        case .studio: return "Las cámaras en recuadros sobre el fondo de tu podcast"
         }
     }
 }
@@ -295,6 +302,43 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Episode data that prePod sends to postPod.
+struct EpisodeInfo: Codable, Equatable {
+    var number: Int?
+    var title: String?
+    var description: String?
+    var podcastDescription: String?
+    var scheduledDate: String?
+    var script: [ScriptItem] = []
+    var links: [String] = []
+}
+
+/// One piece of the prePod script (free-form: title and/or text).
+struct ScriptItem: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var title: String
+    var text: String
+}
+
+struct Sponsor: Codable, Equatable, Identifiable {
+    var id: Int
+    var name: String
+    var copy: String?
+    var url: String?
+    var logoFile: String?               // relative to project folder, if the bundle brought it
+}
+
+struct Segment: Codable, Equatable, Identifiable {
+    var id: Int
+    var position: Int
+    var kind: String
+    var title: String
+    var durationEstimate: Double?
+    var sponsorId: Int?
+    var notes: String?
+    var actualOffset: Double?           // real start in the recording (prodPod chapters)
+}
+
 /// A moment marked in postPod (or prodPod chapters). Point moments have no duration.
 struct Moment: Codable, Identifiable, Equatable {
     var id: Int
@@ -329,10 +373,36 @@ extension Project {
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
         laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]
         moments = try c.decodeIfPresent([Moment].self, forKey: .moments) ?? []
+        episode = try c.decodeIfPresent(EpisodeInfo.self, forKey: .episode) ?? EpisodeInfo()
+        sponsors = try c.decodeIfPresent([Sponsor].self, forKey: .sponsors) ?? []
+        segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
+        showSponsors = try c.decodeIfPresent(Bool.self, forKey: .showSponsors) ?? true
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
+    }
+
+    /// When each sponsor appears (timeline time) — same rule as postPod web's exporter:
+    /// the block's real offset if prodPod marked it, otherwise the sum of estimated durations.
+    func sponsorAppearances(seconds: Double = 6) -> [(sponsor: Sponsor, start: Double, end: Double)] {
+        var cursor = 0.0
+        var out: [(Sponsor, Double, Double)] = []
+        for seg in segments.sorted(by: { $0.position < $1.position }) {
+            defer { cursor += seg.durationEstimate ?? 0 }
+            guard let sid = seg.sponsorId, let sp = sponsors.first(where: { $0.id == sid }) else { continue }
+            let t0 = seg.actualOffset ?? cursor
+            guard t0 < duration else { continue }
+            out.append((sp, t0, min(duration, t0 + seconds)))
+        }
+        return out
+    }
+
+    /// Chapters for YouTube descriptions: moments with labels, else script blocks with real offsets.
+    var chapters: [(time: Double, title: String)] {
+        let fromMoments = moments.filter { !$0.label.isEmpty }.map { ($0.time, $0.label) }
+        if !fromMoments.isEmpty { return fromMoments.sorted { $0.0 < $1.0 } }
+        return segments.compactMap { s in s.actualOffset.map { ($0, s.title) } }.filter { !$0.1.isEmpty }.sorted { $0.0 < $1.0 }
     }
 
     /// Same rule as postPod web (exportMoment): the moment's own duration, or until the next moment.

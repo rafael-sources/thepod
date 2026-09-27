@@ -17,6 +17,28 @@ struct OverviewStep: View {
                         if let podcast = session.project.podcastName {
                             Text("Podcast: \(podcast)").foregroundStyle(Theme.secondary)
                         }
+                        if let d = session.project.episode.description, !d.isEmpty {
+                            Text(d).font(.callout).foregroundStyle(Theme.secondary).lineLimit(4)
+                        }
+                    }
+                    if !session.project.episode.script.isEmpty || !session.project.segments.isEmpty {
+                        ScriptCard(project: session.project) { t in session.seek(timeline: t) }
+                    }
+                    if !session.project.sponsors.isEmpty {
+                        Card {
+                            Text("Sponsors del episodio").font(.headline)
+                            ForEach(session.project.sponsorAppearances(), id: \.start) { a in
+                                HStack {
+                                    Image(systemName: "megaphone.fill").foregroundStyle(Theme.accent)
+                                    Text(a.sponsor.name).bold()
+                                    if let c = a.sponsor.copy { Text(c).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1) }
+                                    Spacer()
+                                    Button(EditEngine.clock(a.start)) { session.seek(timeline: a.start) }.buttonStyle(.link).monospacedDigit()
+                                }
+                            }
+                            Text("Aparecen en el video en el momento del bloque del guion. Puedes apagarlos al exportar.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
                     }
                     Card {
                         Text("Personas en la grabación").font(.headline)
@@ -97,6 +119,46 @@ struct OverviewStep: View {
             }
             session.project = p
         })
+    }
+}
+
+struct ScriptCard: View {
+    let project: Project
+    let seek: (Double) -> Void
+    @State private var expanded = false
+
+    var body: some View {
+        Card {
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(project.segments.sorted { $0.position < $1.position }) { seg in
+                        HStack(alignment: .top) {
+                            Image(systemName: seg.sponsorId != nil ? "megaphone" : "text.alignleft")
+                                .foregroundStyle(Theme.accent).frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(seg.title.isEmpty ? seg.kind.capitalized : seg.title).bold()
+                                if let n = seg.notes, !n.isEmpty { Text(n).font(.caption).foregroundStyle(Theme.secondary) }
+                            }
+                            Spacer()
+                            if let t = seg.actualOffset {
+                                Button(EditEngine.clock(t)) { seek(t) }.buttonStyle(.link).monospacedDigit()
+                            } else if let d = seg.durationEstimate {
+                                Text("~\(Int(d / 60)) min").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                    }
+                    ForEach(project.episode.script) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if !item.title.isEmpty { Text(item.title).bold() }
+                            if !item.text.isEmpty { Text(item.text).font(.callout).foregroundStyle(Theme.secondary).textSelection(.enabled) }
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                Label("Guion de prePod", systemImage: "doc.text").font(.headline)
+            }
+        }
     }
 }
 
@@ -577,6 +639,9 @@ struct ExportStep: View {
                             Toggle("Nombres de las personas", isOn: $session.project.showNames)
                             if session.project.logoFile != nil {
                                 Toggle("Logo del podcast", isOn: $session.project.showLogo)
+                            }
+                            if !session.project.sponsors.isEmpty {
+                                Toggle("Sponsors en su momento del guion", isOn: $session.project.showSponsors)
                             }
                         }
                     }

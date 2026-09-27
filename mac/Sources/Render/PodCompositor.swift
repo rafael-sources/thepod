@@ -18,6 +18,8 @@ final class RenderScene: @unchecked Sendable {
     let logo: CIImage?
     let background: CIImage?
     let title: String
+    struct SponsorCard { let start: Double; let end: Double; let name: String; let copy: String?; let logo: CIImage? }
+    let sponsorCards: [SponsorCard]
 
     private var cache: [String: CIImage] = [:]
     private let lock = NSLock()
@@ -25,7 +27,9 @@ final class RenderScene: @unchecked Sendable {
     init(renderSize: CGSize, format: ExportFormat, layout: LayoutTemplate, laneOrder: [Int],
          trackIDs: [Int: CMPersistentTrackID], captions: [CaptionLine], style: CaptionStyle,
          switches: [SpeakerSwitch], names: [Int: (name: String, handle: String?)], showNames: Bool,
-         cropX: [Int: Double], logo: CIImage?, background: CIImage?, title: String) {
+         cropX: [Int: Double], logo: CIImage?, background: CIImage?, title: String,
+         sponsorCards: [SponsorCard] = []) {
+        self.sponsorCards = sponsorCards
         self.renderSize = renderSize
         self.format = format
         self.layout = layout
@@ -99,7 +103,7 @@ final class RenderScene: @unchecked Sendable {
                 tags.append((lane, rect))
             }
             if showNames {
-                let multi = resolved == .sideBySide || resolved == .grid || resolved == .stack
+                let multi = resolved == .sideBySide || resolved == .grid || resolved == .stack || resolved == .studio
                 for (lane, rect) in tags {
                     let isMainPanel = lane == main
                     let showThis = multi || (isMainPanel && (t - since < 3.5 || t < 4))
@@ -122,6 +126,18 @@ final class RenderScene: @unchecked Sendable {
             let placed = logo.transformed(by: .init(scaleX: scale, y: scale))
             let pos = placed.transformed(by: .init(translationX: W - w - m - placed.extent.minX, y: H - h - m - placed.extent.minY))
             out = pos.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.9)]).composited(over: out)
+        }
+
+        for (i, card) in sponsorCards.enumerated() where t >= card.start && t < card.end {
+            if let img = cached("sponsor-\(i)-\(Int(W))", { sponsorImage(card) }) {
+                let m = min(W, H) * 0.03
+                // slide in during the first 0.35 s
+                let p = min(1, (t - card.start) / 0.35), q = min(1, (card.end - t) / 0.35)
+                let k = CGFloat(min(p, q))
+                let x = W - m - img.extent.width * k
+                let y = format.isVertical ? H * 0.62 : H - img.extent.height - m - (logo != nil ? min(W, H) * 0.11 : 0)
+                out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
+            }
         }
 
         if style.enabled, let (idx, line) = caption(at: t) {
@@ -149,6 +165,32 @@ final class RenderScene: @unchecked Sendable {
         return out.cropped(to: full)
     }
 
+    private func sponsorImage(_ card: SponsorCard) -> CIImage? {
+        let W = renderSize.width, H = renderSize.height
+        let fs = max(18, min(W, H) * (format.isVertical ? 0.03 : 0.028))
+        guard let text = TextRenderer.sponsorText(name: card.name, copy: card.copy, fontSize: fs, maxWidth: W * (format.isVertical ? 0.6 : 0.3)) else { return nil }
+        let pad = fs * 0.6
+        var logoImg: CIImage?
+        var logoW: CGFloat = 0
+        if let logo = card.logo {
+            let h = max(text.extent.height, fs * 2.4)
+            let s = h / max(1, logo.extent.height)
+            logoImg = logo.transformed(by: .init(scaleX: s, y: s))
+            logoW = logo.extent.width * s
+        }
+        let w = pad * 2 + logoW + (logoImg != nil ? pad : 0) + text.extent.width
+        let h = pad * 2 + max(text.extent.height, logoImg?.extent.height ?? 0)
+        let box = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.68)).cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
+        let accent = CIImage(color: CIColor(red: 1, green: 0.78, blue: 0.2)).cropped(to: CGRect(x: 0, y: 0, width: fs * 0.18, height: h))
+        var out = accent.composited(over: box)
+        if let li = logoImg {
+            out = li.transformed(by: .init(translationX: pad - li.extent.minX, y: (h - li.extent.height) / 2 - li.extent.minY)).composited(over: out)
+        }
+        let tx = pad + logoW + (logoImg != nil ? pad : 0)
+        out = text.transformed(by: .init(translationX: tx, y: (h - text.extent.height) / 2)).composited(over: out)
+        return out
+    }
+
     private func caption(at t: Double) -> (Int, CaptionLine)? {
         // binary search on start
         var lo = 0, hi = captions.count - 1, found = -1
@@ -163,7 +205,7 @@ final class RenderScene: @unchecked Sendable {
     // MARK: Layout
 
     func resolve(_ l: LayoutTemplate, count: Int) -> LayoutTemplate {
-        if count <= 1 { return .solo }
+        if count <= 1 && l != .studio { return .solo }
         switch l {
         case .auto:
             switch format {
@@ -181,6 +223,23 @@ final class RenderScene: @unchecked Sendable {
         switch layout {
         case .solo, .auto:
             return [(main, full, false)]
+        case .studio:
+            let m = min(W, H) * 0.06
+            let gap = min(W, H) * 0.025
+            let n = CGFloat(lanes.count)
+            if format.isVertical {
+                let h = (H * 0.72 - gap * (n - 1)) / n
+                let top = H * 0.86
+                return lanes.enumerated().map { (i, l) in
+                    (l, CGRect(x: m, y: top - CGFloat(i + 1) * h - CGFloat(i) * gap, width: W - 2 * m, height: h), true)
+                }
+            }
+            let w = (W - 2 * m - gap * (n - 1)) / n
+            let h = min(H * 0.72, w * 1.1)
+            let y = (H - h) / 2 - H * 0.03
+            return lanes.enumerated().map { (i, l) in
+                (l, CGRect(x: m + CGFloat(i) * (w + gap), y: y, width: w, height: h), true)
+            }
         case .sideBySide:
             let w = W / CGFloat(lanes.count)
             return lanes.enumerated().map { (i, l) in (l, CGRect(x: CGFloat(i) * w, y: 0, width: w, height: H), false) }
