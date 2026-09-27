@@ -160,3 +160,54 @@ def test_job_lifecycle_helpers(client):
 
 def test_unknown_job_is_404(client):
     assert client.get("/api/mac/jobs/nope").status_code == 404
+
+
+def _make_podcast(slug="test-pod", ep_title="Ep 1", ep_number=7):
+    """Create a podcast dir + DB with one episode. PODCASTS_DIR must already be patched."""
+    pod_dir = config.PODCASTS_DIR / slug
+    pod_dir.mkdir(parents=True, exist_ok=True)
+    conn = db_mod.get_db(slug)
+    conn.execute(
+        "INSERT INTO podcast_meta (name, slug, description, owner_username) VALUES (?, ?, 'desc', 'tester')",
+        (slug, slug),
+    )
+    conn.execute(
+        "INSERT INTO episodes (title, status, episode_number) VALUES (?, 'recorded', ?)",
+        (ep_title, ep_number),
+    )
+    ep_id = conn.execute("SELECT id FROM episodes ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    conn.commit()
+    conn.close()
+    return slug, ep_id
+
+
+def test_upload_episode_media_success(client, tmp_path):
+    import episodes
+    slug, ep_id = _make_podcast()
+    media = tmp_path / "final.mp3"
+    media.write_bytes(b"mp3data")
+
+    with patch("hosting.upload_file",
+               return_value={"ok": True, "url": "https://media.example/test-pod/ep007-test-pod.mp3"}) as up:
+        result = episodes.upload_episode_media(slug, ep_id, media)
+
+    assert result["ok"] is True
+    assert result["media_url"].endswith("ep007-test-pod.mp3")
+    # Same filename convention as the existing publish endpoint.
+    assert up.call_args[0][2] == "ep007-test-pod.mp3"
+
+    conn = db_mod.get_db(slug)
+    row = conn.execute("SELECT status, media_url FROM episodes WHERE id=?", (ep_id,)).fetchone()
+    conn.close()
+    assert row["status"] == "published"
+    assert row["media_url"] == result["media_url"]
+
+
+def test_upload_episode_media_missing_episode(client, tmp_path):
+    import episodes
+    slug, _ = _make_podcast()
+    media = tmp_path / "final.mp3"
+    media.write_bytes(b"x")
+    result = episodes.upload_episode_media(slug, 999, media)
+    assert result["ok"] is False
+    assert "no encontrado" in result["error"]

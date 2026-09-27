@@ -1339,11 +1339,13 @@ def force_sync_notes(slug, ep_id):
     })
 
 
-@bp.post("/api/podcasts/<slug>/episodes/<int:ep_id>/publish")
-@require_auth
-def publish_episode(slug, ep_id):
-    """Publish: upload media to VPS, update status, save media_url."""
-    _ensure_podcast(slug)
+def upload_episode_media(slug: str, ep_id: int, media_path) -> dict:
+    """Sube el archivo a hosting (VPS) y marca el episodio como publicado.
+
+    Lógica compartida entre el endpoint web (ruta en el servidor) y la API
+    del Mac (archivo subido por partes).
+    Returns {"ok": True, "media_url": ...} o {"ok": False, "error": ...}.
+    """
     db = get_db(slug)
     try:
         row = db.execute("SELECT * FROM episodes WHERE id=?", (ep_id,)).fetchone()
@@ -1351,17 +1353,12 @@ def publish_episode(slug, ep_id):
         db.close()
 
     if not row:
-        return jsonify({"error": "episodio no encontrado"}), 404
-
-    data = request.get_json(silent=True) or {}
-    media_file = data.get("media_file")
-    if not media_file:
-        return jsonify({"error": "se requiere media_file (ruta al archivo exportado)"}), 400
+        return {"ok": False, "error": "episodio no encontrado"}
 
     from pathlib import Path
-    media_path = Path(media_file)
+    media_path = Path(media_path)
     if not media_path.is_file():
-        return jsonify({"error": f"Archivo no encontrado: {media_file}"}), 400
+        return {"ok": False, "error": f"Archivo no encontrado: {media_path}"}
 
     import hosting
     ep_num = row["episode_number"] or ep_id
@@ -1369,7 +1366,7 @@ def publish_episode(slug, ep_id):
     result = hosting.upload_file(slug, media_path, filename)
 
     if not result["ok"]:
-        return jsonify({"error": result["error"]}), 500
+        return result
 
     db = get_db(slug)
     try:
@@ -1378,4 +1375,26 @@ def publish_episode(slug, ep_id):
     finally:
         db.close()
 
-    return jsonify({"ok": True, "media_url": result["url"], "status": "published"})
+    return {"ok": True, "media_url": result["url"]}
+
+
+@bp.post("/api/podcasts/<slug>/episodes/<int:ep_id>/publish")
+@require_auth
+def publish_episode(slug, ep_id):
+    """Publish: upload media to VPS, update status, save media_url."""
+    _ensure_podcast(slug)
+
+    data = request.get_json(silent=True) or {}
+    media_file = data.get("media_file")
+    if not media_file:
+        return jsonify({"error": "se requiere media_file (ruta al archivo exportado)"}), 400
+
+    result = upload_episode_media(slug, ep_id, media_file)
+    if not result["ok"]:
+        if result["error"] == "episodio no encontrado":
+            return jsonify({"error": result["error"]}), 404
+        if result["error"].startswith("Archivo no encontrado"):
+            return jsonify({"error": result["error"]}), 400
+        return jsonify({"error": result["error"]}), 500
+
+    return jsonify({"ok": True, "media_url": result["media_url"], "status": "published"})
