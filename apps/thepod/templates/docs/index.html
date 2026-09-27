@@ -2,7 +2,7 @@
 
 {% set theme = "hub" %}
 {% block title %}Docs · thePod{% endblock %}
-{% block description %}Documentación visual de la suite thePod: prePod (preproducción), prodPod (estudio en vivo) y postPod (edición y publicación).{% endblock %}
+{% block description %}Documentación visual de la suite thePod: prePod (preproducción), prodPod (estudio en vivo), postPod (edición y publicación) y amaPod (Q&A en vivo).{% endblock %}
 
 {% block body %}
 <div style="max-width: 980px; margin: 0 auto;">
@@ -13,7 +13,7 @@
     </div>
     <h1>Tu podcast, de la <em>idea</em> a la publicación.</h1>
     <p class="lede">
-      thePod orquesta tres apps que se hablan entre sí. Acá vas a entender qué hace cada una, cómo se conectan, y cómo sacarles todo en menos de una hora.
+      thePod orquesta cuatro apps que se hablan entre sí. Acá vas a entender qué hace cada una, cómo se conectan, y cómo sacarles todo en menos de una hora.
     </p>
   </section>
 
@@ -44,6 +44,16 @@
       <div class="tag">Edición y publicación</div>
       <div class="name">postPod</div>
       <p class="desc">Edición no-destructiva, momentos, captions Whisper, edición por transcripción, speech enhancement y export con notas auto.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/amapod" class="docs-index-card theme-amapod" style="--accent: #14b8a6; --accent-soft: rgba(20,184,166,0.14); --accent-dim: rgba(20,184,166,0.45);">
+      <span class="icon">❓</span>
+      <div class="tag">Q&amp;A en vivo</div>
+      <div class="name">amaPod</div>
+      <p class="desc">Eventos AMA con cola de preguntas moderada, participantes sin cuenta, preconexión, chat, espectadores con likes y grabación.</p>
       <div class="toc-mini">
         <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
       </div>
@@ -80,7 +90,7 @@
     </div>
 
     <p style="margin-top: 22px; font-size: 14.5px; color: var(--paper-soft); line-height: 1.65; max-width: 70ch;">
-      Cada app pasa el contexto a la siguiente automáticamente: prePod le dice a prodPod quién participa y cuándo, prodPod le entrega a postPod los archivos grabados con marcadores. Una sola sesión, tres herramientas, cero copy-paste.
+      Cada app pasa el contexto a la siguiente automáticamente: prePod le dice a prodPod quién participa y cuándo, prodPod le entrega a postPod los archivos grabados con marcadores, y amaPod suma las preguntas de la audiencia dentro del estudio. Una sola sesión, cuatro herramientas, cero copy-paste.
     </p>
   </section>
 

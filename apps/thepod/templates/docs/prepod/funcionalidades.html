@@ -31,13 +31,14 @@
 
 <section id="episodios">
   <h2><span class="num">02</span> Tablero de episodios (Kanban)</h2>
-  <p>Cinco columnas que representan el flujo de producción:</p>
+  <p>Seis columnas que representan el flujo de producción:</p>
   <ol>
     <li><strong>Ideas</strong>: episodios en etapa de concepto.</li>
     <li><strong>Planificando</strong>: en preparación activa.</li>
     <li><strong>Con guion</strong>: rundown y guion completados.</li>
     <li><strong>Grabado</strong>: la grabación ya se realizó.</li>
     <li><strong>Publicado</strong>: episodio publicado y distribuido.</li>
+    <li><strong>Archivado</strong>: episodios cerrados que salen de la vista diaria (columna oculta por defecto).</li>
   </ol>
   <p>Cada tarjeta muestra el número (EP #), título, fecha programada y duración estimada.</p>
   <p>Acciones disponibles:</p>
@@ -97,8 +98,9 @@
   <ol>
     <li>Haz clic en "Agregar invitado".</li>
     <li>Completa nombre, email (opcional) y rol (Host, Co-host o Invitado).</li>
-    <li>Opcionalmente, agrega una bio del invitado.</li>
+    <li>Opcionalmente, agrega una bio, una <strong>foto</strong> y sus redes sociales (X/Twitter, Instagram, YouTube, TikTok).</li>
   </ol>
+  <p>La foto y las redes viajan con el episodio: prodPod y postPod las usan para banners y créditos.</p>
   <p><strong>Sistema de RSVP</strong>: para confirmar asistencia tienes dos caminos:</p>
   <ul>
     <li><strong>Invitar por email</strong>: haz clic en "Invitar" y se envía un correo automático con el link de confirmación.</li>
@@ -200,6 +202,51 @@
     Estos links pueden mostrarse en tu landing pública.
   </p>
 </section>
+
+<section id="publicacion">
+  <h2><span class="num">15</span> Publicación del episodio</h2>
+  <p>
+    Cuando el audio final está listo (exportado desde postPod o subido manualmente), publicas el episodio
+    desde su detalle: el archivo se sube al hosting, el episodio pasa a <strong>Publicado</strong> y el
+    feed RSS se actualiza con el enclosure del audio — listo para que las plataformas lo detecten.
+  </p>
+</section>
+
+<section id="panel-distribucion">
+  <h2><span class="num">16</span> Panel de distribución</h2>
+  <p>Herramientas para llevar tu feed RSS a los directorios de podcasts:</p>
+  <ul>
+    <li><strong>Validación del feed</strong>: verifica que tu RSS cumpla los requisitos de Apple/Spotify antes de enviarlo.</li>
+    <li><strong>Estado por plataforma</strong>: registra en qué directorios ya enviaste el podcast (Spotify, Apple Podcasts, YouTube, etc.) y su estado.</li>
+    <li><strong>Chequeo automático</strong>: comprueba si el feed responde correctamente desde afuera.</li>
+  </ul>
+</section>
+
+<section id="youtube">
+  <h2><span class="num">17</span> Subida a YouTube</h2>
+  <p>
+    Conecta tu canal de YouTube con OAuth desde prePod (una sola vez). Después puedes subir el video del
+    episodio directamente a tu canal, con título y descripción tomados del episodio y las show notes.
+    Puedes desconectar la cuenta cuando quieras.
+  </p>
+</section>
+
+<section id="notas-ai">
+  <h2><span class="num">18</span> Notas AI desde postPod</h2>
+  <p>
+    Si generaste resumen y highlights con AI en postPod, esos textos se sincronizan de vuelta al episodio
+    en prePod (<em>resumen AI</em> y <em>highlights AI</em>) para usarlos en show notes y descripciones.
+  </p>
+</section>
+
+<section id="mac-app">
+  <h2><span class="num">19</span> API para la app de escritorio (Mac)</h2>
+  <p>
+    prePod expone una API de publicación por chunks pensada para la app de escritorio de macOS:
+    subida de archivos grandes en fragmentos, publicación de audio al hosting + RSS y subida de video a
+    YouTube, con polling de progreso. Si usas solo el navegador, no necesitas configurar nada.
+  </p>
+</section>
 {% endblock %}
 
 {% block rail %}
@@ -219,5 +266,10 @@
   <a href="#show-notes">Show notes</a>
   <a href="#landing">Landing + RSS</a>
   <a href="#links-distribucion">Links</a>
+  <a href="#publicacion">Publicación</a>
+  <a href="#panel-distribucion">Distribución</a>
+  <a href="#youtube">YouTube</a>
+  <a href="#notas-ai">Notas AI</a>
+  <a href="#mac-app">App de escritorio</a>
 </nav>
 {% endblock %}

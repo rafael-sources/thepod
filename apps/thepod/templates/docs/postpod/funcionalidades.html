@@ -253,7 +253,7 @@
   <ul>
     <li><strong>Quemar captions</strong>: incrusta los subtítulos en el video (selecciona idioma).</li>
     <li><strong>Generar notas</strong>: crea un archivo .txt con capítulos (formato YouTube) y créditos, listo para pegar en Spotify, Apple o YouTube.</li>
-    <li><strong>Audio profesional</strong>: procesamiento de estudio (reducción de ruido, ecualización, compresión, normalización a -16 LUFS). Solo afecta la voz — la música de fondo pasa sin cambios.</li>
+    <li><strong>Audio profesional</strong>: cadena de procesamiento de estudio — corte de graves (highpass 80 Hz), reducción de ruido FFT, ecualización para voz, compresión y normalización a -16 LUFS. Solo afecta la voz — la música de fondo pasa sin cambios.</li>
     <li><strong>Exportar solo el rango</strong>: si tienes un rango seleccionado en el timeline, puedes exportar solo esa porción.</li>
   </ul>
   <p>El job corre en segundo plano con barra de progreso. Cuando termina: descarga, reproduce en nueva pestaña, o descarga las notas.</p>
@@ -286,6 +286,61 @@
     donde puedes ajustar el volumen individual además de los puntos de recorte y la asignación de track.
   </p>
 </section>
+
+<section id="estilo-subtitulos">
+  <h2><span class="num">22</span> Estilo de subtítulos (karaoke)</h2>
+  <p>Los captions generados con Whisper se pueden personalizar visualmente desde el panel de estilo:</p>
+  <ul>
+    <li><strong>Fuente y tamaño</strong>: pequeño, mediano o grande.</li>
+    <li><strong>Color de texto y contorno</strong>: selectores de color independientes.</li>
+    <li><strong>Fondo</strong> (opcional): caja de color detrás del texto para máxima legibilidad.</li>
+    <li><strong>Highlight karaoke</strong>: color con el que se ilumina cada palabra mientras se pronuncia, estilo TikTok.</li>
+    <li><strong>Posición</strong>: arriba, centro o abajo del frame.</li>
+  </ul>
+  <p>
+    El estilo se previsualiza en vivo en el reproductor y se respeta al quemar los captions en la exportación.
+    También puedes corregir palabras individuales del transcript antes de exportar.
+  </p>
+</section>
+
+<section id="composicion-multitrack">
+  <h2><span class="num">23</span> Composición multitrack (layouts)</h2>
+  <p>
+    Cuando el proyecto tiene clips en múltiples tracks (grabaciones multicámara de prodPod), el modal de exportación
+    muestra un selector de <strong>composición</strong> con plantillas listas:
+  </p>
+  <ul>
+    <li><strong>Lado a lado</strong>: los participantes en paneles horizontales.</li>
+    <li><strong>Grid</strong>: cuadrícula equilibrada para 3+ cámaras.</li>
+    <li><strong>Spotlight</strong>: el hablante activo en grande, el resto en miniaturas.</li>
+    <li><strong>PiP</strong>: picture-in-picture — eliges la esquina y cuál track es el principal.</li>
+    <li><strong>Solo speaker</strong>: solo el hablante activo, a pantalla completa.</li>
+  </ul>
+  <p>No necesitas configurar operaciones manualmente: eliges la plantilla y el export compone el video.</p>
+</section>
+
+<section id="banners-momentos">
+  <h2><span class="num">24</span> Banners de momentos y participantes</h2>
+  <p>
+    Al exportar puedes activar <strong>banners de momentos</strong>: cada momento del timeline aparece como un
+    rótulo estilo noticiero (CNN) con su etiqueta, en la posición que elijas (arriba o abajo).
+  </p>
+  <p>
+    Desde el panel de <strong>Participantes y banners</strong> asignas cada participante a una pista, para que
+    su nombre y foto aparezcan como banner cuando esa cámara está en spotlight. Los datos de participantes
+    (nombres, roles, fotos) llegan automáticamente desde prePod/prodPod.
+  </p>
+</section>
+
+<section id="bundles">
+  <h2><span class="num">25</span> Bundles de proyecto (exportar / importar)</h2>
+  <p>
+    Un proyecto completo se puede empaquetar como archivo .zip para moverlo a otra instancia de postPod o
+    archivarlo. El bundle incluye: metadata del proyecto, base de datos del timeline, media, branding,
+    logos de sponsors, sonidos del soundboard, fotos de invitados, assets del director y audio global referenciado.
+  </p>
+  <p>Al importar el bundle en otra máquina, el proyecto queda funcional con toda su edición intacta.</p>
+</section>
 {% endblock %}
 
 {% block rail %}
@@ -312,5 +367,9 @@
   <a href="#exportar-momento">Exportar momento</a>
   <a href="#reordenar">Reordenar clips</a>
   <a href="#volumen-clip">Volumen por clip</a>
+  <a href="#estilo-subtitulos">Estilo de subtítulos</a>
+  <a href="#composicion-multitrack">Composición multitrack</a>
+  <a href="#banners-momentos">Banners</a>
+  <a href="#bundles">Bundles de proyecto</a>
 </nav>
 {% endblock %}

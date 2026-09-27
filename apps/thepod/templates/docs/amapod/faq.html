@@ -1,0 +1,116 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Respuestas rápidas a las dudas más comunes sobre amaPod.</p>
+</header>
+
+<section id="faq-general">
+  <h2><span class="num">01</span> General</h2>
+
+  <details>
+    <summary>¿La audiencia necesita cuenta para participar?</summary>
+    <div class="ans">
+      <p>No. Los participantes se anotan con su nombre desde el link público y reciben un token de acceso propio. Los espectadores tampoco necesitan cuenta. Solo el host/moderador inicia sesión con su cuenta de thePod.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cuántas personas pueden estar en la sala de video a la vez?</summary>
+    <div class="ans">
+      <p>Hasta 10 participantes simultáneos: el host, quien está al aire y los preconectados. La audiencia general mira desde la página de espectadores y no ocupa lugar en la sala.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo eliminar un evento?</summary>
+    <div class="ans">
+      <p>Solo mientras está en estado Creado. Un evento activo o finalizado conserva su historial de participantes y preguntas.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo reutilizar la configuración de un evento?</summary>
+    <div class="ans">
+      <p>Sí — guárdala como plantilla y crea el próximo evento desde ella. La plantilla conserva título, descripción, modo de chat y branding.</p>
+    </div>
+  </details>
+</section>
+
+<section id="faq-cola">
+  <h2><span class="num">02</span> Cola y participantes</h2>
+
+  <details>
+    <summary>¿Cuántas preguntas puede enviar cada participante?</summary>
+    <div class="ans">
+      <p>Hasta 3 pre-preguntas, que puede editar mientras espera en la cola. El moderador las ve antes de darle el aire.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué es exactamente la preconexión?</summary>
+    <div class="ans">
+      <p>Los primeros 3 de la cola se conectan a la sala por adelantado — eligen cámara y micrófono y quedan en espera, sin ser visibles. Cuando les toca, aparecen al instante sin el clásico "¿me escuchas?".</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa si alguien dice algo indebido al aire?</summary>
+    <div class="ans">
+      <p>Usa el botón de censura: corta su audio y video de inmediato sin interrumpir el evento. El participante queda marcado como censurado.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Un participante puede irse de la cola?</summary>
+    <div class="ans">
+      <p>Sí, puede retirarse en cualquier momento. Su posición se libera y la cola se renumera automáticamente.</p>
+    </div>
+  </details>
+</section>
+
+<section id="faq-chat-grabacion">
+  <h2><span class="num">03</span> Chat y grabación</h2>
+
+  <details>
+    <summary>¿Cómo funciona el chat moderado?</summary>
+    <div class="ans">
+      <p>Los mensajes de la audiencia entran a una bandeja de aprobación y solo se publican cuando el host los aprueba. Los mensajes del host se publican directo. También puedes usar chat libre o apagarlo por completo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿La grabación es igual a la de prodPod?</summary>
+    <div class="ans">
+      <p>No. prodPod graba pistas separadas por participante (ideal para edición multipista). amaPod graba la vista compuesta del evento como un solo MP4 — pensada para archivo y clips.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa con la grabación al finalizar el evento?</summary>
+    <div class="ans">
+      <p>Se exporta automáticamente a postPod como proyecto de edición. También puedes descargar el MP4 directamente desde el panel del evento.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo usar amaPod durante una grabación de podcast?</summary>
+    <div class="ans">
+      <p>Sí — vincula el evento a la sesión de prodPod y el host verá el panel de Q&amp;A embebido en el estudio, con la cola de preguntas lista para poner al aire.</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq-general">General</a>
+  <a href="#faq-cola">Cola y participantes</a>
+  <a href="#faq-chat-grabacion">Chat y grabación</a>
+</nav>
+{% endblock %}

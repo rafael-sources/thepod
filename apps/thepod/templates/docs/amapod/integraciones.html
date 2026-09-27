@@ -1,0 +1,61 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo amaPod se conecta con la suite</h1>
+  <p class="lede">amaPod es la capa de audiencia: lleva las preguntas del público al estudio y entrega la grabación a la edición.</p>
+</header>
+
+<section id="hacia-prodpod">
+  <h2><span class="num">01</span> Dentro de prodPod</h2>
+  <p>
+    Un evento de amaPod puede vincularse a una sesión de grabación de prodPod. Cuando eso ocurre,
+    el estudio muestra un panel <strong>amaPod — Q&amp;A</strong> embebido: el host ve la cola de
+    preguntas aprobadas y pone participantes al aire sin salir de prodPod.
+  </p>
+  <p>
+    Técnicamente, prodPod embebe la vista <code>/embed/&lt;id&gt;</code> del evento — la moderación
+    completa sigue disponible en amaPod para un moderador dedicado.
+  </p>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> Hacia postPod</h2>
+  <p>
+    Si el evento se grabó, al finalizarlo la grabación MP4 se exporta automáticamente a postPod
+    como proyecto de edición. Desde ahí puedes recortar los mejores momentos, generar captions
+    con Whisper y exportar clips verticales para redes.
+  </p>
+</section>
+
+<section id="cuentas">
+  <h2><span class="num">03</span> Cuentas y acceso</h2>
+  <ul>
+    <li><strong>Host / moderador</strong>: usa la misma cuenta de thePod que en las demás apps (sesión compartida).</li>
+    <li><strong>Participantes</strong>: entran con el link público y un token de acceso propio — sin cuenta.</li>
+    <li><strong>Espectadores</strong>: la página de visualización es pública, sin login.</li>
+  </ul>
+</section>
+
+<section id="prepod">
+  <h2><span class="num">04</span> ¿Y prePod?</h2>
+  <p>
+    Por ahora los eventos de amaPod se crean directamente en amaPod — no se planifican desde prePod.
+    Si tu Q&amp;A es parte de un episodio, planifica el episodio en prePod como siempre y crea el
+    evento de amaPod aparte, vinculándolo a la sesión de prodPod.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#hacia-prodpod">Dentro de prodPod</a>
+  <a href="#hacia-postpod">Hacia postPod</a>
+  <a href="#cuentas">Cuentas y acceso</a>
+  <a href="#prepod">¿Y prePod?</a>
+</nav>
+{% endblock %}

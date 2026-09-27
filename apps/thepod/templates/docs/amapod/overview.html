@@ -1,0 +1,99 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Vista general — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>amaPod</h1>
+  <p class="lede">
+    Preguntas de tu audiencia, en vivo y con orden. amaPod gestiona eventos de Q&amp;A (AMA) donde
+    los espectadores envían preguntas, un moderador arma la cola, y cada participante sale al aire
+    por video cuando le toca — integrado con el estudio de prodPod.
+  </p>
+</header>
+
+<section id="que-puedes">
+  <h2><span class="num">01</span> ¿Qué puedes hacer?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">EVENTOS</div>
+      <h4>Eventos de Q&amp;A</h4>
+      <p>Crea un evento con título, descripción y modo de chat. Actívalo cuando empiece la transmisión y finalízalo al terminar. Reutiliza formatos con plantillas.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">MODERACIÓN</div>
+      <h4>Cola de preguntas</h4>
+      <p>Los participantes se anotan con su nombre y hasta 3 preguntas. Tú decides quién entra a la cola, en qué orden, y quién sale al aire.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">SIN FRICCIÓN</div>
+      <h4>Participantes sin cuenta</h4>
+      <p>La audiencia participa con un simple link — no necesita registrarse en thePod. Cada participante recibe un token de acceso propio.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">FLUIDEZ</div>
+      <h4>Preconexión</h4>
+      <p>Los próximos 3 de la cola se preconectan a la sala antes de salir al aire: cámara y micrófono listos, cero espera entre preguntas.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">COMUNIDAD</div>
+      <h4>Chat y espectadores</h4>
+      <p>Chat libre, moderado o apagado. Los espectadores siguen el evento desde una página pública y pueden dar likes.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">ARCHIVO</div>
+      <h4>Grabación</h4>
+      <p>Graba el evento como archivo MP4 en el servidor. Al finalizar, se exporta automáticamente a postPod para editarlo.</p>
+    </div>
+  </div>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">02</span> ¿Para quién es?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">CREADORES</div>
+      <h4>Podcasters con audiencia activa</h4>
+      <p>Convierte a tus oyentes en protagonistas: un episodio AMA donde la audiencia pregunta en video, con orden y sin caos.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">EVENTOS</div>
+      <h4>Lanzamientos y sesiones en vivo</h4>
+      <p>Presentaciones, webinars o rondas de preguntas post-evento con moderación completa y grabación automática.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">PRODUCCIÓN</div>
+      <h4>Shows en prodPod</h4>
+      <p>El panel de amaPod se embebe dentro del estudio de prodPod: el host ve la cola y pone preguntas al aire sin cambiar de app.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">03</span> ¿Qué encuentras acá?</h2>
+  <ul>
+    <li><a href="/docs/amapod/quickstart">Primeros pasos</a> — crea tu primer evento de Q&amp;A en minutos.</li>
+    <li><a href="/docs/amapod/conceptos">Conceptos</a> — vocabulario clave: evento, cola, preconexión, modos de chat.</li>
+    <li><a href="/docs/amapod/funcionalidades">Funcionalidades</a> — cada herramienta en detalle.</li>
+    <li><a href="/docs/amapod/integraciones">Integraciones</a> — cómo amaPod se conecta con <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> y <a class="x-link postpod" href="/docs/postpod">postPod</a>.</li>
+    <li><a href="/docs/amapod/faq">FAQ</a> — preguntas frecuentes.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="ctag">EMPIEZA POR ACÁ</div>
+    <div class="cbody">
+      <p>Si es tu primera vez, ve directo a <a href="/docs/amapod/quickstart">Primeros pasos</a>. En pocos minutos tienes un evento listo para recibir preguntas.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#para-quien">¿Para quién es?</a>
+  <a href="#que-hay-aca">¿Qué encuentras acá?</a>
+</nav>
+{% endblock %}

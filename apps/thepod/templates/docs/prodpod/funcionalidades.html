@@ -155,8 +155,49 @@
   <p>Su audio y video se graban localmente en su navegador con la misma calidad que los demás participantes.</p>
 </section>
 
+<section id="layouts">
+  <h2><span class="num">14</span> Vista grid y spotlight</h2>
+  <p>
+    La grilla tiene dos modos de vista: <strong>Grid</strong> (todos los participantes en tamaño igual) y
+    <strong>Spotlight</strong> (el hablante activo en grande, el resto en miniaturas). El spotlight sigue
+    automáticamente a quien está hablando.
+  </p>
+</section>
+
+<section id="director">
+  <h2><span class="num">15</span> Sala de control (director)</h2>
+  <p>
+    Una vista separada para un director de producción, con herramientas que no interrumpen a los participantes:
+  </p>
+  <ul>
+    <li><strong>Overlays en vivo</strong>: banners de texto, banners de sponsor, comentarios destacados, rótulos de segmento, countdowns y gráficos. Se activan y desactivan en tiempo real y quedan registrados con su timestamp para postPod.</li>
+    <li><strong>Cues al host</strong>: botones de indicación — CERRAR TEMA, SIGUIENTE TEMA, PAUSA, MÁS RÁPIDO, MÁS LENTO, LEER ANUNCIO o mensaje personalizado. El host los ve como aviso discreto en pantalla.</li>
+    <li><strong>IFB (talkback)</strong>: push-to-talk privado del director al oído del host — los demás participantes y la grabación no lo escuchan.</li>
+    <li><strong>Force-mute</strong>: silenciar el micrófono de cualquier participante de inmediato.</li>
+    <li><strong>Soundboard y chat</strong>: el director puede disparar sonidos y escribir en el backstage.</li>
+    <li><strong>Control de grabación</strong>: iniciar y detener la grabación desde la sala de control.</li>
+  </ul>
+</section>
+
+<section id="teleprompter-sponsors">
+  <h2><span class="num">16</span> Teleprompter de sponsors</h2>
+  <p>
+    Los segmentos de sponsor planificados en el rundown de prePod generan alertas automáticas durante la grabación:
+    cuando se acerca el momento del anuncio, el host ve un aviso con countdown y el texto del sponsor a leer.
+    Puedes descartar la alerta si el momento cambió.
+  </p>
+</section>
+
+<section id="panel-amapod">
+  <h2><span class="num">17</span> Panel amaPod (Q&amp;A)</h2>
+  <p>
+    Si la sesión tiene un evento de amaPod vinculado, aparece un panel embebido con la cola de preguntas de la audiencia.
+    El host ve las preguntas aprobadas y las pone al aire sin salir del estudio.
+  </p>
+</section>
+
 <section id="enviar-postpod">
-  <h2><span class="num">14</span> Enviar a postPod</h2>
+  <h2><span class="num">18</span> Enviar a postPod</h2>
   <p>
     Al finalizar la grabación, en el panel de grabaciones aparecen todas las pistas
     (video + audio por participante, grabaciones de pantalla). Desde ahí:
@@ -184,6 +225,10 @@
   <a href="#diagnostico">Diagnóstico</a>
   <a href="#kick">Expulsar</a>
   <a href="#invitado">Experiencia del invitado</a>
+  <a href="#layouts">Grid / Spotlight</a>
+  <a href="#director">Sala de control</a>
+  <a href="#teleprompter-sponsors">Teleprompter de sponsors</a>
+  <a href="#panel-amapod">Panel amaPod</a>
   <a href="#enviar-postpod">Enviar a postPod</a>
 </nav>
 {% endblock %}
