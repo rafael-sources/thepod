@@ -300,3 +300,38 @@ def test_publish_audio_denies_foreign_podcast(client):
         resp = client.post("/api/mac/publish/audio",
                            json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
     assert resp.status_code == 403
+
+
+class _NoopThread:
+    """Thread that never runs, so the upload stays claimed."""
+
+    def __init__(self, target=None, daemon=None, name=None):
+        pass
+
+    def start(self):
+        pass
+
+
+def test_publish_audio_conflict_when_already_claimed(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _NoopThread):
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+        resp = client.post("/api/mac/publish/audio", json=payload)
+    assert resp.status_code == 409
+
+
+def test_publish_audio_error_releases_claim(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file", return_value={"ok": False, "error": "rsync falló"}):
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+        # Claim released on error: retry is accepted, not 409.
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202

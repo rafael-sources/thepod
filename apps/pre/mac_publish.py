@@ -94,6 +94,14 @@ def _delete_upload(upload_id: str):
         _upload_locks.pop(upload_id, None)
 
 
+def _release_upload_claim(upload_id: str):
+    """Release a previously set claim so the client can retry without re-uploading."""
+    with _upload_lock(upload_id):
+        meta = _read_meta(upload_id)
+        if meta and meta.pop("claimed", None):
+            _write_meta(upload_id, meta)
+
+
 def _resolve_upload(upload_id: str) -> tuple[Path | None, dict | None]:
     """Return (path, meta) for a finished upload, or (None, None)."""
     meta = _read_meta(upload_id)
@@ -303,10 +311,16 @@ def _parse_publish_payload():
     if denied:
         return None, None, None, None, denied
 
-    path, meta = _resolve_upload(upload_id)
-    if not path:
-        return None, None, None, None, (jsonify(
-            {"error": "upload no encontrado o incompleto"}), 404)
+    with _upload_lock(upload_id):
+        path, meta = _resolve_upload(upload_id)
+        if not path:
+            return None, None, None, None, (jsonify(
+                {"error": "upload no encontrado o incompleto"}), 404)
+        if meta.get("claimed"):
+            return None, None, None, None, (jsonify(
+                {"error": "el upload ya está siendo publicado"}), 409)
+        meta["claimed"] = True
+        _write_meta(upload_id, meta)
 
     return slug, episode_id, path, {"upload_id": upload_id, **meta}, None
 
@@ -333,6 +347,7 @@ def publish_audio():
             _delete_upload(meta["upload_id"])
         else:
             _update_job(job_id, status="error", error=result["error"])
+            _release_upload_claim(meta["upload_id"])
 
     threading.Thread(target=_run, daemon=True, name=f"mac-audio-{job_id}").start()
     return jsonify({"job_id": job_id}), 202
