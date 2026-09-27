@@ -38,8 +38,21 @@ struct PostPodApp: App {
 
 struct RootView: View {
     @EnvironmentObject var app: AppModel
+    @AppStorage("introAlAbrir") private var introEnabled = true
+    @State private var showIntro = !SelfTest.isRequested
 
     var body: some View {
+        ZStack {
+            content
+            if showIntro && introEnabled {
+                IntroView { withAnimation(.easeOut(duration: 0.45)) { showIntro = false } }
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+        }
+    }
+
+    private var content: some View {
         Group {
             if let session = app.session {
                 ProjectView(session: session)
@@ -71,7 +84,7 @@ enum Panels {
     static func chooseImport(_ done: @escaping ([URL]) -> Void) {
         let panel = NSOpenPanel()
         panel.title = "Elige tu grabación"
-        panel.message = "El paquete .zip de postPod, la carpeta con las pistas, o los videos/audios sueltos"
+        panel.message = "El paquete de postPod, la carpeta con las pistas, o los videos y audios sueltos"
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
