@@ -312,7 +312,8 @@ enum Importer {
                 return Segment(id: id, position: r.int("position") ?? 0, kind: r.string("kind") ?? "segment",
                                title: r.string("title") ?? "", durationEstimate: r.double("duration_estimate"),
                                sponsorId: r.int("sponsor_id"), notes: r.string("notes"),
-                               actualOffset: r.double("actual_offset_seconds"))
+                               actualOffset: r.double("actual_offset_seconds"),
+                               plannedOffset: r.double("planned_offset_seconds"))
             }
         }
 

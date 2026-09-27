@@ -345,6 +345,7 @@ struct Segment: Codable, Equatable, Identifiable {
     var sponsorId: Int?
     var notes: String?
     var actualOffset: Double?           // real start in the recording (prodPod chapters)
+    var plannedOffset: Double?          // planned start from prePod
 }
 
 /// A moment marked in postPod (or prodPod chapters). Point moments have no duration.
@@ -400,7 +401,7 @@ extension Project {
         for seg in segments.sorted(by: { $0.position < $1.position }) {
             defer { cursor += seg.durationEstimate ?? 0 }
             guard let sid = seg.sponsorId, let sp = sponsors.first(where: { $0.id == sid }) else { continue }
-            let t0 = seg.actualOffset ?? cursor
+            let t0 = seg.actualOffset ?? seg.plannedOffset ?? cursor
             guard t0 < duration else { continue }
             out.append((sp, t0, min(duration, t0 + seconds)))
         }
