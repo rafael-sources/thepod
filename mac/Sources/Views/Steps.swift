@@ -450,7 +450,7 @@ struct ReelsStep: View {
                     if session.project.moments.isEmpty && session.project.reels.isEmpty {
                         Card {
                             Label("Este episodio no tiene momentos marcados", systemImage: "bookmark.slash").font(.headline)
-                            Text("Marca los momentos en postPod (tecla M) y vuelve a exportar el paquete, o agrega uno aquí: pon el video donde empieza y toca el botón.")
+                            Text("Márcalos aquí mismo con “Marcar momento” debajo del video, o en postPod web (tecla M) y usa “Traer de nuevo”.")
                                 .font(.caption).foregroundStyle(Theme.secondary)
                         }
                     } else if !session.project.moments.isEmpty {
@@ -476,13 +476,17 @@ struct ReelsStep: View {
                             session.project.reels.removeAll { $0.id == reel.id }
                         }
                     }
-                    Button {
-                        let t = session.player.currentTime().seconds
-                        let start = session.built.map { EditEngine.toTimeline(t, keep: $0.keep) } ?? 0
-                        session.project.reels.append(Reel(title: "Momento \(session.project.reels.count + 1)",
-                                                          start: start, end: min(session.project.duration, start + 60)))
-                    } label: { Label("Agregar un momento desde donde está el video", systemImage: "plus") }
-                        .buttonStyle(.borderless)
+                    Card {
+                        Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
+                        Text("Mira el episodio y, cuando pase algo bueno, toca “Marcar momento” debajo del video. Se crea un reel de 60 segundos desde ahí; luego ajustas inicio y fin.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        if session.previewWindow != nil {
+                            Button("Ver el episodio completo") {
+                                previewing = nil
+                                session.setPreview(format: .vertical, window: nil, layout: session.project.reelLayout)
+                            }
+                        }
+                    }
                     if !session.project.reels.isEmpty {
                         let n = session.project.reels.filter(\.selected).count
                         BigButton(title: "Exportar \(n) \(n == 1 ? "reel" : "reels")", symbol: "square.and.arrow.up",

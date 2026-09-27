@@ -501,6 +501,18 @@ final class ProjectSession: ObservableObject {
     }
 
     /// Current playhead in TIMELINE time.
+    /// Marca un momento donde está el video (como la tecla M en postPod web) y crea su reel.
+    @discardableResult
+    func markMoment() -> Reel {
+        let t = playheadTimeline
+        let n = project.moments.count + 1
+        let id = (project.moments.map(\.id).max() ?? 0) + 1
+        project.moments.append(Moment(id: id, time: t, duration: nil, label: "Momento \(n)"))
+        let reel = Reel(title: "Momento \(n)", reason: "Marcado en la app", start: t, end: min(project.duration, t + 60))
+        project.reels.append(reel)
+        return reel
+    }
+
     var playheadTimeline: Double {
         let t = player.currentTime().seconds
         guard let b = built, t.isFinite else { return 0 }

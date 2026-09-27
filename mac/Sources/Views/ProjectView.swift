@@ -128,6 +128,7 @@ struct PlayerView: NSViewRepresentable {
 struct PreviewPane: View {
     @ObservedObject var session: ProjectSession
     var allowedFormats: [ExportFormat] = [.landscape, .vertical, .square]
+    @State private var marked = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -142,6 +143,19 @@ struct PreviewPane: View {
                     }
                 }
             }
+            HStack {
+                Button {
+                    session.markMoment()
+                    marked = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { marked = false }
+                } label: {
+                    Label(marked ? "Momento marcado · lo ves en Reels" : "Marcar momento", systemImage: marked ? "checkmark" : "bookmark.fill")
+                }
+                .help("Marca este punto para hacer un reel, como la tecla M en postPod web")
+                .disabled(session.built == nil)
+                Spacer()
+            }
+            .frame(maxWidth: 520)
             if allowedFormats.count > 1 {
                 Picker("Vista", selection: Binding(get: { session.previewFormat },
                                                     set: { session.setPreview(format: $0, window: session.previewWindow, layout: session.previewLayout) })) {
