@@ -24,6 +24,8 @@ struct ProjectView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                EpisodeTimeline(session: session)
                 if let job = session.job {
                     JobBar(job: job) { session.cancelJob() }
                 }

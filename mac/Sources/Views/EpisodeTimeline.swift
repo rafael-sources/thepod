@@ -1,0 +1,224 @@
+import SwiftUI
+
+/// Timeline del episodio (como el de postPod web, para ver y moverse):
+/// una fila por persona con cuándo habla, lo que se corta, momentos/reels, sponsors y efectos.
+/// Clic o arrastre para mover el video; zoom para ver detalle.
+struct EpisodeTimeline: View {
+    @ObservedObject var session: ProjectSession
+    @State private var zoom: Double = 1
+    @State private var collapsed = false
+
+    static let palette: [Color] = [
+        Color(red: 0.353, green: 0.545, blue: 1.0),    // azul prePod
+        Color(red: 0.078, green: 0.722, blue: 0.651),  // teal amaPod
+        Color(red: 1.0, green: 0.42, blue: 0.42),
+        Color(red: 0.72, green: 0.55, blue: 1.0),
+        Color(red: 0.45, green: 0.85, blue: 0.5),
+        Color(red: 1.0, green: 0.62, blue: 0.3),
+    ]
+
+    private let labelWidth: CGFloat = 96
+    private let rulerH: CGFloat = 18
+    private let marksH: CGFloat = 16
+    private let laneH: CGFloat = 20
+    private let fxH: CGFloat = 12
+
+    var body: some View {
+        let p = session.project
+        VStack(spacing: 6) {
+            HStack(spacing: 12) {
+                Button { withAnimation(.easeOut(duration: 0.2)) { collapsed.toggle() } } label: {
+                    Label("Timeline", systemImage: collapsed ? "chevron.right" : "chevron.down").font(.callout.bold())
+                }
+                .buttonStyle(.plain)
+                if !collapsed {
+                    legend
+                    Spacer()
+                    Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
+                    Slider(value: $zoom, in: 1...30).frame(width: 140)
+                    Image(systemName: "plus.magnifyingglass").foregroundStyle(Theme.secondary)
+                } else {
+                    Spacer()
+                }
+            }
+            if !collapsed && p.duration > 0 {
+                let rows = rowLayout(p)
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear.frame(height: rulerH + marksH)
+                        ForEach(Array(p.lanes.enumerated()), id: \.element.id) { i, lane in
+                            Text(p.laneName(lane.id))
+                                .font(.caption).lineLimit(1)
+                                .foregroundStyle(Self.palette[i % Self.palette.count])
+                                .frame(width: labelWidth - 8, height: laneH, alignment: .leading)
+                        }
+                        Text("Efectos").font(.caption2).foregroundStyle(Theme.secondary)
+                            .frame(width: labelWidth - 8, height: fxH, alignment: .leading)
+                    }
+                    .frame(width: labelWidth)
+                    GeometryReader { geo in
+                        let width = max(geo.size.width, geo.size.width * zoom)
+                        let pps = width / p.duration
+                        ScrollView(.horizontal, showsIndicators: zoom > 1.01) {
+                            ZStack(alignment: .topLeading) {
+                                TimelineCanvas(model: TimelineModel(project: p, energy: session.energy), pps: pps,
+                                               rulerH: rulerH, marksH: marksH, laneH: laneH, fxH: fxH)
+                                    .equatable()
+                                PlayheadLayer(session: session, pps: pps, height: rows)
+                            }
+                            .frame(width: width, height: rows)
+                            .contentShape(Rectangle())
+                            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+                                seek(to: Double(g.location.x / pps), duration: p.duration)
+                            })
+                        }
+                    }
+                    .frame(height: rows)
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(Color.black.opacity(0.25))
+    }
+
+    private var legend: some View {
+        HStack(spacing: 12) {
+            legendItem(Color.red.opacity(0.55), "Se corta")
+            legendItem(Theme.accent, "Momento / reel")
+            legendItem(Color.purple.opacity(0.8), "Sponsor")
+            legendItem(Color.white.opacity(0.8), "Efecto")
+        }
+        .font(.caption2)
+        .foregroundStyle(Theme.secondary)
+    }
+
+    private func legendItem(_ c: Color, _ t: String) -> some View {
+        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 8); Text(t) }
+    }
+
+    private func rowLayout(_ p: Project) -> CGFloat {
+        rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH + 4
+    }
+
+    private func seek(to t: Double, duration: Double) {
+        var t = min(max(0, t), duration)
+        if let w = session.previewWindow { t = min(max(t, w.start), w.end) }   // viendo un reel: dentro del reel
+        session.seek(timeline: t, play: false)
+    }
+}
+
+/// Datos ya calculados para dibujar (no cambian mientras se reproduce).
+struct TimelineModel: Equatable {
+    var duration: Double
+    var lanes: [[ClosedRange<Double>]]          // tramos con voz por persona
+    var cuts: [ClosedRange<Double>]
+    var moments: [Double]
+    var reels: [ClosedRange<Double>]
+    var sponsors: [ClosedRange<Double>]
+    var effects: [ClosedRange<Double>]
+
+    init(project p: Project, energy: EnergyMap?) {
+        duration = p.duration
+        cuts = p.cuts.filter(\.enabled).map { $0.start...max($0.start, $0.end) }
+        moments = p.moments.map(\.time)
+        reels = p.reels.map { $0.start...max($0.start, $0.end) }
+        sponsors = p.showSponsors ? p.sponsorAppearances().map { $0.start...max($0.start, $0.end) } : []
+        effects = p.audioLane.map { $0.tlStart...($0.tlStart + max(0.3, $0.srcOut - $0.srcIn)) }
+        lanes = p.lanes.map { lane in
+            if let arr = energy?.lanes[lane.id], !arr.isEmpty {
+                return Self.runs(arr.enumerated().filter { $0.element > -38 }.map { Double($0.offset) * EnergyMap.hop },
+                                 step: EnergyMap.hop, gap: 0.6)
+            }
+            let words = p.words.filter { $0.lane == lane.id }
+            if !words.isEmpty {
+                return Self.merge(words.map { $0.s...max($0.s, $0.e) }, gap: 0.8)
+            }
+            return lane.placed.map { $0.tlStart...$0.tlEnd }
+        }
+    }
+
+    private static func runs(_ times: [Double], step: Double, gap: Double) -> [ClosedRange<Double>] {
+        merge(times.map { $0...($0 + step) }, gap: gap)
+    }
+
+    private static func merge(_ spans: [ClosedRange<Double>], gap: Double) -> [ClosedRange<Double>] {
+        var out: [ClosedRange<Double>] = []
+        for s in spans.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = out.last, s.lowerBound <= last.upperBound + gap {
+                out[out.count - 1] = last.lowerBound...max(last.upperBound, s.upperBound)
+            } else { out.append(s) }
+        }
+        return out
+    }
+}
+
+private struct TimelineCanvas: View, Equatable {
+    let model: TimelineModel
+    let pps: CGFloat
+    let rulerH, marksH, laneH, fxH: CGFloat
+
+    var body: some View {
+        Canvas { ctx, size in
+            func x(_ t: Double) -> CGFloat { CGFloat(t) * pps }
+            func band(_ r: ClosedRange<Double>, y: CGFloat, h: CGFloat, _ c: Color, radius: CGFloat = 2) {
+                let w = max(1, x(r.upperBound) - x(r.lowerBound))
+                ctx.fill(Path(roundedRect: CGRect(x: x(r.lowerBound), y: y, width: w, height: h), cornerRadius: radius), with: .color(c))
+            }
+
+            // Regla
+            let steps: [Double] = [5, 10, 15, 30, 60, 120, 300, 600]
+            let stepT = steps.first { CGFloat($0) * pps >= 70 } ?? 600
+            var t = 0.0
+            while t <= model.duration {
+                ctx.fill(Path(CGRect(x: x(t), y: rulerH - 5, width: 1, height: 5)), with: .color(.white.opacity(0.35)))
+                ctx.draw(Text(EditEngine.clock(t)).font(.system(size: 9).monospacedDigit()).foregroundStyle(.white.opacity(0.55)),
+                         at: CGPoint(x: x(t) + 3, y: 1), anchor: .topLeading)
+                t += stepT
+            }
+
+            // Momentos, reels y sponsors
+            let my = rulerH
+            for r in model.reels { band(r, y: my + 3, h: marksH - 6, Theme.accent.opacity(0.28)) }
+            for r in model.sponsors { band(r, y: my + 3, h: marksH - 6, Color.purple.opacity(0.8)) }
+            for m in model.moments {
+                var flag = Path()
+                flag.move(to: CGPoint(x: x(m), y: my + 1)); flag.addLine(to: CGPoint(x: x(m) + 7, y: my + 5))
+                flag.addLine(to: CGPoint(x: x(m), y: my + 9)); flag.closeSubpath()
+                ctx.fill(flag, with: .color(Theme.accent))
+                ctx.fill(Path(CGRect(x: x(m), y: my, width: 1.2, height: size.height - my)), with: .color(Theme.accent.opacity(0.6)))
+            }
+
+            // Personas
+            for (i, spans) in model.lanes.enumerated() {
+                let y = rulerH + marksH + CGFloat(i) * laneH
+                ctx.fill(Path(CGRect(x: 0, y: y + 3, width: size.width, height: laneH - 6)), with: .color(.white.opacity(0.04)))
+                let c = EpisodeTimeline.palette[i % EpisodeTimeline.palette.count]
+                for s in spans { band(s, y: y + 4, h: laneH - 8, c.opacity(0.85)) }
+            }
+
+            // Efectos
+            let fy = rulerH + marksH + CGFloat(model.lanes.count) * laneH
+            for e in model.effects { band(e, y: fy + 3, h: fxH - 5, .white.opacity(0.8), radius: 3) }
+
+            // Lo que se corta, encima de todo
+            let top = rulerH + marksH
+            for c in model.cuts { band(c, y: top, h: size.height - top, Color.red.opacity(0.38), radius: 0) }
+        }
+    }
+}
+
+/// Solo la línea de reproducción se redibuja mientras suena el video.
+private struct PlayheadLayer: View {
+    @ObservedObject var session: ProjectSession
+    let pps: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+            let x = CGFloat(session.playheadTimeline) * pps
+            Rectangle().fill(Color.white).frame(width: 1.5, height: height)
+                .offset(x: x)
+                .allowsHitTesting(false)
+        }
+    }
+}
