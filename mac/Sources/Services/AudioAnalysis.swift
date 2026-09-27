@@ -164,12 +164,15 @@ enum AudioAnalysis {
         let rel = "media/enhanced_\(media.id).m4a"
         let dest = ProjectStore.url(rel, in: slug)
         if FileManager.default.fileExists(atPath: dest.path) { return rel }
-        let tmp = dest.deletingLastPathComponent().appendingPathComponent("tmp_enhanced_\(media.id).m4a")
+        // Unique temp name: two windows/processes working on the same project must never clobber each other.
+        let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("enhancing_\(media.id)_\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: tmp) }
         try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn",
                               "-af", FFmpeg.speechChain, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
                              duration: media.duration, progress: progress)
-        try? FileManager.default.removeItem(at: dest)
-        try FileManager.default.moveItem(at: tmp, to: dest)
+        if !FileManager.default.fileExists(atPath: dest.path) {
+            try FileManager.default.moveItem(at: tmp, to: dest)
+        }
         return rel
     }
 
@@ -177,9 +180,12 @@ enum AudioAnalysis {
     static func whisperAudio(media: SourceMedia, slug: String, progress: @escaping (Double) -> Void) async throws -> URL {
         let dest = ProjectStore.cacheFolder(for: slug).appendingPathComponent("whisper_\(media.id).wav")
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
+        let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("whisper_\(media.id)_\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: tmp) }
         let src = ProjectStore.url(media.enhancedAudioFile ?? media.file, in: slug)
-        try await FFmpeg.run(["-i", src.path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", dest.path],
+        try await FFmpeg.run(["-i", src.path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", tmp.path],
                              duration: media.duration, progress: progress)
+        if !FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.moveItem(at: tmp, to: dest) }
         return dest
     }
 }
