@@ -93,7 +93,11 @@ final class Updater: ObservableObject {
                 let (data, resp) = try await session.data(for: try request("GET", "/api/descargas/thepod-mac"))
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 guard code == 200 else {
-                    if quiet { state = .idle } else { state = code == 404 ? .upToDate : .failed("thePod respondió \(code)") }
+                    // 404 = el servidor todavía no publica la app de Mac: no es lo mismo que "estás al día".
+                    if quiet { state = .idle } else {
+                        state = .failed(code == 404 ? "El servidor de thePod todavía no tiene publicada la versión para Mac."
+                                                    : "thePod respondió \(code)")
+                    }
                     return
                 }
                 let rel = try JSONDecoder().decode(Release.self, from: data)
