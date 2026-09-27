@@ -25,6 +25,8 @@ struct HomeView: View {
 
                 dropZone
 
+                WebProjectsSection()
+
                 if !app.projects.isEmpty {
                     Text("Tus episodios")
                         .font(.title2.bold())
@@ -48,7 +50,7 @@ struct HomeView: View {
             .frame(maxWidth: 1200)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { app.reload() }
+        .onAppear { app.reload(); app.loadWebProjects() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in app.reload() }
     }
 
@@ -148,5 +150,82 @@ extension NSItemProvider {
                 if let error { cont.resume(throwing: error) } else { cont.resume(returning: url) }
             }
         }
+    }
+}
+
+/// "En postPod web": the projects this account can see online, downloadable in one click.
+struct WebProjectsSection: View {
+    @EnvironmentObject var app: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("En postPod web").font(.title2.bold())
+                Spacer()
+                if app.webState == .loading { ProgressView().controlSize(.small) }
+                Button {
+                    Task { await PostPodWebClient.shared.resetSession() }
+                    app.loadWebProjects()
+                } label: { Label("Actualizar", systemImage: "arrow.clockwise") }
+                .buttonStyle(.bordered)
+                .disabled(app.webState == .loading)
+            }
+            switch app.webState {
+            case .notConfigured:
+                Card {
+                    Text("Conecta tu cuenta para ver aquí tus episodios de postPod y traerlos sin descargar el .zip a mano.")
+                        .foregroundStyle(Theme.secondary)
+                    SettingsLink { Label("Abrir Ajustes", systemImage: "gearshape") }
+                }
+            case .failed(let msg):
+                Card {
+                    Label("No pude conectar con postPod", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(msg).font(.callout).foregroundStyle(Theme.secondary)
+                }
+            case .loaded where app.webProjects.isEmpty:
+                Text("No hay proyectos de postPod visibles para tu cuenta.").foregroundStyle(Theme.secondary)
+            default:
+                VStack(spacing: 8) {
+                    ForEach(app.webProjects) { w in row(w) }
+                }
+            }
+        }
+    }
+
+    private func row(_ w: PostPodWebClient.WebProject) -> some View {
+        let local = app.localProject(forWeb: w.slug)
+        let busy = app.webDownloading == w.slug
+        return HStack(spacing: 14) {
+            Image(systemName: "cloud.fill").font(.title3).foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(w.name).font(.headline).lineLimit(1)
+                HStack(spacing: 10) {
+                    if let d = w.createdAt { Text(d, style: .date) }
+                    if let o = w.owner { Label(o, systemImage: "person") }
+                    if local != nil { Label("Ya está en esta Mac", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good) }
+                }
+                .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            if busy {
+                ProgressView().controlSize(.small)
+            } else if let local {
+                Button("Abrir") { app.open(local) }.buttonStyle(.borderedProminent)
+                Button("Traer de nuevo") { app.importFromWeb(w) }
+                    .buttonStyle(.bordered)
+                    .disabled(app.importJob != nil)
+                    .help("Descarga otra copia desde postPod (la actual no se borra)")
+            } else {
+                Button { app.importFromWeb(w) } label: {
+                    Label("Traer a la Mac", systemImage: "arrow.down.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(app.importJob != nil)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.stroke))
     }
 }

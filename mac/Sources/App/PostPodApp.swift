@@ -6,6 +6,7 @@ struct PostPodApp: App {
     @StateObject private var app = AppModel()
 
     init() {
+        Keychain.migrateLegacy()
         TextRenderer.registerBundledFonts()
         if SelfTest.isRequested {
             DispatchQueue.main.async { SelfTest.run() }

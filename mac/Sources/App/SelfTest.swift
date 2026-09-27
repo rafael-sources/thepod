@@ -8,7 +8,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test")
     }
 
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
@@ -20,6 +20,30 @@ enum SelfTest {
             do {
                 let list = try await PrePodClient.shared.podcasts()
                 print("OK podcasts=\(list.count)")
+            } catch { print("ERROR \(error.localizedDescription)") }
+            fflush(stdout); exit(0)
+        }
+    }
+
+    /// Lista los proyectos de postPod web; con `--download <slug>` también baja el paquete (sin importarlo).
+    @MainActor
+    static func postpodTest() {
+        Task { @MainActor in
+            print("url=\(PostPodWebClient.baseURL) user=[\(PrePodClient.username)] configured=\(PrePodClient.isConfigured)")
+            do {
+                let list = try await PostPodWebClient.shared.projects()
+                print("OK proyectos=\(list.count)")
+                for p in list { print("  \(p.slug) · \(p.name) · \(p.owner ?? "-")") }
+                let a = CommandLine.arguments
+                if let i = a.firstIndex(of: "--download"), a.count > i + 1 {
+                    let t0 = Date()
+                    let url = try await PostPodWebClient.shared.downloadBundle(slug: a[i + 1]) { f, got, total in
+                        print(String(format: "  %.0fs %@ %lld/%lld", Date().timeIntervalSince(t0), f.map { "\(Int($0 * 100))%" } ?? "armando", got, total))
+                        fflush(stdout)
+                    }
+                    let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
+                    print("DESCARGADO \(url.path) \(size) bytes en \(Int(Date().timeIntervalSince(t0)))s")
+                }
             } catch { print("ERROR \(error.localizedDescription)") }
             fflush(stdout); exit(0)
         }
@@ -52,6 +76,7 @@ enum SelfTest {
         let args = CommandLine.arguments
         if args.contains("--render") { render(); return }
         if args.contains("--prepod-test") { prepodTest(); return }
+        if args.contains("--postpod-test") { postpodTest(); return }
         guard let i = args.firstIndex(of: "--selftest") else { return }
         let inputs = args[(i + 1)...].filter { !$0.hasPrefix("-") }.map { URL(fileURLWithPath: $0) }
         let skipLandscape = args.contains("--no-landscape")

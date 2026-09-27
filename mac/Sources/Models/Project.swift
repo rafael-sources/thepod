@@ -44,6 +44,7 @@ struct Project: Codable, Identifiable, Equatable {
 
     var logoFile: String?               // relative to project folder
     var backgroundFile: String?
+    var postpodSlug: String?            // proyecto de postPod web del que se descargó
 
     var duration: Double {
         let laneEnd = lanes.map { $0.duration }.max() ?? 0
@@ -391,6 +392,7 @@ extension Project {
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
+        postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)
     }
 
     /// When each sponsor appears (timeline time) — same rule as postPod web's exporter:

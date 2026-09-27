@@ -304,27 +304,32 @@ struct PublishStep: View {
 
 struct PrePodSettingsSection: View {
     @State private var url = PrePodClient.baseURL
+    @State private var postURL = PostPodWebClient.baseURL
     @State private var user = PrePodClient.username
     @State private var password = Keychain.get("prepod-password") ?? ""
     @State private var result: String?
     @State private var ok = false
 
     var body: some View {
-        Section("prePod (para publicar)") {
+        Section("Tu cuenta de prePod / postPod") {
             TextField("Dirección de prePod", text: $url)
+            TextField("Dirección de postPod", text: $postURL)
             TextField("Usuario", text: $user)
             SecureField("Contraseña", text: $password)
             HStack {
                 Button("Guardar y probar") {
                     PrePodClient.baseURL = url
+                    PostPodWebClient.baseURL = postURL
                     PrePodClient.username = user
                     Keychain.set(password, for: "prepod-password")
                     Task {
                         await PrePodClient.shared.resetSession()
+                        await PostPodWebClient.shared.resetSession()
                         do {
                             let list = try await PrePodClient.shared.podcasts()
+                            let web = try await PostPodWebClient.shared.projects()
                             ok = true
-                            result = "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s")"
+                            result = "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod"
                         } catch {
                             ok = false
                             result = error.localizedDescription

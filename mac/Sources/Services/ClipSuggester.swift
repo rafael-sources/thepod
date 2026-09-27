@@ -144,7 +144,28 @@ enum ClipSuggester {
 }
 
 enum Keychain {
-    private static let service = "com.example.postpodapp"
+    private static let service = "space.aitism.postpod"
+
+    /// One-time move of settings saved under the app's previous identifier.
+    static func migrateLegacy() {
+        let legacy = "com.example" + ".postpodapp"
+        let d = UserDefaults.standard
+        if let old = d.persistentDomain(forName: legacy) {
+            for (k, v) in old where d.object(forKey: k) == nil { d.set(v, forKey: k) }
+            d.removePersistentDomain(forName: legacy)
+        }
+        for account in ["prepod-password", "anthropic-api-key"] {
+            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: legacy,
+                                    kSecAttrAccount as String: account, kSecReturnData as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+            var item: CFTypeRef?
+            guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data,
+                  let value = String(data: data, encoding: .utf8) else { continue }
+            if get(account) == nil { set(value, for: account) }
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: legacy,
+                           kSecAttrAccount as String: account] as CFDictionary)
+        }
+    }
 
     static var apiKey: String? {
         get { get("anthropic-api-key") }

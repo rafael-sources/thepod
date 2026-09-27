@@ -39,13 +39,89 @@ final class AppModel: ObservableObject {
         importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
         importTask = Task {
             do {
-                let project = try await Importer.importItems(urls) { stage, fraction in
-                    Task { @MainActor in self.importJob = JobState(title: "Importando tu grabación", detail: stage, fraction: fraction) }
-                }
+                let project = try await runImport(urls)
                 importJob = nil
                 reload()
                 open(project)
             } catch is CancellationError {
+                importJob = nil
+            } catch {
+                importJob = nil
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func runImport(_ urls: [URL]) async throws -> Project {
+        try await Importer.importItems(urls) { stage, fraction in
+            Task { @MainActor in
+                guard self.importJob != nil else { return }
+                self.importJob = JobState(title: "Importando tu grabación", detail: stage, fraction: fraction)
+            }
+        }
+    }
+
+    // MARK: postPod web
+
+    @Published var webProjects: [PostPodWebClient.WebProject] = []
+    @Published var webState: WebState = .idle
+    @Published var webDownloading: String?          // slug being downloaded
+
+    enum WebState: Equatable { case idle, loading, loaded, notConfigured, failed(String) }
+
+    func localProject(forWeb slug: String) -> Project? {
+        projects.first { $0.postpodSlug == slug }
+    }
+
+    func loadWebProjects() {
+        guard PrePodClient.isConfigured else { webState = .notConfigured; return }
+        if webState == .loading { return }
+        webState = .loading
+        Task {
+            do {
+                webProjects = try await PostPodWebClient.shared.projects()
+                webState = .loaded
+            } catch {
+                webState = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Asks postPod web to build the bundle, downloads it and imports it — the same as
+    /// downloading the .zip by hand and dragging it here.
+    func importFromWeb(_ web: PostPodWebClient.WebProject) {
+        guard importJob == nil else { return }
+        let title = "Trayendo «\(web.name)» de postPod"
+        importJob = JobState(title: title, detail: "postPod está armando el paquete… (puede tardar unos minutos)", fraction: nil)
+        webDownloading = web.slug
+        importTask = Task {
+            var zip: URL?
+            defer {
+                if let zip { try? FileManager.default.removeItem(at: zip.deletingLastPathComponent()) }
+                webDownloading = nil
+            }
+            do {
+                let file = try await PostPodWebClient.shared.downloadBundle(slug: web.slug) { fraction, got, total in
+                    Task { @MainActor in
+                        guard self.importJob != nil else { return }
+                        let mb = { (b: Int64) in String(format: "%.0f MB", Double(b) / 1_048_576) }
+                        let detail = got == 0 ? "postPod está armando el paquete… (puede tardar unos minutos)"
+                            : total > 0 ? "Descargando \(mb(got)) de \(mb(total))" : "Descargando \(mb(got))"
+                        self.importJob = JobState(title: title, detail: detail, fraction: fraction)
+                    }
+                }
+                zip = file
+                try Task.checkCancellation()
+                importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
+                var project = try await runImport([file])
+                project.postpodSlug = web.slug
+                try? ProjectStore.save(project)
+                importJob = nil
+                reload()
+                open(project)
+            } catch is CancellationError {
+                importJob = nil
+            } catch let e as URLError where e.code == .cancelled {
                 importJob = nil
             } catch {
                 importJob = nil
