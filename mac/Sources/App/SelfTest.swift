@@ -11,6 +11,9 @@ enum SelfTest {
     @MainActor
     static func run() {
         NSApplication.shared.setActivationPolicy(.prohibited)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApplication.shared.windows.forEach { $0.orderOut(nil) }   // headless: no window
+        }
         let args = CommandLine.arguments
         guard let i = args.firstIndex(of: "--selftest") else { return }
         let inputs = args[(i + 1)...].filter { !$0.hasPrefix("-") }.map { URL(fileURLWithPath: $0) }

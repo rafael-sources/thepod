@@ -48,6 +48,8 @@ struct HomeView: View {
             .frame(maxWidth: 1200)
             .frame(maxWidth: .infinity)
         }
+        .onAppear { app.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in app.reload() }
     }
 
     private var dropZone: some View {

@@ -60,6 +60,8 @@ enum Importer {
         let slug = ProjectStore.uniqueSlug(for: name)
         let folder = ProjectStore.folder(for: slug)
         try FileManager.default.createDirectory(at: folder.appendingPathComponent("media"), withIntermediateDirectories: true)
+        var finished = false
+        defer { if !finished { try? FileManager.default.removeItem(at: folder) } }   // no half-imported leftovers
 
         var project = Project(id: slug, name: name, podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         let sorted = files.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
@@ -90,6 +92,7 @@ enum Importer {
         }
         progress("Listo", 1)
         try ProjectStore.save(project)
+        finished = true
         return project
     }
 
@@ -108,6 +111,8 @@ enum Importer {
         let slug = ProjectStore.uniqueSlug(for: (meta["slug"] as? String) ?? name)
         let folder = ProjectStore.folder(for: slug)
         try fm.createDirectory(at: folder.appendingPathComponent("media"), withIntermediateDirectories: true)
+        var finished = false
+        defer { if !finished { try? fm.removeItem(at: folder) } }   // no half-imported leftovers
 
         var project = Project(id: slug, name: name, createdAt: Date(), importedFrom: "postpod-bundle")
         if let source = meta["source"] as? [String: Any], let podcast = source["podcast"] as? [String: Any] {
@@ -278,6 +283,7 @@ enum Importer {
 
         progress("Listo", 1)
         try ProjectStore.save(project)
+        finished = true
         return project
     }
 
