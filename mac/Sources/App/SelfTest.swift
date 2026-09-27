@@ -8,7 +8,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test")
     }
 
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
@@ -81,6 +81,25 @@ enum SelfTest {
         if args.contains("--render") { render(); return }
         if args.contains("--prepod-test") { prepodTest(); return }
         if args.contains("--postpod-test") { postpodTest(); return }
+        if args.contains("--pre-test") {             // solo lectura: podcasts, episodios y el detalle del primero
+            Task { @MainActor in
+                do {
+                    let api = PrePodClient.shared
+                    let pods = try await api.prePodcasts()
+                    print("podcasts=\(pods.count)")
+                    for p in pods {
+                        let eps = try await api.preEpisodes(p.slug)
+                        print("  \(p.name): \(eps.count) episodios · " + Dictionary(grouping: eps, by: \.status).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " "))
+                        if let e = eps.last {
+                            let sc = try await api.script(p.slug, e.id), bl = try await api.blocks(p.slug, e.id), gu = try await api.guests(p.slug, e.id)
+                            print("    \(e.label) [\(e.whenText ?? "sin fecha")]: guion=\(sc.count) rundown=\(bl.count) invitados=\(gu.count)")
+                        }
+                    }
+                } catch { print("ERROR \(error)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
         guard let i = args.firstIndex(of: "--selftest") else { return }
         let inputs = args[(i + 1)...].filter { !$0.hasPrefix("-") }.map { URL(fileURLWithPath: $0) }
         let skipLandscape = args.contains("--no-landscape")

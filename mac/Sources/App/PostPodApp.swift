@@ -57,7 +57,9 @@ struct RootView: View {
 
     private var content: some View {
         Group {
-            if let session = app.session {
+            if app.section == .pre {
+                PreHomeView()
+            } else if let session = app.session {
                 ProjectView(session: session)
                     .id(session.project.id)
             } else {

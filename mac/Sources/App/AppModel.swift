@@ -7,8 +7,14 @@ struct JobState: Equatable {
     var fraction: Double? = nil      // nil = indeterminate
 }
 
+enum AppSection: String { case pre, post }
+
 @MainActor
 final class AppModel: ObservableObject {
+    /// Sección de thePod que se está usando (pre · post); se recuerda entre aperturas.
+    @Published var section: AppSection = AppSection(rawValue: UserDefaults.standard.string(forKey: "seccion") ?? "") ?? .post {
+        didSet { UserDefaults.standard.set(section.rawValue, forKey: "seccion") }
+    }
     @Published var projects: [Project] = []
     @Published var session: ProjectSession?
     @Published var importJob: JobState?

@@ -65,7 +65,7 @@ actor PrePodClient {
         return u
     }
 
-    private func send(_ method: String, _ path: String, json: [String: Any]? = nil, body: Data? = nil,
+    func send(_ method: String, _ path: String, json: [String: Any]? = nil, body: Data? = nil,
                       retry: Bool = true) async throws -> Data {
         if !loggedIn && path != "/api/auth/login" { try await login() }
         var req = URLRequest(url: try url(path))
