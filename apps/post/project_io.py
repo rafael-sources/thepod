@@ -43,14 +43,15 @@ def export_project(slug: str) -> Path:
                     total_size += f.stat().st_size
                     file_count += 1
 
-        branding_dir = project_dir / "branding"
-        if branding_dir.exists():
-            for f in branding_dir.rglob("*"):
-                if f.is_file():
-                    arcname = f"branding/{f.relative_to(branding_dir)}"
-                    zf.write(f, arcname)
-                    total_size += f.stat().st_size
-                    file_count += 1
+        for extra in ("branding", "sponsors", "sounds", "guests"):
+            extra_dir = project_dir / extra
+            if extra_dir.exists():
+                for f in extra_dir.rglob("*"):
+                    if f.is_file():
+                        arcname = f"{extra}/{f.relative_to(extra_dir)}"
+                        zf.write(f, arcname)
+                        total_size += f.stat().st_size
+                        file_count += 1
 
         director_count = 0
         director_dir = project_dir / "director_assets"
@@ -111,7 +112,8 @@ def export_project(slug: str) -> Path:
             "file_count": file_count,
             "total_size_bytes": total_size,
             "includes": ["proyecto.json", "proyecto.sqlite", "media",
-                         "branding", "director_assets", "global_audio"],
+                         "branding", "sponsors", "sounds", "guests",
+                         "director_assets", "global_audio"],
             "director_assets_count": director_count,
             "global_audio_count": global_audio_count,
             "recovered_from_global": recovered_from_global,

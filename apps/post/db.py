@@ -202,6 +202,8 @@ def _migrate_in_place(conn: sqlite3.Connection) -> None:
     seg_cols = {r["name"] for r in conn.execute("PRAGMA table_info(project_segments)")}
     if "actual_offset_seconds" not in seg_cols:
         conn.execute("ALTER TABLE project_segments ADD COLUMN actual_offset_seconds REAL")
+    if "planned_offset_seconds" not in seg_cols:
+        conn.execute("ALTER TABLE project_segments ADD COLUMN planned_offset_seconds REAL")
     if "layout_template" not in ej_cols:
         conn.execute("ALTER TABLE export_jobs ADD COLUMN layout_template TEXT DEFAULT 'side_by_side'")
     if "pip_corner" not in ej_cols:

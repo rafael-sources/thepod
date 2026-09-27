@@ -5,6 +5,7 @@ require a shared secret (`INTEGRATION_SECRET`) in the `X-PodPod-Secret`
 header.
 """
 
+import json
 import shutil
 import subprocess
 import uuid
@@ -79,7 +80,13 @@ def import_from_prepod():
 
     existing = find_project_by_shared_id(spid, source_episode_id=episode.get("id"))
     if existing:
-        return jsonify({"project": _summarize_project(existing), "created": False}), 200
+        # Refresh: re-sync tables and re-download assets so edits made in
+        # prePod (sponsors, sounds, guests, branding...) reach the project.
+        _sync_prepod_payload(existing["slug"], data, podcast, episode)
+        from projects import _read_meta as _rm
+        existing = _rm(existing["slug"]) or existing
+        return jsonify({"project": _summarize_project(existing),
+                        "created": False, "refreshed": True}), 200
 
     podcast_name = (podcast.get("name") or "").strip() or "Podcast"
     ep_num = episode.get("number")
@@ -132,8 +139,7 @@ def import_from_prepod():
         _wm(meta["slug"], m2)
         meta = m2
 
-    _import_participants_sponsors_segments(meta["slug"], episode)
-    _download_branding_assets(meta["slug"], podcast.get("branding") or {})
+    _sync_prepod_payload(meta["slug"], data, podcast, episode)
     return jsonify({"project": _summarize_project(meta), "created": True}), 201
 
 
@@ -154,8 +160,8 @@ def _import_participants_sponsors_segments(slug, episode):
                 continue
             db.execute(
                 "INSERT INTO project_participants "
-                "(name, role, social_instagram, social_twitter, social_youtube, social_tiktok) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "(name, role, social_instagram, social_twitter, social_youtube, social_tiktok, photo_filename) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     g.get("name") or "Participante",
                     g.get("role") or "guest",
@@ -163,6 +169,7 @@ def _import_participants_sponsors_segments(slug, episode):
                     g.get("social_twitter"),
                     g.get("social_youtube"),
                     g.get("social_tiktok"),
+                    g.get("photo_filename"),
                 ),
             )
 
@@ -196,8 +203,8 @@ def _import_participants_sponsors_segments(slug, episode):
                 local_sponsor_id = sponsor_id_map.get(old_sid)
             db.execute(
                 "INSERT INTO project_segments "
-                "(position, kind, title, duration_estimate, sponsor_id, notes) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "(position, kind, title, duration_estimate, sponsor_id, notes, planned_offset_seconds) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     b.get("position") or 0,
                     b.get("kind") or "segment",
@@ -205,6 +212,7 @@ def _import_participants_sponsors_segments(slug, episode):
                     b.get("duration_estimate"),
                     local_sponsor_id,
                     b.get("notes"),
+                    b.get("planned_offset_seconds"),
                 ),
             )
         db.commit()
@@ -212,33 +220,112 @@ def _import_participants_sponsors_segments(slug, episode):
         db.close()
 
 
-def _download_branding_assets(slug, branding):
-    """Download branding images (background, logo) from prePod into the project."""
+def _fetch_from_prepod(url: str, dest: Path, min_bytes: int = 500) -> bool:
+    """Server-to-server download from prePod, authenticated with the shared
+    secret (prePod media routes accept X-PodPod-Secret in place of a session
+    cookie). Returns True if the file landed and looks sane."""
     import urllib.request
+    req = urllib.request.Request(url, headers={"X-PodPod-Secret": INTEGRATION_SECRET})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp, open(dest, "wb") as fh:
+            shutil.copyfileobj(resp, fh)
+        if dest.stat().st_size < min_bytes:
+            dest.unlink(missing_ok=True)
+            return False
+        return True
+    except Exception:
+        dest.unlink(missing_ok=True)
+        return False
+
+
+def _download_branding_assets(slug, branding):
+    """Download branding images (background, logo, cover) from prePod into the project."""
     dest_dir = PROJECTS_DIR / slug / "branding"
     dest_dir.mkdir(parents=True, exist_ok=True)
     from projects import _read_meta, _write_meta
     meta = _read_meta(slug) or {}
     changed = False
 
-    for key, prefix in [("background_url", "background"), ("logo_url", "logo")]:
+    for key, prefix in [("background_url", "background"), ("logo_url", "logo"),
+                        ("cover_url", "cover")]:
         url = branding.get(key)
         if not url:
             continue
         ext = Path(url).suffix.lower() or ".png"
         dest = dest_dir / f"{prefix}{ext}"
-        try:
-            urllib.request.urlretrieve(url, str(dest))
-            if dest.stat().st_size < 500:
-                dest.unlink(missing_ok=True)
-                continue
+        if _fetch_from_prepod(url, dest):
             meta[f"{prefix}_filename"] = dest.name
             changed = True
-        except Exception:
-            dest.unlink(missing_ok=True)
 
     if changed:
         _write_meta(slug, meta)
+
+
+def _download_sponsor_logos(slug, sponsors):
+    """Download sponsors[].logo_url into the project's sponsors/ dir, named by
+    logo_filename so project_sponsors rows point at the local copies."""
+    dest_dir = PROJECTS_DIR / slug / "sponsors"
+    for s in sponsors:
+        if not isinstance(s, dict):
+            continue
+        url = s.get("logo_url")
+        fname = s.get("logo_filename") or (Path(url).name if url else None)
+        if not url or not fname:
+            continue
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        _fetch_from_prepod(url, dest_dir / Path(fname).name)
+
+
+def _download_podcast_sounds(slug, sounds):
+    """Download the podcast soundboard pack (podcast.sounds[].download_url)
+    into sounds/ plus a sounds.json manifest with the metadata."""
+    if not sounds:
+        return
+    dest_dir = PROJECTS_DIR / slug / "sounds"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = []
+    for s in sounds:
+        if not isinstance(s, dict):
+            continue
+        url = s.get("download_url")
+        fname = Path(s.get("filename") or "").name
+        if url and fname:
+            _fetch_from_prepod(url, dest_dir / fname, min_bytes=100)
+        manifest.append({k: s.get(k) for k in
+                         ("name", "filename", "shortcut_key", "color",
+                          "duration_seconds", "file_size_bytes", "position")})
+    (dest_dir / "sounds.json").write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False))
+
+
+def _download_guest_photos(slug, guests):
+    """Download guest photos (guests[].photo_url) into the project's guests/ dir."""
+    dest_dir = PROJECTS_DIR / slug / "guests"
+    for g in guests:
+        if not isinstance(g, dict):
+            continue
+        url = g.get("photo_url")
+        fname = g.get("photo_filename") or (Path(url).name if url else None)
+        if not url or not fname:
+            continue
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        _fetch_from_prepod(url, dest_dir / Path(fname).name)
+
+
+def _sync_prepod_payload(slug, data, podcast, episode):
+    """Everything that is safe to (re)apply on both first import and refresh:
+    participants/sponsors/segments tables, asset downloads, source_url."""
+    _import_participants_sponsors_segments(slug, episode)
+    _download_branding_assets(slug, podcast.get("branding") or {})
+    _download_sponsor_logos(slug, episode.get("sponsors") or [])
+    _download_podcast_sounds(slug, podcast.get("sounds") or [])
+    _download_guest_photos(slug, episode.get("guests") or [])
+    if data.get("source_url"):
+        from projects import _read_meta, _write_meta
+        meta = _read_meta(slug) or {}
+        if meta.get("source_url") != data["source_url"]:
+            meta["source_url"] = data["source_url"]
+            _write_meta(slug, meta)
 
 
 COMPOSITE_MARKER = "[composite_podcast_hstack]"
