@@ -8,9 +8,11 @@ session, then shows 3 cards (prePod, prodPod, postPod) with one-click
 No business logic of its own — auth/users live in shared_users.
 """
 
+import json
 from datetime import timedelta
+from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, session
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from shared_config import load_shared_config
@@ -157,6 +159,54 @@ def create_app():
             app_urls=_app_urls(),
             username=session.get("username"),
         )
+
+    # ----- Descargas (solo con sesión) -----
+    # El .dmg y su ficha viven fuera del repo: ~/.podpod/downloads/postPod.dmg y postPod.json
+    # (o "downloads_dir" en ~/.podpod/config.json). scripts/publish-postpod-mac.sh los deja ahí.
+
+    def _downloads_dir() -> Path:
+        cfg2 = load_shared_config()
+        return Path(cfg2.get("downloads_dir") or (Path.home() / ".podpod" / "downloads"))
+
+    def _postpod_mac_info():
+        d = _downloads_dir()
+        dmg, meta = d / "postPod.dmg", d / "postPod.json"
+        if not dmg.is_file():
+            return None
+        info = {}
+        try:
+            info = json.loads(meta.read_text())
+        except (OSError, ValueError):
+            pass
+        info.setdefault("size", dmg.stat().st_size)
+        return info
+
+    @app.get("/descargas")
+    def descargas():
+        return render_template("descargas.html",
+                               username=session.get("username"),
+                               postpod_mac=_postpod_mac_info())
+
+    @app.get("/api/descargas/postpod-mac")
+    def descargas_postpod_mac_info():
+        if not session.get("username"):
+            return jsonify({"error": "no autenticado"}), 401
+        info = _postpod_mac_info()
+        if not info:
+            return jsonify({"error": "todavía no hay una versión publicada"}), 404
+        return jsonify(info)
+
+    @app.get("/descargas/postpod-mac")
+    def descargas_postpod_mac():
+        if not session.get("username"):
+            return redirect("/descargas")
+        info = _postpod_mac_info()
+        if not info:
+            abort(404)
+        version = info.get("version") or "mac"
+        return send_file(str(_downloads_dir() / "postPod.dmg"), as_attachment=True,
+                         download_name=f"postPod-{version}.dmg",
+                         mimetype="application/x-apple-diskimage", conditional=True, max_age=0)
 
     @app.get("/api/apps")
     def apps_list():
