@@ -380,7 +380,7 @@ def episode_integration_status(slug, ep_id):
         try:
             status, data = _http_json(
                 "GET",
-                f"{base.rstrip('/')}/api/integrations/status?shared_project_id={spid}",
+                f"{base.rstrip('/')}/api/integrations/status?shared_project_id={spid}&source_episode_id={ep_id}",
                 headers={"X-PodPod-Secret": INTEGRATION_SECRET},
                 timeout=3,
             )

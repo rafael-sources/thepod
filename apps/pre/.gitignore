@@ -13,10 +13,8 @@ venv/
 .DS_Store
 *.swp
 
-# Runtime / per-podcast storage
-podcasts/*/uploads/
-podcasts/*/assets/
-podcasts/*/branding/
+# Runtime / per-podcast storage (datos de usuario, nunca en git)
+podcasts/
 *.sqlite
 *.sqlite-journal
 *.db

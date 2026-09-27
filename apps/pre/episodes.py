@@ -97,7 +97,7 @@ def _sync_ai_notes(slug: str, ep_id: int, shared_project_id: str):
     from integrations import _http_json
     status_code, status_data = _http_json(
         "GET",
-        f"{postpod_url}/api/integrations/status?shared_project_id={shared_project_id}",
+        f"{postpod_url}/api/integrations/status?shared_project_id={shared_project_id}&source_episode_id={ep_id}",
         headers={"X-PodPod-Secret": cfg.get("integration_secret", "")},
     )
     if status_code != 200 or not status_data or not status_data.get("slug"):
