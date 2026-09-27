@@ -2,3 +2,4 @@ build/
 *.xcodeproj/
 build.log
 Vendor/
+build.noindex/

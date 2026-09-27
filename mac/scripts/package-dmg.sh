@@ -8,18 +8,23 @@ cd "$ROOT"
 zsh scripts/build-ffmpeg.sh >/dev/null
 xcodegen generate -q >/dev/null 2>&1
 xcodebuild -project PostPodApp.xcodeproj -scheme PostPodApp -configuration Release \
-  -destination 'platform=macOS,arch=arm64' -derivedDataPath build/dd-release build > build/release.log 2>&1 \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath build.noindex/dd-release build > build/release.log 2>&1 \
   || { grep -E "error:" build/release.log | head; exit 1; }
-APP=build/dd-release/Build/Products/Release/postPod.app
+APP=build.noindex/dd-release/Build/Products/Release/postPod.app
+# Que las copias de compilación no aparezcan como apps en la Mac (solo la de Aplicaciones)
+LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+unregister() { "$LSREG" -u "$1" 2>/dev/null || true; }
+unregister "$APP"
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
 BUILD=$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")
-STAGE=build/dmg-stage
+STAGE=build.noindex/dmg-stage
 rm -rf "$STAGE" && mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/postPod.app"
 ln -s /Applications "$STAGE/Aplicaciones"
 DMG=build/postPod-$VERSION.dmg
 rm -f "$DMG"
 hdiutil create -volname "postPod $VERSION" -srcfolder "$STAGE" -fs HFS+ -format ULFO -ov "$DMG" >/dev/null
+unregister "$STAGE/postPod.app"
 rm -rf "$STAGE"
 SIZE=$(stat -f %z "$DMG")
 SHA=$(shasum -a 256 "$DMG" | cut -d' ' -f1)
