@@ -13,10 +13,8 @@ venv/
 .DS_Store
 *.swp
 
-# Local data (user media + per-project DBs)
-projects/*/media/
-projects/*/exports/
-projects/*/thumbnails/
+# Local data (user projects, media + per-project DBs)
+projects/
 global/video/
 global/audio/
 global/image/
