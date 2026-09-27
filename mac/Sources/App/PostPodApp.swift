@@ -14,7 +14,7 @@ struct PostPodApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("postPod") {
+        WindowGroup("thePod") {
             RootView()
                 .environmentObject(app)
                 .frame(minWidth: 1100, minHeight: 720)

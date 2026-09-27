@@ -146,15 +146,17 @@ enum ClipSuggester {
 enum Keychain {
 
     /// One-time move of settings saved under the app's previous identifier.
+    /// Una sola vez: trae los ajustes guardados con los identificadores anteriores de la app
+    /// (postPod → thePod). La cuenta y los proyectos viven en carpetas que no cambian.
     static func migrateLegacy() {
-        guard !UserDefaults.standard.bool(forKey: "legacyMigrated") else { return }
-        UserDefaults.standard.set(true, forKey: "legacyMigrated")
-        let legacy = "com.example" + ".postpodapp"
         let d = UserDefaults.standard
-        if let old = d.persistentDomain(forName: legacy) {
+        guard !d.bool(forKey: "migradoAThePod") else { return }
+        for legacy in ["space.aitism" + ".postpod", "com.example" + ".postpodapp"] {
+            guard let old = d.persistentDomain(forName: legacy) else { continue }
             for (k, v) in old where d.object(forKey: k) == nil { d.set(v, forKey: k) }
             d.removePersistentDomain(forName: legacy)
         }
+        d.set(true, forKey: "migradoAThePod")
     }
 
     static var apiKey: String? {

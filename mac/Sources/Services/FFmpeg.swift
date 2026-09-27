@@ -10,7 +10,7 @@ enum FFmpeg {
         var errorDescription: String? {
             switch self {
             case .notFound:
-                return "A esta copia de postPod le falta una parte que necesita para procesar video. Vuelve a instalar la app."
+                return "A esta copia de thePod le falta una parte que necesita para procesar video. Vuelve a instalar la app."
             case .failed(let msg):
                 return "No se pudo procesar el archivo. (\(msg))"
             }

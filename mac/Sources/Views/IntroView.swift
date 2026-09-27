@@ -27,7 +27,7 @@ struct IntroView: View {
                     GridRow { tile(.pre); tile(.prod) }
                     GridRow { tile(.post); tile(.ama) }
                 }
-                Text("postPod")
+                Text("thePod")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.937, green: 0.890, blue: 0.816))   // #EFE3D0
                     .opacity(showName ? 1 : 0)

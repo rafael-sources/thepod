@@ -10,9 +10,14 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 28) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("postPod")
-                            .font(.system(size: 40, weight: .black, design: .rounded))
-                        Text("De tu grabación a episodio, reels y subtítulos. Con pocos clics.")
+                        HStack(spacing: 10) {
+                            Text("thePod")
+                                .font(.system(size: 40, weight: .black, design: .rounded))
+                            Text("post")
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        Text("Edición y publicación: de tu grabación a episodio, reels y subtítulos. Con pocos clics.")
                             .font(.title3)
                             .foregroundStyle(Theme.secondary)
                     }

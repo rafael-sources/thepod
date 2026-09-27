@@ -703,7 +703,7 @@ struct SettingsView: View {
             }
             if !FFmpeg.isAvailable {
                 Section {
-                    Label("A esta copia de postPod le falta una parte para procesar video. Vuelve a instalar la app.",
+                    Label("A esta copia de thePod le falta una parte para procesar video. Vuelve a instalar la app.",
                           systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                 }
