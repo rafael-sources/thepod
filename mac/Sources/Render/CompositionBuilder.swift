@@ -1,0 +1,162 @@
+import AVFoundation
+import CoreImage
+
+/// Builds one AVFoundation composition from the project's edit decisions.
+/// The SAME composition drives the live preview (AVPlayer) and the final export,
+/// so what the user sees is exactly what gets rendered.
+struct BuiltComposition {
+    let asset: AVMutableComposition
+    let videoComposition: AVMutableVideoComposition?
+    let audioMix: AVMutableAudioMix
+    let keep: [EditEngine.Span]
+    let duration: Double
+    let scene: RenderScene?
+
+    func playerItem() -> AVPlayerItem {
+        let item = AVPlayerItem(asset: asset)
+        item.videoComposition = videoComposition
+        item.audioMix = audioMix
+        return item
+    }
+}
+
+enum CompositionBuilder {
+    enum Failure: LocalizedError {
+        case empty
+        var errorDescription: String? { "No hay nada que reproducir: todo el rango quedó cortado o no hay pistas." }
+    }
+
+    static func build(project: Project, format: ExportFormat, window: EditEngine.Span? = nil,
+                      energy: EnergyMap?, layoutOverride: LayoutTemplate? = nil,
+                      captionsOverride: Bool? = nil) async throws -> BuiltComposition {
+        let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts, window: window)
+        let outDuration = EditEngine.outputDuration(keep)
+        guard outDuration > 0.1 else { throw Failure.empty }
+
+        let comp = AVMutableComposition()
+        var mixParams: [AVMutableAudioMixInputParameters] = []
+        var videoTrackIDs: [Int: CMPersistentTrackID] = [:]
+        var assets: [String: AVURLAsset] = [:]
+        func asset(_ rel: String) -> AVURLAsset {
+            if let a = assets[rel] { return a }
+            let a = AVURLAsset(url: ProjectStore.url(rel, in: project.id), options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            assets[rel] = a
+            return a
+        }
+        func cm(_ s: Double) -> CMTime { CMTime(seconds: s, preferredTimescale: 90_000) }
+
+        /// Places [tlStart, tlStart+len) of a source onto `track`, skipping whatever falls in cuts.
+        func place(track: AVMutableCompositionTrack, source: AVAssetTrack, sourceDuration: Double,
+                   tlStart: Double, srcIn: Double, length: Double) throws {
+            var cursor = 0.0
+            for k in keep {
+                let a = max(k.start, tlStart), b = min(k.end, tlStart + length)
+                if b - a > 0.01 {
+                    let src = srcIn + (a - tlStart)
+                    let len = min(b - a, max(0, sourceDuration - src))
+                    if len > 0.01 {
+                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(len)), of: source,
+                                                  at: cm(cursor + (a - k.start)))
+                    }
+                }
+                cursor += k.end - k.start
+            }
+        }
+
+        let wantVideo = format != .audio
+        for lane in project.lanes {
+            var vTrack: AVMutableCompositionTrack?
+            var aTrack: AVMutableCompositionTrack?
+            for placed in lane.placed {
+                guard let media = project.mediaItem(placed.clip.mediaId) else { continue }
+                let videoAsset = asset(media.file)
+                let srcDuration = try await videoAsset.load(.duration).seconds
+                if wantVideo, media.hasVideo, let src = try await videoAsset.loadTracks(withMediaType: .video).first {
+                    if vTrack == nil { vTrack = comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) }
+                    try place(track: vTrack!, source: src, sourceDuration: srcDuration,
+                              tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
+                }
+                if media.hasAudio {
+                    let audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
+                    let audioAsset = asset(audioRel)
+                    if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
+                        let aDur = try await audioAsset.load(.duration).seconds
+                        if aTrack == nil { aTrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) }
+                        try place(track: aTrack!, source: src, sourceDuration: aDur,
+                                  tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
+                        let p = AVMutableAudioMixInputParameters(track: aTrack!)
+                        p.setVolume(Float(lane.volume * placed.clip.volume), at: .zero)
+                        if !mixParams.contains(where: { $0.trackID == aTrack!.trackID }) { mixParams.append(p) }
+                    }
+                }
+            }
+            if let vTrack { videoTrackIDs[lane.id] = vTrack.trackID }
+        }
+
+        // Music / SFX lane
+        var sfxTracks: [(track: AVMutableCompositionTrack, busyUntil: Double)] = []
+        for clip in project.audioLane.sorted(by: { $0.tlStart < $1.tlStart }) {
+            guard let media = project.mediaItem(clip.mediaId) else { continue }
+            let a = asset(media.file)
+            guard let src = try await a.loadTracks(withMediaType: .audio).first else { continue }
+            let dur = try await a.load(.duration).seconds
+            let len = clip.srcOut - clip.srcIn
+            let slot = sfxTracks.firstIndex { $0.busyUntil <= clip.tlStart }
+            let track: AVMutableCompositionTrack
+            if let slot {
+                track = sfxTracks[slot].track
+                sfxTracks[slot].busyUntil = clip.tlStart + len
+            } else {
+                track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                sfxTracks.append((track, clip.tlStart + len))
+                let p = AVMutableAudioMixInputParameters(track: track)
+                p.setVolume(Float(clip.volume), at: .zero)
+                mixParams.append(p)
+            }
+            try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+        }
+
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = mixParams
+
+        var videoComposition: AVMutableVideoComposition?
+        var scene: RenderScene?
+        if wantVideo {
+            let captionsOn = captionsOverride ?? project.captionStyle.enabled
+            var style = project.captionStyle
+            style.enabled = captionsOn && !project.words.isEmpty
+            let captions = style.enabled
+                ? EditEngine.captionLines(words: project.words, keep: keep, vertical: format.isVertical, uppercase: style.uppercase)
+                : []
+            var names: [Int: (name: String, handle: String?)] = [:]
+            for lane in project.lanes {
+                names[lane.id] = (project.laneName(lane.id), project.participant(forLane: lane.id)?.handle)
+            }
+            let s = RenderScene(
+                renderSize: format.renderSize, format: format,
+                layout: layoutOverride ?? project.layout,
+                laneOrder: project.lanes.map(\.id), trackIDs: videoTrackIDs,
+                captions: captions, style: style,
+                switches: AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep),
+                names: names, showNames: project.showNames,
+                cropX: project.laneCrop,
+                logo: project.showLogo ? project.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) } : nil,
+                background: project.backgroundFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
+                    .map { img in
+                        img.clampedToExtent().applyingGaussianBlur(sigma: 6).cropped(to: img.extent)
+                            .applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.25])
+                    },
+                title: project.name)
+            let vc = AVMutableVideoComposition()
+            vc.customVideoCompositorClass = PodCompositor.self
+            vc.renderSize = format.renderSize
+            vc.frameDuration = CMTime(value: 1, timescale: 30)
+            vc.instructions = [PodInstruction(timeRange: CMTimeRange(start: .zero, duration: cm(outDuration)), scene: s)]
+            videoComposition = vc
+            scene = s
+        }
+
+        return BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
+                                keep: keep, duration: outDuration, scene: scene)
+    }
+}
