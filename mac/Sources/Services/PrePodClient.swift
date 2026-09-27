@@ -35,7 +35,7 @@ actor PrePodClient {
     // MARK: Settings
 
     static var baseURL: String {
-        get { UserDefaults.standard.string(forKey: "prepodURL") ?? "https://prepod.example.com" }
+        get { UserDefaults.standard.string(forKey: "prepodURL") ?? "https://prepod.castmedia.space" }
         set { UserDefaults.standard.set(newValue, forKey: "prepodURL") }
     }
     static var username: String {
