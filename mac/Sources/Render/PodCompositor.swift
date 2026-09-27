@@ -13,6 +13,7 @@ final class RenderScene: @unchecked Sendable {
     let style: CaptionStyle
     let switches: [SpeakerSwitch]
     let names: [Int: (name: String, handle: String?)]
+    let photos: [Int: CIImage]
     let showNames: Bool
     let cropX: [Int: Double]
     let logo: CIImage?
@@ -28,8 +29,9 @@ final class RenderScene: @unchecked Sendable {
          trackIDs: [Int: CMPersistentTrackID], captions: [CaptionLine], style: CaptionStyle,
          switches: [SpeakerSwitch], names: [Int: (name: String, handle: String?)], showNames: Bool,
          cropX: [Int: Double], logo: CIImage?, background: CIImage?, title: String,
-         sponsorCards: [SponsorCard] = []) {
+         sponsorCards: [SponsorCard] = [], photos: [Int: CIImage] = [:]) {
         self.sponsorCards = sponsorCards
+        self.photos = photos
         self.renderSize = renderSize
         self.format = format
         self.layout = layout
@@ -109,7 +111,7 @@ final class RenderScene: @unchecked Sendable {
                     let showThis = multi || (isMainPanel && (t - since < 3.5 || t < 4))
                     guard showThis, let n = names[lane] else { continue }
                     let fs = max(18, min(W, H) * (format.isVertical ? 0.032 : 0.026))
-                    guard let tag = cached("tag-\(lane)-\(Int(fs))", { TextRenderer.nameTag(n.name, handle: n.handle, fontSize: fs) }) else { continue }
+                    guard let tag = cached("tag-\(lane)-\(Int(fs))", { TextRenderer.nameTag(n.name, handle: n.handle, fontSize: fs, photo: photos[lane]) }) else { continue }
                     let margin = min(W, H) * 0.025
                     var y = rect.minY + margin
                     if format.isVertical && !multi { y = rect.minY + H * 0.30 }

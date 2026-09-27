@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Compila ffmpeg + ffprobe estáticos (arm64, LGPL) para meterlos dentro de postPod.app.
+# Compila ffmpeg estático (arm64, LGPL) para meterlo dentro de thePod.app.
 # Versión fijada a propósito: la app se prueba con esta versión. Para actualizar, cambia
 # FFMPEG_VERSION, corre este script, prueba importar/arreglar/exportar y publica la app nueva.
 #
@@ -21,6 +21,7 @@ JOBS=$(sysctl -n hw.ncpu)
 export MACOSX_DEPLOYMENT_TARGET=$MIN_MACOS
 CFLAGS_COMMON="-arch arm64 -mmacosx-version-min=$MIN_MACOS -O2"
 
+rm -f "$OUT/ffprobe"      # ya no se usa: la app lee los tiempos con ffmpeg (menos peso)
 if [[ -x "$OUT/ffmpeg" ]] && "$OUT/ffmpeg" -version 2>/dev/null | head -1 | grep -q "version $FFMPEG_VERSION "; then
   echo "ffmpeg $FFMPEG_VERSION ya está en Vendor/ffmpeg"; exit 0
 fi
@@ -48,14 +49,14 @@ fi
 rm -rf ffmpeg-$FFMPEG_VERSION && tar xJf ffmpeg-$FFMPEG_VERSION.tar.xz
 cd ffmpeg-$FFMPEG_VERSION
 ./configure --prefix="$WORK/install" --arch=arm64 --target-os=darwin --cc=clang \
-  --enable-static --disable-shared --disable-debug --disable-doc --disable-ffplay \
+  --enable-static --disable-shared --disable-debug --disable-doc --disable-ffplay --disable-ffprobe \
   --disable-autodetect --enable-videotoolbox --enable-audiotoolbox --enable-zlib --enable-pthreads \
   --enable-libmp3lame --disable-network \
   --extra-cflags="$CFLAGS_COMMON -I$DEPS/include" \
   --extra-ldflags="-arch arm64 -mmacosx-version-min=$MIN_MACOS -L$DEPS/lib" >/dev/null
 make -j$JOBS >/dev/null
-cp ffmpeg ffprobe "$OUT/"
-strip "$OUT/ffmpeg" "$OUT/ffprobe"
+cp ffmpeg "$OUT/"
+strip "$OUT/ffmpeg"
 cp COPYING.LGPLv2.1 "$LIC/FFmpeg-LGPLv2.1.txt"
 cp LICENSE.md "$LIC/FFmpeg-LICENSE.md"
 printf 'FFmpeg %s (https://ffmpeg.org) bajo LGPL 2.1, compilado sin componentes GPL.\nCódigo fuente: https://ffmpeg.org/releases/ffmpeg-%s.tar.xz\nLAME %s (https://lame.sourceforge.io) bajo LGPL.\n' \

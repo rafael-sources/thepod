@@ -83,7 +83,7 @@ enum TextRenderer {
     }
 
     /// Lower-third style name tag: name (+ optional handle).
-    static func nameTag(_ name: String, handle: String?, fontSize: CGFloat) -> CIImage? {
+    static func nameTag(_ name: String, handle: String?, fontSize: CGFloat, photo: CIImage? = nil) -> CIImage? {
         let nameAttr = NSAttributedString(string: name, attributes: [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .bold), .foregroundColor: NSColor.white])
         let handleAttr = handle.map { NSAttributedString(string: "  " + $0, attributes: [
@@ -94,15 +94,31 @@ enum TextRenderer {
         let line = CTLineCreateWithAttributedString(full)
         let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
         let padX = fontSize * 0.7, padY = fontSize * 0.42
-        let size = CGSize(width: ceil(bounds.width + padX * 2), height: ceil(fontSize * 1.25 + padY * 2))
+        let height = ceil(fontSize * 1.25 + padY * 2)
+        // Con foto: un círculo con la cara a la izquierda, dentro de la píldora.
+        let photoCG = photo.flatMap { CIContext().createCGImage($0, from: $0.extent) }
+        let photoD = height - fontSize * 0.3
+        let lead = photoCG != nil ? photoD + fontSize * 0.35 : 0
+        let size = CGSize(width: ceil(bounds.width + padX * 2 + lead), height: height)
         return draw(size: size) { ctx in
             let r = CGRect(origin: .zero, size: size)
             ctx.setFillColor(NSColor.black.withAlphaComponent(0.62).cgColor)
             ctx.addPath(CGPath(roundedRect: r, cornerWidth: size.height / 2, cornerHeight: size.height / 2, transform: nil))
             ctx.fillPath()
-            ctx.setFillColor(NSColor(srgbRed: 1, green: 0.84, blue: 0.2, alpha: 1).cgColor)
-            ctx.fillEllipse(in: CGRect(x: padX * 0.45, y: size.height / 2 - fontSize * 0.15, width: fontSize * 0.3, height: fontSize * 0.3))
-            ctx.textPosition = CGPoint(x: padX + fontSize * 0.1, y: padY + fontSize * 0.28)
+            if let cg = photoCG {
+                let c = CGRect(x: fontSize * 0.15, y: fontSize * 0.15, width: photoD, height: photoD)
+                // recorte cuadrado centrado de la foto, dentro de un círculo
+                let side = CGFloat(min(cg.width, cg.height))
+                let crop = CGRect(x: (CGFloat(cg.width) - side) / 2, y: (CGFloat(cg.height) - side) / 2, width: side, height: side)
+                ctx.saveGState()
+                ctx.addEllipse(in: c); ctx.clip()
+                if let sq = cg.cropping(to: crop) { ctx.draw(sq, in: c) }
+                ctx.restoreGState()
+            } else {
+                ctx.setFillColor(NSColor(srgbRed: 1, green: 0.84, blue: 0.2, alpha: 1).cgColor)
+                ctx.fillEllipse(in: CGRect(x: padX * 0.45, y: size.height / 2 - fontSize * 0.15, width: fontSize * 0.3, height: fontSize * 0.3))
+            }
+            ctx.textPosition = CGPoint(x: padX + fontSize * 0.1 + lead, y: padY + fontSize * 0.28)
             CTLineDraw(line, ctx)
         }
     }

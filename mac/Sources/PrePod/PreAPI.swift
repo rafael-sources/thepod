@@ -194,3 +194,171 @@ extension PrePodClient {
         return (false, (obj["error"] as? String) ?? "No se pudo enviar")
     }
 }
+
+// MARK: - Ideas, plantillas, landing, notas, correos
+
+struct EpisodeIdea: Decodable, Identifiable, Hashable {
+    let id: Int
+    var content: String
+    var author: String
+    var status: String
+    var votes: Int
+    var votedByMe: Bool
+}
+
+struct ShowTemplate: Decodable, Identifiable, Hashable {
+    let id: Int
+    var name: String
+    var description: String?
+    var isDefault: Bool
+    var blockCount: Int?
+    var sectionCount: Int?
+}
+
+struct TemplateDetail: Decodable {
+    var id: Int
+    var name: String
+    var description: String?
+    var isDefault: Bool
+    var blocks: [RundownBlock]
+    var sections: [ScriptSection]
+}
+
+struct LandingConfig: Decodable {
+    var template: String?
+    var showEpisodes: Bool?
+    var showTeam: Bool?
+    var ownerName: String?
+    var ownerEmail: String?
+    var language: String?
+    var socialYoutube: String?
+    var socialSpotify: String?
+    var socialApplePodcasts: String?
+    var socialInstagram: String?
+    var socialTiktok: String?
+    var socialTwitter: String?
+
+    // prePod guarda show_* como 0/1
+    enum CodingKeys: String, CodingKey {
+        case template, showEpisodes, showTeam, ownerName, ownerEmail, language, socialYoutube, socialSpotify,
+             socialApplePodcasts, socialInstagram, socialTiktok, socialTwitter
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        func flag(_ k: CodingKeys) -> Bool? {
+            if let b = try? c.decodeIfPresent(Bool.self, forKey: k) { return b }
+            if let i = try? c.decodeIfPresent(Int.self, forKey: k) { return i != 0 }
+            return nil
+        }
+        template = try? c.decodeIfPresent(String.self, forKey: .template)
+        showEpisodes = flag(.showEpisodes); showTeam = flag(.showTeam)
+        ownerName = try? c.decodeIfPresent(String.self, forKey: .ownerName)
+        ownerEmail = try? c.decodeIfPresent(String.self, forKey: .ownerEmail)
+        language = try? c.decodeIfPresent(String.self, forKey: .language)
+        socialYoutube = try? c.decodeIfPresent(String.self, forKey: .socialYoutube)
+        socialSpotify = try? c.decodeIfPresent(String.self, forKey: .socialSpotify)
+        socialApplePodcasts = try? c.decodeIfPresent(String.self, forKey: .socialApplePodcasts)
+        socialInstagram = try? c.decodeIfPresent(String.self, forKey: .socialInstagram)
+        socialTiktok = try? c.decodeIfPresent(String.self, forKey: .socialTiktok)
+        socialTwitter = try? c.decodeIfPresent(String.self, forKey: .socialTwitter)
+    }
+}
+
+struct TeamMember: Decodable, Identifiable, Hashable {
+    let id: Int
+    var name: String
+    var role: String?
+    var bio: String?
+    var imageUrl: String?
+    var socialInstagram: String?
+    var socialTwitter: String?
+    var socialWebsite: String?
+}
+
+struct ShowNotes: Decodable {
+    var text: String
+}
+
+struct EpisodeLink: Decodable, Identifiable, Hashable {
+    let id: Int
+    var platform: String
+    var url: String
+}
+
+extension PrePodClient {
+    private func dj<T: Decodable>(_ t: T.Type, _ d: Data) throws -> T {
+        let j = JSONDecoder(); j.keyDecodingStrategy = .convertFromSnakeCase
+        return try j.decode(T.self, from: d)
+    }
+    private func pp(_ slug: String) -> String { "/api/podcasts/\(slug)" }
+
+    // Ideas
+    func ideas(_ slug: String, _ epId: Int) async throws -> [EpisodeIdea] { try dj([EpisodeIdea].self, await send("GET", pp(slug) + "/episodes/\(epId)/ideas")) }
+    func addIdea(_ slug: String, _ epId: Int, _ text: String) async throws -> EpisodeIdea {
+        try dj(EpisodeIdea.self, await send("POST", pp(slug) + "/episodes/\(epId)/ideas", json: ["content": text]))
+    }
+    func setIdeaStatus(_ slug: String, _ id: Int, _ status: String) async throws { _ = try await send("PUT", pp(slug) + "/ideas/\(id)", json: ["status": status]) }
+    func deleteIdea(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/ideas/\(id)") }
+    func vote(_ slug: String, _ id: Int, on: Bool) async throws { _ = try await send(on ? "POST" : "DELETE", pp(slug) + "/ideas/\(id)/vote") }
+
+    // Plantillas
+    func templates(_ slug: String) async throws -> [ShowTemplate] { try dj([ShowTemplate].self, await send("GET", pp(slug) + "/templates")) }
+    func template(_ slug: String, _ id: Int) async throws -> TemplateDetail { try dj(TemplateDetail.self, await send("GET", pp(slug) + "/templates/\(id)")) }
+    func addTemplate(_ slug: String, name: String) async throws -> ShowTemplate {
+        try dj(ShowTemplate.self, await send("POST", pp(slug) + "/templates", json: ["name": name]))
+    }
+    func updateTemplate(_ slug: String, _ id: Int, _ fields: [String: Any]) async throws { _ = try await send("PATCH", pp(slug) + "/templates/\(id)", json: fields) }
+    func deleteTemplate(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/templates/\(id)") }
+    func addTemplateBlock(_ slug: String, _ tid: Int, kind: BlockKind) async throws -> RundownBlock {
+        try dj(RundownBlock.self, await send("POST", pp(slug) + "/templates/\(tid)/blocks", json: ["kind": kind.rawValue, "title": kind.title]))
+    }
+    func updateTemplateBlock(_ slug: String, _ id: Int, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/template-blocks/\(id)", json: fields) }
+    func reorderTemplateBlocks(_ slug: String, _ tid: Int, _ order: [Int]) async throws -> [RundownBlock] {
+        try dj([RundownBlock].self, await send("POST", pp(slug) + "/templates/\(tid)/blocks/reorder", json: ["order": order]))
+    }
+    func deleteTemplateBlock(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/template-blocks/\(id)") }
+    func addTemplateSection(_ slug: String, _ tid: Int) async throws -> ScriptSection {
+        try dj(ScriptSection.self, await send("POST", pp(slug) + "/templates/\(tid)/sections", json: ["speaker": "", "content": ""]))
+    }
+    func updateTemplateSection(_ slug: String, _ id: Int, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/template-sections/\(id)", json: fields) }
+    func deleteTemplateSection(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/template-sections/\(id)") }
+    /// Crea el episodio con una plantilla elegida (nil = sin plantilla).
+    func createEpisode(_ slug: String, title: String, templateId: Int?) async throws -> PreEpisode {
+        try dj(PreEpisode.self, await send("POST", pp(slug) + "/episodes",
+                                          json: ["title": title, "template_id": templateId.map { $0 as Any } ?? NSNull()]))
+    }
+
+    // Sponsor por bloque
+    func setBlockSponsor(_ slug: String, _ blockId: Int, sponsorId: Int?) async throws {
+        _ = try await send("PUT", pp(slug) + "/blocks/\(blockId)/sponsor", json: ["sponsor_id": sponsorId.map { $0 as Any } ?? NSNull()])
+    }
+
+    // Notas del episodio, links y correos
+    func showNotes(_ slug: String, _ epId: Int) async throws -> ShowNotes { try dj(ShowNotes.self, await send("GET", pp(slug) + "/episodes/\(epId)/show-notes")) }
+    func syncNotes(_ slug: String, _ epId: Int) async throws { _ = try await send("POST", pp(slug) + "/episodes/\(epId)/sync-notes") }
+    func links(_ slug: String, _ epId: Int) async throws -> [EpisodeLink] { try dj([EpisodeLink].self, await send("GET", pp(slug) + "/episodes/\(epId)/links")) }
+    func setLink(_ slug: String, _ epId: Int, platform: String, url: String) async throws {
+        _ = try await send("POST", pp(slug) + "/episodes/\(epId)/links", json: ["platform": platform, "url": url])
+    }
+    func deleteLink(_ slug: String, _ epId: Int, platform: String) async throws { _ = try await send("DELETE", pp(slug) + "/episodes/\(epId)/links/\(platform)") }
+    /// Correo de preparación a todos los invitados con correo. Devuelve (enviados, total, detalle).
+    func sendPreRecording(_ slug: String, _ epId: Int) async throws -> (Int, Int, String) {
+        let d = try await send("POST", pp(slug) + "/episodes/\(epId)/send-pre-recording", json: [:])
+        let o = (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
+        let results = (o["results"] as? [[String: Any]]) ?? []
+        let noSMTP = results.contains { ($0["reason"] as? String) == "no_smtp" }
+        return ((o["sent"] as? Int) ?? 0, (o["total"] as? Int) ?? results.count,
+                noSMTP ? "prePod no tiene configurado el envío de correos." : "")
+    }
+
+    // Landing y equipo
+    func landing(_ slug: String) async throws -> LandingConfig { try dj(LandingConfig.self, await send("GET", pp(slug) + "/landing")) }
+    func updateLanding(_ slug: String, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/landing", json: fields) }
+    func team(_ slug: String) async throws -> [TeamMember] { try dj([TeamMember].self, await send("GET", pp(slug) + "/team")) }
+    func addTeamMember(_ slug: String, name: String) async throws -> TeamMember {
+        try dj(TeamMember.self, await send("POST", pp(slug) + "/team", json: ["name": name]))
+    }
+    func updateTeamMember(_ slug: String, _ id: Int, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/team/\(id)", json: fields) }
+    func deleteTeamMember(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/team/\(id)") }
+    func uploadTeamImage(_ slug: String, _ id: Int, file: URL) async throws { _ = try await upload(pp(slug) + "/team/\(id)/image", field: "file", file: file) }
+}

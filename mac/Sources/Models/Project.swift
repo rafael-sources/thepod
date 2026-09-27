@@ -164,6 +164,7 @@ struct Participant: Codable, Identifiable, Equatable {
     var twitter: String?
     var youtube: String?
     var tiktok: String?
+    var photoFile: String?              // foto del invitado (de prePod), relativa al proyecto
 
     var handle: String? {
         for h in [instagram, tiktok, twitter, youtube] {

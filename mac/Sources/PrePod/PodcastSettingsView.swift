@@ -19,9 +19,11 @@ struct PodcastSettingsView: View {
                 Text("Equipo").tag(2)
                 Text("Sponsors").tag(3)
                 Text("Soundboard").tag(4)
+                Text("Plantillas").tag(6)
+                Text("Página").tag(7)
                 Text("Distribución").tag(5)
             }
-            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 700)
+            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 860)
             ScrollView {
                 Group {
                     switch tab {
@@ -30,6 +32,8 @@ struct PodcastSettingsView: View {
                     case 2: TeamTab(slug: slug)
                     case 3: SponsorsTab(slug: slug)
                     case 4: SoundboardTab(slug: slug)
+                    case 6: TemplatesTab(slug: slug)
+                    case 7: LandingTab(slug: slug)
                     default: DistributionTab(slug: slug)
                     }
                 }

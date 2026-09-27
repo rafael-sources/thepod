@@ -20,7 +20,7 @@ La vista previa y la exportación usan **la misma composición** (`CompositionBu
 ```bash
 brew install xcodegen
 cd macos
-zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg/ffprobe en Vendor/ffmpeg (≈10 min)
+zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg en Vendor/ffmpeg (≈10 min)
 xcodegen generate
 open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
 ```
@@ -41,8 +41,8 @@ Para publicar una versión en thePod: `zsh scripts/package-dmg.sh` (deja `build/
 
 ## ffmpeg dentro de la app
 
-La app lleva su propio `ffmpeg` y `ffprobe` en `Contents/MacOS/`: el usuario no instala nada.
-Los compila `scripts/build-ffmpeg.sh` desde el código fuente oficial, estáticos, arm64 y **LGPL**
+La app lleva su propio `ffmpeg` en `Contents/MacOS/`: el usuario no instala nada.
+Los compila `scripts/build-ffmpeg.sh` (sin ffprobe: los tiempos de inicio se leen con ffmpeg) desde el código fuente oficial, estáticos, arm64 y **LGPL**
 (sin `--enable-gpl` ni `--enable-nonfree`), con VideoToolbox, AudioToolbox y LAME para MP3.
 Las licencias quedan en `Contents/Resources/` (`FFmpeg-LGPLv2.1.txt`, `LAME-COPYING.txt`, `README.txt`).
 

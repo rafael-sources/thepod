@@ -44,12 +44,14 @@ final class PreModel: ObservableObject {
         Task { do { try await loadEpisodes() } catch { self.error = error.localizedDescription } }
     }
 
-    func create(title: String) {
+    /// templateId: nil = la plantilla por defecto del podcast; 0 = sin plantilla.
+    func create(title: String, templateId: Int? = nil) {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         Task {
             do {
-                let e = try await api.createEpisode(slug, title: t)
+                let e = templateId == nil ? try await api.createEpisode(slug, title: t)
+                                          : try await api.createEpisode(slug, title: t, templateId: templateId == 0 ? nil : templateId)
                 episodes.append(e)
                 open = e
             } catch { self.error = error.localizedDescription }
@@ -137,6 +139,9 @@ struct PreHomeView: View {
     @StateObject private var model = PreModel()
     @State private var newTitle = ""
     @State private var creating = false
+    @State private var templates: [ShowTemplate] = []
+    @State private var templateId = -1          // -1 = la de por defecto, 0 = sin plantilla
+    @State private var showCalendar = false
 
     var body: some View {
         Group {
@@ -193,26 +198,44 @@ struct PreHomeView: View {
                     Button { model.configuring = true } label: { Label("Configurar podcast", systemImage: "slider.horizontal.3") }
                     Toggle("Mostrar archivados", isOn: $model.showArchived).toggleStyle(.checkbox)
                     Spacer()
-                    Button { creating = true } label: { Label("Nuevo episodio", systemImage: "plus") }
+                    Picker("", selection: $showCalendar) {
+                        Label("Tablero", systemImage: "rectangle.split.3x1").tag(false)
+                        Label("Calendario", systemImage: "calendar").tag(true)
+                    }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 220)
+                    Button {
+                        creating = true
+                        Task {
+                            templates = (try? await PrePodClient.shared.templates(model.slug)) ?? []
+                            templateId = templates.first(where: \.isDefault)?.id ?? 0
+                        }
+                    } label: { Label("Nuevo episodio", systemImage: "plus") }
                         .buttonStyle(.borderedProminent)
                         .popover(isPresented: $creating) {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Nuevo episodio").font(.headline)
                                 TextField("Título", text: $newTitle).frame(width: 300)
                                     .onSubmit(createNow)
+                                if !templates.isEmpty {
+                                    Picker("Plantilla", selection: $templateId) {
+                                        ForEach(templates) { t in Text(t.name + (t.isDefault ? " (por defecto)" : "")).tag(t.id) }
+                                        Text("Sin plantilla").tag(0)
+                                    }
+                                    .frame(width: 300)
+                                }
                                 HStack { Spacer(); Button("Crear", action: createNow).buttonStyle(.borderedProminent) }
                             }
                             .padding(16)
                         }
                 }
-                columns
+                if showCalendar { PreCalendarView(model: model) } else { columns }
             }
         }
         .padding(28)
     }
 
     private func createNow() {
-        model.create(title: newTitle)
+        model.create(title: newTitle, templateId: templates.isEmpty ? nil : templateId)
         newTitle = ""
         creating = false
     }
@@ -325,18 +348,20 @@ struct PreEpisodeView: View {
                 Text("Guion").tag(0)
                 Text("Rundown").tag(1)
                 Text("Invitados").tag(2)
-                Text("Descripción").tag(3)
+                Text("Ideas").tag(3)
+                Text("Publicación").tag(4)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(maxWidth: 520)
+            .frame(maxWidth: 620)
 
             Group {
                 switch tab {
                 case 0: ScriptTab(slug: model.slug, episodeId: episode.id)
                 case 1: RundownTab(slug: model.slug, episodeId: episode.id)
                 case 2: GuestsTab(slug: model.slug, episodeId: episode.id)
-                default: DescriptionTab(model: model, episode: $episode, saver: saver)
+                case 3: IdeasTab(slug: model.slug, episodeId: episode.id)
+                default: PublicationTab(model: model, episode: $episode, saver: saver)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -471,6 +496,7 @@ struct RundownTab: View {
     let slug: String
     let episodeId: Int
     @State private var blocks: [RundownBlock] = []
+    @State private var sponsors: [Sponsor2] = []
     @State private var error: String?
     @State private var saver = Debouncer()
     private let api = PrePodClient.shared
@@ -497,11 +523,20 @@ struct RundownTab: View {
                                 .labelsHidden().frame(width: 120)
                             TextField("Título", text: $b.title)
                                 .onChange(of: b.title) { _, v in save(b.id, ["title": v]) }
-                            TextField("min", value: Binding(get: { b.durationEstimate.map { $0 / 60 } },
-                                                            set: { b.durationEstimate = $0.map { $0 * 60 } }), format: .number)
+                            TextField("min", value: $b.durationEstimate, format: .number)   // en prePod los bloques van en minutos
                                 .frame(width: 50)
                                 .onChange(of: b.durationEstimate) { _, v in save(b.id, ["duration_estimate": v ?? NSNull()]) }
                             Text("min").font(.caption).foregroundStyle(Theme.secondary)
+                            if b.kind == "sponsor" {
+                                Picker("", selection: Binding(get: { b.sponsorId ?? 0 }, set: { v in
+                                    b.sponsorId = v == 0 ? nil : v
+                                    Task { do { try await api.setBlockSponsor(slug, b.id, sponsorId: v == 0 ? nil : v) } catch { self.error = error.localizedDescription } }
+                                })) {
+                                    Text("¿Qué sponsor?").tag(0)
+                                    ForEach(sponsors) { Text($0.name).tag($0.id) }
+                                }
+                                .labelsHidden().frame(width: 160)
+                            }
                             Button { reorder(i, -1) } label: { Image(systemName: "arrow.up") }.disabled(i == 0)
                             Button { reorder(i, 1) } label: { Image(systemName: "arrow.down") }.disabled(i == blocks.count - 1)
                             Button(role: .destructive) { remove(b) } label: { Image(systemName: "trash") }
@@ -516,12 +551,15 @@ struct RundownTab: View {
         .task { await load() }
     }
 
-    private var totalMinutes: Int { Int((blocks.compactMap(\.durationEstimate).reduce(0, +) / 60).rounded()) }
-    private func start(of i: Int) -> Double { blocks.prefix(i).compactMap(\.durationEstimate).reduce(0, +) }
+    private var totalMinutes: Int { Int(blocks.compactMap(\.durationEstimate).reduce(0, +).rounded()) }
+    private func start(of i: Int) -> Double { blocks.prefix(i).compactMap(\.durationEstimate).reduce(0, +) * 60 }
     private func clock(_ s: Double) -> String { String(format: "%d:%02d", Int(s) / 60, Int(s) % 60) }
 
     private func load() async {
-        do { blocks = try await api.blocks(slug, episodeId) } catch { self.error = error.localizedDescription }
+        do {
+            blocks = try await api.blocks(slug, episodeId)
+            sponsors = (try? await api.sponsors(slug)) ?? []
+        } catch { self.error = error.localizedDescription }
     }
     private func save(_ id: Int, _ fields: [String: Any]) {
         saver.run("\(id)-\(fields.keys.sorted().joined())") {
@@ -564,7 +602,13 @@ struct GuestsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let error { Text(error).foregroundStyle(.orange).font(.caption) }
-            if let note { Text(note).foregroundStyle(Theme.secondary).font(.caption) }
+            HStack {
+                if let note { Text(note).foregroundStyle(Theme.secondary).font(.caption) }
+                Spacer()
+                Button { sendPrep() } label: { Label("Enviar correo de preparación", systemImage: "envelope") }
+                    .help("Fecha, rundown, link a la sala y recomendaciones, a todos los que tienen correo")
+                    .disabled(!guests.contains { !$0.email.trimmingCharacters(in: .whitespaces).isEmpty })
+            }
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach($guests) { $g in
@@ -631,6 +675,14 @@ struct GuestsTab: View {
     private func remove(_ g: PreGuest) {
         Task {
             do { try await api.deleteGuest(slug, g.id); guests.removeAll { $0.id == g.id } } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func sendPrep() {
+        Task {
+            do {
+                let (sent, total, extra) = try await api.sendPreRecording(slug, episodeId)
+                note = "Correo de preparación: \(sent) de \(total) enviados. \(extra)"
+            } catch { self.error = error.localizedDescription }
         }
     }
     private func invite(_ g: PreGuest) {

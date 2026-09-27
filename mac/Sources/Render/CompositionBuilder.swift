@@ -154,7 +154,12 @@ enum CompositionBuilder {
                     guard let o else { return nil }
                     return RenderScene.SponsorCard(start: o, end: o + (a.end - a.start), name: a.sponsor.name, copy: a.sponsor.copy,
                                                    logo: a.sponsor.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) })
-                } : [])
+                } : [],
+                photos: Dictionary(uniqueKeysWithValues: project.lanes.compactMap { lane in
+                    project.participant(forLane: lane.id)?.photoFile
+                        .flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
+                        .map { (lane.id, $0) }
+                }))
             let vc = AVMutableVideoComposition()
             vc.customVideoCompositorClass = PodCompositor.self
             vc.renderSize = format.renderSize

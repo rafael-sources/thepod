@@ -225,9 +225,21 @@ enum Importer {
         if db.tableExists("project_participants") {
             for r in try db.query("SELECT * FROM project_participants ORDER BY id") {
                 guard let id = r.int("id"), let n = r.string("name") else { continue }
+                var photo: String?
+                if let f = r.string("photo_filename"), !f.isEmpty {
+                    let src = root.appendingPathComponent("guests").appendingPathComponent(f)
+                    if fm.fileExists(atPath: src.path) {
+                        let dir = folder.appendingPathComponent("guests", isDirectory: true)
+                        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+                        let to = dir.appendingPathComponent(f)
+                        if !fm.fileExists(atPath: to.path) { try? fm.copyItem(at: src, to: to) }
+                        photo = "guests/\(f)"
+                    }
+                }
                 project.participants.append(Participant(id: id, name: n, role: r.string("role") ?? "guest", track: r.int("track"),
                                                         instagram: r.string("social_instagram"), twitter: r.string("social_twitter"),
-                                                        youtube: r.string("social_youtube"), tiktok: r.string("social_tiktok")))
+                                                        youtube: r.string("social_youtube"), tiktok: r.string("social_tiktok"),
+                                                        photoFile: photo))
             }
         }
         for i in project.lanes.indices {

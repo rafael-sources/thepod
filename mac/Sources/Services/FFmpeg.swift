@@ -100,33 +100,32 @@ enum FFmpeg {
         return log.contains("Stream #") && log.contains(": \(kind):")
     }
 
-    static var probeURL: URL? {
-        guard let ff = executableURL else { return nil }
-        let probe = ff.deletingLastPathComponent().appendingPathComponent("ffprobe")
-        return FileManager.default.isExecutableFile(atPath: probe.path) ? probe : nil
-    }
-
     /// First timestamp of the video and audio streams. prodPod files that lost their first
     /// chunks keep absolute timestamps (e.g. video starts at 510 s); we pad so every lane stays in sync.
+    /// Uses ffmpeg itself (first packet with -copyts), so the app doesn't need to ship ffprobe.
     static func streamStarts(_ url: URL) async -> (video: Double?, audio: Double?) {
-        guard let probe = probeURL else { return (nil, nil) }
-        let p = Process()
-        p.executableURL = probe
-        p.arguments = ["-v", "quiet", "-show_entries", "stream=codec_type,start_time", "-of", "csv=p=0", url.path]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return (nil, nil) }
-        let data = await Task.detached { pipe.fileHandleForReading.readDataToEndOfFile() }.value
-        p.waitUntilExit()
-        var v: Double?, a: Double?
-        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
-            let parts = line.split(separator: ",")
-            guard parts.count >= 2, let t = Double(parts[1]) else { continue }
-            if parts[0] == "video", v == nil { v = t }
-            if parts[0] == "audio", a == nil { a = t }
+        async let v = firstTimestamp(url, kind: "v")
+        async let a = firstTimestamp(url, kind: "a")
+        return await (v, a)
+    }
+
+    private static func firstTimestamp(_ url: URL, kind: String) async -> Double? {
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("first-\(kind)-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: out) }
+        _ = try? await run(["-v", "error", "-copyts", "-i", url.path, "-map", "0:\(kind):0?", "-c", "copy",
+                            "-frames:\(kind)", "1", "-f", "framemd5", out.path], allowFailure: true)
+        guard let text = try? String(contentsOf: out, encoding: .utf8) else { return nil }
+        var tb: Double?
+        for line in text.split(separator: "\n") {
+            if line.hasPrefix("#tb 0:") {
+                let frac = line.split(separator: ":").last?.trimmingCharacters(in: .whitespaces).split(separator: "/") ?? []
+                if frac.count == 2, let n = Double(frac[0]), let d = Double(frac[1]), d > 0 { tb = n / d }
+            } else if !line.hasPrefix("#") {
+                let f = line.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                if f.count > 2, let pts = Double(f[2]), let tb { return pts * tb }
+            }
         }
-        return (v, a)
+        return nil
     }
 
     // MARK: parsing

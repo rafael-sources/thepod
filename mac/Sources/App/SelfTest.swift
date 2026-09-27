@@ -8,7 +8,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test")
     }
 
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
@@ -81,6 +81,18 @@ enum SelfTest {
         if args.contains("--render") { render(); return }
         if args.contains("--prepod-test") { prepodTest(); return }
         if args.contains("--postpod-test") { postpodTest(); return }
+        if args.contains("--update-test") {          // qué versión publica el servidor (no baja nada)
+            Updater.shared.check()
+            Task { @MainActor in
+                for _ in 0..<40 {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    if Updater.shared.state != .checking { break }
+                }
+                print("instalada=\(Updater.currentVersion) (\(Updater.currentBuild)) servidor=\(Updater.shared.state)")
+                fflush(stdout); exit(0)
+            }
+            return
+        }
         if args.contains("--pre-test") {             // solo lectura: podcasts, episodios y el detalle del primero
             Task { @MainActor in
                 do {
@@ -93,6 +105,16 @@ enum SelfTest {
                         let di = try await api.distribution(p.slug); let fo = try await api.fonts()
                         print("config \(c.name): colores=\(c.colorPrimary ?? "-") fuente=\(c.fontHeading ?? "-") logo=\(c.logoUrl != nil) · dueño=\(h.owner ?? "-") conductores=\(h.extraHosts.count) directores=\((h.directors ?? []).count) · sponsors=\(sp.count) sonidos=\(so.count) · plataformas=\(di.platforms.keys.sorted()) feed=\(di.feedUrl ?? "-") · fuentes=\(fo.count)")
                         if let u = c.logoUrl { print("logo bytes=\((try? await api.media(u))?.count ?? -1)") }
+                        let tp = try await api.templates(p.slug)
+                        var td: TemplateDetail?
+                        if let first = tp.first { td = try await api.template(p.slug, first.id) }
+                        let la = try await api.landing(p.slug); let tm = try await api.team(p.slug)
+                        print("plantillas=\(tp.count) [\(td.map { "\($0.name): \($0.blocks.count) bloques, \($0.sections.count) secciones" } ?? "-")] · landing=\(la.template ?? "-") episodios=\(la.showEpisodes ?? false) · equipo=\(tm.count)")
+                        let allEps = try await api.preEpisodes(p.slug)
+                        if let e = allEps.first(where: { $0.episodeNumber == 14 }) ?? allEps.first {
+                            let ide = try await api.ideas(p.slug, e.id); let ln = try await api.links(p.slug, e.id); let sn = try await api.showNotes(p.slug, e.id)
+                            print("\(e.label): ideas=\(ide.count) links=\(ln.map(\.platform)) notas=\(sn.text.count) caracteres")
+                        }
                     }
                     for p in pods {
                         let eps = try await api.preEpisodes(p.slug)
