@@ -1,0 +1,80 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo la app se conecta con la suite</h1>
+  <p class="lede">
+    Usa la misma cuenta que el resto de thePod. Trae de <a class="x-link postpod" href="/docs/postpod">postPod</a> el proyecto,
+    de <a class="x-link prepod" href="/docs/prepod">prePod</a> todo lo del episodio, y publica con lo que prePod ya tiene configurado.
+  </p>
+</header>
+
+<section id="cuenta">
+  <h2><span class="num">01</span> Una sola cuenta</h2>
+  <p>
+    El usuario y la contraseña son los de thePod. La app inicia sesión en prePod y en postPod con esas credenciales
+    y solo ve lo que tu cuenta puede ver en la web (tus proyectos, o todos si eres administrador).
+    La contraseña vive en el llavero de macOS.
+  </p>
+</section>
+
+<section id="desde-postpod">
+  <h2><span class="num">02</span> Desde postPod</h2>
+  <p>
+    <strong>Traer a la Mac</strong> pide a postPod el paquete del proyecto (el mismo <code>.zip</code> que baja el botón de exportar
+    de la web) y lo importa. Del paquete, la app usa:
+  </p>
+  <ul>
+    <li><strong>Pistas</strong> de cada participante (video y audio), con su desfase en el tiempo.</li>
+    <li><strong>Participantes</strong> y sus nombres.</li>
+    <li><strong>Transcripciones</strong> ya hechas, si existen, y los <strong>cortes</strong> del editor de transcript.</li>
+    <li><strong>Momentos</strong>, que se convierten en reels.</li>
+    <li><strong>Estilo de subtítulos</strong> configurado en la web.</li>
+    <li><strong>Música global y sonidos del soundboard</strong>, para el paso de Efectos.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">SOLO IDA</div>
+    <div class="cbody"><p>La app trae proyectos, pero no devuelve la edición a postPod web. Si cambias algo en la web (por ejemplo, marcas más momentos), usa <strong>Traer de nuevo</strong>.</p></div>
+  </div>
+</section>
+
+<section id="desde-prepod">
+  <h2><span class="num">03</span> Desde prePod</h2>
+  <p>Si el episodio fue planificado en prePod, el paquete trae y la app usa:</p>
+  <ul>
+    <li><strong>Datos del episodio</strong>: número, título, descripción, resumen del podcast y links. Van a los metadatos y a las notas del export.</li>
+    <li><strong>Branding</strong>: el logo como marca de agua y el fondo del podcast en el layout <em>Estudio</em>.</li>
+    <li><strong>Sponsors</strong> con su logo: aparecen en el video en el bloque del guion que les corresponde (el minuto real si prodPod lo marcó, si no el planificado).</li>
+    <li><strong>Guion</strong>: visible en <em>Tu grabación</em> y usado para los capítulos.</li>
+  </ul>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">04</span> Publicar con prePod</h2>
+  <p>La app no guarda claves de Spotify, Apple ni YouTube: publica a través de prePod.</p>
+  <table>
+    <thead><tr><th>Destino</th><th>Cómo llega</th><th>Qué necesita en prePod</th></tr></thead>
+    <tbody>
+      <tr><td>Spotify y Apple Podcasts</td><td>La app sube el MP3; prePod lo aloja y lo agrega al feed RSS. Las plataformas lo leen solas.</td><td>Hosting configurado y el podcast dado de alta con su feed.</td></tr>
+      <tr><td>YouTube</td><td>La app sube el video 16:9; prePod lo publica en tu canal.</td><td>Canal conectado en Distribución → YouTube.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Los archivos grandes se suben por partes y se reintentan solos si se corta la conexión.
+    Al terminar, la app muestra el link publicado.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#cuenta">Una sola cuenta</a>
+  <a href="#desde-postpod">Desde postPod</a>
+  <a href="#desde-prepod">Desde prePod</a>
+  <a href="#publicar">Publicar con prePod</a>
+</nav>
+{% endblock %}

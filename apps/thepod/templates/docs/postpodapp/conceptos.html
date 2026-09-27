@@ -1,0 +1,95 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · Conceptos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTOS</div>
+  <h1>Cómo piensa la app</h1>
+  <p class="lede">Pocas ideas, bien definidas. Si entiendes estas seis, entiendes todo lo que hace la app.</p>
+</header>
+
+<section id="proyecto">
+  <h2><span class="num">01</span> Proyecto</h2>
+  <p>
+    Cada episodio que traes es un proyecto con su propia carpeta en <code>~/Movies/postPod/&lt;nombre&gt;/</code>:
+    los medios, la configuración (<code>project.json</code>), la caché de análisis, los efectos de sonido,
+    los sponsors, el branding y la carpeta <code>exports/</code>. Borrar un proyecto desde la app lo manda a la papelera.
+  </p>
+</section>
+
+<section id="pistas">
+  <h2><span class="num">02</span> Pistas y personas</h2>
+  <p>
+    Cada persona grabada es una <strong>pista</strong> con su video y su audio. Las pistas pueden empezar en momentos
+    distintos (alguien que entró tarde): la app respeta ese desfase para que todo quede sincronizado.
+    La app sabe <strong>quién habla</strong> midiendo el volumen de cada pista, y con eso cambia de cámara en los layouts automáticos.
+  </p>
+</section>
+
+<section id="cortes">
+  <h2><span class="num">03</span> Cortes no destructivos</h2>
+  <p>
+    Como en postPod web, nada se borra de verdad. Los silencios, las muletillas y las frases que quitas se guardan como
+    <strong>cortes</strong> sobre el tiempo original de la grabación. La vista previa y la exportación saltan esos tramos.
+    Puedes deshacerlos cuando quieras.
+  </p>
+  <table>
+    <thead><tr><th>Tipo de corte</th><th>De dónde sale</th></tr></thead>
+    <tbody>
+      <tr><td>Silencio</td><td>Pausas largas donde nadie habla (se protege cualquier tramo con voz audible)</td></tr>
+      <tr><td>Muletilla</td><td>“eh”, “emm”, “mmm”… y, si lo activas, “este”, “o sea”, “pues”, “bueno”</td></tr>
+      <tr><td>Frase</td><td>Las que cortas a mano en Subtítulos</td></tr>
+      <tr><td>Importado</td><td>Los cortes que ya hiciste en el transcript de postPod web</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="transcripcion">
+  <h2><span class="num">04</span> Transcripción</h2>
+  <p>
+    La app transcribe cada pista por separado con Whisper, en tu Mac y sin internet, con la hora exacta de cada palabra.
+    Después une las pistas y descarta las palabras duplicadas que se cuelan de un micrófono a otro.
+    De esa transcripción salen los subtítulos, los cortes de muletillas y la detección de silencios.
+  </p>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Momentos y reels</h2>
+  <p>
+    Los <strong>momentos</strong> son los que marcas en postPod web (tecla <kbd>M</kbd>) o en vivo en prodPod.
+    La app no inventa reels con IA: cada momento se convierte en un reel, con la misma regla que usa la web
+    (la duración del momento, o hasta el siguiente momento). También puedes agregar un momento desde la app.
+  </p>
+</section>
+
+<section id="layouts">
+  <h2><span class="num">06</span> Formatos y layouts</h2>
+  <p>El <strong>formato</strong> es el tamaño del video; el <strong>layout</strong> es cómo se acomodan las cámaras dentro.</p>
+  <table>
+    <thead><tr><th>Layout</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td>Automático</td><td>Elige el mejor según el formato</td></tr>
+      <tr><td>Quien habla</td><td>Pantalla completa para quien está hablando</td></tr>
+      <tr><td>Lado a lado</td><td>Todos a la vez, uno al lado del otro</td></tr>
+      <tr><td>Cuadrícula</td><td>Todos en cuadrícula</td></tr>
+      <tr><td>Protagonista</td><td>Quien habla en grande, el resto al costado</td></tr>
+      <tr><td>Ventanita</td><td>Quien habla en grande, otro en una esquina</td></tr>
+      <tr><td>Arriba y abajo</td><td>Uno arriba y otro abajo (ideal vertical)</td></tr>
+      <tr><td>Estudio</td><td>Las cámaras en recuadros sobre el fondo de tu podcast</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#proyecto">Proyecto</a>
+  <a href="#pistas">Pistas y personas</a>
+  <a href="#cortes">Cortes no destructivos</a>
+  <a href="#transcripcion">Transcripción</a>
+  <a href="#momentos">Momentos y reels</a>
+  <a href="#layouts">Formatos y layouts</a>
+</nav>
+{% endblock %}

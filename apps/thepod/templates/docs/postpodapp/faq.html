@@ -1,0 +1,72 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Dudas comunes y cómo resolver los problemas más habituales.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>¿Se sube mi audio a algún servidor para transcribirlo?</summary>
+    <div class="ans"><p>No. La transcripción, la mejora de audio y el render se hacen en tu Mac. Solo se sube algo cuando tú tocas Publicar.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Funciona en Macs con Intel?</summary>
+    <div class="ans"><p>No. La app está hecha para Apple Silicon (M1 o posterior) y macOS 15 o posterior.</p></div>
+  </details>
+
+  <details>
+    <summary>“No se encontró ffmpeg”</summary>
+    <div class="ans"><p>Instálalo con Homebrew: <code>brew install ffmpeg</code>. La app lo busca en <code>/opt/homebrew/bin</code>.</p></div>
+  </details>
+
+  <details>
+    <summary>“Usuario o contraseña inválidos” o no aparecen proyectos en “En postPod web”</summary>
+    <div class="ans">
+      <p>Revisa en Ajustes que las direcciones sean las de <code>castmedia.space</code> (la sesión de thePod se comparte en ese dominio) y toca <strong>Guardar y probar</strong>. Si la web te deja entrar con esos mismos datos, la app también debería.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>“Traer a la Mac” se queda en “postPod está armando el paquete…”</summary>
+    <div class="ans"><p>Es normal en episodios largos: el servidor comprime todas las pistas antes de enviar el primer byte. Un episodio de ~2 GB puede tardar unos minutos. Después verás el avance en MB.</p></div>
+  </details>
+
+  <details>
+    <summary>La primera transcripción tarda mucho</summary>
+    <div class="ans"><p>La primera vez la app descarga el modelo de transcripción (~600 MB, o ~250 MB en modo Rápido). Queda guardado y las siguientes veces empieza de inmediato.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Puedo deshacer lo que hizo “Arreglar todo”?</summary>
+    <div class="ans"><p>Sí. Los cortes no borran nada: <strong>Deshacer cortes</strong> los quita todos, o puedes revisarlos uno por uno en la lista. El sonido de estudio se puede apagar y el video vuelve a usar el audio original.</p></div>
+  </details>
+
+  <details>
+    <summary>No me aparecen reels</summary>
+    <div class="ans"><p>Los reels salen de los momentos de postPod. Márcalos en la web (tecla <kbd>M</kbd>) y usa <strong>Traer de nuevo</strong>, o agrega uno desde la app con <strong>Agregar un momento desde donde está el video</strong>.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Dónde quedan mis archivos?</summary>
+    <div class="ans"><p>En <code>~/Movies/postPod/&lt;proyecto&gt;/exports/</code>. En la barra lateral de cada proyecto está el botón <strong>Carpeta de exportados</strong>.</p></div>
+  </details>
+
+  <details>
+    <summary>“prePod todavía no tiene configurado el hosting”</summary>
+    <div class="ans"><p>Para publicar el audio, prePod necesita el hosting configurado. Hazlo una vez en prePod y vuelve a la app. YouTube funciona aparte, con el canal conectado en prePod.</p></div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq">Preguntas frecuentes</a>
+</nav>
+{% endblock %}

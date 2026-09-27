@@ -1,0 +1,102 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · Vista general — Docs · thePod{% endblock %}
+{% block description %}postPod App: la postproducción de thePod como app nativa para Mac con Apple Silicon.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>postPod App</h1>
+  <p class="lede">
+    La postproducción de thePod como app nativa para Mac. Traes el episodio desde
+    <a class="x-link postpod" href="/docs/postpod">postPod</a> y, con pocos botones, lo dejas limpio,
+    con subtítulos, en todos los formatos y publicado. Pensada para quien nunca editó un video.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> ¿Qué es postPod App?</h2>
+  <p class="dropcap">
+    postPod App es la versión para Mac de la etapa de edición. No reemplaza a postPod web: la complementa.
+    En la web se reciben las grabaciones de prodPod, se marcan los momentos y se organiza el proyecto;
+    en la Mac se hace el trabajo pesado —mejorar el audio, transcribir, cortar, renderizar— usando el chip
+    Apple Silicon, sin esperar a un servidor y sin subir nada para procesar.
+  </p>
+  <p>
+    Está hecha con SwiftUI y AVFoundation. La vista previa y el archivo exportado salen del mismo motor,
+    así que lo que ves es exactamente lo que se exporta.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> ¿Qué puedes hacer?</h2>
+  <ul>
+    <li><strong>Traer episodios desde postPod web</strong> con tu misma cuenta, sin descargar el .zip a mano.</li>
+    <li><strong>Arreglar todo</strong> con un botón: sonido de estudio, sin silencios largos y sin muletillas (“eh”, “emm”).</li>
+    <li><strong>Transcribir</strong> en tu Mac, sin internet, y editar los subtítulos frase por frase.</li>
+    <li><strong>Reels, TikTok y Shorts</strong> automáticos a partir de los <em>momentos</em> que marcaste en postPod.</li>
+    <li><strong>Layouts multicámara</strong>: quien habla, lado a lado, cuadrícula, protagonista, ventanita, arriba y abajo, estudio.</li>
+    <li><strong>Efectos de sonido</strong> del soundboard del podcast, puestos donde tú quieras.</li>
+    <li><strong>Sponsors y branding de prePod</strong> dentro del video: logo, fondo y la tarjeta del sponsor en su bloque del guion.</li>
+    <li><strong>Publicar</strong> el audio en Spotify y Apple Podcasts (vía el feed de prePod) y el video en YouTube.</li>
+  </ul>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">03</span> ¿Web o Mac?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">POSTPOD WEB</div>
+      <h4>Organizar y marcar</h4>
+      <p>Recibe lo que llega de prodPod, arma el timeline, marca momentos y comparte el proyecto con el equipo desde cualquier navegador.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">POSTPOD APP</div>
+      <h4>Terminar y publicar</h4>
+      <p>Limpia el audio, transcribe, corta, genera reels y renderiza rápido en tu Mac. Ideal si nunca editaste: todo son pasos numerados.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">JUNTAS</div>
+      <h4>El flujo completo</h4>
+      <p>Grabas en prodPod, marcas momentos en postPod web, tocas <strong>Traer a la Mac</strong> y terminas el episodio en la app.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <div class="ctag">IMPORTANTE</div>
+    <div class="cbody"><p>La app <strong>trae</strong> proyectos desde postPod, pero no sube tu edición de vuelta a la web. Lo que haces en la Mac se queda en la Mac (y lo que publicas, en Spotify, Apple y YouTube).</p></div>
+  </div>
+</section>
+
+<section id="requisitos">
+  <h2><span class="num">04</span> Requisitos</h2>
+  <ul>
+    <li>Mac con Apple Silicon (M1 o posterior). Probada en MacBook Pro M3 y MacBook Air M5.</li>
+    <li>macOS 15 o posterior.</li>
+    <li><code>ffmpeg</code> instalado con Homebrew (<code>brew install ffmpeg</code>).</li>
+    <li>Unos 600 MB libres para el modelo de transcripción, que se descarga la primera vez.</li>
+    <li>Espacio para tus proyectos: se guardan en <code>~/Movies/postPod/</code>.</li>
+  </ul>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">05</span> ¿Qué encuentras acá?</h2>
+  <ul>
+    <li><a href="/docs/postpodapp/quickstart">Quickstart</a> — instalar, conectar tu cuenta y terminar tu primer episodio.</li>
+    <li><a href="/docs/postpodapp/conceptos">Conceptos</a> — proyecto, pistas, cortes, momentos, reels.</li>
+    <li><a href="/docs/postpodapp/funcionalidades">Funcionalidades</a> — cada paso de la app en detalle.</li>
+    <li><a href="/docs/postpodapp/integraciones">Integraciones</a> — qué llega de postPod y prePod, y cómo se publica.</li>
+    <li><a href="/docs/postpodapp/faq">FAQ</a> — preguntas frecuentes y problemas comunes.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-es">¿Qué es postPod App?</a>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#para-quien">¿Web o Mac?</a>
+  <a href="#requisitos">Requisitos</a>
+  <a href="#que-hay-aca">¿Qué encuentras acá?</a>
+</nav>
+{% endblock %}

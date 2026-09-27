@@ -1,0 +1,121 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · Quickstart — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">QUICKSTART</div>
+  <h1>Tu primer episodio en la Mac.</h1>
+  <p class="lede">
+    De un proyecto en postPod web a un episodio limpio, con subtítulos, reels y publicado.
+    La app te guía con pasos numerados en la barra de la izquierda; esto es lo mismo, explicado.
+  </p>
+</header>
+
+<section id="instalar">
+  <h2><span class="num">01</span> Instala la app</h2>
+  <p>
+    Instala <code>ffmpeg</code> si no lo tienes: <code>brew install ffmpeg</code>.
+    Luego abre <strong>postPod</strong> desde Aplicaciones (o con <code>open postPod.app</code>).
+  </p>
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Por ahora la app se compila desde el repositorio <code>postpod</code> (carpeta <code>macos/</code>) con Xcode y XcodeGen. Las instrucciones están en el README de esa carpeta.</p></div>
+  </div>
+</section>
+
+<section id="cuenta">
+  <h2><span class="num">02</span> Conecta tu cuenta</h2>
+  <p>
+    Abre <strong>Ajustes</strong> (<kbd>⌘</kbd> <kbd>,</kbd>) y, en <em>Tu cuenta de prePod / postPod</em>, escribe
+    las direcciones (por defecto <code>prepod.castmedia.space</code> y <code>postpod.castmedia.space</code>),
+    tu usuario y tu contraseña. Es la misma cuenta que usas en la web.
+    Toca <strong>Guardar y probar</strong>: debe decir cuántos podcasts y proyectos ve tu cuenta.
+  </p>
+  <p>La contraseña se guarda en el llavero de macOS, no en un archivo.</p>
+</section>
+
+<section id="traer">
+  <h2><span class="num">03</span> Trae el episodio</h2>
+  <p>
+    En la pantalla de inicio, la sección <strong>En postPod web</strong> lista los proyectos que tu cuenta puede ver.
+    Toca <strong>Traer a la Mac</strong>: postPod arma el paquete (puede tardar unos minutos en episodios largos),
+    la app lo descarga mostrando el avance y lo importa sola.
+  </p>
+  <p>
+    ¿No tienes conexión con la web? También puedes arrastrar a la ventana el <code>.zip</code> que descargas de postPod,
+    una carpeta con las pistas de cada persona, o los videos sueltos.
+  </p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>Los videos WebM se convierten una sola vez al importar. Después, todo va rápido.</p></div>
+  </div>
+</section>
+
+<section id="revisar">
+  <h2><span class="num">04</span> Tu grabación</h2>
+  <p>
+    Revisa que estén todas las personas y ponle nombre a cada una: los nombres salen en el video.
+    Aquí también ves el guion de prePod y los sponsors del episodio, si los hay.
+  </p>
+</section>
+
+<section id="arreglar">
+  <h2><span class="num">05</span> Arreglar todo</h2>
+  <p>
+    Un botón hace tres cosas: <strong>sonido de estudio</strong> (quita ruido, iguala volúmenes, da presencia a la voz),
+    <strong>quitar silencios</strong> largos y <strong>quitar muletillas</strong>. La primera vez también escribe la
+    transcripción en tu Mac, sin internet; tarda unos minutos.
+  </p>
+  <p>Nada se borra de verdad: <strong>Deshacer cortes</strong> devuelve todo como estaba.</p>
+</section>
+
+<section id="subtitulos">
+  <h2><span class="num">06</span> Subtítulos</h2>
+  <p>
+    Elige un estilo (Clásico, TikTok, Cómic, Caja negra, Discreto) y corrige lo que haga falta.
+    Toca una frase para oírla; puedes editar el texto o cortar la frase entera del video.
+  </p>
+</section>
+
+<section id="reels">
+  <h2><span class="num">07</span> Reels</h2>
+  <p>
+    Cada <em>momento</em> que marcaste en postPod se convierte en un reel vertical con subtítulos.
+    Ajusta la duración (30, 60 o 90 s), elige los que quieres y toca <strong>Exportar</strong>.
+  </p>
+</section>
+
+<section id="exportar">
+  <h2><span class="num">08</span> Exporta</h2>
+  <p>
+    Elige dónde lo vas a publicar —YouTube (16:9), Reels/TikTok/Shorts (9:16), Instagram cuadrado (1:1) o solo audio (MP3)—
+    y el layout de las cámaras. La app pone el tamaño correcto. Los archivos quedan en la
+    <strong>Carpeta de exportados</strong> del proyecto, junto con un <code>.txt</code> de notas (capítulos, invitados, sponsors y links).
+  </p>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">09</span> Publica</h2>
+  <p>
+    En <strong>Publicar</strong>, vincula el proyecto con su episodio de prePod (una sola vez) y toca
+    <strong>Publicar audio</strong> para Spotify y Apple Podcasts, o <strong>Subir a YouTube</strong>.
+    Si todavía no exportaste, la app exporta primero.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#instalar">Instala la app</a>
+  <a href="#cuenta">Conecta tu cuenta</a>
+  <a href="#traer">Trae el episodio</a>
+  <a href="#revisar">Tu grabación</a>
+  <a href="#arreglar">Arreglar todo</a>
+  <a href="#subtitulos">Subtítulos</a>
+  <a href="#reels">Reels</a>
+  <a href="#exportar">Exporta</a>
+  <a href="#publicar">Publica</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod App · Funcionalidades — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FUNCIONALIDADES</div>
+  <h1>Paso a paso, en detalle</h1>
+  <p class="lede">La app está organizada en siete pasos. Puedes ir en orden o saltar al que necesites; un ✓ marca los que ya hiciste.</p>
+</header>
+
+<section id="inicio">
+  <h2><span class="num">01</span> Inicio: tus episodios</h2>
+  <ul>
+    <li><strong>Zona para arrastrar</strong>: el <code>.zip</code> de postPod, una carpeta con las pistas o videos sueltos. También <strong>Elegir archivos…</strong> o <kbd>⌘</kbd> <kbd>N</kbd>.</li>
+    <li><strong>En postPod web</strong>: los proyectos de tu cuenta, con <strong>Traer a la Mac</strong>. Si ya lo trajiste, verás <strong>Abrir</strong> y <strong>Traer de nuevo</strong> (baja otra copia sin borrar la actual).</li>
+    <li><strong>Tus episodios</strong>: los proyectos en esta Mac. Clic derecho para mostrarlos en Finder o mandarlos a la papelera.</li>
+  </ul>
+</section>
+
+<section id="grabacion">
+  <h2><span class="num">02</span> Tu grabación</h2>
+  <p>Resumen del episodio: personas, duración, nombres (salen en el video), el <strong>guion de prePod</strong> y los <strong>sponsors</strong> con su bloque.</p>
+</section>
+
+<section id="arreglar">
+  <h2><span class="num">03</span> Arreglar</h2>
+  <p>Tres interruptores y un botón, <strong>Arreglar todo</strong>:</p>
+  <ul>
+    <li><strong>Sonido de estudio</strong> — filtro de graves, reducción de ruido, presencia, compresión y volumen normalizado a −16 LUFS (el estándar de podcasts).</li>
+    <li><strong>Quitar silencios</strong> — pausas largas donde nadie habla.</li>
+    <li><strong>Quitar muletillas</strong> — “eh”, “emm”, “mmm”; opcionalmente “este”, “o sea”, “pues”, “bueno” (revisa el resultado).</li>
+  </ul>
+  <p>
+    Al terminar ves cuánto duraba y cuánto dura ahora, y la lista de cortes para revisarlos uno por uno.
+    <strong>Deshacer cortes</strong> los quita todos. El modelo de transcripción se elige en Ajustes:
+    <em>Preciso</em> (recomendado, ~600 MB) o <em>Rápido</em> (~250 MB).
+  </p>
+</section>
+
+<section id="subtitulos">
+  <h2><span class="num">04</span> Subtítulos</h2>
+  <ul>
+    <li><strong>Estilos</strong>: Clásico, TikTok, Cómic, Caja negra y Discreto, con opciones de <strong>MAYÚSCULAS</strong> y <strong>Resaltar palabra</strong> (efecto karaoke).</li>
+    <li><strong>Frases</strong>: toca una para oírla, corrige el texto o córtala del video.</li>
+    <li>Si no hay transcripción todavía, <strong>Escribir transcripción</strong> la genera en tu Mac.</li>
+  </ul>
+</section>
+
+<section id="efectos">
+  <h2><span class="num">05</span> Efectos</h2>
+  <p>
+    Pon el video donde quieras el efecto, elige un sonido y toca <strong>Poner aquí</strong>.
+    La librería trae los sonidos del soundboard del podcast y la música global que vienen en el paquete de postPod;
+    también puedes arrastrar tus propios MP3.
+  </p>
+</section>
+
+<section id="reels">
+  <h2><span class="num">06</span> Reels</h2>
+  <ul>
+    <li>Un reel por cada momento de postPod, vertical 9:16 con subtítulos.</li>
+    <li>Duración rápida: <strong>30 s</strong>, <strong>60 s</strong> o <strong>90 s</strong>, o ajusta inicio y fin a mano.</li>
+    <li><strong>Agregar un momento desde donde está el video</strong> y <strong>Restaurar desde los momentos</strong> si quieres volver a empezar.</li>
+    <li>Marca los que quieres y exporta todos de una vez.</li>
+  </ul>
+</section>
+
+<section id="exportar">
+  <h2><span class="num">07</span> Exportar</h2>
+  <table>
+    <thead><tr><th>Formato</th><th>Tamaño</th></tr></thead>
+    <tbody>
+      <tr><td>YouTube</td><td>Horizontal 16:9 · 1080p</td></tr>
+      <tr><td>Reels · TikTok · Shorts</td><td>Vertical 9:16 · 1080×1920</td></tr>
+      <tr><td>Instagram cuadrado</td><td>Cuadrado 1:1 · 1080×1080</td></tr>
+      <tr><td>Solo audio (MP3)</td><td>Para Spotify, Apple Podcasts…</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Opciones: layout de cámaras, encuadre de cada persona, subtítulos, nombres, logo del podcast y
+    <strong>sponsors en su momento del guion</strong>. Junto al archivo se genera un <code>.txt</code> con capítulos,
+    invitados, sponsors y links para pegar en la descripción. Los metadatos (título, descripción, autor) van dentro del archivo.
+  </p>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">08</span> Publicar</h2>
+  <ul>
+    <li><strong>Vincular</strong> el proyecto con su podcast y episodio de prePod (si el paquete no lo trae).</li>
+    <li><strong>Estado en prePod</strong>: hosting, feed RSS, plataformas y canal de YouTube conectado.</li>
+    <li><strong>Publicar audio</strong>: sube el MP3 a tu hosting y lo agrega al feed. Spotify y Apple lo toman solos.</li>
+    <li><strong>Subir a YouTube</strong>: público, oculto (con link) o privado, al canal conectado en prePod.</li>
+  </ul>
+</section>
+
+<section id="atajos">
+  <h2><span class="num">09</span> Atajos</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td><div class="kgroup"><kbd>⌘</kbd> + <kbd>N</kbd></div></td><td class="desc"><strong>Importar grabación…</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>⌘</kbd> + <kbd>,</kbd></div></td><td class="desc"><strong>Ajustes</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>Espacio</kbd></div></td><td class="desc"><strong>Reproducir / pausar</strong> (con el reproductor seleccionado)</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#inicio">Inicio</a>
+  <a href="#grabacion">Tu grabación</a>
+  <a href="#arreglar">Arreglar</a>
+  <a href="#subtitulos">Subtítulos</a>
+  <a href="#efectos">Efectos</a>
+  <a href="#reels">Reels</a>
+  <a href="#exportar">Exportar</a>
+  <a href="#publicar">Publicar</a>
+  <a href="#atajos">Atajos</a>
+</nav>
+{% endblock %}

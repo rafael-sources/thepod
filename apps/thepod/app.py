@@ -88,6 +88,10 @@ def create_app():
                     "tag": "Edición y publicación",
                     "sections": ["overview", "quickstart", "conceptos",
                                  "funcionalidades", "atajos", "integraciones", "faq"]},
+        "postpodapp": {"name": "postPod App", "icon": "💻",
+                    "tag": "App para Mac",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "integraciones", "faq"]},
         "amapod":  {"name": "amaPod",  "icon": "❓",
                     "tag": "Q&A en vivo",
                     "sections": ["overview", "quickstart", "conceptos",
@@ -110,6 +114,7 @@ def create_app():
             "prepod":  cfg2.get("prepod_url")  or "",
             "prodpod": cfg2.get("prodpod_url") or "",
             "postpod": cfg2.get("postpod_url") or "",
+            "postpodapp": "",
             "amapod":  cfg2.get("amapod_url")  or "",
         }
 
