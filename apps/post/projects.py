@@ -156,24 +156,80 @@ def delete_project(slug):
     return jsonify({"ok": True})
 
 
-@bp.get("/<slug>/export-bundle")
-@require_auth
-def export_bundle(slug):
-    project_dir = PROJECTS_DIR / slug
-    if not project_dir.exists():
+def _bundle_access_error(slug):
+    """404/403 shared by the bundle endpoints; None when access is fine."""
+    if not (PROJECTS_DIR / slug).exists():
         return jsonify({"error": "proyecto no encontrado"}), 404
     meta = _read_meta(slug) or {}
     if not _can_see(meta):
         return jsonify({"error": "no autorizado"}), 403
-    from project_io import export_project
+    return None
+
+
+@bp.get("/<slug>/export-bundle")
+@require_auth
+def export_bundle(slug):
+    err = _bundle_access_error(slug)
+    if err:
+        return err
+    from project_io import bundle_is_current, bundle_zip_path, export_project
     try:
-        zip_path = export_project(slug)
+        if bundle_is_current(slug):
+            zip_path = bundle_zip_path(slug)
+        else:
+            zip_path = export_project(slug)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     return send_file(
         str(zip_path),
         as_attachment=True,
         download_name=f"{slug}_bundle.zip",
+        conditional=True,
+        etag=True,
+        max_age=0,
+    )
+
+
+@bp.post("/<slug>/bundle")
+@require_auth
+def bundle_start(slug):
+    err = _bundle_access_error(slug)
+    if err:
+        return err
+    from project_io import start_bundle_build
+    return jsonify(start_bundle_build(slug))
+
+
+@bp.get("/<slug>/bundle")
+@require_auth
+def bundle_state(slug):
+    err = _bundle_access_error(slug)
+    if err:
+        return err
+    from project_io import bundle_status
+    return jsonify(bundle_status(slug))
+
+
+@bp.get("/<slug>/bundle/download")
+@require_auth
+def bundle_download(slug):
+    err = _bundle_access_error(slug)
+    if err:
+        return err
+    from project_io import bundle_status, bundle_zip_path
+    st = bundle_status(slug)
+    if st.get("state") != "ready":
+        return jsonify({"error": "el paquete no está listo; pídelo con POST "
+                                 "/api/projects/<slug>/bundle y espera state=ready"}), 409
+    # conditional=True hace que Flask responda Range/If-Range con 206,
+    # que es lo que permite reanudar la descarga desde la app de Mac.
+    return send_file(
+        str(bundle_zip_path(slug)),
+        as_attachment=True,
+        download_name=f"{slug}_bundle.zip",
+        conditional=True,
+        etag=True,
+        max_age=0,
     )
 
 
