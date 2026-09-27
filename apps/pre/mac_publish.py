@@ -36,6 +36,12 @@ from db import get_db
 bp = Blueprint("mac_publish", __name__, url_prefix="/api/mac")
 
 CHUNK_MAX = 16 * 1024 * 1024   # 16 MB por chunk
+
+_UPLOAD_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
+
+
+def _valid_upload_id(upload_id) -> bool:
+    return bool(isinstance(upload_id, str) and _UPLOAD_ID_RE.fullmatch(upload_id))
 UPLOAD_MAX = 20 * 1024 ** 3    # 20 GB: tope de tamaño declarado por upload
 UPLOAD_TTL = 24 * 3600         # limpiar uploads abandonados a las 24 h
 
@@ -226,6 +232,8 @@ def create_upload():
 @bp.put("/uploads/<upload_id>/chunk")
 @require_auth
 def upload_chunk(upload_id):
+    if not _valid_upload_id(upload_id):
+        return jsonify({"error": "upload_id inválido"}), 400
     with _upload_lock(upload_id):
         meta = _read_meta(upload_id)
         if not meta:
@@ -262,6 +270,8 @@ def upload_chunk(upload_id):
 @bp.post("/uploads/<upload_id>/finish")
 @require_auth
 def finish_upload(upload_id):
+    if not _valid_upload_id(upload_id):
+        return jsonify({"error": "upload_id inválido"}), 400
     with _upload_lock(upload_id):
         meta = _read_meta(upload_id)
         if not meta:
@@ -306,6 +316,8 @@ def _parse_publish_payload():
     if not slug or not isinstance(episode_id, int) or not upload_id:
         return None, None, None, None, (jsonify(
             {"error": "slug, episode_id (int) y upload_id son requeridos"}), 400)
+    if not _valid_upload_id(upload_id):
+        return None, None, None, None, (jsonify({"error": "upload_id inválido"}), 400)
 
     denied = _podcast_access_error(slug)
     if denied:

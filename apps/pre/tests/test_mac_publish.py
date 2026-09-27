@@ -92,7 +92,8 @@ def test_chunk_out_of_order_is_rejected(client):
 
 
 def test_chunk_unknown_upload_is_404(client):
-    resp = client.put("/api/mac/uploads/nope/chunk?index=0", data=b"ab")
+    nonexistent_id = "a" * 32  # valid format but no upload exists
+    resp = client.put(f"/api/mac/uploads/{nonexistent_id}/chunk?index=0", data=b"ab")
     assert resp.status_code == 404
 
 
@@ -551,3 +552,17 @@ def test_publish_status_unknown_episode(client):
          patch("youtube_publish._get_stored_tokens", return_value=None):
         resp = client.get(f"/api/mac/podcasts/{slug}/publish-status?episode_id=999")
     assert resp.status_code == 404
+
+
+def test_upload_id_format_rejected_on_chunk_and_finish(client):
+    assert client.put("/api/mac/uploads/..%2Fevil/chunk?index=0", data=b"x").status_code in (400, 404)
+    assert client.put("/api/mac/uploads/AAAA1111/chunk?index=0", data=b"x").status_code == 400
+    assert client.post("/api/mac/uploads/AAAA1111/finish").status_code == 400
+
+
+def test_publish_rejects_traversal_upload_id(client):
+    slug, ep_id = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": "../../etc/passwd"})
+    assert resp.status_code == 400
