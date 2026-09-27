@@ -114,7 +114,11 @@ enum Importer {
             project.podcastName = podcast["name"] as? String
         }
 
-        let db = try SQLiteReader(url: root.appendingPathComponent("proyecto.sqlite"))
+        // Work on a copy: never touch the user's original bundle.
+        let dbCopy = FileManager.default.temporaryDirectory.appendingPathComponent("postpod-\(UUID().uuidString).sqlite")
+        try FileManager.default.copyItem(at: root.appendingPathComponent("proyecto.sqlite"), to: dbCopy)
+        defer { try? FileManager.default.removeItem(at: dbCopy) }
+        let db = try SQLiteReader(url: dbCopy)
         let mediaRows = try db.query("SELECT * FROM media_files ORDER BY id")
         struct MF { var id: Int; var filename: String; var original: String; var type: String; var duration: Double }
         let mfs: [MF] = mediaRows.compactMap { r in

@@ -7,7 +7,8 @@ final class SQLiteReader {
     private var db: OpaquePointer?
 
     init(url: URL) throws {
-        if sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil) != SQLITE_OK {
+        // postPod DBs are in WAL mode: a pure read-only open fails without the -shm file, so open the (temporary) copy read-write.
+        if sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) != SQLITE_OK {
             let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "desconocido"
             sqlite3_close(db)
             throw NSError(domain: "SQLite", code: 1, userInfo: [NSLocalizedDescriptionKey: "No se pudo abrir la base del proyecto: \(msg)"])
