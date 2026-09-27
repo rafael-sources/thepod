@@ -269,18 +269,33 @@ enum Importer {
             }
         }
 
-        // Sound effects library (bundle v2: global_audio/ + podcast sounds/)
-        for dir in ["global_audio", "sounds"] {
-            let src = root.appendingPathComponent(dir)
-            let files = ((try? fm.contentsOfDirectory(atPath: src.path)) ?? [])
-                .filter { ["mp3", "wav", "m4a", "aac"].contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
-            guard !files.isEmpty else { continue }
+        // Librería de efectos = el soundboard del podcast (sounds/ + sounds.json), en el orden y con los
+        // nombres de prodPod. global_audio/ es la biblioteca general de postPod (de todos los podcasts):
+        // no se ofrece como librería; los sonidos de ahí que el episodio usa ya llegan en su línea de audio.
+        let soundsDir = root.appendingPathComponent("sounds")
+        var manifest: [[String: Any]] = []
+        if let data = try? Data(contentsOf: soundsDir.appendingPathComponent("sounds.json")),
+           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            manifest = arr.sorted { (($0["position"] as? Int) ?? 0) < (($1["position"] as? Int) ?? 0) }
+        }
+        var soundFiles: [(file: String, name: String?)] = manifest.compactMap { m in
+            guard let f = m["filename"] as? String, fm.fileExists(atPath: soundsDir.appendingPathComponent(f).path) else { return nil }
+            return (f, m["name"] as? String)
+        }
+        if soundFiles.isEmpty {
+            soundFiles = ((try? fm.contentsOfDirectory(atPath: soundsDir.path)) ?? [])
+                .filter { ["mp3", "wav", "m4a", "aac", "ogg", "webm"].contains(($0 as NSString).pathExtension.lowercased()) }
+                .sorted().map { ($0, nil) }
+        }
+        if !soundFiles.isEmpty {
             let dest = folder.appendingPathComponent("sfx", isDirectory: true)
             try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
-            for f in files {
+            for (f, name) in soundFiles {
                 let to = dest.appendingPathComponent(f)
-                if !fm.fileExists(atPath: to.path) { try? fm.copyItem(at: src.appendingPathComponent(f), to: to) }
-                if !project.sfxLibrary.contains("sfx/\(f)") { project.sfxLibrary.append("sfx/\(f)") }
+                if !fm.fileExists(atPath: to.path) { try? fm.copyItem(at: soundsDir.appendingPathComponent(f), to: to) }
+                let rel = "sfx/\(f)"
+                if !project.sfxLibrary.contains(rel) { project.sfxLibrary.append(rel) }
+                if let name, !name.isEmpty { project.sfxNames[rel] = name }
             }
         }
 

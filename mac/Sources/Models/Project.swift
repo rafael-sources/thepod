@@ -38,6 +38,7 @@ struct Project: Codable, Identifiable, Equatable {
     var segments: [Segment] = []        // script blocks with timing (prePod "blocks")
     var showSponsors: Bool = true
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
+    var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
     var reels: [Reel] = []
     var aiSummary: String?
@@ -388,6 +389,7 @@ extension Project {
         segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
         showSponsors = try c.decodeIfPresent(Bool.self, forKey: .showSponsors) ?? true
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
+        sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)

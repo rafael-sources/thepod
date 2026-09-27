@@ -34,7 +34,7 @@ struct SoundsStep: View {
                                 HStack {
                                     Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
                                         .buttonStyle(.link).monospacedDigit()
-                                    Text(session.project.mediaItem(clip.mediaId).map { name($0.file) } ?? "Sonido").lineLimit(1)
+                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
                                     Spacer()
                                     Image(systemName: "speaker.wave.2").foregroundStyle(Theme.secondary)
                                     Slider(value: $clip.volume, in: 0...1.5).frame(width: 110)
@@ -112,7 +112,8 @@ struct SoundsStep: View {
     }
 
     private func name(_ rel: String) -> String {
-        ((rel as NSString).lastPathComponent as NSString).deletingPathExtension
+        if let n = session.project.sfxNames[rel] { return n }
+        return ((rel as NSString).lastPathComponent as NSString).deletingPathExtension
             .replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ").capitalized
     }
 
