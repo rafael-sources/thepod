@@ -1,0 +1,234 @@
+"""
+API para postPod de Mac: subida por partes de archivos grandes (100 MB–GB)
+y publicación de episodios reutilizando la configuración existente de prePod
+(hosting VPS + feed RSS y YouTube OAuth por podcast).
+
+Endpoints (todos requieren la sesión de /api/auth/login):
+    POST /api/mac/uploads                              {filename, size} → {upload_id}
+    PUT  /api/mac/uploads/<upload_id>/chunk?index=N    cuerpo binario ≤ 16 MB, secuencial
+    POST /api/mac/uploads/<upload_id>/finish           → verifica tamaño → {ok}
+    POST /api/mac/publish/audio                        {slug, episode_id, upload_id} → {job_id}
+    POST /api/mac/publish/youtube                      {slug, episode_id, upload_id, title, ...} → {job_id}
+    GET  /api/mac/jobs/<job_id>                        → {status, progress, result, error}
+    GET  /api/mac/podcasts/<slug>/publish-status?episode_id=N
+
+Los uploads viven en podcasts/_uploads/ y se limpian a las 24 h.
+Los jobs corren en hilos daemon dentro del único worker de gunicorn;
+se pierden si el servicio se reinicia (el cliente debe reintentar).
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+import time
+import uuid
+from pathlib import Path
+
+from flask import Blueprint, jsonify, request, session
+
+from auth import require_auth
+from config import PODCASTS_DIR, policy_for
+from db import get_db
+
+bp = Blueprint("mac_publish", __name__, url_prefix="/api/mac")
+
+CHUNK_MAX = 16 * 1024 * 1024   # 16 MB por chunk
+UPLOAD_TTL = 24 * 3600         # limpiar uploads abandonados a las 24 h
+
+
+# ---------------------------------------------------------------------------
+# Upload store (filesystem: podcasts/_uploads/<upload_id>.part + .json)
+# ---------------------------------------------------------------------------
+
+def _uploads_dir() -> Path:
+    d = PODCASTS_DIR / "_uploads"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _meta_path(upload_id: str) -> Path:
+    return _uploads_dir() / f"{upload_id}.json"
+
+
+def _read_meta(upload_id: str) -> dict | None:
+    p = _meta_path(upload_id)
+    if not p.is_file():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _write_meta(upload_id: str, meta: dict):
+    _meta_path(upload_id).write_text(json.dumps(meta))
+
+
+def _cleanup_stale_uploads():
+    cutoff = time.time() - UPLOAD_TTL
+    for f in _uploads_dir().iterdir():
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+        except OSError:
+            pass
+
+
+def _delete_upload(upload_id: str):
+    meta = _read_meta(upload_id) or {}
+    for name in (f"{upload_id}.part", meta.get("stored_name"), f"{upload_id}.json"):
+        if not name:
+            continue
+        try:
+            (_uploads_dir() / name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _resolve_upload(upload_id: str) -> tuple[Path | None, dict | None]:
+    """Return (path, meta) for a finished upload, or (None, None)."""
+    meta = _read_meta(upload_id)
+    if not meta or not meta.get("complete") or not meta.get("stored_name"):
+        return None, None
+    path = _uploads_dir() / meta["stored_name"]
+    if not path.is_file():
+        return None, None
+    return path, meta
+
+
+# ---------------------------------------------------------------------------
+# Acceso por podcast (mismo criterio que el guard de app.py, que no cubre /api/mac)
+# ---------------------------------------------------------------------------
+
+def _podcast_access_error(slug: str):
+    """Return a (response, status) tuple if access must be denied, else None."""
+    if not (PODCASTS_DIR / slug).exists():
+        return jsonify({"error": "podcast no encontrado"}), 404
+    username = session.get("username")
+    if policy_for(username).get("see_all"):
+        return None
+    try:
+        db = get_db(slug)
+        try:
+            row = db.execute(
+                "SELECT owner_username, extra_hosts FROM podcast_meta WHERE slug=?",
+                (slug,),
+            ).fetchone()
+        finally:
+            db.close()
+    except Exception:
+        return None
+    if not row:
+        return None
+    owner = row["owner_username"] or "admin"
+    extras = []
+    if row["extra_hosts"]:
+        try:
+            v = json.loads(row["extra_hosts"])
+            if isinstance(v, list):
+                extras = [str(x) for x in v]
+        except (TypeError, ValueError):
+            pass
+    if username != owner and username not in extras:
+        return jsonify({"error": "no autorizado para este podcast"}), 403
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Registro de jobs en memoria (gunicorn corre con 1 worker → seguro)
+# ---------------------------------------------------------------------------
+
+_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de subida por partes
+# ---------------------------------------------------------------------------
+
+@bp.post("/uploads")
+@require_auth
+def create_upload():
+    _cleanup_stale_uploads()
+    data = request.get_json(silent=True) or {}
+    filename = (data.get("filename") or "").strip()
+    size = data.get("size")
+    if not filename or not isinstance(size, int) or size <= 0:
+        return jsonify({"error": "filename y size (bytes, > 0) son requeridos"}), 400
+
+    upload_id = uuid.uuid4().hex
+    (_uploads_dir() / f"{upload_id}.part").touch()
+    _write_meta(upload_id, {
+        "filename": filename,
+        "size": size,
+        "next_index": 0,
+        "complete": False,
+        "created_at": time.time(),
+    })
+    return jsonify({"upload_id": upload_id})
+
+
+@bp.put("/uploads/<upload_id>/chunk")
+@require_auth
+def upload_chunk(upload_id):
+    meta = _read_meta(upload_id)
+    if not meta:
+        return jsonify({"error": "upload no encontrado"}), 404
+    if meta.get("complete"):
+        return jsonify({"error": "upload ya finalizado"}), 409
+
+    index = request.args.get("index", type=int)
+    if index is None:
+        return jsonify({"error": "parámetro index requerido"}), 400
+    if index != meta["next_index"]:
+        return jsonify({
+            "error": f"chunk fuera de orden: se esperaba index={meta['next_index']}",
+            "next_index": meta["next_index"],
+        }), 409
+
+    body = request.get_data(cache=False)
+    if not body:
+        return jsonify({"error": "cuerpo binario vacío"}), 400
+    if len(body) > CHUNK_MAX:
+        return jsonify({"error": "el chunk supera el máximo de 16 MB"}), 413
+
+    part = _uploads_dir() / f"{upload_id}.part"
+    if not part.is_file():
+        return jsonify({"error": "upload no encontrado"}), 404
+    with part.open("ab") as fh:
+        fh.write(body)
+
+    meta["next_index"] = index + 1
+    _write_meta(upload_id, meta)
+    return jsonify({"ok": True, "received": part.stat().st_size})
+
+
+@bp.post("/uploads/<upload_id>/finish")
+@require_auth
+def finish_upload(upload_id):
+    meta = _read_meta(upload_id)
+    if not meta:
+        return jsonify({"error": "upload no encontrado"}), 404
+    if meta.get("complete"):
+        return jsonify({"ok": True, "size": meta["size"]})
+
+    part = _uploads_dir() / f"{upload_id}.part"
+    if not part.is_file():
+        return jsonify({"error": "upload no encontrado"}), 404
+
+    actual = part.stat().st_size
+    if actual != meta["size"]:
+        return jsonify({
+            "error": f"tamaño incorrecto: se esperaban {meta['size']} bytes y llegaron {actual}",
+        }), 400
+
+    # Conservar la extensión original: el nombre final del audio y el mimetype
+    # del video en YouTube dependen del sufijo del archivo.
+    suffix = Path(meta["filename"]).suffix or ".bin"
+    stored = _uploads_dir() / f"{upload_id}{suffix}"
+    part.rename(stored)
+    meta["complete"] = True
+    meta["stored_name"] = stored.name
+    _write_meta(upload_id, meta)
+    return jsonify({"ok": True, "size": actual})

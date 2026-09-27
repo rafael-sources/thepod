@@ -20,6 +20,7 @@ import templates_api
 import users_admin
 import distribution as distribution_bp
 import youtube_publish as youtube_bp
+import mac_publish
 from auth import require_auth
 from config import AVAILABLE_FONTS, PODCASTS_DIR, SECRET_KEY
 
@@ -113,6 +114,7 @@ def create_app():
     app.register_blueprint(users_admin.bp)
     app.register_blueprint(distribution_bp.bp)
     app.register_blueprint(youtube_bp.bp)
+    app.register_blueprint(mac_publish.bp)
 
     PODCASTS_DIR.mkdir(parents=True, exist_ok=True)
 
