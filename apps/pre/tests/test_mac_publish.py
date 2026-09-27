@@ -335,3 +335,35 @@ def test_publish_audio_error_releases_claim(client):
         assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
         # Claim released on error: retry is accepted, not 409.
         assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+
+
+def test_upload_video_not_configured(tmp_path):
+    import youtube_publish
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"vid")
+    with patch("youtube_publish.load_shared_config", return_value={}):
+        result = youtube_publish._upload_video("pod", f, "title")
+    assert result["ok"] is False
+    assert "no configurado" in result["error"].lower()
+
+
+def test_upload_video_not_connected(tmp_path):
+    import youtube_publish
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"vid")
+    with patch("youtube_publish.load_shared_config",
+               return_value={"youtube": {"client_id": "x", "client_secret": "y", "redirect_uri": "z"}}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        result = youtube_publish._upload_video("pod", f, "title")
+    assert result["ok"] is False
+    assert "no conectado" in result["error"].lower()
+
+
+def test_upload_video_missing_file():
+    import youtube_publish
+    with patch("youtube_publish.load_shared_config",
+               return_value={"youtube": {"client_id": "x", "client_secret": "y", "redirect_uri": "z"}}), \
+         patch("youtube_publish._get_stored_tokens", return_value={"access_token": "a", "refresh_token": "r"}):
+        result = youtube_publish._upload_video("pod", "/no/existe.mp4", "title")
+    assert result["ok"] is False
+    assert "no encontrado" in result["error"].lower()

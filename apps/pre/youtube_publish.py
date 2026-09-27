@@ -251,29 +251,25 @@ def youtube_disconnect():
     return jsonify({"ok": True})
 
 
-@bp.post("/api/youtube/upload")
-@require_auth
-def youtube_upload():
-    data = request.get_json(silent=True) or {}
-    slug = data.get("slug", "").strip()
-    video_path = data.get("video_path", "").strip()
-    title = data.get("title", "").strip()
-    description = data.get("description", "")
+def _upload_video(slug: str, video_path, title: str, description: str = "",
+                  privacy: str = "public", category: str = "22",
+                  progress_cb=None) -> dict:
+    """Sube un video a YouTube con los tokens OAuth del podcast.
 
-    if not slug or not video_path or not title:
-        return jsonify({"ok": False, "error": "slug, video_path y title son requeridos"}), 400
-
+    progress_cb (opcional) recibe un float 0.0–1.0 en cada chunk subido.
+    Returns {"ok": True, "video_id": ..., "url": ...} o {"ok": False, "error": ...}.
+    """
     yt_config = _get_youtube_config()
     if not yt_config:
-        return jsonify({"ok": False, "error": "YouTube no configurado"}), 500
+        return {"ok": False, "error": "YouTube no configurado"}
 
     tokens = _get_stored_tokens(slug)
     if not tokens:
-        return jsonify({"ok": False, "error": "YouTube no conectado para este podcast"}), 400
+        return {"ok": False, "error": "YouTube no conectado para este podcast"}
 
     video_file = Path(video_path)
     if not video_file.is_file():
-        return jsonify({"ok": False, "error": f"Video no encontrado: {video_path}"}), 404
+        return {"ok": False, "error": f"Video no encontrado: {video_path}"}
 
     try:
         from googleapiclient.discovery import build
@@ -286,10 +282,10 @@ def youtube_upload():
             "snippet": {
                 "title": title[:100],
                 "description": description[:5000],
-                "categoryId": data.get("category", "22"),
+                "categoryId": category,
             },
             "status": {
-                "privacyStatus": data.get("privacy", "public"),
+                "privacyStatus": privacy,
             },
         }
 
@@ -298,7 +294,9 @@ def youtube_upload():
 
         response = None
         while response is None:
-            _, response = req.next_chunk()
+            status, response = req.next_chunk()
+            if status and progress_cb:
+                progress_cb(status.progress())
 
         video_id = response["id"]
 
@@ -311,13 +309,41 @@ def youtube_upload():
                 channel_id=tokens.get("channel_id", ""),
             )
 
-        return jsonify({
-            "ok": True,
-            "video_id": video_id,
-            "url": f"https://www.youtube.com/watch?v={video_id}",
-        })
+        return {"ok": True, "video_id": video_id,
+                "url": f"https://www.youtube.com/watch?v={video_id}"}
 
     except ImportError:
-        return jsonify({"ok": False, "error": "Instala: pip install google-api-python-client google-auth-oauthlib"}), 500
+        return {"ok": False, "error": "Instala: pip install google-api-python-client google-auth-oauthlib"}
     except Exception as e:
-        return jsonify({"ok": False, "error": f"Upload fallido: {str(e)[:300]}"}), 500
+        return {"ok": False, "error": f"Upload fallido: {str(e)[:300]}"}
+
+
+@bp.post("/api/youtube/upload")
+@require_auth
+def youtube_upload():
+    data = request.get_json(silent=True) or {}
+    slug = data.get("slug", "").strip()
+    video_path = data.get("video_path", "").strip()
+    title = data.get("title", "").strip()
+    description = data.get("description", "")
+
+    if not slug or not video_path or not title:
+        return jsonify({"ok": False, "error": "slug, video_path y title son requeridos"}), 400
+
+    result = _upload_video(
+        slug, video_path, title, description,
+        privacy=data.get("privacy", "public"),
+        category=data.get("category", "22"),
+    )
+
+    if not result["ok"]:
+        error = result["error"]
+        if error == "YouTube no configurado":
+            return jsonify(result), 500
+        if error == "YouTube no conectado para este podcast":
+            return jsonify(result), 400
+        if error.startswith("Video no encontrado"):
+            return jsonify(result), 404
+        return jsonify(result), 500
+
+    return jsonify(result)
