@@ -1835,6 +1835,7 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             vertical_center_spotlight = False
 
     pip = False
+    grid = False
     if layout_template == "side_by_side":
         spotlight = False
         vertical_center_spotlight = False
@@ -1848,6 +1849,10 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
     elif layout_template == "solo":
         spotlight = False
         vertical_center_spotlight = True
+    elif layout_template == "grid":
+        spotlight = False
+        vertical_center_spotlight = False
+        grid = True
 
     clips, flat_ops, all_have_audio, total_duration, moments, audio_lane = _load_timeline_state(slug)
     if not clips:
@@ -2093,7 +2098,7 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             if c["has_audio"]:
                 use_counts_a[c["id"]] = use_counts_a.get(c["id"], 0) + 1
         else:
-            if mc and pip:
+            if mc and (pip or grid):
                 for entry in mc:
                     ec = entry["clip"]
                     use_counts_v[ec["id"]] = use_counts_v.get(ec["id"], 0) + 1
@@ -2328,6 +2333,92 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     else:
                         parts.append(
                             f"[{src_a}]atrim=start={es2:.3f}:end={ee2:.3f},asetpts=PTS-STARTPTS[{al}]"
+                        )
+                    a_labels.append(f"[{al}]")
+                if len(a_labels) == 1:
+                    parts.append(f"{a_labels[0]}anull[a{k}]")
+                else:
+                    parts.append(f"{''.join(a_labels)}amix=inputs={len(a_labels)}:normalize=0[a{k}]")
+            else:
+                src_a = split_a[mc[0]["clip"]["id"]].pop(0)
+                s_a = float(mc[0]["src_start"]) - seek_offset
+                e_a = float(mc[0]["src_end"]) - seek_offset
+                parts.append(f"[{src_a}]atrim=start={s_a:.3f}:end={e_a:.3f},asetpts=PTS-STARTPTS[a{k}]")
+
+        elif grid and mc and W and H and len(mc) >= 2:
+            n = len(mc)
+            cols = 2
+            rows = (n + cols - 1) // cols
+            cell_w = W // cols
+            cell_h = H // rows
+
+            panel_labels = []
+            for j, entry in enumerate(mc):
+                ec = entry["clip"]
+                es = float(entry["src_start"]) - seek_offset
+                ee = float(entry["src_end"]) - seek_offset
+                src = split_v[ec["id"]].pop(0)
+                pl = f"gp{k}_{j}"
+                if has_bg:
+                    chain = (
+                        f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                        f"fps={target_fps},"
+                        f"scale={cell_w}:{cell_h}:force_original_aspect_ratio=decrease,"
+                        f"format=yuva420p,"
+                        f"pad={cell_w}:{cell_h}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,"
+                        f"setsar=1"
+                    )
+                else:
+                    chain = (
+                        f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                        f"fps={target_fps},"
+                        f"scale={cell_w}:{cell_h}:force_original_aspect_ratio=decrease,"
+                        f"pad={cell_w}:{cell_h}:(ow-iw)/2:(oh-ih)/2,"
+                        f"setsar=1,format=yuv420p"
+                    )
+                parts.append(f"[{src}]{chain}[{pl}]")
+                panel_labels.append(f"[{pl}]")
+
+            row_labels = []
+            for r in range(rows):
+                row_panels = panel_labels[r * cols : r * cols + cols]
+                if len(row_panels) == cols:
+                    rl = f"grow{k}_{r}"
+                    parts.append(f"{''.join(row_panels)}hstack=inputs={cols}[{rl}]")
+                    row_labels.append(f"[{rl}]")
+                else:
+                    pl_single = row_panels[0].strip("[]")
+                    rl = f"grow{k}_{r}"
+                    row_w = cell_w * cols
+                    parts.append(
+                        f"[{pl_single}]pad={row_w}:{cell_h}:(ow-iw)/2:0"
+                        f":color={'black@0.0' if has_bg else 'black'},"
+                        f"setsar=1[{rl}]"
+                    )
+                    row_labels.append(f"[{rl}]")
+
+            if len(row_labels) == 1:
+                parts.append(f"{row_labels[0]}null[v{k}]")
+            else:
+                parts.append(f"{''.join(row_labels)}vstack=inputs={len(row_labels)}[v{k}]")
+
+            if all_have_audio:
+                a_labels = []
+                for j, entry in enumerate(mc):
+                    ec = entry["clip"]
+                    es_a = float(entry["src_start"]) - seek_offset
+                    ee_a = float(entry["src_end"]) - seek_offset
+                    src_a = split_a[ec["id"]].pop(0)
+                    vol = float(ec.get("volume", 1.0))
+                    al = f"ma{k}_{j}"
+                    if abs(vol - 1.0) > 1e-3:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es_a:.3f}:end={ee_a:.3f},asetpts=PTS-STARTPTS,"
+                            f"volume={vol:.3f}[{al}]"
+                        )
+                    else:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es_a:.3f}:end={ee_a:.3f},asetpts=PTS-STARTPTS[{al}]"
                         )
                     a_labels.append(f"[{al}]")
                 if len(a_labels) == 1:

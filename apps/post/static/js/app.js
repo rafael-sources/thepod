@@ -3613,6 +3613,7 @@ var ExportModal = {
               <div class="layout-selector">
                 <button v-for="lt in [
                   { id: 'side_by_side', label: 'Lado a lado', icon: '[▪▪]' },
+                  { id: 'grid', label: 'Grid', icon: '[⊞]' },
                   { id: 'spotlight', label: 'Spotlight', icon: '[▪▫]' },
                   { id: 'pip', label: 'PiP', icon: '[▪°]' },
                   { id: 'solo', label: 'Solo speaker', icon: '[▪]' },
@@ -4871,6 +4872,9 @@ var ProjectView = {
             </button>
             <button :disabled="timeline.clips.length === 0" @click="showTranscript = true" class="ghost" style="margin-left:8px;" title="Editar por transcripción">
               ✍ Transcript
+            </button>
+            <button :disabled="timeline.clips.length === 0" @click="openSilenceModal" class="ghost" style="margin-left:8px;" title="Detectar y eliminar silencios del proyecto">
+              🔇 Silencios
             </button>
             <button @click="showParticipants = !showParticipants" :class="{on: showParticipants}" class="ghost" style="margin-left:8px;" title="Participantes y banners">
               👤 Participantes

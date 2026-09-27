@@ -87,7 +87,7 @@ def create_export(slug):
     director_overlays = 1 if data.get("director_overlays") else 0
 
     layout_template = (data.get("layout_template") or "side_by_side").strip().lower()
-    if layout_template not in ("side_by_side", "spotlight", "pip", "solo"):
+    if layout_template not in ("side_by_side", "spotlight", "pip", "solo", "grid"):
         layout_template = "side_by_side"
     pip_corner = (data.get("pip_corner") or "bottom_right").strip().lower()
     if pip_corner not in ("top_left", "top_right", "bottom_left", "bottom_right"):
