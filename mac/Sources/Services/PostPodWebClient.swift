@@ -110,14 +110,147 @@ actor PostPodWebClient {
         }
     }
 
-    /// Asks postPod to build the bundle and downloads it. `progress(nil)` while the server is
-    /// zipping (no bytes yet), then the received fraction. Returns a local .zip the caller owns.
-    func downloadBundle(slug: String, progress: @escaping @Sendable (Double?, Int64, Int64) -> Void) async throws -> URL {
+    // MARK: Bundle: generate with progress + resumable download
+
+    enum Phase: Sendable {
+        case preparing(Double?)            // postPod armando el paquete (fracción si el servidor la da)
+        case downloading(Int64, Int64)     // bytes recibidos, total
+        case reconnecting                  // se cortó: reintentando desde donde quedó
+    }
+
+    struct BundleInfo {
+        let state: String                  // idle | building | ready | error
+        let progress: Double?
+        let size: Int64
+        let version: String                // cambia cuando el paquete se regenera
+        let error: String?
+    }
+
+    private struct LegacyServer: Error {}
+
+    /// Carpeta donde quedan las descargas a medias para poder reanudarlas.
+    nonisolated static var partialFolder: URL {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let url = base.appendingPathComponent("postPod/descargas", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private struct PartialMeta: Codable { var version: String; var size: Int64; var etag: String? }
+
+    nonisolated private static func partURL(_ slug: String) -> URL { partialFolder.appendingPathComponent("\(slug).part") }
+    nonisolated private static func metaURL(_ slug: String) -> URL { partialFolder.appendingPathComponent("\(slug).json") }
+
+    /// Si hay una descarga a medias de este proyecto: (bytes que ya están, total).
+    nonisolated static func partial(slug: String) -> (got: Int64, total: Int64)? {
+        guard let data = try? Data(contentsOf: metaURL(slug)),
+              let meta = try? JSONDecoder().decode(PartialMeta.self, from: data),
+              let got = (try? FileManager.default.attributesOfItem(atPath: partURL(slug).path)[.size] as? NSNumber)?.int64Value,
+              got > 0 else { return nil }
+        return (got, meta.size)
+    }
+
+    nonisolated static func discardPartial(slug: String) {
+        try? FileManager.default.removeItem(at: partURL(slug))
+        try? FileManager.default.removeItem(at: metaURL(slug))
+    }
+
+    private func bundlePath(_ slug: String) -> String {
+        "/api/projects/\(slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug)"
+    }
+
+    private func bundleCall(_ method: String, _ slug: String) async throws -> BundleInfo {
         if !loggedIn { try await login() }
-        let path = "/api/projects/\(slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug)/export-bundle"
         for attempt in 0..<2 {
-            progress(nil, 0, 0)
-            let delegate = DownloadProgress(progress)
+            let (data, resp) = try await session.data(for: try request(method, bundlePath(slug) + "/bundle"))
+            absorb(resp)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if code == 401, attempt == 0 { loggedIn = false; try await login(); continue }
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            if let obj, let state = obj["state"] as? String {
+                return BundleInfo(state: state,
+                                  progress: (obj["progress"] as? NSNumber)?.doubleValue,
+                                  size: (obj["size"] as? NSNumber)?.int64Value ?? 0,
+                                  version: (obj["version"] as? String) ?? "",
+                                  error: obj["error"] as? String)
+            }
+            if (code == 404 || code == 405), obj?["error"] == nil { throw LegacyServer() }   // postPod sin la API nueva
+            throw Failure(message: Self.errorMessage(data, code: code))
+        }
+        throw Failure(message: "postPod no aceptó la sesión")
+    }
+
+    /// Pide a postPod el paquete del proyecto, informa cuánto lleva armado, y lo descarga
+    /// pudiendo reanudar (tras un corte de red o si la app se cerró). Devuelve un .zip que el llamador borra.
+    func downloadBundle(slug: String, progress: @escaping @Sendable (Phase) -> Void) async throws -> URL {
+        var info: BundleInfo
+        do {
+            info = try await bundleCall("POST", slug)
+        } catch is LegacyServer {
+            return try await legacyDownload(slug: slug, progress: progress)
+        }
+        while info.state != "ready" {
+            if info.state == "error" { throw Failure(message: info.error ?? "postPod no pudo preparar el paquete") }
+            progress(.preparing(info.progress))
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            info = try await bundleCall("GET", slug)
+        }
+
+        let part = Self.partURL(slug), metaURL = Self.metaURL(slug)
+        var meta = (try? Data(contentsOf: metaURL)).flatMap { try? JSONDecoder().decode(PartialMeta.self, from: $0) }
+        if meta?.version != info.version || meta?.size != info.size {      // el paquete cambió: empezar de cero
+            Self.discardPartial(slug: slug)
+            meta = PartialMeta(version: info.version, size: info.size, etag: nil)
+        }
+        try JSONEncoder().encode(meta!).write(to: metaURL)
+
+        var failures = 0
+        while true {
+            let have = (try? FileManager.default.attributesOfItem(atPath: part.path)[.size] as? NSNumber)?.int64Value ?? 0
+            if info.size > 0, have >= info.size { break }
+            var req = try request("GET", bundlePath(slug) + "/bundle/download")
+            if have > 0 {
+                req.setValue("bytes=\(have)-", forHTTPHeaderField: "Range")
+                if let etag = meta?.etag { req.setValue(etag, forHTTPHeaderField: "If-Range") }
+            }
+            do {
+                let result = try await StreamingDownload.run(request: req, config: session.configuration, file: part,
+                                                             offset: have, expected: info.size) { got, total in
+                    progress(.downloading(got, total))
+                }
+                absorb(result.response)
+                if result.status == 401 { loggedIn = false; try await login(); continue }
+                guard result.status == 200 || result.status == 206 else {
+                    throw Failure(message: Self.errorMessage(result.errorBody, code: result.status))
+                }
+                if let etag = result.response.value(forHTTPHeaderField: "ETag"), meta?.etag != etag {
+                    meta?.etag = etag
+                    try? JSONEncoder().encode(meta!).write(to: metaURL)
+                }
+                if info.size <= 0 { break }                                  // sin tamaño conocido: terminó el cuerpo
+            } catch let e as URLError where e.code != .cancelled && failures < 20 {
+                failures += 1
+                progress(.reconnecting)
+                try await Task.sleep(nanoseconds: UInt64(min(30, 2 * failures)) * 1_000_000_000)
+            }
+        }
+
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("postpod-dl-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let dest = dir.appendingPathComponent("\(slug)_bundle.zip")
+        try FileManager.default.moveItem(at: part, to: dest)
+        try? FileManager.default.removeItem(at: metaURL)
+        return dest
+    }
+
+    /// postPod sin la API nueva: una sola petición que arma y envía (sin % ni reanudar).
+    private func legacyDownload(slug: String, progress: @escaping @Sendable (Phase) -> Void) async throws -> URL {
+        let path = bundlePath(slug) + "/export-bundle"
+        for attempt in 0..<2 {
+            progress(.preparing(nil))
+            let delegate = DownloadProgress { _, got, total in
+                progress(got == 0 ? .preparing(nil) : .downloading(got, total))
+            }
             let (returned, resp) = try await session.download(for: try request("GET", path), delegate: delegate)
             let tmp = FileManager.default.fileExists(atPath: returned.path) ? returned : (delegate.saved ?? returned)
             absorb(resp)
@@ -140,6 +273,88 @@ actor PostPodWebClient {
             return dest
         }
         throw Failure(message: "postPod no aceptó la sesión")
+    }
+}
+
+/// Descarga que escribe directo al archivo parcial: continúa con Range (206) o empieza de cero (200).
+private final class StreamingDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    struct Result { let status: Int; let response: HTTPURLResponse; let errorBody: Data }
+
+    private let file: URL
+    private let offset: Int64
+    private let expected: Int64
+    private let report: @Sendable (Int64, Int64) -> Void
+    private var handle: FileHandle?
+    private var status = 0
+    private var response: HTTPURLResponse?
+    private var errorBody = Data()
+    private var written: Int64 = 0
+    private var total: Int64 = 0
+    private var last = Date.distantPast
+    private var continuation: CheckedContinuation<Result, Error>?
+
+    private init(file: URL, offset: Int64, expected: Int64, report: @escaping @Sendable (Int64, Int64) -> Void) {
+        self.file = file; self.offset = offset; self.expected = expected; self.report = report
+    }
+
+    static func run(request: URLRequest, config: URLSessionConfiguration, file: URL, offset: Int64, expected: Int64,
+                    report: @escaping @Sendable (Int64, Int64) -> Void) async throws -> Result {
+        let d = StreamingDownload(file: file, offset: offset, expected: expected, report: report)
+        let s = URLSession(configuration: config, delegate: d, delegateQueue: nil)
+        defer { s.finishTasksAndInvalidate() }
+        let task = s.dataTask(with: request)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                d.continuation = cont
+                task.resume()
+            }
+        } onCancel: { task.cancel() }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        let http = response as? HTTPURLResponse
+        self.response = http
+        status = http?.statusCode ?? 0
+        let fm = FileManager.default
+        if status == 206 {
+            if !fm.fileExists(atPath: file.path) { fm.createFile(atPath: file.path, contents: nil) }
+            handle = try? FileHandle(forWritingTo: file)
+            _ = try? handle?.seekToEnd()
+            written = offset
+            total = expected > 0 ? expected : offset + max(0, response.expectedContentLength)
+        } else if status == 200 {
+            fm.createFile(atPath: file.path, contents: nil)                  // respuesta completa: desde cero
+            handle = try? FileHandle(forWritingTo: file)
+            written = 0
+            total = response.expectedContentLength > 0 ? response.expectedContentLength : expected
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let handle else { errorBody.append(data); return }
+        try? handle.write(contentsOf: data)
+        written += Int64(data.count)
+        if Date().timeIntervalSince(last) > 0.25 {
+            last = Date()
+            report(written, total)
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        try? handle?.synchronize()
+        try? handle?.close()
+        handle = nil
+        if let error {
+            continuation?.resume(throwing: error)
+        } else if let response {
+            report(written, total)
+            continuation?.resume(returning: Result(status: status, response: response, errorBody: errorBody))
+        } else {
+            continuation?.resume(throwing: URLError(.badServerResponse))
+        }
+        continuation = nil
     }
 }
 

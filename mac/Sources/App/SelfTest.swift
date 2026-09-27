@@ -37,8 +37,12 @@ enum SelfTest {
                 let a = CommandLine.arguments
                 if let i = a.firstIndex(of: "--download"), a.count > i + 1 {
                     let t0 = Date()
-                    let url = try await PostPodWebClient.shared.downloadBundle(slug: a[i + 1]) { f, got, total in
-                        print(String(format: "  %.0fs %@ %lld/%lld", Date().timeIntervalSince(t0), f.map { "\(Int($0 * 100))%" } ?? "armando", got, total))
+                    let url = try await PostPodWebClient.shared.downloadBundle(slug: a[i + 1]) { phase in
+                        switch phase {
+                        case .preparing(let f): print(String(format: "  %.0fs preparando %@", Date().timeIntervalSince(t0), f.map { "\(Int($0 * 100))%" } ?? "…"))
+                        case .downloading(let got, let total): print(String(format: "  %.0fs %lld/%lld", Date().timeIntervalSince(t0), got, total))
+                        case .reconnecting: print("  reconectando…")
+                        }
                         fflush(stdout)
                     }
                     let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0

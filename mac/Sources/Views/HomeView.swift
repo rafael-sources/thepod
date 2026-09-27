@@ -196,6 +196,7 @@ struct WebProjectsSection: View {
     private func row(_ w: PostPodWebClient.WebProject) -> some View {
         let local = app.localProject(forWeb: w.slug)
         let busy = app.webDownloading == w.slug
+        let partial = busy ? nil : PostPodWebClient.partial(slug: w.slug)
         return HStack(spacing: 14) {
             Image(systemName: "cloud.fill").font(.title3).foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 3) {
@@ -204,12 +205,25 @@ struct WebProjectsSection: View {
                     if let d = w.createdAt { Text(d, style: .date) }
                     if let o = w.owner { Label(o, systemImage: "person") }
                     if local != nil { Label("Ya está en esta Mac", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good) }
+                    if let partial {
+                        Label(partial.total > 0 ? "Descarga a medias · \(Int(Double(partial.got) / Double(partial.total) * 100))%" : "Descarga a medias",
+                              systemImage: "pause.circle.fill").foregroundStyle(Theme.accent)
+                    }
                 }
                 .font(.caption).foregroundStyle(Theme.secondary)
             }
             Spacer()
             if busy {
                 ProgressView().controlSize(.small)
+            } else if partial != nil {
+                Button { app.importFromWeb(w) } label: {
+                    Label("Reanudar", systemImage: "arrow.clockwise.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(app.importJob != nil)
+                Button("Descartar") { PostPodWebClient.discardPartial(slug: w.slug); app.objectWillChange.send() }
+                    .buttonStyle(.bordered)
+                    .disabled(app.importJob != nil)
             } else if let local {
                 Button("Abrir") { app.open(local) }.buttonStyle(.borderedProminent)
                 Button("Traer de nuevo") { app.importFromWeb(w) }

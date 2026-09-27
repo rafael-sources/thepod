@@ -92,7 +92,7 @@ final class AppModel: ObservableObject {
     func importFromWeb(_ web: PostPodWebClient.WebProject) {
         guard importJob == nil else { return }
         let title = "Trayendo «\(web.name)» de postPod"
-        importJob = JobState(title: title, detail: "postPod está armando el paquete… (puede tardar unos minutos)", fraction: nil)
+        importJob = JobState(title: title, detail: "Conectando con postPod…", fraction: nil)
         webDownloading = web.slug
         importTask = Task {
             var zip: URL?
@@ -101,13 +101,23 @@ final class AppModel: ObservableObject {
                 webDownloading = nil
             }
             do {
-                let file = try await PostPodWebClient.shared.downloadBundle(slug: web.slug) { fraction, got, total in
+                let file = try await PostPodWebClient.shared.downloadBundle(slug: web.slug) { phase in
                     Task { @MainActor in
                         guard self.importJob != nil else { return }
-                        let mb = { (b: Int64) in String(format: "%.0f MB", Double(b) / 1_048_576) }
-                        let detail = got == 0 ? "postPod está armando el paquete… (puede tardar unos minutos)"
-                            : total > 0 ? "Descargando \(mb(got)) de \(mb(total))" : "Descargando \(mb(got))"
-                        self.importJob = JobState(title: title, detail: detail, fraction: fraction)
+                        let size = { (b: Int64) in ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+                        switch phase {
+                        case .preparing(let f):
+                            self.importJob = JobState(title: title,
+                                                      detail: "postPod está preparando el episodio" + (f.map { " · \(Int($0 * 100))%" } ?? "…"),
+                                                      fraction: f)
+                        case .downloading(let got, let total):
+                            self.importJob = JobState(title: title,
+                                                      detail: total > 0 ? "Descargando \(size(got)) de \(size(total))" : "Descargando \(size(got))",
+                                                      fraction: total > 0 ? Double(got) / Double(total) : nil)
+                        case .reconnecting:
+                            self.importJob = JobState(title: title, detail: "Se cortó la conexión. Reanudando desde donde quedó…",
+                                                      fraction: self.importJob?.fraction)
+                        }
                     }
                 }
                 zip = file
