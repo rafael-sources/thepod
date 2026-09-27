@@ -192,25 +192,35 @@ def create_app():
             ],
         }
 
-    @app.get("/media/podcasts/<slug>/branding/<path:filename>")
-    @require_auth
-    def serve_branding(slug, filename):
-        base = (PODCASTS_DIR / slug / "branding").resolve()
+    # Media serving: browser uses cookie auth; postPod/prodPod (server-side)
+    # use the X-PodPod-Secret header. Either works.
+    def _media_auth_ok():
+        if _sess.get("username"):
+            return True
+        from config import INTEGRATION_SECRET
+        return _req.headers.get("X-PodPod-Secret") == INTEGRATION_SECRET
+
+    def _serve_podcast_media(slug, subdir, filename):
+        if not _media_auth_ok():
+            abort(401)
+        base = (PODCASTS_DIR / slug / subdir).resolve()
         target = (base / filename).resolve()
         if not str(target).startswith(str(base) + os.sep) and target != base:
             abort(403)
         from flask import request
         return _serve_with_range(target, request)
 
+    @app.get("/media/podcasts/<slug>/branding/<path:filename>")
+    def serve_branding(slug, filename):
+        return _serve_podcast_media(slug, "branding", filename)
+
     @app.get("/media/podcasts/<slug>/sponsors/<path:filename>")
-    @require_auth
     def serve_sponsor_media(slug, filename):
-        base = (PODCASTS_DIR / slug / "sponsors").resolve()
-        target = (base / filename).resolve()
-        if not str(target).startswith(str(base) + os.sep) and target != base:
-            abort(403)
-        from flask import request
-        return _serve_with_range(target, request)
+        return _serve_podcast_media(slug, "sponsors", filename)
+
+    @app.get("/media/podcasts/<slug>/guests/<path:filename>")
+    def serve_guest_media(slug, filename):
+        return _serve_podcast_media(slug, "guests", filename)
 
     import time as _time
     _boot_ts = str(int(_time.time()))
