@@ -66,7 +66,7 @@ actor PrePodClient {
     }
 
     func send(_ method: String, _ path: String, json: [String: Any]? = nil, body: Data? = nil,
-                      retry: Bool = true) async throws -> Data {
+                      contentType: String = "application/octet-stream", retry: Bool = true) async throws -> Data {
         if !loggedIn && path != "/api/auth/login" { try await login() }
         var req = URLRequest(url: try url(path))
         req.httpMethod = method
@@ -74,7 +74,7 @@ actor PrePodClient {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: json)
         } else if let body {
-            req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+            req.setValue(contentType, forHTTPHeaderField: "Content-Type")
             req.httpBody = body
         }
         if !cookies.isEmpty {
@@ -88,13 +88,29 @@ actor PrePodClient {
         let code = http?.statusCode ?? 0
         if code == 401, retry, path != "/api/auth/login" {
             loggedIn = false
-            return try await send(method, path, json: json, body: body, retry: false)
+            return try await send(method, path, json: json, body: body, contentType: contentType, retry: false)
         }
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw Failure(message: msg ?? "prePod respondió \(code)")
         }
         return data
+    }
+
+    /// Sube un archivo como formulario (multipart), igual que el navegador en prePod web.
+    func upload(_ path: String, field: String, file: URL, fields: [String: String] = [:], method: String = "POST") async throws -> Data {
+        let boundary = "thepod-\(UUID().uuidString)"
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (k, v) in fields {
+            add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n")
+        }
+        let name = file.lastPathComponent.replacingOccurrences(of: "\"", with: "")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(field)\"; filename=\"\(name)\"\r\n")
+        add("Content-Type: application/octet-stream\r\n\r\n")
+        body.append(try Data(contentsOf: file))
+        add("\r\n--\(boundary)--\r\n")
+        return try await send(method, path, body: body, contentType: "multipart/form-data; boundary=\(boundary)")
     }
 
     func login() async throws {

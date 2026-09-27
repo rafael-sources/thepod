@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 @main
 struct PostPodApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var app = AppModel()
 
     init() {

@@ -87,6 +87,13 @@ enum SelfTest {
                     let api = PrePodClient.shared
                     let pods = try await api.prePodcasts()
                     print("podcasts=\(pods.count)")
+                    if let p = pods.first(where: { $0.name.contains("Letra") }) ?? pods.first {
+                        let c = try await api.podcastConfig(p.slug); let h = try await api.hosts(p.slug)
+                        let sp = try await api.sponsors(p.slug); let so = try await api.sounds(p.slug)
+                        let di = try await api.distribution(p.slug); let fo = try await api.fonts()
+                        print("config \(c.name): colores=\(c.colorPrimary ?? "-") fuente=\(c.fontHeading ?? "-") logo=\(c.logoUrl != nil) · dueño=\(h.owner ?? "-") conductores=\(h.extraHosts.count) directores=\((h.directors ?? []).count) · sponsors=\(sp.count) sonidos=\(so.count) · plataformas=\(di.platforms.keys.sorted()) feed=\(di.feedUrl ?? "-") · fuentes=\(fo.count)")
+                        if let u = c.logoUrl { print("logo bytes=\((try? await api.media(u))?.count ?? -1)") }
+                    }
                     for p in pods {
                         let eps = try await api.preEpisodes(p.slug)
                         print("  \(p.name): \(eps.count) episodios · " + Dictionary(grouping: eps, by: \.status).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " "))

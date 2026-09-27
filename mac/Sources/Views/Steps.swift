@@ -688,13 +688,15 @@ struct ExportStep: View {
 struct SettingsView: View {
     @AppStorage("whisperModel") private var whisperModel = Transcriber.defaultModel
     @AppStorage("introAlAbrir") private var introEnabled = true
+    @AppStorage("sonidoAlCerrar") private var quitSound = true
 
     var body: some View {
         Form {
             PrePodSettingsSection()
             UpdateSettingsSection()
-            Section("Al abrir") {
+            Section("Al abrir y cerrar") {
                 Toggle("Sonido y animación de thePod al abrir la app", isOn: $introEnabled)
+                Toggle("Sonido de thePod al cerrar la app", isOn: $quitSound)
             }
             Section("Transcripción (en tu Mac)") {
                 Picker("Modelo de voz", selection: $whisperModel) {

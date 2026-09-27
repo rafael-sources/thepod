@@ -14,6 +14,7 @@ final class PreModel: ObservableObject {
     @Published var error: String?
     @Published var open: PreEpisode?
     @Published var showArchived = false
+    @Published var configuring = false
 
     var podcast: PrePodcast? { podcasts.first { $0.slug == slug } }
     private let api = PrePodClient.shared
@@ -142,6 +143,12 @@ struct PreHomeView: View {
             if let e = model.open {
                 PreEpisodeView(model: model, episode: e)
                     .id(e.id)
+            } else if model.configuring, !model.slug.isEmpty {
+                PodcastSettingsView(slug: model.slug) {
+                    model.configuring = false
+                    model.load()
+                }
+                .id(model.slug)
             } else {
                 board
             }
@@ -183,6 +190,7 @@ struct PreHomeView: View {
                         ForEach(model.podcasts) { Text($0.name).tag($0.slug) }
                     }
                     .frame(maxWidth: 340)
+                    Button { model.configuring = true } label: { Label("Configurar podcast", systemImage: "slider.horizontal.3") }
                     Toggle("Mostrar archivados", isOn: $model.showArchived).toggleStyle(.checkbox)
                     Spacer()
                     Button { creating = true } label: { Label("Nuevo episodio", systemImage: "plus") }
