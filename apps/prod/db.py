@@ -192,6 +192,9 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "sound_triggers", "triggered_by", "triggered_by TEXT")
     _ensure_column(conn, "chat_messages", "target_username", "target_username TEXT")
     _ensure_column(conn, "participants", "source_rsvp_url", "source_rsvp_url TEXT")
+    # Calidad de grabación local decidida por la prueba inicial (preflight)
+    _ensure_column(conn, "participants", "recording_quality", "recording_quality TEXT")
+    _ensure_column(conn, "participants", "recording_bitrate", "recording_bitrate INTEGER")
     _migrate_participants_check(conn)
     return conn
 

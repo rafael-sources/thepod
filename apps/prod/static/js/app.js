@@ -320,15 +320,22 @@ function _decodeMsg(payload) {
 }
 
 /* Track-based recorder: records a MediaStream into a single webm blob.
-   onChunk(blob) is called with each chunk for incremental upload. */
-function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk) {
+   onChunk(blob) is called with each chunk for incremental upload.
+   encOpts (opcional): { videoBitsPerSecond } — fija el bitrate del archivo
+   local; la calidad de grabación NO cambia durante la llamada. */
+function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk, encOpts) {
   var types = audioOnly
     ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
     : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm",
        "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4"];
   var mime = types.find(function (t) { return window.MediaRecorder && MediaRecorder.isTypeSupported(t); });
   var fallback = audioOnly ? "audio/webm" : "video/webm";
-  var rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  var recInit = mime ? { mimeType: mime } : {};
+  if (encOpts && encOpts.videoBitsPerSecond && !audioOnly) {
+    recInit.videoBitsPerSecond = encOpts.videoBitsPerSecond;
+    recInit.audioBitsPerSecond = 128000;
+  }
+  var rec = new MediaRecorder(stream, recInit);
   var actualMime = mime || fallback;
   var ext = actualMime.indexOf("mp4") !== -1 ? "mp4" : "webm";
   var chunks = [];
@@ -346,6 +353,392 @@ function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk) {
   rec._ext = ext;
   rec.start(timesliceMs || 1000);
   return rec;
+}
+
+/* ==========================================================================
+   Calidad de grabación — perfiles, prueba inicial y subida segura por partes
+
+   La calidad de GRABACIÓN (el archivo local que sube a postPod) es
+   independiente de la calidad de la SALA (lo que ven los demás por LiveKit).
+   Una prueba de ~5 s en la pantalla previa decide el perfil de grabación;
+   a la sala siempre se publica una versión reducida (≤720p) con simulcast.
+   ========================================================================== */
+
+var REC_PROFILES = [
+  { id: "1080p8", quality: "1080p", width: 1920, height: 1080, frameRate: 30, bitrate: 8000000, desc: "1080p · calidad máxima (~8 Mbps)" },
+  { id: "1080p5", quality: "1080p", width: 1920, height: 1080, frameRate: 30, bitrate: 5000000, desc: "1080p (~5 Mbps)" },
+  { id: "720p25", quality: "720p",  width: 1280, height: 720,  frameRate: 30, bitrate: 2500000, desc: "720p (~2.5 Mbps)" },
+  { id: "720p15", quality: "720p",  width: 1280, height: 720,  frameRate: 30, bitrate: 1500000, desc: "720p · ligera (~1.5 Mbps)" },
+];
+
+function recProfileById(id) {
+  return REC_PROFILES.find(function (p) { return p.id === id; }) || REC_PROFILES[2];
+}
+
+/* Decisión de la prueba: nunca por debajo de 720p, y "equipo justo" fuerza
+   720p aunque la subida alcance para más. */
+function decideRecProfile(upMbps, device) {
+  if (!device.ok1080 || !device.fluid) {
+    return upMbps >= 2 ? "720p25" : "720p15";
+  }
+  if (upMbps >= 8) return "1080p8";
+  if (upMbps >= 4) return "1080p5";
+  if (upMbps >= 2) return "720p25";
+  return "720p15";
+}
+
+/* Sube un blob de ~2.5 MB a un endpoint que lo descarta y mide Mbps.
+   Un POST chico primero "calienta" la conexión para no medir el handshake. */
+async function measureUploadMbps(token) {
+  var qs = token ? ("?token=" + encodeURIComponent(token)) : "";
+  function randomBlob(bytes) {
+    var buf = new Uint8Array(bytes);
+    for (var off = 0; off < bytes; off += 65536) {
+      crypto.getRandomValues(buf.subarray(off, Math.min(off + 65536, bytes)));
+    }
+    return new Blob([buf]);
+  }
+  try {
+    await fetch("/api/net-test" + qs, { method: "POST", credentials: "same-origin", body: randomBlob(128 * 1024) });
+    var size = 2.5 * 1024 * 1024;
+    var payload = randomBlob(size);
+    var t0 = performance.now();
+    var resp = await fetch("/api/net-test" + qs, { method: "POST", credentials: "same-origin", body: payload });
+    var secs = (performance.now() - t0) / 1000;
+    if (!resp.ok || secs <= 0) return null;
+    return (size * 8) / secs / 1e6;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* Prueba del equipo: graba ~3 s a 1080p con MediaRecorder desde el track de
+   cámara y mide los fps reales que llegan (requestVideoFrameCallback) — si el
+   equipo no aguanta capturar + codificar 1080p, los fps caen. */
+async function measureDevice1080(videoTrack) {
+  var out = { ok1080: false, fluid: true, fps: 0 };
+  if (!videoTrack) return out;
+  var settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+  out.ok1080 = (settings.height || 0) >= 1080;
+  var probe = null;
+  try { probe = videoTrack.clone(); } catch (_) { return out; }
+  var stream = new MediaStream([probe]);
+  var v = document.createElement("video");
+  v.muted = true; v.playsInline = true; v.srcObject = stream;
+  v.style.position = "fixed"; v.style.left = "-9999px"; v.style.width = "10px";
+  document.body.appendChild(v);
+  var frames = 0;
+  var supportsRVFC = typeof v.requestVideoFrameCallback === "function";
+  function onFrame() { frames++; if (supportsRVFC) v.requestVideoFrameCallback(onFrame); }
+  try {
+    await v.play().catch(function () {});
+    if (supportsRVFC) v.requestVideoFrameCallback(onFrame);
+    var rec = null;
+    try {
+      rec = new MediaRecorder(stream, { videoBitsPerSecond: 8000000 });
+      rec.start(500);
+    } catch (_) {}
+    var t0 = performance.now();
+    await new Promise(function (r) { setTimeout(r, 3000); });
+    var secs = (performance.now() - t0) / 1000;
+    if (rec && rec.state !== "inactive") { try { rec.stop(); } catch (_) {} }
+    if (supportsRVFC) {
+      out.fps = frames / secs;
+      var target = Math.min(settings.frameRate || 30, 30);
+      out.fluid = out.fps >= Math.min(24, target * 0.8);
+    }
+  } finally {
+    try { probe.stop(); } catch (_) {}
+    v.srcObject = null;
+    v.remove();
+  }
+  return out;
+}
+
+/* Corre la prueba completa (~5 s: subida y equipo en paralelo) sobre el
+   stream de la vista previa. Devuelve { profileId, upMbps, device }. */
+async function runRecordingPreflight(previewStream, token) {
+  var videoTrack = previewStream ? previewStream.getVideoTracks()[0] : null;
+  var results = await Promise.all([
+    measureUploadMbps(token),
+    measureDevice1080(videoTrack),
+  ]);
+  var upMbps = results[0];
+  var device = results[1];
+  // Sin medida de subida (endpoint caído): decidir solo por el equipo.
+  var effectiveUp = (upMbps == null) ? 4 : upMbps;
+  return { profileId: decideRecProfile(effectiveUp, device), upMbps: upMbps, device: device };
+}
+
+/* --- Cola de chunks persistida en IndexedDB -------------------------------
+   Si la pestaña se cierra a mitad de la subida, los chunks pendientes quedan
+   guardados y se recuperan al volver a entrar a la sesión. */
+var _recIdbPromise = null;
+function _recIdb() {
+  if (_recIdbPromise) return _recIdbPromise;
+  _recIdbPromise = new Promise(function (resolve) {
+    if (!window.indexedDB) return resolve(null);
+    var req = indexedDB.open("prodpod_rec", 1);
+    req.onupgradeneeded = function () {
+      var db = req.result;
+      var store = db.createObjectStore("chunks", { keyPath: "id", autoIncrement: true });
+      store.createIndex("skey", "skey");
+    };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { resolve(null); };
+  });
+  return _recIdbPromise;
+}
+function _idbPut(rec) {
+  return _recIdb().then(function (db) {
+    if (!db) return null;
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction("chunks", "readwrite");
+        var req = tx.objectStore("chunks").add(rec);
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+      } catch (_) { resolve(null); }
+    });
+  });
+}
+function _idbAllFor(skey) {
+  return _recIdb().then(function (db) {
+    if (!db) return [];
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction("chunks", "readonly");
+        var req = tx.objectStore("chunks").index("skey").getAll(skey);
+        req.onsuccess = function () { resolve(req.result || []); };
+        req.onerror = function () { resolve([]); };
+      } catch (_) { resolve([]); }
+    });
+  });
+}
+function _idbDelete(ids) {
+  if (!ids.length) return Promise.resolve();
+  return _recIdb().then(function (db) {
+    if (!db) return;
+    return new Promise(function (resolve) {
+      try {
+        var tx = db.transaction("chunks", "readwrite");
+        var store = tx.objectStore("chunks");
+        ids.forEach(function (id) { if (id != null) store.delete(id); });
+        tx.oncomplete = resolve;
+        tx.onerror = resolve;
+      } catch (_) { resolve(); }
+    });
+  });
+}
+
+/* --- Uploader compartido (host e invitado) --------------------------------
+   - manda cada lote con su offset absoluto (reintento seguro, sin duplicar)
+   - si la cola crece (red lenta), sube MÁS LENTO durante la llamada para no
+     pelearle ancho de banda a la sala, y termina de subir al final
+   - guarda lo pendiente en IndexedDB por si se cierra la pestaña */
+function createChunkUploader(opts) {
+  // opts: { sid, token, trackType, onStatus(st), sendData(state, bytes) }
+  var skey = "s" + opts.sid + ":" + (opts.token || "host") + ":" + (opts.trackType || "video");
+  var queue = [];          // [{ idbId, offset, blob }]
+  var nextOffset = 0;      // bytes generados localmente
+  var ackedBytes = 0;      // bytes confirmados por el servidor
+  var pendingBytes = 0;
+  var ext = ".webm";
+  var timer = null;
+  var uploading = false;
+  var lastFlushAt = 0;
+  var retries = 0;
+  var state = { state: "idle", sentBytes: 0, pendingBytes: 0, retries: 0, error: "" };
+  var BACKLOG_SLOW = 16 * 1024 * 1024;
+
+  function emit() {
+    state.sentBytes = ackedBytes;
+    state.pendingBytes = pendingBytes;
+    state.retries = retries;
+    if (opts.onStatus) opts.onStatus(state);
+  }
+
+  function setExt(e) { ext = e || ".webm"; }
+
+  function push(blob) {
+    var rec = { idbId: null, offset: nextOffset, blob: blob };
+    nextOffset += blob.size;
+    pendingBytes += blob.size;
+    queue.push(rec);
+    _idbPut({ skey: skey, offset: rec.offset, ext: ext, blob: blob }).then(function (id) { rec.idbId = id; });
+    emit();
+  }
+
+  function _url() {
+    return "/api/sessions/" + opts.sid + "/recordings/stream";
+  }
+
+  async function _postBatch(entries, finalize, durationSeconds) {
+    var form = new FormData();
+    if (entries.length) {
+      form.append("chunk", new Blob(entries.map(function (e) { return e.blob; })), "chunk" + ext);
+      form.append("offset", String(entries[0].offset));
+    }
+    if (opts.token) form.append("token", opts.token);
+    form.append("track_type", opts.trackType || "video");
+    form.append("ext", ext);
+    if (finalize) {
+      form.append("finalize", "1");
+      form.append("duration_seconds", String(durationSeconds || 0));
+    }
+    var resp = await fetch(_url(), { method: "POST", credentials: "same-origin", body: form });
+    var data = null;
+    try { data = await resp.json(); } catch (_) {}
+    if (resp.status === 409 && data) {
+      // El servidor tiene menos bytes de los que ya dimos por confirmados:
+      // reencolar desde bytes_received lo que todavía tengamos.
+      var br = data.bytes_received || 0;
+      if (br < (entries.length ? entries[0].offset : ackedBytes)) {
+        throw new Error("el servidor perdió parte de la grabación ya subida");
+      }
+      return { resync: br };
+    }
+    if (!resp.ok) throw new Error((data && data.error) || ("HTTP " + resp.status));
+    return data || {};
+  }
+
+  function _takeBatch(capBytes) {
+    var batch = [];
+    var size = 0;
+    for (var i = 0; i < queue.length; i++) {
+      batch.push(queue[i]);
+      size += queue[i].blob.size;
+      if (capBytes && size >= capBytes) break;
+    }
+    return batch;
+  }
+
+  function _ackBatch(batch) {
+    var bytes = 0;
+    batch.forEach(function (e) { bytes += e.blob.size; });
+    queue.splice(0, batch.length);
+    pendingBytes -= bytes;
+    ackedBytes = batch[batch.length - 1].offset + batch[batch.length - 1].blob.size;
+    _idbDelete(batch.map(function (e) { return e.idbId; }));
+    retries = 0;
+  }
+
+  async function _flushOnce(capBytes) {
+    if (uploading || !queue.length) return false;
+    uploading = true;
+    try {
+      var batch = _takeBatch(capBytes);
+      var data = await _postBatch(batch, false);
+      if (data.resync != null) {
+        // el servidor va atrás dentro de este mismo lote: reintenta entero
+        // (el server trunca al offset y reescribe — sin duplicados)
+        retries++;
+        return false;
+      }
+      _ackBatch(batch);
+      if (state.state !== "finalizing") state.state = "streaming";
+      emit();
+      if (opts.sendData) opts.sendData("streaming", ackedBytes);
+      return true;
+    } catch (e) {
+      retries++;
+      emit();
+      return false;
+    } finally {
+      uploading = false;
+    }
+  }
+
+  function start() {
+    state.state = "streaming";
+    ackedBytes = 0;
+    emit();
+    if (timer) clearInterval(timer);
+    timer = setInterval(function () {
+      // Ritmo adaptativo: con la cola corta sube cada 10 s; con la cola larga
+      // (red lenta) sube menos y más espaciado — el resto se va al final.
+      var slow = pendingBytes >= BACKLOG_SLOW;
+      var minGap = slow ? 15000 : 10000;
+      if (Date.now() - lastFlushAt < minGap) return;
+      lastFlushAt = Date.now();
+      _flushOnce(slow ? (1.5 * 1024 * 1024) : (6 * 1024 * 1024));
+    }, 2000);
+  }
+
+  async function finalize(durationSeconds) {
+    if (timer) { clearInterval(timer); timer = null; }
+    state.state = "finalizing";
+    emit();
+    var attempts = 0;
+    while (queue.length) {
+      var ok = await _flushOnce(8 * 1024 * 1024);
+      emit();
+      if (!ok) {
+        attempts++;
+        if (attempts > 40) {
+          state.state = "error";
+          state.error = "No se pudo terminar de subir. Lo pendiente quedó guardado en este navegador.";
+          emit();
+          if (opts.sendData) opts.sendData("error", ackedBytes);
+          return false;
+        }
+        await new Promise(function (r) { setTimeout(r, Math.min(500 * Math.pow(1.5, attempts), 5000)); });
+      }
+    }
+    attempts = 0;
+    while (true) {
+      try {
+        await _postBatch([], true, durationSeconds);
+        break;
+      } catch (e) {
+        attempts++;
+        if (attempts > 8) {
+          state.state = "error";
+          state.error = "Error al finalizar: " + e.message;
+          emit();
+          if (opts.sendData) opts.sendData("error", ackedBytes);
+          return false;
+        }
+        await new Promise(function (r) { setTimeout(r, Math.min(500 * Math.pow(1.5, attempts), 5000)); });
+      }
+    }
+    state.state = "done";
+    emit();
+    if (opts.sendData) opts.sendData("done", ackedBytes);
+    return true;
+  }
+
+  /* Reconstruye la cola desde registros de IndexedDB (recuperación tras un
+     cierre de pestaña), conservando los offsets absolutos originales. */
+  function seed(rows) {
+    rows.forEach(function (r) {
+      queue.push({ idbId: r.id, offset: r.offset, blob: r.blob });
+      pendingBytes += r.blob.size;
+    });
+    if (rows.length) {
+      var last = rows[rows.length - 1];
+      nextOffset = last.offset + last.blob.size;
+      ackedBytes = rows[0].offset;
+      if (rows[0].ext) ext = rows[0].ext;
+    }
+    emit();
+  }
+
+  return { push: push, start: start, finalize: finalize, setExt: setExt,
+           seed: seed, status: state, skey: skey };
+}
+
+/* Al entrar a una sesión: si quedaron chunks de una grabación interrumpida
+   (pestaña cerrada a mitad de subida), termina de subirlos y finaliza esa
+   grabación para que no se pierda. */
+async function recoverPendingUpload(sid, token, trackType) {
+  var skey = "s" + sid + ":" + (token || "host") + ":" + (trackType || "video");
+  var rows = await _idbAllFor(skey);
+  if (!rows.length) return false;
+  rows.sort(function (a, b) { return a.offset - b.offset; });
+  var up = createChunkUploader({ sid: sid, token: token, trackType: trackType });
+  up.seed(rows);
+  return up.finalize(0);
 }
 
 /* ========================================================================== */
@@ -542,9 +935,12 @@ var StudioView = {
       // "OverconstrainedError"), retry with browser-default devices and
       // forget the stale selection.
       async function _grab(useStored) {
+        // Se pide 1080p30 "ideal": si la cámara no llega, el navegador da lo
+        // máximo que tenga. Esta captura es la que evalúa la prueba de calidad.
+        var video = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+        if (useStored && deviceSelection.cameraId) video.deviceId = { exact: deviceSelection.cameraId };
         var constraints = {
-          video: (useStored && deviceSelection.cameraId)
-            ? { deviceId: { exact: deviceSelection.cameraId } } : true,
+          video: video,
           audio: (useStored && deviceSelection.micId)
             ? { deviceId: { exact: deviceSelection.micId } } : true,
         };
@@ -577,6 +973,8 @@ var StudioView = {
         }
         // After permission granted the device labels become populated.
         await listDevices();
+        // Prueba de calidad de grabación (~5 s), en paralelo a la vista previa.
+        if (recPreflight.state === "idle") runRecPreflight();
       } catch (e) {
         prejoinError.value = "Cámara/mic no accesibles: " + e.message;
       }
@@ -638,32 +1036,59 @@ var StudioView = {
       sendData({ type: "practice_mode", active: v });
     });
     var handsRaised = reactive({});  // identity -> bool (from hand_raise data msgs)
-    var qualityPreset = ref(localStorage.getItem("prodpod.qualityPreset") || "med");
-    watch(qualityPreset, function (v) {
-      localStorage.setItem("prodpod.qualityPreset", v);
+    // ---- Calidad de GRABACIÓN: la decide la prueba de la pantalla previa.
+    // La calidad de la SALA es independiente (≤720p con simulcast, LiveKit
+    // adapta lo que recibe cada uno).
+    var recPreflight = reactive({
+      state: "idle",     // idle | testing | done
+      upMbps: null,
+      fps: 0,
+      profileId: null,   // techo que dio la prueba
+      choiceId: null,    // elección final (nunca por encima del techo)
     });
-    function _qualityCaptureOpts() {
-      if (qualityPreset.value === "low")  return { width: 640,  height: 360, frameRate: 24 };
-      if (qualityPreset.value === "high") return { width: 1280, height: 720, frameRate: 30 };
-      return { width: 854, height: 480, frameRate: 24 };
+    var recProfileChoices = computed(function () {
+      if (!recPreflight.profileId) return REC_PROFILES;
+      var idx = REC_PROFILES.findIndex(function (p) { return p.id === recPreflight.profileId; });
+      return REC_PROFILES.slice(Math.max(idx, 0));
+    });
+    function recProfile() {
+      return recProfileById(recPreflight.choiceId || recPreflight.profileId || "720p25");
     }
-    function _qualityPublishLayers() {
-      if (qualityPreset.value === "low") return [
-        { width: 320, height: 180, encoding: { maxBitrate: 100000, maxFramerate: 12 } },
-      ];
-      if (qualityPreset.value === "high") return [
-        { width: 320, height: 180, encoding: { maxBitrate: 200000, maxFramerate: 15 } },
-        { width: 640, height: 360, encoding: { maxBitrate: 700000, maxFramerate: 24 } },
-      ];
+    function _recCaptureOpts() {
+      var p = recProfile();
+      return { width: p.width, height: p.height, frameRate: p.frameRate };
+    }
+    async function runRecPreflight() {
+      if (recPreflight.state === "testing" || !prejoinStream) return;
+      recPreflight.state = "testing";
+      try {
+        var r = await runRecordingPreflight(prejoinStream, null);
+        recPreflight.upMbps = r.upMbps;
+        recPreflight.fps = r.device.fps;
+        recPreflight.profileId = r.profileId;
+        recPreflight.choiceId = r.profileId;
+      } catch (_) {
+        recPreflight.profileId = "720p25";
+        recPreflight.choiceId = "720p25";
+      }
+      recPreflight.state = "done";
+    }
+    async function persistRecQuality() {
+      var p = recProfile();
+      try {
+        await fetch("/api/sessions/" + props.session.id + "/recording-quality", {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quality: p.quality, bitrate: p.bitrate }),
+        });
+      } catch (_) {}
+    }
+    function _roomPublishLayers() {
+      // Capas bajas del simulcast; la capa alta es el track publicado (≤720p).
       return [
-        { width: 320, height: 180, encoding: { maxBitrate: 150000, maxFramerate: 15 } },
+        { width: 320, height: 180, encoding: { maxBitrate: 200000, maxFramerate: 15 } },
         { width: 640, height: 360, encoding: { maxBitrate: 500000, maxFramerate: 24 } },
       ];
-    }
-    function _qualityMaxBitrate() {
-      if (qualityPreset.value === "low")  return 600000;
-      if (qualityPreset.value === "high") return 2500000;
-      return 1200000;
     }
     var myIdentity = ref("");
     var readyMap = reactive({});     // identity -> bool
@@ -1494,15 +1919,14 @@ var StudioView = {
         var newRoom = new LK.Room({
           adaptiveStream: true,
           dynacast: true,
-          videoCaptureDefaults: { resolution: _qualityCaptureOpts() },
+          // La cámara se captura a la resolución de GRABACIÓN (hasta 1080p);
+          // a la sala se publica un clon reducido a ≤720p (ver más abajo).
+          videoCaptureDefaults: { resolution: _recCaptureOpts() },
           publishDefaults: {
             simulcast: true,
-            videoSimulcastLayers: _qualityPublishLayers(),
+            videoSimulcastLayers: _roomPublishLayers(),
             videoCodec: "vp8",
-            videoEncoding: {
-              maxBitrate: _qualityMaxBitrate(),
-              maxFramerate: _qualityCaptureOpts().frameRate,
-            },
+            videoEncoding: { maxBitrate: 1700000, maxFramerate: 30 },
           },
         });
 
@@ -1625,6 +2049,25 @@ var StudioView = {
         var micPub = await newRoom.localParticipant.setMicrophoneEnabled(true, micOpts);
         var camPub = await newRoom.localParticipant.setCameraEnabled(true, camOpts);
 
+        // Separar grabación y sala: la captura quedó a la resolución de
+        // grabación (hasta 1080p). Guardamos ese track completo para el
+        // MediaRecorder y a la sala le mandamos un clon reducido a ≤720p.
+        _fullResCamTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        if (_fullResCamTrack) {
+          var camSet = _fullResCamTrack.getSettings ? _fullResCamTrack.getSettings() : {};
+          if ((camSet.height || 0) > 720) {
+            try {
+              var roomTrack = _fullResCamTrack.clone();
+              await roomTrack.applyConstraints({ width: { ideal: 1280 }, height: { ideal: 720 } });
+              await camPub.track.replaceTrack(roomTrack, true);
+              _roomCamTrack = roomTrack;
+            } catch (_) {
+              // Si el navegador no reduce el clon, la sala recibe la captura
+              // completa con el bitrate capado — la grabación no cambia.
+            }
+          }
+        }
+
         // Apply mic-check gain (if any) by re-routing the published mic
         // track through a Web Audio GainNode. We replaceTrack on LiveKit's
         // LocalAudioTrack so peers see the same publication ID — no
@@ -1649,7 +2092,9 @@ var StudioView = {
           }
         }
 
-        var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        // Para la grabación usamos el track de captura COMPLETO (no el clon
+        // reducido que ve la sala).
+        var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack)        localStream = new MediaStream([camTrack]);
@@ -1670,6 +2115,7 @@ var StudioView = {
 
         await loadParticipants();
         await loadChat();
+        persistRecQuality();  // guarda la calidad de grabación para el director
 
         // Mount tracks from participants already in the room
         function mountExistingRemotes() {
@@ -1699,6 +2145,10 @@ var StudioView = {
     async function disconnect() {
       // Full state cleanup so a stale session never survives into a new one.
       stopLocalRecorders();
+      // Tracks propios de la separación grabación/sala: LiveKit no los
+      // conoce como suyos, así que los soltamos nosotros.
+      if (_roomCamTrack) { try { _roomCamTrack.stop(); } catch (_) {} _roomCamTrack = null; }
+      if (_fullResCamTrack) { try { _fullResCamTrack.stop(); } catch (_) {} _fullResCamTrack = null; }
       // Screen share: stop recorder + unpublish + release stream.
       if (screenSharing.value || screenStream || screenRecorder) {
         try { await stopScreenShare(); } catch (_) {}
@@ -1841,12 +2291,22 @@ var StudioView = {
     }
 
     var _hostRecStream = null;
+    var _fullResCamTrack = null;   // captura completa (hasta 1080p) — para grabar
+    var _roomCamTrack = null;      // clon reducido ≤720p — lo que ve la sala
+
+    var _hostUploader = null;
+    var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
+    var hostStreamedBytes = ref(0);
+    var hostPendingMB = ref(0);
 
     function startLocalRecorders() {
       if (room) {
         var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
         var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
-        var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        // Grabar SIEMPRE desde la captura completa, no desde el clon de la sala.
+        var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
+          ? _fullResCamTrack
+          : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         var tracks = [];
         if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
@@ -1860,83 +2320,33 @@ var StudioView = {
         }
       }
       if (!recorder && localStream) {
-        _hostChunkQueue = [];
-        _hostRetryCount = 0;
-        _hostStreamExt = ".webm";
-        recorder = _startRecorder(localStream, function () {}, 1000, false, function (data) {
-          _hostChunkQueue.push(data);
+        _hostUploader = createChunkUploader({
+          sid: props.session.id,
+          token: null,
+          trackType: "video",
+          onStatus: function (st) {
+            hostStreamedBytes.value = st.sentBytes;
+            hostPendingMB.value = st.pendingBytes / (1024 * 1024);
+            if (st.state === "error") {
+              hostUploadStatus.state = "error";
+              hostUploadStatus.error = st.error;
+            }
+          },
+          sendData: function (stt, bytes) {
+            sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes });
+          },
         });
-        _hostStreamExt = recorder._ext ? ("." + recorder._ext) : ".webm";
+        recorder = _startRecorder(localStream, function () {}, 1000, false, function (data) {
+          _hostUploader.push(data);
+        }, { videoBitsPerSecond: recProfile().bitrate });
+        _hostUploader.setExt(recorder._ext ? ("." + recorder._ext) : ".webm");
+        _hostUploader.start();
         hostUploadStatus.state = "streaming";
         hostStreamedBytes.value = 0;
-        _hostChunkTimer = setInterval(function () { _flushHostChunks(false); }, 10000);
-      }
-    }
-
-    var _hostChunkQueue = [];
-    var _hostChunkUploading = false;
-    var _hostChunkTimer = null;
-    var _hostStreamExt = ".webm";
-    var _hostRetryCount = 0;
-    var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
-    var hostStreamedBytes = ref(0);
-
-    async function _flushHostChunks(finalize) {
-      if (_hostChunkUploading) {
-        if (!finalize) return;
-        while (_hostChunkUploading) { await new Promise(function (r) { setTimeout(r, 100); }); }
-      }
-      if (!_hostChunkQueue.length && !finalize) return;
-      _hostChunkUploading = true;
-      var pending = _hostChunkQueue.slice();
-      var form = new FormData();
-      if (pending.length) {
-        var blob = new Blob(pending);
-        form.append("chunk", blob, "chunk" + _hostStreamExt);
-      }
-      form.append("track_type", "video");
-      form.append("ext", _hostStreamExt);
-      if (finalize) {
-        form.append("finalize", "1");
-        form.append("duration_seconds", String(timecode.value));
-      }
-      try {
-        var resp = await fetch("/api/sessions/" + props.session.id + "/recordings/stream", {
-          method: "POST", credentials: "same-origin", body: form,
-        });
-        if (resp.ok) {
-          _hostChunkQueue.splice(0, pending.length);
-          _hostRetryCount = 0;
-          var data = await resp.json();
-          if (!finalize) {
-            hostStreamedBytes.value = data.bytes_received || data.size_bytes || hostStreamedBytes.value;
-          }
-          sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: hostStreamedBytes.value });
-          if (finalize) {
-            hostUploadStatus.state = "done";
-            hostUploadStatus.sizeMB = (hostStreamedBytes.value / (1024 * 1024)).toFixed(1);
-          }
-        } else {
-          _hostRetryCount++;
-        }
-      } catch (e) {
-        _hostRetryCount++;
-        if (finalize && _hostRetryCount > 5) {
-          hostUploadStatus.state = "error";
-          hostUploadStatus.error = e.message;
-          sendData({ type: "upload_status", identity: myIdentity.value, state: "error", bytes: hostStreamedBytes.value });
-        }
-      }
-      _hostChunkUploading = false;
-      if (finalize && hostUploadStatus.state !== "done" && hostUploadStatus.state !== "error") {
-        var delay = Math.min(500 * Math.pow(1.5, _hostRetryCount - 1), 5000);
-        await new Promise(function (r) { setTimeout(r, delay); });
-        return _flushHostChunks(true);
       }
     }
 
     async function stopLocalRecorders() {
-      if (_hostChunkTimer) { clearInterval(_hostChunkTimer); _hostChunkTimer = null; }
       if (recorder) {
         await new Promise(function (resolve) {
           recorder.onstop = resolve;
@@ -1949,7 +2359,14 @@ var StudioView = {
         _hostRecStream = null;
       }
       hostUploadStatus.state = "finalizing";
-      await _flushHostChunks(true);
+      if (_hostUploader) {
+        var ok = await _hostUploader.finalize(timecode.value);
+        if (ok) {
+          hostUploadStatus.state = "done";
+          hostUploadStatus.sizeMB = (hostStreamedBytes.value / (1024 * 1024)).toFixed(1);
+        }
+        _hostUploader = null;
+      }
     }
 
     async function markChapter() {
@@ -2111,6 +2528,11 @@ var StudioView = {
       listDevices();
       startPrejoinPreview();
       window.addEventListener("keydown", onKey);
+      // Si quedó una subida a medias de una visita anterior (pestaña cerrada
+      // durante la grabación), termina de subirla ahora.
+      recoverPendingUpload(props.session.id, null, "video").then(function (ok) {
+        if (ok && window.toast) window.toast({ type: "success", text: "Se recuperó y subió una grabación pendiente" });
+      });
     });
     function _beaconLeave() {
       try {
@@ -2239,7 +2661,8 @@ var StudioView = {
       runMicCheck: runMicCheck, cancelMicCheck: cancelMicCheck,
       applyMicCheckGain: applyMicCheckGain, resetMicCheckGain: resetMicCheckGain,
       practiceMode: practiceMode, markChapter: markChapter,
-      qualityPreset: qualityPreset,
+      recPreflight: recPreflight, recProfileChoices: recProfileChoices,
+      recProfile: recProfile, hostPendingMB: hostPendingMB,
       handsRaised: handsRaised, ownHandUp: ownHandUp, toggleHand: toggleHand,
       screenSharing: screenSharing, screenRecordOnly: screenRecordOnly, remoteScreen: remoteScreen,
       askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
@@ -2274,11 +2697,11 @@ var StudioView = {
           <span>Ensayo</span>
         </label>
         <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
-        <select v-if="!connected" v-model="qualityPreset" class="quality-pick"
-                title="Calidad de captura — más alto = más CPU">
-          <option value="low">Baja 360p</option>
-          <option value="med">Media 480p</option>
-          <option value="high">Alta 720p</option>
+        <span v-if="!connected && recPreflight.state === 'testing'" class="quality-pick"
+              title="Midiendo tu subida y tu equipo (~5 s)">📶 Probando calidad…</span>
+        <select v-else-if="!connected && recPreflight.state === 'done'" v-model="recPreflight.choiceId" class="quality-pick"
+                :title="'La prueba puso el máximo (' + recPreflight.profileId + '). Puedes bajarla, no subirla.'">
+          <option v-for="p in recProfileChoices" :key="p.id" :value="p.id">REC {{ p.desc }}</option>
         </select>
         <template v-if="sessionEnded">
           <span class="session-done-badge" title="La grabación de esta sesión ya finalizó">✓ FINALIZADA</span>
@@ -2319,10 +2742,10 @@ var StudioView = {
       </div>
 
       <div v-if="hostUploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
-        Subiendo en tiempo real · {{ (hostStreamedBytes / (1024*1024)).toFixed(1) }} MB enviados
+        Subiendo en tiempo real · {{ (hostStreamedBytes / (1024*1024)).toFixed(1) }} MB enviados<span v-if="hostPendingMB > 0.5"> · falta {{ hostPendingMB.toFixed(1) }} MB</span>
       </div>
       <div v-if="hostUploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
-        ⏳ Finalizando subida — no cierres esta pestaña…
+        ⏳ Subiendo… falta {{ hostPendingMB.toFixed(1) }} MB — no cierres esta pestaña
       </div>
       <div v-if="hostUploadStatus.state === 'done'" class="upload-banner" style="background:#1a3a1a;border-bottom:2px solid #4a4;padding:8px 16px;text-align:center;font-weight:700;color:#6c6;">
         ✓ Grabación del host subida correctamente ({{ hostUploadStatus.sizeMB }} MB)
@@ -2455,6 +2878,15 @@ var StudioView = {
 
                 <div v-if="!micCheckResult && micCheckAppliedGain && !micCheckRunning" style="margin-top: 8px;">
                   <button class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="resetMicCheckGain">Quitar ajuste guardado</button>
+                </div>
+              </div>
+
+              <div style="margin-top: 10px; font-size: 12px;">
+                <div v-if="recPreflight.state === 'testing'" class="muted">📶 Probando tu conexión y tu equipo (~5 s)…</div>
+                <div v-else-if="recPreflight.state === 'done'">
+                  ✓ Tu grabación irá en <strong>{{ recProfile().quality }}</strong>
+                  <span class="muted" v-if="recPreflight.upMbps"> · subida {{ recPreflight.upMbps.toFixed(1) }} Mbps</span>
+                  <span class="muted" v-if="recPreflight.fps"> · {{ Math.round(recPreflight.fps) }} fps</span>
                 </div>
               </div>
 
@@ -2988,6 +3420,58 @@ var GuestStudioView = {
   props: { joinData: Object, inviteToken: String },
   setup: function (props) {
     var localVideoEl = ref(null);
+
+    // ---- Prueba de calidad de grabación en la pantalla previa ----
+    var preflightVideoEl = ref(null);
+    var _preflightStream = null;
+    var recPreflight = reactive({ state: "idle", upMbps: null, fps: 0, profileId: null, choiceId: null });
+    var recProfileChoices = computed(function () {
+      if (!recPreflight.profileId) return REC_PROFILES;
+      var idx = REC_PROFILES.findIndex(function (p) { return p.id === recPreflight.profileId; });
+      return REC_PROFILES.slice(Math.max(idx, 0));
+    });
+    function recProfileG() {
+      return recProfileById(recPreflight.choiceId || recPreflight.profileId || "720p25");
+    }
+    async function startGuestPreflight() {
+      if (recPreflight.state !== "idle") return;
+      recPreflight.state = "testing";
+      try {
+        _preflightStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+          audio: true,
+        });
+        await nextTick();
+        if (preflightVideoEl.value) preflightVideoEl.value.srcObject = _preflightStream;
+        var r = await runRecordingPreflight(_preflightStream, props.inviteToken);
+        recPreflight.upMbps = r.upMbps;
+        recPreflight.fps = r.device.fps;
+        recPreflight.profileId = r.profileId;
+        recPreflight.choiceId = r.profileId;
+      } catch (_) {
+        recPreflight.profileId = "720p25";
+        recPreflight.choiceId = "720p25";
+      }
+      recPreflight.state = "done";
+    }
+    function stopGuestPreflight() {
+      if (_preflightStream) {
+        _preflightStream.getTracks().forEach(function (t) { try { t.stop(); } catch (_) {} });
+        _preflightStream = null;
+      }
+      if (preflightVideoEl.value) preflightVideoEl.value.srcObject = null;
+    }
+    async function persistRecQuality() {
+      var p = recProfileG();
+      try {
+        await fetch("/api/sessions/" + props.joinData.session_id + "/recording-quality?token=" +
+                    encodeURIComponent(props.inviteToken), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quality: p.quality, bitrate: p.bitrate }),
+        });
+      } catch (_) {}
+    }
     var error = ref("");
     var busy = ref(false);
     var connectStep = ref("");
@@ -3171,12 +3655,17 @@ var GuestStudioView = {
     }
 
     var _recStream = null;
+    var _fullResCamTrack = null;   // captura completa (hasta 1080p) — para grabar
+    var _roomCamTrack = null;      // clon reducido ≤720p — lo que ve la sala
 
     function _buildRecordingStream() {
       var tracks = [];
       var camPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Camera) || _savedCamPub;
       var micPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Microphone) || _savedMicPub;
-      var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+      // Grabar SIEMPRE desde la captura completa, no desde el clon de la sala.
+      var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
+        ? _fullResCamTrack
+        : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
       var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
       if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
       if (micTrack && micTrack.readyState === "live") tracks.push(micTrack.clone());
@@ -3200,9 +3689,9 @@ var GuestStudioView = {
         var hasMic = stream.getAudioTracks().length > 0;
         recordingCaps.hasCam = hasCam;
         recordingCaps.hasMic = hasMic;
-        recorder = _startRecorder(stream, function () {}, 1000, false, _onRecordingChunk);
-        _streamExt = recorder._ext ? ("." + recorder._ext) : ".webm";
-        _startChunkStreaming();
+        recorder = _startRecorder(stream, function () {}, 1000, false, _onRecordingChunk,
+                                  { videoBitsPerSecond: recProfileG().bitrate });
+        _startChunkStreaming(recorder._ext ? ("." + recorder._ext) : ".webm");
         if (!hasCam && window.toast) {
           window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });
         }
@@ -3215,7 +3704,6 @@ var GuestStudioView = {
       if (!recording.value) return;
       recording.value = false;
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      if (_chunkFlushTimer) { clearInterval(_chunkFlushTimer); _chunkFlushTimer = null; }
       if (recorder) {
         await new Promise(function (resolve) {
           recorder.onstop = resolve;
@@ -3223,8 +3711,7 @@ var GuestStudioView = {
         });
         recorder = null;
       }
-      uploadStatus.state = "finalizing";
-      await _flushChunks(true);
+      await _finishUpload();
       flushTriggerLog();
       recordingStartedAtMs = null;
       ownReady.value = false;
@@ -3268,81 +3755,56 @@ var GuestStudioView = {
     var uploadStatus = reactive({ state: "idle", percent: 0, sizeMB: "", error: "" });
     var recordingCaps = reactive({ hasCam: true, hasMic: true });
     var streamedBytes = ref(0);
+    var pendingMB = ref(0);
 
     function _preventClose(e) { e.preventDefault(); e.returnValue = ""; }
 
-    var _chunkQueue = [];
-    var _chunkUploading = false;
-    var _chunkFlushTimer = null;
-    var _streamExt = ".webm";
+    var _uploader = null;
     var _chunkRetries = ref(0);
 
     function _onRecordingChunk(data) {
-      _chunkQueue.push(data);
+      if (_uploader) _uploader.push(data);
     }
 
-    async function _flushChunks(finalize) {
-      if (_chunkUploading) {
-        if (!finalize) return;
-        while (_chunkUploading) { await new Promise(function (r) { setTimeout(r, 100); }); }
+    async function _finishUpload() {
+      if (!_uploader) return;
+      uploadStatus.state = "finalizing";
+      var ok = await _uploader.finalize(timecode.value);
+      if (ok) {
+        uploadStatus.state = "done";
+        uploadStatus.sizeMB = (streamedBytes.value / (1024 * 1024)).toFixed(1);
+        window.removeEventListener("beforeunload", _preventClose);
+      } else {
+        uploadStatus.error = _uploader.status.error || "No se pudo terminar de subir.";
       }
-      if (!_chunkQueue.length && !finalize) return;
-      _chunkUploading = true;
-      var pending = _chunkQueue.slice();
-      var form = new FormData();
-      if (pending.length) {
-        var blob = new Blob(pending);
-        form.append("chunk", blob, "chunk" + _streamExt);
-      }
-      form.append("token", props.inviteToken);
-      form.append("track_type", "video");
-      form.append("ext", _streamExt);
-      if (finalize) {
-        form.append("finalize", "1");
-        form.append("duration_seconds", String(timecode.value));
-      }
-      try {
-        var resp = await fetch("/api/sessions/" + props.joinData.session_id + "/recordings/stream", {
-          method: "POST", body: form,
-        });
-        if (resp.ok) {
-          _chunkQueue.splice(0, pending.length);
-          _chunkRetries.value = 0;
-          var data = await resp.json();
-          if (!finalize) {
-            streamedBytes.value = data.bytes_received || data.size_bytes || streamedBytes.value;
-          }
-          sendData({ type: "upload_status", identity: myIdentity.value, state: finalize ? "done" : "streaming", bytes: streamedBytes.value });
-          if (finalize) {
-            uploadStatus.state = "done";
-            uploadStatus.sizeMB = (streamedBytes.value / (1024 * 1024)).toFixed(1);
-            window.removeEventListener("beforeunload", _preventClose);
-          }
-        } else {
-          _chunkRetries.value++;
-        }
-      } catch (e) {
-        _chunkRetries.value++;
-        if (finalize && _chunkRetries.value > 5) {
-          uploadStatus.state = "error";
-          uploadStatus.error = "Error al finalizar: " + e.message;
-          sendData({ type: "upload_status", identity: myIdentity.value, state: "error", bytes: streamedBytes.value });
-        }
-      }
-      _chunkUploading = false;
-      if (finalize && uploadStatus.state !== "done" && uploadStatus.state !== "error") {
-        var delay = Math.min(500 * Math.pow(1.5, _chunkRetries.value - 1), 5000);
-        await new Promise(function (r) { setTimeout(r, delay); });
-        return _flushChunks(true);
-      }
+      _uploader = null;
     }
 
-    function _startChunkStreaming() {
+    function _startChunkStreaming(ext) {
       window.addEventListener("beforeunload", _preventClose);
       uploadStatus.state = "streaming";
       streamedBytes.value = 0;
+      pendingMB.value = 0;
       _chunkRetries.value = 0;
-      _chunkFlushTimer = setInterval(function () { _flushChunks(false); }, 10000);
+      _uploader = createChunkUploader({
+        sid: props.joinData.session_id,
+        token: props.inviteToken,
+        trackType: "video",
+        onStatus: function (st) {
+          streamedBytes.value = st.sentBytes;
+          pendingMB.value = st.pendingBytes / (1024 * 1024);
+          _chunkRetries.value = st.retries;
+          if (st.state === "error") {
+            uploadStatus.state = "error";
+            uploadStatus.error = st.error;
+          }
+        },
+        sendData: function (stt, bytes) {
+          sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes });
+        },
+      });
+      _uploader.setExt(ext);
+      _uploader.start();
     }
 
     async function connect() {
@@ -3352,20 +3814,26 @@ var GuestStudioView = {
       connectStep.value = "preparando…";
       try {
         myIdentity.value = "participant_" + props.joinData.participant_id;
+        // La vista previa de la prueba suelta la cámara antes de que LiveKit
+        // la vuelva a pedir (Safari no comparte el device entre dos gUM).
+        stopGuestPreflight();
+        var recProf = recProfileG();
         var newRoom = new LK.Room({
           adaptiveStream: true,
           dynacast: true,
+          // Captura a la resolución de GRABACIÓN decidida por la prueba;
+          // a la sala se publica un clon reducido a ≤720p (ver más abajo).
           videoCaptureDefaults: {
-            resolution: { width: 854, height: 480, frameRate: 24 },
+            resolution: { width: recProf.width, height: recProf.height, frameRate: recProf.frameRate },
           },
           publishDefaults: {
             simulcast: true,
             videoSimulcastLayers: [
-              { width: 320, height: 180, encoding: { maxBitrate: 150_000,  maxFramerate: 15 } },
+              { width: 320, height: 180, encoding: { maxBitrate: 200_000,  maxFramerate: 15 } },
               { width: 640, height: 360, encoding: { maxBitrate: 500_000,  maxFramerate: 24 } },
             ],
             videoCodec: "vp8",
-            videoEncoding: { maxBitrate: 1_200_000, maxFramerate: 24 },
+            videoEncoding: { maxBitrate: 1_700_000, maxFramerate: 30 },
           },
         });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
@@ -3428,9 +3896,24 @@ var GuestStudioView = {
         _savedCamPub = camPub;
         _savedMicPub = micPub;
 
+        // Separar grabación y sala: el track de captura completo queda para
+        // el MediaRecorder; a la sala va un clon reducido a ≤720p.
+        _fullResCamTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        if (_fullResCamTrack) {
+          var camSet = _fullResCamTrack.getSettings ? _fullResCamTrack.getSettings() : {};
+          if ((camSet.height || 0) > 720) {
+            try {
+              var roomTrack = _fullResCamTrack.clone();
+              await roomTrack.applyConstraints({ width: { ideal: 1280 }, height: { ideal: 720 } });
+              await camPub.track.replaceTrack(roomTrack, true);
+              _roomCamTrack = roomTrack;
+            } catch (_) { /* fallback: la sala recibe la captura completa capada por bitrate */ }
+          }
+        }
+
         connectStep.value = "4/4 montando streams locales…";
 
-        var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
+        var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack) localStream = new MediaStream([camTrack]);
@@ -3442,6 +3925,7 @@ var GuestStudioView = {
 
         room = newRoom;
         connected.value = true;
+        persistRecQuality();  // guarda la calidad de grabación para el director
         await nextTick();
         // Try several times to attach the local video — the <video> ref might
         // not be mounted on the very first tick depending on render timing.
@@ -3517,9 +4001,19 @@ var GuestStudioView = {
       window.location.href = "/";
     }
 
-    onMounted(function () { loadSounds(); });
+    onMounted(function () {
+      loadSounds();
+      startGuestPreflight();
+      // Subida interrumpida en una visita anterior: recuperarla.
+      recoverPendingUpload(props.joinData.session_id, props.inviteToken, "video").then(function (ok) {
+        if (ok && window.toast) window.toast({ type: "success", text: "Se recuperó y subió una grabación pendiente" });
+      });
+    });
     onBeforeUnmount(function () {
       if (timerHandle) clearInterval(timerHandle);
+      stopGuestPreflight();
+      if (_roomCamTrack) { try { _roomCamTrack.stop(); } catch (_) {} _roomCamTrack = null; }
+      if (_fullResCamTrack) { try { _fullResCamTrack.stop(); } catch (_) {} _fullResCamTrack = null; }
       if (_recStream) {
         _recStream.getTracks().forEach(function (t) { t.stop(); });
         _recStream = null;
@@ -3538,6 +4032,8 @@ var GuestStudioView = {
              chat: chat, chatInput: chatInput, sendChat: sendChat,
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
              countdown: countdown, myIdentity: myIdentity, practiceMode: practiceMode,
+             preflightVideoEl: preflightVideoEl, recPreflight: recPreflight,
+             recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB,
              uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
              postRecording: postRecording,
              activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
@@ -3560,7 +4056,7 @@ var GuestStudioView = {
         ⚠ GRABANDO SOLO AUDIO — tu cámara no está disponible
       </div>
       <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
-        Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados
+        Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados<span v-if="pendingMB > 0.5"> · falta {{ pendingMB.toFixed(1) }} MB</span>
       </div>
       <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
         ⚠ Conexión inestable — reintentando subida (tu grabación local sigue activa)
@@ -3568,8 +4064,8 @@ var GuestStudioView = {
       <div v-if="postRecording" style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);">
         <div v-if="uploadStatus.state === 'finalizing'" style="text-align:center;">
           <div style="font-size:48px;margin-bottom:16px;">⏳</div>
-          <h2 style="margin:0 0 8px;color:var(--paper);">Finalizando subida…</h2>
-          <p class="muted" style="font-size:14px;">No cierres esta pestaña. Tu grabación se está procesando.</p>
+          <h2 style="margin:0 0 8px;color:var(--paper);">Subiendo… falta {{ pendingMB.toFixed(1) }} MB</h2>
+          <p class="muted" style="font-size:14px;">No cierres esta pestaña. Tu grabación se está terminando de subir.</p>
         </div>
         <div v-else-if="uploadStatus.state === 'done'" style="text-align:center;">
           <div style="font-size:64px;margin-bottom:16px;">✓</div>
@@ -3590,9 +4086,22 @@ var GuestStudioView = {
           <div class="prejoin-card">
             <div class="prejoin-controls" style="text-align: center;">
               <h3 style="margin: 0 0 6px;">{{ joinData.display_name }}, listo para entrar</h3>
-              <p class="muted" style="margin: 0 0 18px; font-size: 12px;">
+              <p class="muted" style="margin: 0 0 12px; font-size: 12px;">
                 Activa cámara y micrófono para conectarte al estudio. Vas a poder probar todo antes de que empiecen a grabar.
               </p>
+              <video ref="preflightVideoEl" autoplay muted playsinline
+                     style="width: 100%; max-height: 220px; border-radius: 8px; background: #000; object-fit: cover; margin-bottom: 10px;"></video>
+              <div style="font-size: 12px; margin-bottom: 14px; min-height: 18px;">
+                <span v-if="recPreflight.state === 'testing'" class="muted">📶 Probando tu conexión y tu equipo (~5 s)…</span>
+                <template v-else-if="recPreflight.state === 'done'">
+                  ✓ Tu grabación irá en <strong>{{ recProfileG().quality }}</strong>
+                  <span class="muted" v-if="recPreflight.upMbps"> · subida {{ recPreflight.upMbps.toFixed(1) }} Mbps</span>
+                  <select v-model="recPreflight.choiceId" class="quality-pick" style="margin-left: 8px;"
+                          title="La prueba puso el máximo; puedes bajarla, no subirla.">
+                    <option v-for="p in recProfileChoices" :key="p.id" :value="p.id">REC {{ p.desc }}</option>
+                  </select>
+                </template>
+              </div>
               <button class="primary" @click="connect" style="width: 100%; padding: 14px;">
                 🎙 Activar cámara y entrar
               </button>
@@ -4226,7 +4735,7 @@ var DirectorView = {
               <div class="cr-p-name">{{ p.display_name }}\
                 <span v-if="readyMap[\'participant_\' + p.id]" style="color:var(--signal);font-size:9px;font-weight:700;margin-left:4px;">LISTO</span>\
               </div>\
-              <div class="cr-p-role">{{ p.role }}</div>\
+              <div class="cr-p-role">{{ p.role }}<span v-if="p.recording_quality" :title="\'Calidad de grabación local decidida por la prueba inicial\'"> · REC {{ p.recording_quality }}<template v-if="p.recording_bitrate"> @ {{ (p.recording_bitrate / 1000000).toFixed(1) }} Mbps</template></span></div>\
             </div>\
           </div>\
           <div class="cr-p-actions">\

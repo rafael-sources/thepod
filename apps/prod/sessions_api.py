@@ -117,6 +117,9 @@ def _serialize_participant(row):
     keys = row.keys()
     if "source_rsvp_url" in keys:
         d["source_rsvp_url"] = row["source_rsvp_url"]
+    if "recording_quality" in keys:
+        d["recording_quality"] = row["recording_quality"]
+        d["recording_bitrate"] = row["recording_bitrate"]
     return d
 
 

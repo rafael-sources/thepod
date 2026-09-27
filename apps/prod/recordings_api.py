@@ -328,12 +328,38 @@ def stream_recording_chunk(sid):
 
         chunk = request.files.get("chunk")
         if chunk:
-            with open(str(streaming_path), "ab") as out:
-                while True:
-                    buf = chunk.stream.read(65536)
-                    if not buf:
-                        break
-                    out.write(buf)
+            offset_raw = request.form.get("offset")
+            if offset_raw is None:
+                # Sin offset: comportamiento histórico (append ciego).
+                with open(str(streaming_path), "ab") as out:
+                    while True:
+                        buf = chunk.stream.read(65536)
+                        if not buf:
+                            break
+                        out.write(buf)
+            else:
+                # Subida segura por partes: el cliente dice en qué byte
+                # empieza este chunk. Así un reintento nunca duplica datos
+                # y un hueco se detecta con 409 en vez de corromper el archivo.
+                try:
+                    offset = int(offset_raw)
+                except ValueError:
+                    return jsonify({"error": "offset inválido"}), 400
+                cur_size = streaming_path.stat().st_size if streaming_path.exists() else 0
+                if offset > cur_size:
+                    return jsonify({"error": "faltan bytes anteriores",
+                                    "bytes_received": cur_size}), 409
+                data = chunk.stream.read()
+                if offset < cur_size and cur_size >= offset + len(data):
+                    pass  # chunk repetido completo: ignorar
+                else:
+                    # offset == cur_size (caso normal) o el final del archivo
+                    # quedó a medias por un request cortado: truncar al offset
+                    # y volver a escribir el chunk completo.
+                    with open(str(streaming_path), "r+b" if streaming_path.exists() else "wb") as out:
+                        out.truncate(offset)
+                        out.seek(offset)
+                        out.write(data)
 
         if finalize:
             if not streaming_path.exists():
@@ -387,6 +413,81 @@ def stream_recording_chunk(sid):
 
         size = streaming_path.stat().st_size if streaming_path.exists() else 0
         return jsonify({"ok": True, "bytes_received": size})
+    finally:
+        db.close()
+
+
+def _resolve_participant(db, sid, token):
+    """Participante por invite token, o por username de la sesión iniciada.
+    El mismo esquema de autorización que el streaming de chunks."""
+    p = None
+    if token:
+        p = db.execute(
+            "SELECT id FROM participants WHERE session_id=? AND invite_token=?",
+            (sid, token),
+        ).fetchone()
+    if not p:
+        username = current_user()
+        if username:
+            p = db.execute(
+                "SELECT id FROM participants WHERE session_id=? AND username=?",
+                (sid, username),
+            ).fetchone()
+    return p
+
+
+@bp.post("/api/net-test")
+def net_test():
+    """Recibe un blob de prueba y lo descarta: el cliente mide Mbps de subida
+    cronometrando este POST. Autoriza cualquier usuario con sesión o cualquier
+    invite token válido."""
+    authorized = current_user() is not None
+    token = request.args.get("token")
+    if not authorized and token:
+        db = get_db()
+        try:
+            authorized = db.execute(
+                "SELECT 1 FROM participants WHERE invite_token=?", (token,)
+            ).fetchone() is not None
+        finally:
+            db.close()
+    if not authorized:
+        return jsonify({"error": "no autorizado"}), 401
+    if (request.content_length or 0) > 8 * 1024 * 1024:
+        return jsonify({"error": "blob de prueba demasiado grande"}), 413
+    data = request.get_data(cache=False)
+    return jsonify({"ok": True, "bytes": len(data)})
+
+
+@bp.post("/api/sessions/<int:sid>/recording-quality")
+def set_recording_quality(sid):
+    """Guarda la calidad de grabación local que decidió la prueba inicial,
+    para mostrarla en el Control Room del director."""
+    db = get_db()
+    try:
+        sess = db.execute("SELECT id FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+        body = request.get_json(silent=True) or {}
+        token = request.args.get("token") or body.get("token")
+        p = _resolve_participant(db, sid, token)
+        if not p:
+            return jsonify({"error": "no autorizado"}), 401
+        quality = (body.get("quality") or "").strip()
+        if quality not in ("1080p", "720p"):
+            return jsonify({"error": "quality debe ser 1080p o 720p"}), 400
+        try:
+            bitrate = int(body.get("bitrate") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "bitrate inválido"}), 400
+        if not (500_000 <= bitrate <= 20_000_000):
+            return jsonify({"error": "bitrate fuera de rango"}), 400
+        db.execute(
+            "UPDATE participants SET recording_quality=?, recording_bitrate=? WHERE id=?",
+            (quality, bitrate, p["id"]),
+        )
+        db.commit()
+        return jsonify({"ok": True, "quality": quality, "bitrate": bitrate})
     finally:
         db.close()
 
