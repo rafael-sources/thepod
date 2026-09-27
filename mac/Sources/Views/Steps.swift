@@ -384,14 +384,25 @@ struct ReelsStep: View {
         HStack(alignment: .top, spacing: 20) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    StepHeader(title: "Reels, TikTok y Shorts", subtitle: "Encontramos los mejores momentos y los convertimos en videos verticales con subtítulos.")
-                    BigButton(title: session.project.reels.isEmpty ? "Buscar los mejores momentos" : "Buscar de nuevo",
-                              symbol: "sparkles", disabled: session.isBusy) { session.suggestReels() }
-                    if let note = session.reelsNote {
-                        Text(note).font(.caption).foregroundStyle(Theme.secondary)
-                    } else if Keychain.apiKey == nil {
-                        Text("Consejo: con tu clave de Claude (Ajustes) la IA elige los momentos más virales. Sin clave usamos un análisis automático.")
-                            .font(.caption).foregroundStyle(Theme.secondary)
+                    StepHeader(title: "Reels, TikTok y Shorts", subtitle: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos.")
+                    if session.project.moments.isEmpty && session.project.reels.isEmpty {
+                        Card {
+                            Label("Este episodio no tiene momentos marcados", systemImage: "bookmark.slash").font(.headline)
+                            Text("Marca los momentos en postPod (tecla M) y vuelve a exportar el paquete, o agrega uno aquí: pon el video donde empieza y toca el botón.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    } else if !session.project.moments.isEmpty {
+                        HStack {
+                            Label("\(session.project.moments.count) momentos de postPod", systemImage: "bookmark.fill")
+                                .foregroundStyle(Theme.accent)
+                            Spacer()
+                            Button("Restaurar desde los momentos") {
+                                session.project.reels = session.project.reelsFromMoments()
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Vuelve a crear los reels tal como vienen de postPod")
+                        }
+                        .font(.callout)
                     }
                     ForEach($session.project.reels) { $reel in
                         ReelCard(reel: $reel, isPreviewing: previewing == reel.id, duration: session.project.duration) {
@@ -403,13 +414,14 @@ struct ReelsStep: View {
                             session.project.reels.removeAll { $0.id == reel.id }
                         }
                     }
+                    Button {
+                        let t = session.player.currentTime().seconds
+                        let start = session.built.map { EditEngine.toTimeline(t, keep: $0.keep) } ?? 0
+                        session.project.reels.append(Reel(title: "Momento \(session.project.reels.count + 1)",
+                                                          start: start, end: min(session.project.duration, start + 60)))
+                    } label: { Label("Agregar un momento desde donde está el video", systemImage: "plus") }
+                        .buttonStyle(.borderless)
                     if !session.project.reels.isEmpty {
-                        Button {
-                            let t = session.player.currentTime().seconds
-                            let start = session.built.map { EditEngine.toTimeline(t, keep: $0.keep) } ?? 0
-                            session.project.reels.append(Reel(title: "Mi momento", start: start, end: min(session.project.duration, start + 45)))
-                        } label: { Label("Agregar un reel desde donde está el video", systemImage: "plus") }
-                            .buttonStyle(.borderless)
                         let n = session.project.reels.filter(\.selected).count
                         BigButton(title: "Exportar \(n) \(n == 1 ? "reel" : "reels")", symbol: "square.and.arrow.up",
                                   disabled: n == 0 || session.isBusy) { session.exportReels() }
@@ -468,7 +480,17 @@ struct ReelCard: View {
                     timeStepper(value: $reel.start, label: "Empieza")
                     Text("→").foregroundStyle(Theme.secondary)
                     timeStepper(value: $reel.end, label: "Termina")
-                    Text("· \(Int(reel.length)) s").font(.caption).foregroundStyle(reel.length > 90 ? .orange : Theme.secondary)
+                    Text("· \(EditEngine.clock(reel.length))").font(.caption).foregroundStyle(reel.length > 90 ? .orange : Theme.secondary)
+                }
+                HStack(spacing: 6) {
+                    Text("Duración:").font(.caption).foregroundStyle(Theme.secondary)
+                    ForEach([30.0, 60.0, 90.0], id: \.self) { secs in
+                        Button("\(Int(secs)) s") { reel.end = min(duration, reel.start + secs) }
+                            .buttonStyle(.bordered).controlSize(.mini)
+                    }
+                    if reel.length > 90 {
+                        Text("Muy largo para reels").font(.caption2).foregroundStyle(.orange)
+                    }
                 }
                 if let file = reel.exportedFile {
                     Label(file, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.good).lineLimit(1)
@@ -595,23 +617,10 @@ struct ExportStep: View {
 // MARK: - Settings
 
 struct SettingsView: View {
-    @State private var apiKey = Keychain.apiKey ?? ""
-    @AppStorage("claudeModel") private var claudeModel = "claude-sonnet-5"
     @AppStorage("whisperModel") private var whisperModel = Transcriber.defaultModel
-    @State private var saved = false
 
     var body: some View {
         Form {
-            Section("Claude (para elegir reels con IA)") {
-                SecureField("Clave de API de Anthropic", text: $apiKey)
-                TextField("Modelo", text: $claudeModel)
-                HStack {
-                    Button("Guardar clave") { Keychain.apiKey = apiKey; saved = true }
-                    if saved { Text("Guardada en el llavero").font(.caption).foregroundStyle(Theme.good) }
-                }
-                Text("La clave se guarda en el llavero de macOS. Solo se envía la transcripción (texto), nunca el audio ni el video.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
             Section("Transcripción (en tu Mac)") {
                 Picker("Modelo de voz", selection: $whisperModel) {
                     Text("Preciso (recomendado, ~600 MB)").tag(Transcriber.defaultModel)

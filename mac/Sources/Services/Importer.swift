@@ -249,6 +249,15 @@ enum Importer {
             }
         }
 
+        // Moments (marked in postPod / prodPod chapters) → reels
+        if db.tableExists("moments") {
+            project.moments = try db.query("SELECT * FROM moments ORDER BY timeline_seconds, id").compactMap { r in
+                guard let id = r.int("id"), let t = r.double("timeline_seconds") else { return nil }
+                return Moment(id: id, time: t, duration: r.double("duration_seconds"), label: r.string("label") ?? "")
+            }
+            project.reels = project.reelsFromMoments()
+        }
+
         // Subtitle style
         if db.tableExists("subtitle_styles"), let r = try db.query("SELECT * FROM subtitle_styles ORDER BY id LIMIT 1").first {
             var st = CaptionStyle()

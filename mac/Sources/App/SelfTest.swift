@@ -47,7 +47,12 @@ enum SelfTest {
                 try await session.performFix()
                 log(session.fixSummary ?? "fix sin resumen")
                 log("Palabras: \(session.project.words.count), cortes: \(session.project.cuts.count)")
-                try await session.performSuggest()
+                if session.project.reels.isEmpty {
+                    session.project.reels = session.project.reelsFromMoments()
+                }
+                if session.project.reels.isEmpty {   // no moments marked: test with one manual reel
+                    session.project.reels = [Reel(title: "Prueba", start: 60, end: min(session.project.duration, 105))]
+                }
                 log("Reels: " + session.project.reels.map { "\(EditEngine.clock($0.start))-\(EditEngine.clock($0.end)) \($0.title)" }.joined(separator: " | "))
                 var outputs: [String] = []
                 if !skipLandscape {

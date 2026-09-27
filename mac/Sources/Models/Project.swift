@@ -33,6 +33,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
 
+    var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
     var reels: [Reel] = []
     var aiSummary: String?
 
@@ -290,6 +291,63 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
         case .vertical: return "vertical"
         case .square: return "cuadrado"
         case .audio: return "audio"
+        }
+    }
+}
+
+/// A moment marked in postPod (or prodPod chapters). Point moments have no duration.
+struct Moment: Codable, Identifiable, Equatable {
+    var id: Int
+    var time: Double                    // timeline seconds
+    var duration: Double?
+    var label: String
+}
+
+extension Project {
+    /// Tolerant decoding: projects saved by older versions keep opening when new fields appear.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        podcastName = try c.decodeIfPresent(String.self, forKey: .podcastName)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        importedFrom = try c.decodeIfPresent(String.self, forKey: .importedFrom) ?? "tracks"
+        media = try c.decodeIfPresent([SourceMedia].self, forKey: .media) ?? []
+        lanes = try c.decodeIfPresent([Lane].self, forKey: .lanes) ?? []
+        audioLane = try c.decodeIfPresent([AudioLaneClip].self, forKey: .audioLane) ?? []
+        participants = try c.decodeIfPresent([Participant].self, forKey: .participants) ?? []
+        language = try c.decodeIfPresent(String.self, forKey: .language) ?? "es"
+        words = try c.decodeIfPresent([Word].self, forKey: .words) ?? []
+        transcribedLanes = try c.decodeIfPresent([Int].self, forKey: .transcribedLanes) ?? []
+        cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
+        fix = try c.decodeIfPresent(FixSettings.self, forKey: .fix) ?? FixSettings()
+        enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? false
+        captionStyle = try c.decodeIfPresent(CaptionStyle.self, forKey: .captionStyle) ?? CaptionStyle()
+        layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
+        reelLayout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .reelLayout) ?? .auto
+        showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
+        showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
+        laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]
+        moments = try c.decodeIfPresent([Moment].self, forKey: .moments) ?? []
+        reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
+        aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
+        logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
+        backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
+    }
+
+    /// Same rule as postPod web (exportMoment): the moment's own duration, or until the next moment.
+    func reelsFromMoments() -> [Reel] {
+        let sorted = moments.sorted { $0.time < $1.time }
+        return sorted.enumerated().compactMap { (i, m) in
+            let start = max(0, m.time)
+            var end: Double
+            if let d = m.duration, d > 0 { end = start + d }
+            else { end = i + 1 < sorted.count ? sorted[i + 1].time : duration }
+            end = min(end, duration)
+            guard end > start + 1 else { return nil }
+            let title = m.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            return Reel(title: title.isEmpty ? "Momento \(i + 1)" : title,
+                        reason: "Momento marcado en postPod", start: start, end: end)
         }
     }
 }
