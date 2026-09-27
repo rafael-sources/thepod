@@ -93,6 +93,48 @@ sudo systemctl enable --now prepod.service
 
 Auth: cookie firmada `podpod_session` (`@require_auth`) para casi todo; landing, RSS y RSVP son públicos; los webhooks entre apps usan el header `X-PodPod-Secret`.
 
+## API para postPod de Mac (`/api/mac`)
+
+Permite que la app de escritorio publique un episodio terminado usando la
+configuración ya existente en prePod (hosting VPS + feed RSS y YouTube OAuth).
+Autenticación: la misma sesión de `POST /api/auth/login` (cookie `podpod_session`).
+
+### Subida por partes (archivos de 100 MB a varios GB)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/mac/uploads` | `{filename, size}` → `{upload_id}`. También limpia uploads abandonados (> 24 h). |
+| PUT | `/api/mac/uploads/<upload_id>/chunk?index=N` | Cuerpo binario ≤ 16 MB → `{ok, received}`. Secuencial: `index` debe ser el siguiente esperado (409 si no). |
+| POST | `/api/mac/uploads/<upload_id>/finish` | Verifica que el tamaño recibido coincida con `size` → `{ok, size}`. |
+
+### Publicación
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/mac/publish/audio` | `{slug, episode_id, upload_id}` → `{job_id}` (202). Sube el audio a VPS con el nombre `ep{NNN}-{slug}.mp3` y marca el episodio como `published` (entra al feed RSS de Spotify/Apple). Devuelve 409 si el upload ya está siendo publicado. |
+| POST | `/api/mac/publish/youtube` | `{slug, episode_id, upload_id, title, description?, privacy?}` (`privacy`: `public`/`unlisted`/`private`) → `{job_id}` (202). Sube el video con los tokens OAuth del podcast y guarda la URL en `episode_links`. Devuelve 409 si el upload ya está siendo publicado. |
+| GET | `/api/mac/jobs/<job_id>` | `{status: queued\|running\|done\|error, progress: 0–1, result, error}`. Los jobs viven en memoria: se pierden al reiniciar el servicio. |
+| GET | `/api/mac/podcasts/<slug>/publish-status?episode_id=N` | `{feed_url, hosting_configured, distribution: [...], youtube: {connected, channel_name}, episode: {title, number, status, media_url, links}}`. |
+
+### nginx (servidor del dominio de prePod)
+
+Los chunks pesan hasta 16 MB; nginx debe permitirlos. En el `server {}` del
+dominio de prePod añade (o verifica) un `location` específico:
+
+```nginx
+location /api/mac/ {
+    client_max_body_size 20M;
+    proxy_pass http://127.0.0.1:5001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 300s;
+}
+```
+
+Verificación rápida en el servidor: `grep -rn "client_max_body_size" /etc/nginx/`
+(si el valor global ya es ≥ 20M, no hace falta el location).
+
 ## Ecosistema thePod
 
 ```
