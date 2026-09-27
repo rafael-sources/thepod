@@ -30,6 +30,7 @@ actor ProdPodClient {
         var role: String
         var status: String?
         var invite_url: String?
+        var recording_quality: String?
         var roleTitle: String {
             ["host": "Conductor", "co-host": "Conductor", "guest": "Invitado", "director": "Director"][role] ?? role
         }
@@ -92,6 +93,70 @@ actor ProdPodClient {
         }
         _ = try await send("POST", "/api/auth/login", json: ["username": PrePodClient.username, "password": pw], retry: false)
         loggedIn = true
+    }
+
+    /// Formulario con un archivo (para la subida por partes). Devuelve el código y la respuesta.
+    func multipart(_ path: String, fields: [String: String], fileField: String?, fileName: String, fileData: Data?,
+                   retry: Bool = true) async throws -> (Int, [String: Any]) {
+        if !loggedIn { try await login() }
+        let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: "La dirección de prodPod no es válida") }
+        let boundary = "thepod-\(UUID().uuidString)"
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (k, v) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n") }
+        if let fileField, let fileData {
+            add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(fileName)\"\r\n")
+            add("Content-Type: application/octet-stream\r\n\r\n")
+            body.append(fileData)
+            add("\r\n")
+        }
+        add("--\(boundary)--\r\n")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 180
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if !cookies.isEmpty { req.setValue(cookies.map { "\($0.key)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie") }
+        let (data, resp) = try await session.upload(for: req, from: body)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if code == 401, retry {
+            loggedIn = false
+            return try await multipart(path, fields: fields, fileField: fileField, fileName: fileName, fileData: fileData, retry: false)
+        }
+        let obj = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        return (code, obj)
+    }
+
+    /// POST con JSON; devuelve la respuesta como diccionario.
+    @discardableResult
+    func postJSON(_ path: String, _ json: [String: Any] = [:]) async throws -> [String: Any] {
+        let d = try await send("POST", path, json: json)
+        return (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
+    }
+
+    func get(_ path: String) async throws -> Data { try await send("GET", path) }
+
+    @discardableResult
+    func send(method: String, path: String, json: [String: Any]? = nil) async throws -> Data {
+        try await send(method, path, json: json)
+    }
+
+    /// Mide la subida: manda 2.5 MB que el servidor descarta. Devuelve Mbps.
+    func uploadTest() async throws -> Double {
+        if !loggedIn { try await login() }
+        let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        var req = URLRequest(url: URL(string: base + "/api/net-test")!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        if !cookies.isEmpty { req.setValue(cookies.map { "\($0.key)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie") }
+        var blob = Data(count: 2_500_000)
+        blob.withUnsafeMutableBytes { p in arc4random_buf(p.baseAddress!, p.count) }
+        let t0 = Date()
+        let (_, resp) = try await session.upload(for: req, from: blob)
+        let secs = Date().timeIntervalSince(t0)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200, secs > 0 else { throw PrePodClient.Failure(message: "No se pudo medir la subida") }
+        return Double(blob.count * 8) / secs / 1_000_000
     }
 
     func sessions() async throws -> [Session] {

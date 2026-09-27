@@ -27,7 +27,10 @@ final class AppModel: ObservableObject {
     @Published var introDone = SelfTest.isRequested || !UserDefaults.standard.bool(forKey: "introAlAbrir", default: true)
     private var importTask: Task<Void, Never>?
 
-    init() { reload() }
+    init() {
+        reload()
+        if !SelfTest.isRequested { Task { await ChunkUploader.shared.resumeAll() } }   // subidas de prod que quedaron a medias
+    }
 
     func reload() { projects = ProjectStore.listProjects() }
 

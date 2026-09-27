@@ -16,6 +16,17 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         set { lock.withLock { _sink = newValue } }
     }
     private var _sink: BufferCapturer?
+    /// Grabación de prod: recibe la cámara completa y, con audífonos, el micrófono directo.
+    var recorder: FragmentRecorder? {
+        get { lock.withLock { _recorder } }
+        set { lock.withLock { _recorder = newValue } }
+    }
+    private var _recorder: FragmentRecorder?
+    var recordRawAudio: Bool {
+        get { lock.withLock { _recordRawAudio } }
+        set { lock.withLock { _recordRawAudio = newValue } }
+    }
+    private var _recordRawAudio = true
     private var transfer: VTPixelTransferSession?
     private var pool: CVPixelBufferPool?
     private var writer: AVAssetWriter?
@@ -147,7 +158,13 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
             }
         }
         let sink = _sink
+        let rec = _recorder
+        let rawAudio = _recordRawAudio
         lock.unlock()
+
+        if let rec {
+            if isVideo { rec.appendVideo(sampleBuffer) } else if rawAudio { rec.appendAudio(sampleBuffer) }
+        }
 
         guard isVideo, let sink, let src = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         if let small = scaled(src) {

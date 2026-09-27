@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import AVFoundation
 
 /// Headless end-to-end run used for development:
 ///   postPod.app/Contents/MacOS/postPod --selftest <file-or-zip> [more files…]
@@ -9,7 +10,7 @@ import AppKit
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -104,6 +105,57 @@ enum SelfTest {
         }
     }
 
+    /// Graba 6 s de imagen sintética en MP4 por fragmentos y lo sube por partes a una sala de prueba.
+    @MainActor
+    static func recTest(_ sid: Int) {
+        Task { @MainActor in
+            let rec = FragmentRecorder()
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("rec-test-\(sid).mp4")
+            do { try rec.start(to: url, quality: RecordingQuality(height: 1080, bitrate: 5_000_000)) }
+            catch { print("ERROR start \(error)"); exit(1) }
+            await ChunkUploader.shared.setProgress { f, sent, total, done, msg in
+                print("subida \(sent)/\(total) \(done ? "LISTA" : "") \(msg ?? "")"); fflush(stdout)
+            }
+            await ChunkUploader.shared.begin(sessionId: sid, file: url)
+            var pool: CVPixelBufferPool?
+            CVPixelBufferPoolCreate(nil, nil, [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                                               kCVPixelBufferWidthKey as String: 1920, kCVPixelBufferHeightKey as String: 1080,
+                                               kCVPixelBufferIOSurfacePropertiesKey as String: [:]] as CFDictionary, &pool)
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+            let clock = CMClockGetHostTimeClock()
+            for i in 0..<180 {
+                var pb: CVPixelBuffer?
+                CVPixelBufferPoolCreatePixelBuffer(nil, pool!, &pb)
+                if let pb {
+                    CVPixelBufferLockBaseAddress(pb, [])
+                    memset(CVPixelBufferGetBaseAddress(pb), Int32((i * 3) % 255), CVPixelBufferGetDataSize(pb))
+                    CVPixelBufferUnlockBaseAddress(pb, [])
+                    var desc: CMVideoFormatDescription?
+                    CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pb, formatDescriptionOut: &desc)
+                    var t = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 30), presentationTimeStamp: CMClockGetTime(clock), decodeTimeStamp: .invalid)
+                    var sb: CMSampleBuffer?
+                    CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pb, formatDescription: desc!, sampleTiming: &t, sampleBufferOut: &sb)
+                    if let sb { rec.appendVideo(sb) }
+                }
+                let ab = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1600)!
+                ab.frameLength = 1600
+                if let d = ab.floatChannelData { for k in 0..<1600 { d[0][k] = 0.2 * sinf(Float(i * 1600 + k) * 0.0575) } }
+                let pts = CMTimeSubtract(CMClockGetTime(clock), CMTime(seconds: 1600.0 / 48000, preferredTimescale: 48000))
+                if let asb = PCM.sampleBuffer(ab, at: pts) { rec.appendAudio(asb) }
+                try? await Task.sleep(nanoseconds: 33_000_000)
+            }
+            await rec.finish()
+            print("local: \(rec.bytesWritten) bytes, \(String(format: "%.2f", rec.duration)) s → \(url.path)")
+            await ChunkUploader.shared.markDone(file: url, duration: rec.duration)
+            for _ in 0..<60 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if await ChunkUploader.shared.pending().isEmpty { break }
+            }
+            print(await ChunkUploader.shared.pending().isEmpty ? "OK subida finalizada" : "ERROR la subida no terminó")
+            fflush(stdout); exit(0)
+        }
+    }
+
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
     @MainActor
     static func prepodTest() {
@@ -182,6 +234,10 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--prod-snapshot"), args.count > i + 1 {
             let dir = URL(fileURLWithPath: args[i + 1])
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { prodSnapshot(dir) }
+            return
+        }
+        if let i = args.firstIndex(of: "--rec-test"), args.count > i + 1, let sid = Int(args[i + 1]) {
+            recTest(sid)
             return
         }
         if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod

@@ -20,7 +20,7 @@ struct ProdHomeView: View {
             }
         }
         .tint(.prodPod)
-        .onAppear { load() }
+        .onAppear { load(); Task { await ChunkUploader.shared.resumeAll() } }
         .onChange(of: app.prodRequest) { _, _ in load() }
     }
 
@@ -252,6 +252,22 @@ struct StudioView: View {
                         Text("Es cómo te ven los demás. Si tu internet es lento, baja la calidad.")
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
+                    Card {
+                        Label("Calidad de tu grabación", systemImage: "record.circle").font(.headline)
+                        if let p = studio.preflight {
+                            HStack(spacing: 6) {
+                                if studio.uploadMbps == nil && p.hasPrefix("Midiendo") { ProgressView().controlSize(.small) }
+                                else { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.good) }
+                                Text(p).font(.callout)
+                            }
+                        }
+                        Picker("Calidad", selection: $studio.recQuality) {
+                            ForEach(studio.recChoices, id: \.title) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden()
+                        Text("Se graba en tu Mac y se sube mientras hablan. Puedes bajarla, no subirla por encima de lo que dio la prueba.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                    }
                     peopleCard(title: "Quién está invitado")
                     Button { studio.join() } label: {
                         Label(studio.phase == .joining ? "Entrando…" : "Entrar a la sala", systemImage: "record.circle")
@@ -283,13 +299,16 @@ struct StudioView: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    HStack(spacing: 6) {
-                        Circle().fill(Color.prodPod).frame(width: 9, height: 9)
-                        Text("EN LA SALA").font(.caption.weight(.heavy)).foregroundStyle(Color.prodPod)
-                    }
+                    statusBadge
                     Text(studio.session.title).font(.headline).lineLimit(1)
                     Spacer()
-                    Text(clock(studio.elapsed)).font(.title3.monospacedDigit()).foregroundStyle(Theme.secondary)
+                    if studio.isOwner && !studio.recording && (!studio.sessionEnded || studio.practice) {
+                        Toggle("Ensayo", isOn: Binding(get: { studio.practice }, set: { _ in studio.togglePractice() }))
+                            .toggleStyle(.checkbox)
+                            .help("Practicar sin guardar: se graba solo en tu Mac y no se sube")
+                    }
+                    Text(clock(studio.recording ? studio.recSeconds : studio.elapsed)).font(.title3.monospacedDigit())
+                        .foregroundStyle(studio.recording ? Color.prodPod : Theme.secondary)
                     Picker("", selection: $studio.layout) {
                         Image(systemName: "person.crop.rectangle").tag(ProdStudio.Layout.speaker)
                         Image(systemName: "square.grid.2x2").tag(ProdStudio.Layout.grid)
@@ -304,8 +323,12 @@ struct StudioView: View {
                 }
                 .padding(.horizontal, 20)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay { countdownOverlay }
+                .overlay(alignment: .top) { banners }
 
                 HStack(spacing: 14) {
+                    recordControls
+                    Spacer().frame(width: 10)
                     RoundButton(on: studio.micOn, onSymbol: "mic.fill", offSymbol: "mic.slash.fill", big: true) { studio.toggleMic() }
                         .help(studio.micOn ? "Silenciar micrófono" : "Activar micrófono")
                     RoundButton(on: studio.camOn, onSymbol: "video.fill", offSymbol: "video.slash.fill", big: true) { studio.toggleCam() }
@@ -320,6 +343,9 @@ struct StudioView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    recordingCard
+                    if !studio.sounds.isEmpty { soundboard }
+                    if !studio.sponsors.isEmpty { sponsorsCard }
                     peopleCard(title: "Personas")
                     Card {
                         Label("Invitar a alguien más", systemImage: "person.badge.plus").font(.headline)
@@ -332,8 +358,157 @@ struct StudioView: View {
                 }
                 .padding(18)
             }
-            .frame(width: 300)
+            .frame(width: 320)
             .background(Color.black.opacity(0.25))
+        }
+    }
+
+    // MARK: Grabación
+
+    private var statusBadge: some View {
+        let (text, color): (String, Color) = {
+            if studio.recording { return (studio.practice ? "ENSAYO" : "GRABANDO", studio.practice ? .yellow : .prodPod) }
+            if studio.countdown != nil { return ("PREPARADOS", .orange) }
+            if studio.sessionEnded { return ("GRABACIÓN TERMINADA", Theme.good) }
+            return ("EN LA SALA", Theme.secondary)
+        }()
+        return HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 9, height: 9)
+                .opacity(studio.recording && studio.recSeconds % 2 == 0 ? 0.35 : 1)
+            Text(text).font(.caption.weight(.heavy)).foregroundStyle(color)
+        }
+    }
+
+    @ViewBuilder private var recordControls: some View {
+        if studio.recording {
+            if studio.isOwner {
+                Button { studio.stopRecording() } label: {
+                    Label("Detener", systemImage: "stop.fill").font(.headline).padding(.horizontal, 8).padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent).tint(.prodPod).controlSize(.large)
+            }
+            if !studio.practice {
+                Button { studio.markMoment() } label: {
+                    Label("Marcar momento", systemImage: "mappin.and.ellipse").padding(.vertical, 6)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
+                .help("Marca este momento: en post aparece como capítulo y sirve para hacer un reel")
+            }
+        } else if !studio.sessionEnded || studio.practice {
+            Button { studio.toggleReady() } label: {
+                Label(studio.ownReady ? "Preparado" : "Prepararme", systemImage: studio.ownReady ? "checkmark.circle.fill" : "circle")
+                    .font(.headline).padding(.horizontal, 8).padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent).tint(studio.ownReady ? Theme.good : .gray).controlSize(.large)
+            .disabled(studio.countdown != nil)
+            .help(studio.directorPresent ? "El director empieza la grabación cuando todos los conductores estén preparados"
+                                         : "Cuando todos estén preparados empieza la cuenta regresiva")
+        }
+    }
+
+    @ViewBuilder private var countdownOverlay: some View {
+        if let c = studio.countdown {
+            Text(c > 0 ? "\(c)" : "¡Grabando!")
+                .font(.system(size: c > 0 ? 120 : 56, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(40)
+                .background(Circle().fill(Color.prodPod.opacity(0.85)).frame(width: 240, height: 240))
+                .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder private var banners: some View {
+        VStack(spacing: 8) {
+            if let c = studio.cue {
+                Label(c, systemImage: "megaphone.fill")
+                    .font(.title3.weight(.heavy)).padding(.horizontal, 18).padding(.vertical, 10)
+                    .background(Capsule().fill(Color.orange)).foregroundStyle(.black)
+            }
+            if let s = studio.sponsorAlert {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Sponsor: \(s.name)", systemImage: "star.fill").font(.headline)
+                    if !s.copy.isEmpty { Text(s.copy).font(.title3) }
+                }
+                .padding(16).frame(maxWidth: 640, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color.purple.opacity(0.9)))
+            }
+        }
+        .padding(.top, 10)
+        .animation(.easeOut(duration: 0.2), value: studio.cue)
+    }
+
+    private var recordingCard: some View {
+        Card {
+            Label("Grabación", systemImage: "record.circle").font(.headline)
+            Text("Tu pista: \(studio.recQuality.title)").font(.caption).foregroundStyle(Theme.secondary)
+            Text(studio.headphones ? "Con audífonos: se graba tu micrófono directo." : "Con parlantes: se graba tu voz sin eco.")
+                .font(.caption).foregroundStyle(studio.headphones ? Theme.good : .orange)
+            if let u = studio.myUpload {
+                let mb = Double(u.bytes) / 1_048_576
+                let total = Double(max(u.total, u.bytes)) / 1_048_576
+                VStack(alignment: .leading, spacing: 4) {
+                    if u.state == "done" {
+                        Label("Tu pista ya está en prodPod (\(String(format: "%.0f", mb)) MB)", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.good)
+                    } else {
+                        Text(u.message ?? (studio.recording ? "Subiendo mientras grabas · \(String(format: "%.0f", mb)) MB"
+                                                            : "Subiendo… falta \(String(format: "%.0f", max(0, total - mb))) MB"))
+                            .foregroundStyle(u.message == nil ? Theme.secondary : .orange)
+                        if total > 0 { ProgressView(value: min(1, mb / total)) }
+                    }
+                }
+                .font(.caption)
+            }
+            ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
+                let name = studio.people.first(where: { $0.id == id })?.name ?? "Otra persona"
+                Text("\(name): \(u.state == "done" ? "subida completa" : "subiendo \(u.bytes / 1_048_576) MB")")
+                    .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
+            }
+            if studio.canExport {
+                Button { studio.exportToPost() } label: {
+                    Label(studio.exporting ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent).disabled(studio.exporting)
+            } else if studio.sessionEnded && studio.directorPresent {
+                Text("El director envía a post cuando todas las pistas terminen de subir.").font(.caption).foregroundStyle(Theme.secondary)
+            }
+            if let e = studio.exportState { Text(e).font(.caption).foregroundStyle(Theme.good) }
+        }
+    }
+
+    private var soundboard: some View {
+        Card {
+            Label("Soundboard", systemImage: "speaker.wave.3.fill").font(.headline)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 6)], spacing: 6) {
+                ForEach(studio.sounds) { pad in
+                    Button { studio.trigger(pad, onlyMe: NSEvent.modifierFlags.contains(.option)) } label: {
+                        VStack(spacing: 2) {
+                            Text(pad.name).font(.caption.weight(.semibold)).lineLimit(1)
+                            if let k = pad.key { Text(k.uppercased()).font(.caption2.monospaced()).foregroundStyle(.white.opacity(0.7)) }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background(RoundedRectangle(cornerRadius: 8).fill((pad.color.map { Color(hex: $0) } ?? .gray).opacity(0.55)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Todos lo oyen. Con ⌥ suena solo para ti. También con su tecla.").font(.caption2).foregroundStyle(Theme.secondary)
+        }
+    }
+
+    private var sponsorsCard: some View {
+        Card {
+            Label("Sponsors", systemImage: "star").font(.headline)
+            ForEach(studio.sponsors) { s in
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(s.name).font(.callout.weight(.semibold))
+                        Text("a los \(studio.clock(Int(s.at)))").font(.caption).foregroundStyle(Theme.secondary)
+                    }
+                    Spacer()
+                    if studio.recording { Button("+90 s") { studio.delaySponsor(s) }.controlSize(.small) }
+                }
+            }
         }
     }
 
@@ -369,7 +544,9 @@ struct StudioView: View {
                     Avatar(name: p.display_name, size: 26)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(p.display_name).font(.callout.weight(.semibold))
-                        Text(p.roleTitle + (live.contains(p.display_name) ? " · en la sala" : "")).font(.caption)
+                        Text(p.roleTitle + (live.contains(p.display_name) ? " · en la sala" : "")
+                             + (studio.readyMap["participant_\(p.id)"] == true ? " · preparado" : "")
+                             + (p.recording_quality.map { " · \($0)" } ?? "")).font(.caption)
                             .foregroundStyle(live.contains(p.display_name) ? Theme.good : Theme.secondary)
                     }
                     Spacer()

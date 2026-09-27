@@ -76,6 +76,49 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var note: String?
     @Published var permissionDenied = false
 
+    // Grabación (etapa 2)
+    @Published var preflight: String?                 // "Midiendo tu conexión…" / resultado
+    @Published var uploadMbps: Double?
+    @Published var recMax = RecordingQuality(height: 1080, bitrate: 8_000_000)
+    @Published var recQuality = RecordingQuality(height: 1080, bitrate: 8_000_000)
+    @Published var ownReady = false
+    @Published var readyMap: [String: Bool] = [:]
+    @Published var countdown: Int?
+    @Published var recording = false
+    @Published var practice = false
+    @Published var sessionEnded = false
+    @Published var recSeconds = 0
+    @Published var myUpload: UploadState?
+    @Published var remoteUploads: [String: UploadState] = [:]
+    @Published var sounds: [Pad] = []
+    @Published var sponsors: [SponsorMark] = []
+    @Published var sponsorAlert: SponsorMark?
+    @Published var cue: String?
+    @Published var directorPresent = false
+    @Published var exportState: String?
+    @Published var exporting = false
+
+    struct UploadState: Equatable { var state: String; var bytes: Int64; var total: Int64 = 0; var message: String? }
+    struct Pad: Identifiable, Equatable {
+        let id: Int; let name: String; let filename: String; let key: String?; let color: String?; let url: String
+    }
+    struct SponsorMark: Identifiable, Equatable {
+        let id: Int; let name: String; let copy: String; var at: Double
+    }
+
+    var myIdentity = ""
+    var isOwner: Bool { session.created_by == PrePodClient.username }
+    let recorder = FragmentRecorder()
+    let voiceFeed = CleanVoiceFeed()
+    var recordFile: URL?
+    var recordStart = Date()
+    var countdownTimer: Timer?
+    var players: [String: AVAudioPlayer] = [:]
+    var triggerLog: [[String: Any]] = []
+    var firedSponsors: Set<Int> = []
+    var keyMonitor: Any?
+    var ifbOn = false
+
     let pipe = CameraPipe()
     private(set) var room: Room?
     private var videoTrack: LocalVideoTrack?
@@ -85,9 +128,13 @@ final class ProdStudio: NSObject, ObservableObject {
     private var joinedAt = Date()
     private var joined = false
 
+    /// La sala abierta ahora (para salir bien al cerrar la app).
+    static weak var current: ProdStudio?
+
     init(session: ProdPodClient.Session) {
         self.session = session
         super.init()
+        Self.current = self
     }
 
     // MARK: Pantalla previa
@@ -106,6 +153,7 @@ final class ProdStudio: NSObject, ObservableObject {
             restartCapture()
             startTicker()
             await loadParticipants()
+            await runPreflight()
         }
     }
 
@@ -142,6 +190,7 @@ final class ProdStudio: NSObject, ObservableObject {
                 if let mic = mics.first(where: { $0.uniqueID == micId }) { AVDevices.useForRoom(mic) }
                 let info = try await ProdPodClient.shared.join(session.id)
                 joined = true
+                myIdentity = "participant_\(info.participant_id)"
                 let room = Room(delegate: self)
                 self.room = room
                 try await room.connect(url: info.livekit_ws_url, token: info.livekit_token,
@@ -162,7 +211,9 @@ final class ProdStudio: NSObject, ObservableObject {
 
                 let pub = try await room.localParticipant.setMicrophone(enabled: true)
                 audioTrack = pub?.track as? LocalAudioTrack
+                audioTrack?.add(audioRenderer: voiceFeed)
                 if !micOn { try? await audioTrack?.mute() }
+                await afterJoin()
 
                 joinedAt = Date()
                 elapsed = 0
@@ -209,12 +260,15 @@ final class ProdStudio: NSObject, ObservableObject {
     }
 
     func leave() async {
+        if recording { await finishRecording(local: true) }
+        removeKeyMonitor()
         await disconnect()
         pipe.stop()
         timer?.invalidate(); timer = nil
     }
 
-    private func disconnect() async {
+    func disconnect() async {
+        if let a = audioTrack { a.remove(audioRenderer: voiceFeed) }
         pipe.sink = nil
         await room?.disconnect()
         room = nil
@@ -224,7 +278,7 @@ final class ProdStudio: NSObject, ObservableObject {
         if joined { await ProdPodClient.shared.leave(session.id); joined = false }
     }
 
-    private func flash(_ s: String) {
+    func flash(_ s: String) {
         note = s
         Task { try? await Task.sleep(nanoseconds: 2_500_000_000); if note == s { note = nil } }
     }
@@ -242,6 +296,7 @@ final class ProdStudio: NSObject, ObservableObject {
     private func tick() {
         ticks += 1
         micLevel = pipe.micLevel ?? -160
+        tickRecording()
         if ticks % 10 == 0 {
             headphones = AVDevices.headphonesLikely
             if phase == .inRoom { elapsed = Int(Date().timeIntervalSince(joinedAt)); refresh() }
@@ -284,14 +339,39 @@ final class ProdStudio: NSObject, ObservableObject {
 extension ProdStudio: RoomDelegate {
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
         let n = participant.name ?? "Alguien"
-        Task { @MainActor in self.flash("\(n) entró"); self.refresh(); await self.loadParticipants() }
+        let id = participant.identity?.stringValue ?? ""
+        Task { @MainActor in
+            if id.hasPrefix("director_") {
+                self.directorPresent = true
+                self.flash("El director está conectado")
+                if self.ownReady { self.send(["type": "ready_toggle", "identity": self.myIdentity, "ready": true]) }
+            } else {
+                self.flash("\(n) entró")
+            }
+            self.refresh(); await self.loadParticipants()
+        }
     }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
         let n = participant.name ?? "Alguien"
-        Task { @MainActor in self.flash("\(n) salió"); self.refresh() }
+        let id = participant.identity?.stringValue ?? ""
+        Task { @MainActor in
+            if id.hasPrefix("director_") { self.updateDirectorPresence() } else { self.flash("\(n) salió") }
+            self.readyMap[id] = nil
+            self.refresh()
+        }
+    }
+    nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+        let payload = SendableDict(obj)
+        Task { @MainActor in self.handle(payload.value) }
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        Task { @MainActor in self.refresh() }
+        let isDirector = participant.identity?.stringValue.hasPrefix("director_") ?? false
+        if isDirector, let a = publication.track as? RemoteAudioTrack { a.volume = 0 }   // solo se oye cuando habla al oído
+        Task { @MainActor in
+            if isDirector { self.applyIFB() }
+            self.refresh()
+        }
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor in self.refresh() }
