@@ -2528,3 +2528,21 @@ a.mark:hover { opacity: 0.8; }
 .ai-btn:hover { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); }
 .ai-btn:disabled { opacity: 0.4; cursor: default; }
 .ai-btn-primary { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); border-color: var(--accent, #89b4fa); font-weight: 600; }
+
+/* ── Subtitle word editor ──────────────────────────── */
+.word-edit-input {
+  font-size: 15px;
+  font-family: var(--font-ui);
+  background: var(--ink-raised);
+  color: var(--signal);
+  border: 1px solid var(--signal-dim);
+  border-radius: 3px;
+  padding: 1px 4px;
+  outline: none;
+}
+.t-word.is-edited {
+  color: var(--signal-cool);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}

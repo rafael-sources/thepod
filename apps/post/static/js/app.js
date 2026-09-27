@@ -3043,10 +3043,50 @@ var TranscriptEditor = {
       if (lastId) await restoreCut(lastId);
     }
 
+    /* ---------- inline word editing ---------- */
+
+    const editingWordIdx = ref(null);
+    const editingWordText = ref("");
+
+    function startEditWord(idx) {
+      editingWordIdx.value = idx;
+      editingWordText.value = transcript.value.words[idx].w;
+      nextTick(() => {
+        const inp = document.querySelector(".word-edit-input");
+        if (inp) inp.focus();
+      });
+    }
+
+    async function saveEditWord() {
+      const idx = editingWordIdx.value;
+      if (idx == null) return;
+      const newText = editingWordText.value.trim();
+      if (!newText || newText === transcript.value.words[idx].w) {
+        editingWordIdx.value = null;
+        return;
+      }
+      try {
+        await api(`/api/projects/${props.slug}/files/${selectedFileId.value}/captions/${encodeURIComponent(selectedLanguage.value)}/words`, {
+          method: "PATCH",
+          body: { edits: [{ index: idx, w: newText }] },
+        });
+        transcript.value.words[idx].w = newText;
+        transcript.value.words[idx]._edited = true;
+      } catch (e) {
+        console.error("Error saving word edit:", e);
+      }
+      editingWordIdx.value = null;
+    }
+
+    function cancelEditWord() {
+      editingWordIdx.value = null;
+    }
+
     /* ---------- keyboard ---------- */
 
     function onKey(ev) {
       if (!props.show) return;
+      if (editingWordIdx.value != null) return;
       // Delete or Backspace removes selection
       if ((ev.key === "Delete" || ev.key === "Backspace") && hasSelection.value) {
         ev.preventDefault();
@@ -3091,6 +3131,7 @@ var TranscriptEditor = {
       onWordMouseDown, onWordMouseEnter, clearSelection,
       deleteSelection, deleteAllFillers, restoreCut, restoreAll, loadTranscript,
       getCutIdForWord, undoLastCut,
+      editingWordIdx, editingWordText, startEditWord, saveEditWord, cancelEditWord,
     };
   },
   template: `
@@ -3130,7 +3171,7 @@ var TranscriptEditor = {
             <div class="spacer"></div>
 
             <span v-if="totalCutSeconds > 0" class="transcript-cut-counter">{{ totalCutSeconds.toFixed(1) }}s eliminados</span>
-            <span class="transcript-hint">Selecciona palabras y presiona Delete · Ctrl+Z deshace</span>
+            <span class="transcript-hint">Selecciona y Delete · Doble-click edita · Ctrl+Z deshace</span>
 
             <label style="display: flex; align-items: center; gap: 4px; font-size: 12px;">
               <input type="checkbox" v-model="showFillersOnly">
@@ -3143,21 +3184,33 @@ var TranscriptEditor = {
 
           <div class="transcript-words"
                style="flex: 1; overflow-y: auto; line-height: 1.9; font-size: 15px; user-select: none; padding: 8px; border: 1px solid var(--ink-line); border-radius: 6px; background: var(--ink-sunken);">
-            <span v-for="(w, i) in visibleWords" :key="i"
-                  class="t-word"
-                  :class="{
-                    'is-deleted': isWordDeleted(w),
-                    'is-filler': showFillersOnly && isFiller(w) && !isWordDeleted(w),
-                    'is-selected':
-                      selStart != null && selEnd != null &&
-                      i >= Math.min(selStart, selEnd) && i <= Math.max(selStart, selEnd),
-                  }"
-                  :title="fmtTs(w.s)"
-                  @mousedown="onWordMouseDown(i, $event)"
-                  @mouseenter="onWordMouseEnter(i)"
-                  style="cursor: pointer; padding: 1px 2px; border-radius: 3px;">
-              {{ w.w }}<span> </span>
-            </span>
+            <template v-for="(w, i) in visibleWords" :key="i">
+              <input v-if="editingWordIdx === i"
+                     type="text"
+                     v-model="editingWordText"
+                     @keydown.enter="saveEditWord"
+                     @keydown.escape="cancelEditWord"
+                     @blur="saveEditWord"
+                     class="word-edit-input"
+                     :style="{ width: Math.max(40, editingWordText.length * 9) + 'px' }">
+              <span v-else
+                    class="t-word"
+                    :class="{
+                      'is-deleted': isWordDeleted(w),
+                      'is-filler': showFillersOnly && isFiller(w) && !isWordDeleted(w),
+                      'is-selected':
+                        selStart != null && selEnd != null &&
+                        i >= Math.min(selStart, selEnd) && i <= Math.max(selStart, selEnd),
+                      'is-edited': w._edited,
+                    }"
+                    :title="fmtTs(w.s)"
+                    @mousedown="onWordMouseDown(i, $event)"
+                    @mouseenter="onWordMouseEnter(i)"
+                    @dblclick.stop="startEditWord(i)"
+                    style="cursor: pointer; padding: 1px 2px; border-radius: 3px;">
+                {{ w.w }}<span> </span>
+              </span>
+            </template>
           </div>
 
           <div v-if="cuts.length" class="muted" style="margin-top: 10px; max-height: 120px; overflow-y: auto; font-size: 12px;">
