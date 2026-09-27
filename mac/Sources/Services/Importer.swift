@@ -83,7 +83,8 @@ enum Importer {
                 let participant = Participant(id: laneId, name: person, role: laneId == 1 ? "host" : "guest", track: laneId)
                 project.participants.append(participant)
                 project.lanes.append(Lane(id: laneId, name: person, participantId: participant.id,
-                                          clips: [LaneClip(mediaId: media.id, srcIn: 0, srcOut: media.duration)]))
+                                          clips: [LaneClip(mediaId: media.id, srcIn: 0, srcOut: media.duration)],
+                                          offset: media.startOffset))
                 laneId += 1
             }
         }
@@ -182,7 +183,9 @@ enum Importer {
             }
             guard !clips.isEmpty else { continue }
             let media = converted[clips[0].mediaId]!
-            project.lanes.append(Lane(id: track, name: personName(from: media.originalName), participantId: nil, clips: clips))
+            let offset = clips.count == 1 && clips[0].srcIn == 0 ? media.startOffset : 0
+            project.lanes.append(Lane(id: track, name: personName(from: media.originalName), participantId: nil,
+                                      clips: clips, offset: offset))
         }
         project.audioLane = laneAudio.compactMap { a in
             guard let media = converted[a.mediaId] else { return nil }
@@ -312,11 +315,16 @@ enum Importer {
         let duration = try await FFmpeg.probeDuration(input)
         let hasVideo = isVideoExt ? await FFmpeg.hasStream("Video", in: input) : false
         let starts = await FFmpeg.streamStarts(input)
+        // Recordings that lost their head keep absolute timestamps. Instead of padding with black,
+        // we trim to the first frame and remember the offset so the lane starts later on the timeline.
+        let vS = max(0, starts.video ?? 0), aS = max(0, starts.audio ?? 0)
+        let base = hasVideo ? min(vS, starts.audio == nil ? vS : aS) : aS
+        let startOffset = base > 0.5 ? base : 0
         let dest = mediaDir.appendingPathComponent("\(stem).\(hasVideo ? "mp4" : "m4a")")
         var args = ["-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", input.path]
         if hasVideo {
-            let vStart = max(0, starts.video ?? 0)
-            var vf = "format=yuv420p"
+            let vStart = max(0, vS - startOffset)
+            var vf = startOffset > 0 ? "setpts=PTS-STARTPTS,format=yuv420p" : "format=yuv420p"
             if vStart > 0.1 {
                 vf = "setpts=PTS-STARTPTS,tpad=start_duration=\(String(format: "%.3f", vStart)):color=black,format=yuv420p"
             }
@@ -326,13 +334,15 @@ enum Importer {
         } else {
             args += ["-vn", "-map", "0:a:0"]
         }
-        let aStart = max(0, starts.audio ?? 0)
+        let aStart = max(0, aS - startOffset)
         let af = aStart > 0.1
             ? "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1"
-            : "aresample=async=1:first_pts=0"
+            : (startOffset > 0 ? "asetpts=PTS-STARTPTS,aresample=async=1" : "aresample=async=1:first_pts=0")
         args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", "+faststart", dest.path]
-        try await FFmpeg.run(args, duration: duration) { f in progress("Convirtiendo", f) }
-        return try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
+        try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress("Convirtiendo", f) }
+        var media = try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
+        media.startOffset = startOffset
+        return media
     }
 
     static func describe(_ url: URL, id: Int, original: String, slug: String) async throws -> SourceMedia {

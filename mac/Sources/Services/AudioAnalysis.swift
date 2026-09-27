@@ -59,7 +59,7 @@ enum AudioAnalysis {
     static func computeEnergy(project: Project, progress: @escaping (Double) -> Void) async throws -> EnergyMap {
         var map = EnergyMap()
         for (li, lane) in project.lanes.enumerated() {
-            var laneDB: [Float] = []
+            var laneDB = [Float](repeating: -120, count: Int(lane.offset / EnergyMap.hop))
             for placed in lane.placed {
                 guard let media = project.mediaItem(placed.clip.mediaId), media.hasAudio else {
                     laneDB += [Float](repeating: -120, count: Int(placed.clip.length / EnergyMap.hop))

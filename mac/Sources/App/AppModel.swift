@@ -236,6 +236,9 @@ final class ProjectSession: ObservableObject {
             if settings.removeSilences {
                 if !p.words.isEmpty {
                     silences = EditEngine.silenceCuts(words: p.words, duration: p.duration, minGap: settings.minSilence, pad: settings.keepPad)
+                    if let energy {
+                        silences = EditEngine.protectSpeech(silences, energy: energy.combined, hop: EnergyMap.hop, pad: settings.keepPad)
+                    }
                 } else if let energy {
                     silences = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: settings.minSilence, pad: settings.keepPad)
                 }

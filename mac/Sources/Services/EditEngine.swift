@@ -108,6 +108,43 @@ enum EditEngine {
         return cuts
     }
 
+    /// Safety net: Whisper sometimes skips words. Never cut a stretch where the audio is clearly loud
+    /// (someone is talking) for longer than `minRun` seconds — split the silence cut around it.
+    static func protectSpeech(_ cuts: [Cut], energy: [Float], hop: Double, threshold: Float = -35,
+                              minRun: Double = 0.4, pad: Double) -> [Cut] {
+        guard !energy.isEmpty else { return cuts }
+        var out: [Cut] = []
+        for cut in cuts {
+            guard cut.kind == .silence else { out.append(cut); continue }
+            let a = max(0, Int(cut.start / hop)), b = min(energy.count, Int(cut.end / hop))
+            var loud: [Span] = []
+            var runStart: Int?
+            if a < b {
+                for i in a..<b {
+                    if energy[i] > threshold { if runStart == nil { runStart = i } }
+                    else if let r = runStart {
+                        if Double(i - r) * hop >= minRun { loud.append((Double(r) * hop - pad, Double(i) * hop + pad)) }
+                        runStart = nil
+                    }
+                }
+                if let r = runStart, Double(b - r) * hop >= minRun { loud.append((Double(r) * hop - pad, Double(b) * hop + pad)) }
+            }
+            var cursor = cut.start
+            for l in loud {
+                if l.start - cursor > 0.3 {
+                    var piece = cut; piece.id = UUID(); piece.start = cursor; piece.end = l.start
+                    out.append(piece)
+                }
+                cursor = max(cursor, l.end)
+            }
+            if cut.end - cursor > 0.3 {
+                var piece = cut; piece.id = UUID(); piece.start = cursor
+                out.append(piece)
+            }
+        }
+        return out
+    }
+
     // MARK: Fillers
 
     static let soundFillers: Set<String> = ["eh", "ehh", "ehhh", "ehm", "em", "emm", "mm", "mmm", "mmmm", "hmm", "hm",

@@ -77,20 +77,50 @@ struct SourceMedia: Codable, Identifiable, Equatable {
     var hasVideo: Bool = true
     var enhancedAudioFile: String?      // relative, produced by "Mejorar audio"
     var transcriptionAudioFile: String? // 16 kHz mono wav for Whisper
+    var startOffset: Double = 0         // recording started this late vs. the others (lost head chunk)
+}
+
+extension SourceMedia {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        originalName = try c.decode(String.self, forKey: .originalName)
+        file = try c.decode(String.self, forKey: .file)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        duration = try c.decode(Double.self, forKey: .duration)
+        hasAudio = try c.decodeIfPresent(Bool.self, forKey: .hasAudio) ?? true
+        hasVideo = try c.decodeIfPresent(Bool.self, forKey: .hasVideo) ?? true
+        enhancedAudioFile = try c.decodeIfPresent(String.self, forKey: .enhancedAudioFile)
+        transcriptionAudioFile = try c.decodeIfPresent(String.self, forKey: .transcriptionAudioFile)
+        startOffset = try c.decodeIfPresent(Double.self, forKey: .startOffset) ?? 0
+    }
+}
+
+extension Lane {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        participantId = try c.decodeIfPresent(Int.self, forKey: .participantId)
+        clips = try c.decode([LaneClip].self, forKey: .clips)
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1
+        offset = try c.decodeIfPresent(Double.self, forKey: .offset) ?? 0
+    }
 }
 
 struct Lane: Codable, Identifiable, Equatable {
     var id: Int                         // 1-based track number
     var name: String
     var participantId: Int?
-    var clips: [LaneClip]               // played back-to-back from timeline 0
+    var clips: [LaneClip]               // played back-to-back starting at `offset`
     var volume: Double = 1.0
+    var offset: Double = 0              // timeline time where this person's recording starts
 
-    var duration: Double { clips.reduce(0) { $0 + $1.length } }
+    var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
     /// Timeline spans of each clip.
     var placed: [(clip: LaneClip, tlStart: Double, tlEnd: Double)] {
-        var t = 0.0
+        var t = offset
         return clips.map { c in
             defer { t += c.length }
             return (c, t, t + c.length)
