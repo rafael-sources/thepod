@@ -5,7 +5,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from config import PROJECTS_DIR
+from config import PROJECTS_DIR, GLOBAL_DIR
 from db import _migrate_in_place
 
 
@@ -52,18 +52,69 @@ def export_project(slug: str) -> Path:
                     total_size += f.stat().st_size
                     file_count += 1
 
+        director_count = 0
+        director_dir = project_dir / "director_assets"
+        if director_dir.exists():
+            for f in director_dir.rglob("*"):
+                if f.is_file():
+                    arcname = f"director_assets/{f.relative_to(director_dir)}"
+                    zf.write(f, arcname)
+                    total_size += f.stat().st_size
+                    file_count += 1
+                    director_count += 1
+
+        global_audio_count = 0
+        global_audio_dir = GLOBAL_DIR / "audio"
+        if global_audio_dir.exists():
+            for f in sorted(global_audio_dir.glob("*.mp3")):
+                zf.write(f, f"global_audio/{f.name}")
+                total_size += f.stat().st_size
+                file_count += 1
+                global_audio_count += 1
+
+        # Audio referenced by audio_lane_clips whose file no longer lives in
+        # the project (e.g. moved to the global library) — recover it into
+        # media/ so the bundle is self-contained and import finds it.
+        recovered_from_global = []
+        if db_src.exists():
+            try:
+                conn = sqlite3.connect(f"file:{db_src}?mode=ro", uri=True)
+                rows = conn.execute(
+                    "SELECT DISTINCT mf.filename, mf.file_type "
+                    "FROM audio_lane_clips al "
+                    "JOIN media_files mf ON mf.id = al.media_file_id"
+                ).fetchall()
+                conn.close()
+            except sqlite3.DatabaseError:
+                rows = []
+            for filename, file_type in rows:
+                if (media_dir / file_type / filename).exists():
+                    continue  # ya incluido en el walk de media/
+                gsrc = GLOBAL_DIR / file_type / filename
+                if gsrc.is_file():
+                    arcname = f"media/{file_type}/{filename}"
+                    zf.write(gsrc, arcname)
+                    total_size += gsrc.stat().st_size
+                    file_count += 1
+                    recovered_from_global.append(arcname)
+
         if meta_path.exists():
             zf.write(meta_path, "proyecto.json")
             file_count += 1
 
         manifest = {
             "app": "postpod",
-            "version": 1,
+            "version": 2,
             "slug": slug,
             "name": meta.get("name", slug),
             "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "file_count": file_count,
             "total_size_bytes": total_size,
+            "includes": ["proyecto.json", "proyecto.sqlite", "media",
+                         "branding", "director_assets", "global_audio"],
+            "director_assets_count": director_count,
+            "global_audio_count": global_audio_count,
+            "recovered_from_global": recovered_from_global,
         }
         zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
 
