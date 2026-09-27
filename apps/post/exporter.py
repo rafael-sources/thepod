@@ -2093,7 +2093,13 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             if c["has_audio"]:
                 use_counts_a[c["id"]] = use_counts_a.get(c["id"], 0) + 1
         else:
-            if mc:
+            if mc and pip:
+                for entry in mc:
+                    ec = entry["clip"]
+                    use_counts_v[ec["id"]] = use_counts_v.get(ec["id"], 0) + 1
+                    if all_have_audio:
+                        use_counts_a[ec["id"]] = use_counts_a.get(ec["id"], 0) + 1
+            elif mc:
                 has_multitrack_vsplit = True
                 for entry in mc:
                     ec = entry["clip"]
@@ -2162,6 +2168,105 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     parts.append(
                         f"[{src}]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS[a{k}]"
                     )
+        elif pip and mc and W and H:
+            main_entry = None
+            pip_entry = None
+            for entry in mc:
+                if int(entry["clip"].get("track", 1)) == pip_main_track:
+                    main_entry = entry
+                else:
+                    pip_entry = entry
+            if not main_entry:
+                main_entry = mc[0]
+                pip_entry = mc[1] if len(mc) > 1 else None
+
+            ec = main_entry["clip"]
+            es = float(main_entry["src_start"]) - seek_offset
+            ee = float(main_entry["src_end"]) - seek_offset
+            src_main = split_v[ec["id"]].pop(0)
+
+            if has_bg:
+                main_chain = (
+                    f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},"
+                    f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                    f"format=yuva420p,"
+                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,"
+                    f"setsar=1"
+                )
+            else:
+                main_chain = (
+                    f"trim=start={es:.3f}:end={ee:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},"
+                    f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
+                    f"setsar=1,format=yuv420p"
+                )
+            main_lbl = f"pipm{k}"
+            parts.append(f"[{src_main}]{main_chain}[{main_lbl}]")
+
+            if pip_entry:
+                ec2 = pip_entry["clip"]
+                es2 = float(pip_entry["src_start"]) - seek_offset
+                ee2 = float(pip_entry["src_end"]) - seek_offset
+                src_pip = split_v[ec2["id"]].pop(0)
+
+                pip_w = W // 4
+                pip_h = H // 4
+                pip_positions = {
+                    "top_left": (20, 20),
+                    "top_right": (W - pip_w - 20, 20),
+                    "bottom_left": (20, H - pip_h - 20),
+                    "bottom_right": (W - pip_w - 20, H - pip_h - 20),
+                }
+                px, py = pip_positions.get(pip_corner, (W - pip_w - 20, H - pip_h - 20))
+
+                pip_chain = (
+                    f"trim=start={es2:.3f}:end={ee2:.3f},setpts=PTS-STARTPTS,"
+                    f"fps={target_fps},"
+                    f"scale={pip_w}:{pip_h}:force_original_aspect_ratio=decrease,"
+                    f"pad={pip_w}:{pip_h}:(ow-iw)/2:(oh-ih)/2,"
+                    f"setsar=1,format=yuv420p"
+                )
+                pip_lbl = f"pips{k}"
+                parts.append(f"[{src_pip}]{pip_chain}[{pip_lbl}]")
+
+                comp_lbl = f"v{k}"
+                parts.append(
+                    f"[{main_lbl}][{pip_lbl}]overlay={px}:{py}:format=auto[{comp_lbl}]"
+                )
+            else:
+                parts.append(f"[{main_lbl}]null[v{k}]")
+
+            if all_have_audio:
+                a_labels = []
+                for j, entry in enumerate(mc):
+                    ec_a = entry["clip"]
+                    es_a = float(entry["src_start"]) - seek_offset
+                    ee_a = float(entry["src_end"]) - seek_offset
+                    src_a = split_a[ec_a["id"]].pop(0)
+                    vol = float(ec_a.get("volume", 1.0))
+                    al = f"ma{k}_{j}"
+                    if abs(vol - 1.0) > 1e-3:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es_a:.3f}:end={ee_a:.3f},asetpts=PTS-STARTPTS,"
+                            f"volume={vol:.3f}[{al}]"
+                        )
+                    else:
+                        parts.append(
+                            f"[{src_a}]atrim=start={es_a:.3f}:end={ee_a:.3f},asetpts=PTS-STARTPTS[{al}]"
+                        )
+                    a_labels.append(f"[{al}]")
+                if len(a_labels) > 1:
+                    parts.append(f"{''.join(a_labels)}amix=inputs={len(a_labels)}:normalize=0[a{k}]")
+                else:
+                    parts.append(f"{a_labels[0]}anull[a{k}]")
+            else:
+                src_a = split_a[mc[0]["clip"]["id"]].pop(0)
+                s_a = float(mc[0]["src_start"]) - seek_offset
+                e_a = float(mc[0]["src_end"]) - seek_offset
+                parts.append(f"[{src_a}]atrim=start={s_a:.3f}:end={e_a:.3f},asetpts=PTS-STARTPTS[a{k}]")
+
         elif vertical_center_spotlight and mc and W and H:
             # VERTICAL CENTER SPOTLIGHT: render only the active speaker's
             # track filling the entire frame. Each segment shows one track.
