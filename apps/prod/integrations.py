@@ -71,9 +71,16 @@ def integration_status():
     spid = request.args.get("shared_project_id")
     if not spid:
         return jsonify({"error": "shared_project_id requerido"}), 400
+    ep_id = request.args.get("source_episode_id")
     db = get_db()
     try:
-        row = _find_session_by_shared_id(db, spid)
+        if ep_id:
+            row = db.execute(
+                "SELECT * FROM sessions WHERE shared_project_id=? AND source_episode_id=?",
+                (spid, ep_id),
+            ).fetchone()
+        else:
+            row = _find_session_by_shared_id(db, spid)
         if not row:
             return jsonify({"found": False}), 404
         return jsonify({"found": True, "project": _summarize_session(row)})
@@ -111,9 +118,14 @@ def import_from_prepod():
     else:
         session_title = podcast_name
 
+    source_episode_id = episode.get("id")
+
     db = get_db()
     try:
-        existing = _find_session_by_shared_id(db, spid)
+        existing = db.execute(
+            "SELECT * FROM sessions WHERE shared_project_id=? AND source_episode_id=?",
+            (spid, source_episode_id),
+        ).fetchone()
         if existing:
             return jsonify({"project": _summarize_session(existing), "created": False}), 200
 

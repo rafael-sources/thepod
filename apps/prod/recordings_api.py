@@ -321,12 +321,13 @@ def stream_recording_chunk(sid):
         finalize = request.form.get("finalize") == "1"
 
         already_finalized = db.execute(
-            "SELECT id FROM recordings WHERE session_id=? AND participant_id=? AND track_type=?",
+            "SELECT id, filename, file_path, size_bytes FROM recordings "
+            "WHERE session_id=? AND participant_id=? AND track_type=?",
             (sid, participant_id, track_type),
         ).fetchone()
 
         chunk = request.files.get("chunk")
-        if chunk and not already_finalized:
+        if chunk:
             with open(str(streaming_path), "ab") as out:
                 while True:
                     buf = chunk.stream.read(65536)
@@ -334,20 +335,13 @@ def stream_recording_chunk(sid):
                         break
                     out.write(buf)
 
-        if already_finalized and finalize:
-            return jsonify({"finalized": True, "size_bytes": 0}), 201
-        if already_finalized:
-            return jsonify({"ok": True, "bytes_received": 0}), 200
-
         if finalize:
             if not streaming_path.exists():
-                existing = db.execute(
-                    "SELECT * FROM recordings WHERE session_id=? AND participant_id=? AND track_type=?",
-                    (sid, participant_id, track_type),
-                ).fetchone()
-                if existing:
-                    return jsonify({"finalized": True, "recording": _serialize_recording(existing),
-                                    "size_bytes": existing["size_bytes"]}), 201
+                if already_finalized:
+                    return jsonify({"finalized": True, "recording": _serialize_recording(
+                        db.execute("SELECT * FROM recordings WHERE id=?",
+                                   (already_finalized["id"],)).fetchone()),
+                                    "size_bytes": already_finalized["size_bytes"]}), 201
                 return jsonify({"error": "no hay datos de streaming"}), 400
             fname = f"p{participant_id}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
             final_path = dest_dir / fname
@@ -361,13 +355,34 @@ def stream_recording_chunk(sid):
 
             size = final_path.stat().st_size
             mime, _ = mimetypes.guess_type(str(final_path))
-            cur = db.execute(
-                "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
-                "duration_seconds, size_bytes, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (sid, participant_id, track_type, fname, str(final_path), dur, size, mime or "video/webm"),
-            )
-            db.commit()
-            row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
+
+            if already_finalized and size > (already_finalized["size_bytes"] or 0):
+                old_path = Path(already_finalized["file_path"])
+                if old_path.exists():
+                    old_path.unlink()
+                db.execute(
+                    "UPDATE recordings SET filename=?, file_path=?, duration_seconds=?, "
+                    "size_bytes=?, mime_type=? WHERE id=?",
+                    (fname, str(final_path), dur, size, mime or "video/webm",
+                     already_finalized["id"]),
+                )
+                db.commit()
+                row = db.execute("SELECT * FROM recordings WHERE id=?",
+                                 (already_finalized["id"],)).fetchone()
+            else:
+                if already_finalized:
+                    final_path.unlink(missing_ok=True)
+                    row = db.execute("SELECT * FROM recordings WHERE id=?",
+                                     (already_finalized["id"],)).fetchone()
+                else:
+                    cur = db.execute(
+                        "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
+                        "duration_seconds, size_bytes, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (sid, participant_id, track_type, fname, str(final_path), dur, size, mime or "video/webm"),
+                    )
+                    db.commit()
+                    row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
+                    size = row["size_bytes"]
             return jsonify({"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}), 201
 
         size = streaming_path.stat().st_size if streaming_path.exists() else 0
@@ -540,7 +555,18 @@ def export_recordings_to_postpod(sid):
             (sid, username),
         ).fetchone())
         if not is_host and not is_director:
-            return jsonify({"error": "sólo el host o director puede exportar"}), 403
+            already = db.execute(
+                "SELECT COUNT(*) AS n FROM recordings WHERE session_id=? AND exported_to_postpod_at IS NOT NULL "
+                "AND exported_to_postpod_at NOT LIKE '_exporting_%'", (sid,)
+            ).fetchone()
+            host_name = db.execute(
+                "SELECT display_name FROM participants WHERE session_id=? AND username=?",
+                (sid, sess["created_by"]),
+            ).fetchone()
+            hname = host_name["display_name"] if host_name else sess["created_by"]
+            if already and already["n"] > 0:
+                return jsonify({"error": f"Ya fue enviado a postPod por {hname}"}), 200
+            return jsonify({"error": f"Solo {hname} (host) o un director puede enviar a postPod"}), 403
         spid = sess["shared_project_id"]
         if not spid:
             # Auto-generate and persist a shared_project_id so postPod can
@@ -629,6 +655,7 @@ def export_recordings_to_postpod(sid):
                     headers=headers,
                     data={
                         "shared_project_id": spid,
+                        "source_episode_id": str(sess["source_episode_id"] or ""),
                         "original_name": original_name,
                         "track_type": r["track_type"],
                         "duration_seconds": str(r["duration_seconds"] or 0),
@@ -701,6 +728,7 @@ def export_recordings_to_postpod(sid):
                 chapters.append(ch)
             payload = {
                 "shared_project_id": spid,
+                "source_episode_id": sess["source_episode_id"],
                 "project_name": sess["title"],
                 "chapters": chapters,
             }
@@ -733,6 +761,7 @@ def export_recordings_to_postpod(sid):
         try:
             payload = {
                 "shared_project_id": spid,
+                "source_episode_id": sess["source_episode_id"],
                 "project_name": sess["title"],
                 "triggers": [
                     {"filename": r["sound_filename"],
@@ -780,6 +809,7 @@ def export_recordings_to_postpod(sid):
                 headers=headers,
                 json={
                     "shared_project_id": spid,
+                    "source_episode_id": sess["source_episode_id"],
                     "project_name": sess["title"],
                     "events": events_payload,
                 },
@@ -805,7 +835,8 @@ def export_recordings_to_postpod(sid):
                     resp = requests.post(
                         asset_endpoint,
                         files={"file": (f.name, fh)},
-                        data={"shared_project_id": spid, "session_id": str(sid)},
+                        data={"shared_project_id": spid, "session_id": str(sid),
+                              "source_episode_id": str(sess["source_episode_id"] or "")},
                         headers=headers,
                         timeout=30,
                     )

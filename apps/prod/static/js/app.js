@@ -1333,6 +1333,10 @@ var StudioView = {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
         finishRecording();
+        if (room) {
+          try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
+          try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+        }
       } else if (msg.type === "hand_raise") {
         handsRaised[msg.identity] = !!msg.up;
         if (msg.up && window.toast) {
@@ -1836,15 +1840,21 @@ var StudioView = {
       }
     }
 
+    var _hostRecStream = null;
+
     function startLocalRecorders() {
       if (room) {
         var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
         var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
         var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
-        if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
-        else if (camTrack) localStream = new MediaStream([camTrack]);
-        else if (micTrack) localStream = new MediaStream([micTrack]);
+        var tracks = [];
+        if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
+        if (micTrack && micTrack.readyState === "live") tracks.push(micTrack.clone());
+        if (tracks.length > 0) {
+          _hostRecStream = new MediaStream(tracks);
+          localStream = _hostRecStream;
+        }
         if (!camTrack && micTrack && window.toast) {
           window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — cámara no disponible" });
         }
@@ -1934,6 +1944,10 @@ var StudioView = {
         });
         recorder = null;
       }
+      if (_hostRecStream) {
+        _hostRecStream.getTracks().forEach(function (t) { t.stop(); });
+        _hostRecStream = null;
+      }
       hostUploadStatus.state = "finalizing";
       await _flushHostChunks(true);
     }
@@ -2017,6 +2031,10 @@ var StudioView = {
       // Clear ready state — no new take in this session
       ownReady.value = false;
       Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
+      if (room) {
+        try { await room.localParticipant.setCameraEnabled(false); } catch (_) {}
+        try { await room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+      }
       if (!practiceMode.value) {
         // Poll up to ~30s for uploads to land. Stop as soon as we see anything.
         var attempts = 0;
@@ -2562,7 +2580,7 @@ var StudioView = {
               <button class="btn-secondary" @click="loadRecordings" title="Recargar lista de pistas">↻ Recargar</button>
               <a v-if="finishedRecordings.length" :href="'/api/sessions/' + session.id + '/recordings/bundle.zip'"
                  class="btn-secondary" download>↓ ZIP</a>
-              <button v-if="!recording" class="btn-export"
+              <button v-if="!recording && !directorConnected" class="btn-export"
                       :class="{ exported: allExported }"
                       :disabled="exporting || !finishedRecordings.length" @click="exportToPostpod"
                       title="Enviar pistas a postPod para editar">
@@ -2985,6 +3003,8 @@ var GuestStudioView = {
     var recording = ref(false);
     var timecode = ref(0);
     var timerHandle = null;
+    var _savedCamPub = null;
+    var _savedMicPub = null;
 
     var sounds = ref([]);
     var audioPool = {};
@@ -3086,6 +3106,10 @@ var GuestStudioView = {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
         finishRecording();
+        if (room) {
+          try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
+          try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+        }
       } else if (msg.type === "practice_mode") {
         practiceMode.value = !!msg.active;
       } else if (msg.type === "kick" && room && room.localParticipant &&
@@ -3146,17 +3170,18 @@ var GuestStudioView = {
       tick();
     }
 
-    function _rebuildLocalStream() {
-      if (!room) return { hasCam: false, hasMic: false };
-      var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
-      var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
+    var _recStream = null;
+
+    function _buildRecordingStream() {
+      var tracks = [];
+      var camPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Camera) || _savedCamPub;
+      var micPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Microphone) || _savedMicPub;
       var camTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
       var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
-      if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
-      else if (camTrack) localStream = new MediaStream([camTrack]);
-      else if (micTrack) localStream = new MediaStream([micTrack]);
-      else localStream = null;
-      return { hasCam: !!camTrack, hasMic: !!micTrack };
+      if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
+      if (micTrack && micTrack.readyState === "live") tracks.push(micTrack.clone());
+      if (tracks.length === 0) return null;
+      return new MediaStream(tracks);
     }
 
     function beginRecordingNow() {
@@ -3167,17 +3192,21 @@ var GuestStudioView = {
       if (timerHandle) clearInterval(timerHandle);
       var start = recordingStartedAtMs;
       timerHandle = setInterval(function () { timecode.value = (Date.now() - start) / 1000; }, 250);
-      var caps = _rebuildLocalStream();
-      recordingCaps.hasCam = caps.hasCam;
-      recordingCaps.hasMic = caps.hasMic;
-      if (!recorder && localStream) {
-        recorder = _startRecorder(localStream, function () {}, 1000, false, _onRecordingChunk);
+
+      _recStream = _buildRecordingStream();
+      var stream = _recStream;
+      if (stream) {
+        var hasCam = stream.getVideoTracks().length > 0;
+        var hasMic = stream.getAudioTracks().length > 0;
+        recordingCaps.hasCam = hasCam;
+        recordingCaps.hasMic = hasMic;
+        recorder = _startRecorder(stream, function () {}, 1000, false, _onRecordingChunk);
         _streamExt = recorder._ext ? ("." + recorder._ext) : ".webm";
         _startChunkStreaming();
-        if (!caps.hasCam) {
-          if (window.toast) window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });
+        if (!hasCam && window.toast) {
+          window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });
         }
-      } else if (!localStream) {
+      } else {
         if (window.toast) window.toast({ type: "error", text: "ERROR: no hay stream local — tu grabación NO se está capturando" });
       }
     }
@@ -3200,6 +3229,10 @@ var GuestStudioView = {
       recordingStartedAtMs = null;
       ownReady.value = false;
       Object.keys(readyMap).forEach(function (k) { delete readyMap[k]; });
+      if (_recStream) {
+        _recStream.getTracks().forEach(function (t) { t.stop(); });
+        _recStream = null;
+      }
       if (room) {
         try { await room.localParticipant.setCameraEnabled(false); } catch (_) {}
         try { await room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
@@ -3392,6 +3425,8 @@ var GuestStudioView = {
         connectStep.value = "3/4 pidiendo permiso de cámara…";
         try { camPub = await withTimeout(newRoom.localParticipant.setCameraEnabled(true), 30000, "Permiso de cámara"); }
         catch (ce) { error.value = (error.value ? error.value + " · " : "") + ce.message; }
+        _savedCamPub = camPub;
+        _savedMicPub = micPub;
 
         connectStep.value = "4/4 montando streams locales…";
 
@@ -3466,7 +3501,10 @@ var GuestStudioView = {
       if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
       if (countdownHandle) { clearTimeout(countdownHandle); countdownHandle = null; }
       if (localMeterStop) { localMeterStop(); localMeterStop = null; }
-      // Notify server we're leaving
+      if (_recStream) {
+        _recStream.getTracks().forEach(function (t) { t.stop(); });
+        _recStream = null;
+      }
       try {
         await fetch("/api/sessions/" + props.joinData.session_id + "/leave-by-participant", {
           method: "POST",
@@ -3474,8 +3512,6 @@ var GuestStudioView = {
           body: JSON.stringify({ participant_id: props.joinData.participant_id, token: props.inviteToken }),
         });
       } catch (_) {}
-      // Disconnect first (LK stops its tracks cleanly), then drop the
-      // wrapper without re-stopping tracks — see StudioView rationale.
       if (room) { try { await room.disconnect(); } catch (_) {} }
       localStream = null;
       window.location.href = "/";
@@ -3484,6 +3520,10 @@ var GuestStudioView = {
     onMounted(function () { loadSounds(); });
     onBeforeUnmount(function () {
       if (timerHandle) clearInterval(timerHandle);
+      if (_recStream) {
+        _recStream.getTracks().forEach(function (t) { t.stop(); });
+        _recStream = null;
+      }
       try {
         navigator.sendBeacon("/api/sessions/" + props.joinData.session_id + "/leave-by-participant",
           new Blob([JSON.stringify({ participant_id: props.joinData.participant_id, token: props.inviteToken })], { type: "application/json" }));
@@ -3776,6 +3816,10 @@ var DirectorView = {
 
     // Upload status monitoring
     var participantUploads = reactive({});
+    var allUploadsComplete = computed(function () {
+      var keys = Object.keys(participantUploads);
+      return keys.length > 0 && keys.every(function (k) { return participantUploads[k].state === "done"; });
+    });
 
     function formatTC(s) {
       var h = Math.floor(s / 3600); var m = Math.floor((s % 3600) / 60); var sec = s % 60;
@@ -3976,13 +4020,13 @@ var DirectorView = {
     }
 
     // --- Recording control ---
-    function allParticipantsReady() {
+    var allParticipantsReady = computed(function () {
       var hosts = participants.value.filter(function(p) {
         return p.role === "host" || p.role === "co-host";
       });
       if (hosts.length === 0) return false;
       return hosts.every(function(p) { return !!readyMap["participant_" + p.id]; });
-    }
+    });
 
     async function startRecording() {
       if (recording.value || countdown.value !== null) return;
@@ -4145,7 +4189,7 @@ var DirectorView = {
       sounds: sounds, sessionSounds: sessionSounds, directorSounds: directorSounds, triggerSound: triggerSound, playingPad: playingPad,
       ifbActive: ifbActive, startIFB: startIFB, stopIFB: stopIFB,
       directorChat: directorChat, directorChatInput: directorChatInput, sendDirectorChat: sendDirectorChat,
-      participantUploads: participantUploads,
+      participantUploads: participantUploads, allUploadsComplete: allUploadsComplete,
       exportToPostpod: exportToPostpod, exporting: exporting, exportStatus: exportStatus,
     };
   },
@@ -4161,9 +4205,9 @@ var DirectorView = {
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
         <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
-                :disabled="!allParticipantsReady()"\
-                :style="allParticipantsReady() ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
-                :title="allParticipantsReady() ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
+                :disabled="!allParticipantsReady"\
+                :style="allParticipantsReady ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
+                :title="allParticipantsReady ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
         <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
           {{ countdown === 0 ? "¡REC!" : countdown }}\
         </span>\

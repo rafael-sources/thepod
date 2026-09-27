@@ -13,9 +13,8 @@ venv/
 .DS_Store
 *.swp
 
-# Runtime data
-sessions/*/recordings/
-sessions/*/sounds/
+# Runtime data (datos de usuario, nunca en git)
+sessions/
 *.sqlite
 *.sqlite-journal
 *.db
