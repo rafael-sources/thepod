@@ -3,10 +3,35 @@ One-shot maintenance routines run at service startup. All work happens in a
 daemon thread so it doesn't block the request handlers.
 """
 
+import sqlite3
 import threading
 from pathlib import Path
 
 from config import GLOBAL_DIR, PROJECTS_DIR
+
+
+def _mark_orphaned_caption_jobs():
+    """Caption jobs run in daemon threads that die on service restart, leaving
+    rows stuck in pending/running forever. Mark them as error so the UI stops
+    showing an eternal progress bar."""
+    if not PROJECTS_DIR.exists():
+        return
+    for project_dir in PROJECTS_DIR.iterdir():
+        db_path = project_dir / "proyecto.sqlite"
+        if not db_path.is_file():
+            continue
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=5)
+            conn.execute(
+                "UPDATE caption_jobs SET status='error', "
+                "error_msg='interrumpido por reinicio del servicio', "
+                "finished_at=datetime('now') "
+                "WHERE status IN ('pending','running')"
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.Error:
+            continue
 
 
 def _scan_missing_sidecars():
@@ -72,5 +97,11 @@ def run_background_maintenance_once():
         if _started:
             return
         _started = True
+    # Synchronous and fast (a few UPDATEs): must finish before any new
+    # caption job can be created, or we'd mark a live job as orphaned.
+    try:
+        _mark_orphaned_caption_jobs()
+    except Exception:
+        pass
     t = threading.Thread(target=_scan_missing_sidecars, daemon=True, name="postpod-sidecar-scan")
     t.start()

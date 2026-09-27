@@ -229,6 +229,10 @@ def _run_caption_job(slug, job_id, file_id, language, model):
             vad_filter=True,
         )
 
+        # faster-whisper yields segments lazily — advance progress (20→90)
+        # as the audio is consumed so long jobs don't look frozen at 20%.
+        total_dur = float(info.duration or 0)
+        last_pct = 20
         segments = []
         for seg in segments_iter:
             words = []
@@ -245,6 +249,11 @@ def _run_caption_job(slug, job_id, file_id, language, model):
                 "text": seg.text,
                 "words": words,
             })
+            if total_dur > 0 and seg.end:
+                pct = 20 + min(69, int(float(seg.end) / total_dur * 70))
+                if pct >= last_pct + 5:
+                    _update_job(slug, job_id, progress=pct)
+                    last_pct = pct
         _update_job(slug, job_id, progress=90)
 
         srt_content = _segments_to_srt(segments)
