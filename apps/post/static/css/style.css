@@ -2529,6 +2529,48 @@ a.mark:hover { opacity: 0.8; }
 .ai-btn:disabled { opacity: 0.4; cursor: default; }
 .ai-btn-primary { background: var(--accent, #89b4fa); color: var(--surface-1, #11111b); border-color: var(--accent, #89b4fa); font-weight: 600; }
 
+/* ── Subtitle style panel ──────────────────────────── */
+.subtitle-style-panel {
+  background: var(--ink-panel);
+  border: 1px solid var(--ink-line-2);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.style-label {
+  font-size: 11px;
+  color: var(--paper-soft);
+  min-width: 110px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.style-options {
+  display: flex;
+  gap: 4px;
+}
+.style-options .kbd.active {
+  background: var(--signal-dim);
+  color: var(--signal);
+  border-color: var(--signal);
+}
+.subtitle-style-panel input[type="color"] {
+  width: 28px;
+  height: 22px;
+  border: 1px solid var(--ink-line);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* ── Subtitle word editor ──────────────────────────── */
 .word-edit-input {
   font-size: 15px;

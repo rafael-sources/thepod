@@ -2923,7 +2923,7 @@ var TranscriptEditor = {
 
     watch(() => [props.show, selectedFileId.value, selectedLanguage.value],
           ([s]) => { if (s) { loadTranscript(); loadCuts(); } });
-    watch(() => props.show, (s) => { if (s) loadFiles(); });
+    watch(() => props.show, (s) => { if (s) { loadFiles(); loadSubtitleStyle(); } });
 
     /* ---------- helpers ---------- */
 
@@ -3043,6 +3043,32 @@ var TranscriptEditor = {
       if (lastId) await restoreCut(lastId);
     }
 
+    /* ---------- subtitle style panel ---------- */
+
+    const showStylePanel = ref(false);
+    const subtitleStyle = ref({
+      font_family: "sans-serif", font_size: "medium",
+      text_color: "#FFFFFF", outline_color: "#000000",
+      background_color: null, highlight_color: "#FFD700",
+      position: "bottom",
+    });
+
+    async function loadSubtitleStyle() {
+      try {
+        subtitleStyle.value = await api(`/api/projects/${props.slug}/subtitle-style`);
+      } catch (_) {}
+    }
+
+    async function updateStyleField(field, value) {
+      subtitleStyle.value[field] = value;
+      try {
+        await api(`/api/projects/${props.slug}/subtitle-style`, {
+          method: "PUT",
+          body: { [field]: value },
+        });
+      } catch (e) { console.error("Error updating style:", e); }
+    }
+
     /* ---------- inline word editing ---------- */
 
     const editingWordIdx = ref(null);
@@ -3132,6 +3158,7 @@ var TranscriptEditor = {
       deleteSelection, deleteAllFillers, restoreCut, restoreAll, loadTranscript,
       getCutIdForWord, undoLastCut,
       editingWordIdx, editingWordText, startEditWord, saveEditWord, cancelEditWord,
+      showStylePanel, subtitleStyle, updateStyleField,
     };
   },
   template: `
@@ -3180,6 +3207,69 @@ var TranscriptEditor = {
             <button v-if="fillerWords.length" class="ghost" style="font-size: 12px; padding: 4px 10px;" @click="deleteAllFillers">
               ✂ Eliminar {{ fillerWords.length }} muletilla(s)
             </button>
+          </div>
+
+          <div style="margin-bottom: 8px;">
+            <button class="kbd" @click="showStylePanel = !showStylePanel" style="font-size:11px;">
+              {{ showStylePanel ? '▾' : '▸' }} Estilo de subtítulos
+            </button>
+          </div>
+          <div v-if="showStylePanel" class="subtitle-style-panel">
+            <div class="style-row">
+              <span class="style-label">Fuente</span>
+              <div class="style-options">
+                <button v-for="f in ['sans-serif','serif','mono','display']" :key="f"
+                        class="kbd" :class="{ active: subtitleStyle.font_family === f }"
+                        @click="updateStyleField('font_family', f)">
+                  {{ {'sans-serif':'Sans','serif':'Serif','mono':'Mono','display':'Display'}[f] }}
+                </button>
+              </div>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Tamaño</span>
+              <div class="style-options">
+                <button v-for="s in ['small','medium','large']" :key="s"
+                        class="kbd" :class="{ active: subtitleStyle.font_size === s }"
+                        @click="updateStyleField('font_size', s)">
+                  {{ {small:'S', medium:'M', large:'L'}[s] }}
+                </button>
+              </div>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Color texto</span>
+              <input type="color" :value="subtitleStyle.text_color"
+                     @change="updateStyleField('text_color', $event.target.value)">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Color contorno</span>
+              <input type="color" :value="subtitleStyle.outline_color"
+                     @change="updateStyleField('outline_color', $event.target.value)">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Fondo</span>
+              <label style="display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" :checked="!!subtitleStyle.background_color"
+                       @change="updateStyleField('background_color', $event.target.checked ? '#000000' : null)">
+                <input v-if="subtitleStyle.background_color" type="color"
+                       :value="subtitleStyle.background_color"
+                       @change="updateStyleField('background_color', $event.target.value)">
+              </label>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Highlight (karaoke)</span>
+              <input type="color" :value="subtitleStyle.highlight_color"
+                     @change="updateStyleField('highlight_color', $event.target.value)">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Posición</span>
+              <div class="style-options">
+                <button v-for="p in ['top','center','bottom']" :key="p"
+                        class="kbd" :class="{ active: subtitleStyle.position === p }"
+                        @click="updateStyleField('position', p)">
+                  {{ {top:'Arriba', center:'Centro', bottom:'Abajo'}[p] }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="transcript-words"
