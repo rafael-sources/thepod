@@ -270,6 +270,13 @@ final class ProjectSession: ObservableObject {
 
     private func enhanceAudio() async throws {
         let ids = Set(project.lanes.flatMap { $0.clips.map(\.mediaId) })
+        // Redo anything whose enhanced file is missing on disk (deleted, or an interrupted run).
+        for i in project.media.indices {
+            if let rel = project.media[i].enhancedAudioFile,
+               !FileManager.default.fileExists(atPath: ProjectStore.url(rel, in: project.id).path) {
+                project.media[i].enhancedAudioFile = nil
+            }
+        }
         let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile == nil }
         for (i, m) in items.enumerated() {
             let who = project.lanes.first { $0.clips.contains { $0.mediaId == m.id } }.map { project.laneName($0.id) } ?? m.originalName

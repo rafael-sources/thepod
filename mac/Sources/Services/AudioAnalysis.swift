@@ -182,7 +182,8 @@ enum AudioAnalysis {
         if FileManager.default.fileExists(atPath: dest.path) { return dest }
         let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("whisper_\(media.id)_\(UUID().uuidString).wav")
         defer { try? FileManager.default.removeItem(at: tmp) }
-        let src = ProjectStore.url(media.enhancedAudioFile ?? media.file, in: slug)
+        var src = ProjectStore.url(media.enhancedAudioFile ?? media.file, in: slug)
+        if !FileManager.default.fileExists(atPath: src.path) { src = ProjectStore.url(media.file, in: slug) }
         try await FFmpeg.run(["-i", src.path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", tmp.path],
                              duration: media.duration, progress: progress)
         if !FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.moveItem(at: tmp, to: dest) }

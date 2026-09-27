@@ -77,7 +77,8 @@ enum CompositionBuilder {
                               tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
                 }
                 if media.hasAudio {
-                    let audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
+                    var audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
+                    if !FileManager.default.fileExists(atPath: ProjectStore.url(audioRel, in: project.id).path) { audioRel = media.file }
                     let audioAsset = asset(audioRel)
                     if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
                         let aDur = try await audioAsset.load(.duration).seconds
