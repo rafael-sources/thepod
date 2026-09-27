@@ -3681,80 +3681,112 @@ var ExportModal = {
 };
 
 var SilenceModal = {
-  props: { clip: Object },
-  emits: ["apply", "cancel"],
+  props: { slug: String },
+  emits: ["close", "applied", "seek"],
   setup(props, { emit }) {
-    const thresholdDb = ref(-40);
-    const minSilence = ref(0.5);
-    const running = ref(false);
-    const result = ref(null);
+    const minGap = ref(parseFloat(localStorage.getItem("postpod.silenceGap") || "1.0"));
+    const loading = ref(false);
+    const silences = ref([]);
+    const sourceUsed = ref("");
+    const checked = ref({});
+    const applying = ref(false);
     const error = ref("");
 
-    async function run() {
-      running.value = true;
+    watch(minGap, (v) => {
+      localStorage.setItem("postpod.silenceGap", String(v));
+    });
+
+    let debounceTimer = null;
+    async function detect() {
+      loading.value = true;
       error.value = "";
-      result.value = null;
       try {
-        // We go through the parent; the parent will POST and then call us back with result.
-        emit("apply", {
-          clip: props.clip,
-          threshold_db: thresholdDb.value,
-          min_silence_seconds: minSilence.value,
-          setResult: (r) => { result.value = r; running.value = false; },
-          setError: (msg) => { error.value = msg; running.value = false; },
+        const r = await api(`/api/projects/${props.slug}/silence/detect`, {
+          method: "POST",
+          body: { min_gap: minGap.value, source: "auto" },
         });
-      } catch (e) {
-        error.value = e.message;
-        running.value = false;
-      }
+        silences.value = r.silences || [];
+        sourceUsed.value = r.source_used || "";
+        const c = {};
+        silences.value.forEach((_, i) => { c[i] = true; });
+        checked.value = c;
+      } catch (e) { error.value = e.message; }
+      loading.value = false;
     }
 
-    return { thresholdDb, minSilence, running, result, error, run };
+    function onSliderInput() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(detect, 300);
+    }
+
+    const checkedCount = computed(() => Object.values(checked.value).filter(Boolean).length);
+    const checkedDuration = computed(() => {
+      let t = 0;
+      silences.value.forEach((s, i) => { if (checked.value[i]) t += s.duration; });
+      return t.toFixed(1);
+    });
+
+    async function apply() {
+      applying.value = true;
+      error.value = "";
+      const cuts = silences.value.filter((_, i) => checked.value[i]).map(s => ({
+        start: s.start, end: s.end, label: s.label,
+      }));
+      try {
+        await api(`/api/projects/${props.slug}/silence/apply`, {
+          method: "POST", body: { cuts },
+        });
+        emit("applied");
+        emit("close");
+      } catch (e) { error.value = e.message; }
+      applying.value = false;
+    }
+
+    onMounted(detect);
+
+    return { minGap, loading, silences, sourceUsed, checked, applying,
+             error, onSliderInput, detect, checkedCount, checkedDuration, apply };
   },
   template: `
-    <div class="modal-backdrop" @click.self="$emit('cancel')">
-      <div class="modal" style="width:480px;">
-        <div class="eyebrow">ANALIZAR Y CORTAR SILENCIOS</div>
-        <h3>{{ clip.source ? clip.source.original_name : 'Clip' }}</h3>
-        <p class="muted" style="margin: 6px 0 18px;">
-          Analiza el audio del clip y reemplaza este clip por varios (uno por tramo con sonido).
-          Ajustable con umbral de volumen y duración mínima del silencio.
-        </p>
-
-        <div class="op-field">
-          <label>Umbral (dB, más negativo = silencio más profundo)</label>
-          <input type="number" step="1" v-model.number="thresholdDb" :disabled="running">
-        </div>
-        <div class="op-field">
-          <label>Duración mínima del silencio (s)</label>
-          <input type="number" step="0.1" min="0.1" v-model.number="minSilence" :disabled="running">
-        </div>
-
-        <div v-if="running" class="muted" style="margin-top:14px; text-align:center; font-family:var(--font-mono); color:var(--signal); font-size:11px; letter-spacing:0.15em; text-transform:uppercase;">
-          ◉ analizando con ffmpeg…
-        </div>
-
-        <div v-if="error" class="error" style="margin-top:12px;">{{ error }}</div>
-
-        <div v-if="result && !running" class="card" style="margin-top:14px; padding:12px; background: var(--ink-sunken);">
-          <div v-if="result.splits === 0">{{ result.message || 'No se aplicaron cambios.' }}</div>
-          <div v-else>
-            <div class="mono" style="font-size:13px;">
-              <b style="color:var(--signal);">{{ result.splits }}</b> segmentos generados ·
-              <b style="color:var(--signal-hot);">{{ result.removed_seconds }}s</b> removidos ·
-              <b style="color:var(--signal-cool);">{{ result.kept_seconds }}s</b> retenidos
-            </div>
-            <div class="muted" style="margin-top:6px; font-size:11px;">
-              {{ result.silences_detected }} silencio(s) detectado(s).
-            </div>
+    <div class="modal-backdrop" @click.self="$emit('close')">
+      <div class="modal" style="max-width:560px; max-height:80vh; display:flex; flex-direction:column;">
+        <div class="eyebrow">ELIMINAR SILENCIOS</div>
+        <h3>Detectar y cortar pausas</h3>
+        <div style="padding:12px 0;">
+          <label class="style-label" style="display:block;margin-bottom:4px;">
+            Tolerancia de pausa: {{ minGap.toFixed(1) }}s
+          </label>
+          <input type="range" min="0.3" max="3.0" step="0.1"
+                 v-model.number="minGap" @input="onSliderInput"
+                 style="width:100%;">
+          <div class="muted" style="font-size:10px;margin-top:2px;">
+            Detectado desde: {{ sourceUsed || '...' }}
           </div>
         </div>
-
-        <div class="row right" style="margin-top:20px; gap:8px;">
-          <button class="ghost" @click="$emit('cancel')" :disabled="running">Cerrar</button>
-          <button class="primary" @click="run" :disabled="running">
-            {{ running ? 'Procesando…' : (result ? 'Re-procesar' : 'Analizar y aplicar') }}
+        <div v-if="loading" class="muted" style="padding:16px;text-align:center;">
+          Analizando...
+        </div>
+        <div v-else-if="silences.length === 0" class="muted" style="padding:16px;text-align:center;">
+          No se encontraron pausas mayores a {{ minGap.toFixed(1) }}s
+        </div>
+        <div v-else style="flex:1;overflow-y:auto;padding:0;">
+          <div v-for="(s, i) in silences" :key="i" class="silence-row"
+               @click="$emit('seek', s.start)">
+            <input type="checkbox" v-model="checked[i]" @click.stop>
+            <span class="silence-label">{{ s.label }}</span>
+            <span class="badge mono">{{ s.duration.toFixed(1) }}s</span>
+          </div>
+        </div>
+        <div v-if="silences.length > 0" class="silence-summary">
+          <span>Se eliminarán {{ checkedCount }} de {{ silences.length }} pausas
+                ({{ checkedDuration }}s)</span>
+          <button class="primary" @click="apply" :disabled="applying || checkedCount === 0">
+            {{ applying ? 'Aplicando...' : 'Aplicar' }}
           </button>
+        </div>
+        <div v-if="error" class="error" style="padding:8px 0;">{{ error }}</div>
+        <div class="row right" style="margin-top:10px;">
+          <button class="ghost" @click="$emit('close')">Cerrar</button>
         </div>
       </div>
     </div>
@@ -4225,24 +4257,9 @@ var ProjectView = {
       if (c) onSeek(c.start);
     }
 
-    function openSilenceModal(clip) { silenceClip.value = clip; }
-    async function applySilenceRemoval(payload) {
-      try {
-        const r = await api(
-          `/api/projects/${props.project.slug}/timeline/clips/${payload.clip.id}/remove-silences`,
-          {
-            method: "POST",
-            body: {
-              threshold_db: payload.threshold_db,
-              min_silence_seconds: payload.min_silence_seconds,
-            },
-          }
-        );
-        await refreshTimeline();
-        payload.setResult(r);
-      } catch (e) {
-        payload.setError(e.message);
-      }
+    function openSilenceModal() { silenceClip.value = true; }
+    async function onSilenceApplied() {
+      await refreshTimeline();
     }
 
     async function createMoment(payload) {
@@ -4692,7 +4709,7 @@ var ProjectView = {
       addOperation, removeOperation,
       onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, exportMoment,
       showFiles, showClips, focusMode, selectedRange,
-      silenceClip, openSilenceModal, applySilenceRemoval,
+      silenceClip, openSilenceModal, onSilenceApplied,
       showExport, showParticipants,
       showTranscript,
       formatShort,
@@ -4892,9 +4909,10 @@ var ProjectView = {
         />
         <SilenceModal
           v-if="silenceClip"
-          :clip="silenceClip"
-          @apply="applySilenceRemoval"
-          @cancel="silenceClip = null"
+          :slug="project.slug"
+          @close="silenceClip = null"
+          @applied="onSilenceApplied"
+          @seek="onSeek"
         />
         <OperationsPanel
           v-if="selectedMoment"
