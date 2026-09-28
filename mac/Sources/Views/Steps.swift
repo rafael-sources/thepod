@@ -647,6 +647,9 @@ struct ExportStep: View {
                             if !session.project.sponsors.isEmpty {
                                 Toggle("Sponsors en su momento del guion", isOn: $session.project.showSponsors)
                             }
+                            if !session.project.cintillos.isEmpty {
+                                Toggle("Cintillos del director (\(session.project.cintillos.count))", isOn: $session.project.showCintillos)
+                            }
                         }
                     }
                     BigButton(title: "Exportar \(format.title)", symbol: "square.and.arrow.up", disabled: session.isBusy) {

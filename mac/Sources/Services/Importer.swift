@@ -344,6 +344,46 @@ enum Importer {
             }
         }
 
+        // Cintillos del director (prodPod): sponsor, podcast, segmento. Los avisos privados ("cue") no van al video.
+        if db.tableExists("director_events") {
+            let iso = ISO8601DateFormatter()
+            func date(_ s: String?) -> Date? {
+                guard let s else { return nil }
+                return iso.date(from: s) ?? iso.date(from: s.replacingOccurrences(of: " ", with: "T") + "Z")
+            }
+            project.cintillos = try db.query("SELECT * FROM director_events WHERE recording_offset_seconds IS NOT NULL ORDER BY recording_offset_seconds").compactMap { r in
+                guard let id = r.int("id"), let kind = r.string("event_type"), ["sponsor", "banner", "segment", "comment"].contains(kind),
+                      let t0 = r.double("recording_offset_seconds") else { return nil }
+                let p = (r.string("payload").flatMap { $0.data(using: .utf8) }
+                    .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) ?? [:]
+                var title = "", text = ""
+                switch kind {
+                case "sponsor": title = p["sponsor_name"] as? String ?? ""; text = p["sponsor_copy"] as? String ?? ""
+                case "banner": title = p["name"] as? String ?? ""; text = p["title"] as? String ?? ""
+                case "segment": title = p["title"] as? String ?? ""; text = p["subtitle"] as? String ?? ""
+                default: title = p["author"] as? String ?? ""; text = p["text"] as? String ?? ""
+                }
+                guard !(title + text).trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+                var dur = r.double("duration_seconds") ?? 0
+                if dur <= 0, let a = date(r.string("injected_at")), let b = date(r.string("removed_at")) { dur = b.timeIntervalSince(a) }
+                if dur <= 0 { dur = 8 }
+                var logoRel: String?
+                if let fp = r.string("file_path"), !fp.isEmpty {
+                    let name = (fp as NSString).lastPathComponent
+                    let src = root.appendingPathComponent("director_assets/\(name)")
+                    if fm.fileExists(atPath: src.path) {
+                        let rel = "cintillos/\(name)"
+                        let dest = folder.appendingPathComponent(rel)
+                        try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try? fm.removeItem(at: dest)
+                        try? fm.copyItem(at: src, to: dest)
+                        logoRel = rel
+                    }
+                }
+                return DirectorCintillo(id: id, kind: kind, title: title, text: text, start: t0, duration: max(1, dur), logoFile: logoRel)
+            }
+        }
+
         // Moments (marked in postPod / prodPod chapters) → reels
         if db.tableExists("moments") {
             project.moments = try db.query("SELECT * FROM moments ORDER BY timeline_seconds, id").compactMap { r in

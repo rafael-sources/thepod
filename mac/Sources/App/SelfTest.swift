@@ -191,6 +191,26 @@ enum SelfTest {
                 host.cacheDisplay(in: host.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("cintillos.png"))
             }
+            // El mismo cintillo como sale en el video final (1920×1080)
+            let logo = d.podcastLogo?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            let spLogo = sp.flatMap { d.sponsorLogo($0) }?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            var frame = CIImage(color: CIColor(red: 0.2, green: 0.25, blue: 0.3)).cropped(to: CGRect(x: 0, y: 0, width: 1920, height: 1080))
+            if let a = TextRenderer.cintillo(title: d.podcastName, text: "Síguenos en todas las plataformas y comparte el episodio", tag: "AHORA",
+                                             accent: NSColor(srgbRed: 1, green: 0.3, blue: 0.3, alpha: 1), logo: logo, width: 1152, height: 130) {
+                frame = a.transformed(by: .init(translationX: 43, y: 43)).composited(over: frame)
+            }
+            if let sp, let b = TextRenderer.cintillo(title: sp.name, text: sp.copy, tag: "PATROCINA",
+                                                     accent: NSColor(srgbRed: 0.7, green: 0.45, blue: 1, alpha: 1), logo: spLogo, width: 1152, height: 130) {
+                frame = b.transformed(by: .init(translationX: 43, y: 220)).composited(over: frame)
+            }
+            if let c = TextRenderer.cintillo(title: "Segmento de prueba", text: "Sin logo", tag: "SEGMENTO",
+                                             accent: NSColor(srgbRed: 0.4, green: 0.62, blue: 1, alpha: 1), logo: nil, width: 1152, height: 130) {
+                frame = c.transformed(by: .init(translationX: 43, y: 400)).composited(over: frame)
+            }
+            let ctx = CIContext()
+            if let cg = ctx.createCGImage(frame, from: frame.extent) {
+                try? NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("cintillo-video.png"))
+            }
             print("sponsors=\(d.sponsors.map(\.name)) logo=\(d.podcastLogo != nil)")
             fflush(stdout); exit(0)
         }

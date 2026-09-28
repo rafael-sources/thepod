@@ -122,7 +122,8 @@ struct TimelineModel: Equatable {
         cuts = p.cuts.filter(\.enabled).map { $0.start...max($0.start, $0.end) }
         moments = p.moments.map(\.time)
         reels = p.reels.map { $0.start...max($0.start, $0.end) }
-        sponsors = p.showSponsors ? p.sponsorAppearances().map { $0.start...max($0.start, $0.end) } : []
+        sponsors = (p.showSponsors ? p.sponsorAppearances().map { $0.start...max($0.start, $0.end) } : [])
+            + (p.showCintillos ? p.cintillos.map { $0.start...($0.start + $0.duration) } : [])
         effects = p.audioLane.map { $0.tlStart...($0.tlStart + max(0.3, $0.srcOut - $0.srcIn)) }
         lanes = p.lanes.map { lane in
             if let arr = energy?.lanes[lane.id], !arr.isEmpty {

@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import AppKit
 
 /// Builds one AVFoundation composition from the project's edit decisions.
 /// The SAME composition drives the live preview (AVPlayer) and the final export,
@@ -160,6 +161,9 @@ enum CompositionBuilder {
                         .flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                         .map { (lane.id, $0) }
                 }))
+            if project.showCintillos {
+                s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
+            }
             let vc = AVMutableVideoComposition()
             vc.customVideoCompositorClass = PodCompositor.self
             vc.renderSize = format.renderSize
@@ -171,5 +175,30 @@ enum CompositionBuilder {
 
         return BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
                                 keep: keep, duration: outDuration, scene: scene)
+    }
+
+    /// Dibuja cada cintillo una vez, al tamaño del video, y lo ubica en el tiempo del video editado.
+    static func cintilloCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize, vertical: Bool) -> [RenderScene.CintilloCard] {
+        let W = renderSize.width, H = renderSize.height
+        let width = vertical ? W * 0.92 : min(W * 0.6, H * 1.25)
+        let height = vertical ? H * 0.075 : H * 0.12
+        return project.cintillos.compactMap { c in
+            let o = EditEngine.toOutput(c.start, keep: keep)
+                ?? keep.firstIndex { $0.start >= c.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+            guard let o else { return nil }
+            let logo = c.logoFile.flatMap { NSImage(contentsOf: ProjectStore.url($0, in: project.id)) }?
+                .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            let (tag, accent): (String, NSColor) = {
+                switch c.kind {
+                case "sponsor": return ("PATROCINA", NSColor(srgbRed: 0.70, green: 0.45, blue: 1.0, alpha: 1))
+                case "banner": return ("AHORA", NSColor(srgbRed: 1.0, green: 0.30, blue: 0.30, alpha: 1))
+                case "segment": return ("SEGMENTO", NSColor(srgbRed: 0.40, green: 0.62, blue: 1.0, alpha: 1))
+                default: return ("COMENTARIO", NSColor(srgbRed: 0.35, green: 0.85, blue: 0.55, alpha: 1))
+                }
+            }()
+            guard let img = TextRenderer.cintillo(title: c.title, text: c.text, tag: tag, accent: accent, logo: logo,
+                                                  width: width, height: height) else { return nil }
+            return RenderScene.CintilloCard(start: o, end: o + c.duration, image: img)
+        }
     }
 }

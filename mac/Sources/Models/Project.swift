@@ -37,6 +37,8 @@ struct Project: Codable, Identifiable, Equatable {
     var sponsors: [Sponsor] = []
     var segments: [Segment] = []        // script blocks with timing (prePod "blocks")
     var showSponsors: Bool = true
+    var cintillos: [DirectorCintillo] = []   // cintillos que el director puso en vivo (prodPod)
+    var showCintillos: Bool = true
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
@@ -331,6 +333,17 @@ struct ScriptItem: Codable, Equatable, Identifiable {
     var text: String
 }
 
+/// Cintillo tipo noticiero que el director lanzó durante la grabación.
+struct DirectorCintillo: Codable, Equatable, Identifiable {
+    var id: Int
+    var kind: String            // sponsor | banner | segment | comment
+    var title: String
+    var text: String
+    var start: Double           // segundos desde que empezó la grabación
+    var duration: Double
+    var logoFile: String?       // relativo a la carpeta del proyecto
+}
+
 struct Sponsor: Codable, Equatable, Identifiable {
     var id: Int
     var name: String
@@ -389,6 +402,8 @@ extension Project {
         sponsors = try c.decodeIfPresent([Sponsor].self, forKey: .sponsors) ?? []
         segments = try c.decodeIfPresent([Segment].self, forKey: .segments) ?? []
         showSponsors = try c.decodeIfPresent(Bool.self, forKey: .showSponsors) ?? true
+        cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
+        showCintillos = try c.decodeIfPresent(Bool.self, forKey: .showCintillos) ?? true
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []

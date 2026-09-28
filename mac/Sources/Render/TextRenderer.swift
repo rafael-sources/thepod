@@ -147,6 +147,64 @@ enum TextRenderer {
         }
     }
 
+    /// Cintillo tipo noticiero: logo a la izquierda, arriba el título sobre el color, abajo el texto sobre blanco.
+    static func cintillo(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CIImage? {
+        let showLogo = logo != nil || tag != "SEGMENTO"
+        let logoW = showLogo ? height : 0
+        let topH = height * 0.44, botH = height - topH
+        return draw(size: CGSize(width: width, height: height)) { ctx in
+            // Barra de color (arriba) y barra blanca (abajo); en Core Graphics y=0 es abajo
+            ctx.setFillColor(NSColor.white.withAlphaComponent(0.95).cgColor)
+            ctx.fill(CGRect(x: logoW, y: 0, width: width - logoW, height: botH))
+            ctx.setFillColor(accent.cgColor)
+            ctx.fill(CGRect(x: logoW, y: botH, width: width - logoW, height: topH))
+            if showLogo {
+                ctx.setFillColor(NSColor.white.cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: logoW, height: height))
+                if let logo {
+                    let pad = height * 0.08
+                    let box = CGRect(x: pad, y: pad, width: logoW - 2 * pad, height: height - 2 * pad)
+                    let s = min(box.width / CGFloat(logo.width), box.height / CGFloat(logo.height))
+                    let w = CGFloat(logo.width) * s, h = CGFloat(logo.height) * s
+                    ctx.interpolationQuality = .high
+                    ctx.draw(logo, in: CGRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h))
+                } else {
+                    let ini = NSAttributedString(string: String(title.prefix(1)).uppercased(), attributes: [
+                        .font: NSFont.systemFont(ofSize: height * 0.45, weight: .black), .foregroundColor: accent])
+                    let l = CTLineCreateWithAttributedString(ini)
+                    let b = CTLineGetBoundsWithOptions(l, .useGlyphPathBounds)
+                    ctx.textPosition = CGPoint(x: (logoW - b.width) / 2 - b.minX, y: (height - b.height) / 2 - b.minY)
+                    CTLineDraw(l, ctx)
+                }
+            }
+            func line(_ str: String, font: NSFont, color: NSColor, x: CGFloat, maxW: CGFloat, midY: CGFloat) -> CGFloat {
+                let a = NSAttributedString(string: str, attributes: [.font: font, .foregroundColor: color])
+                var l = CTLineCreateWithAttributedString(a)
+                let dots = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: [.font: font, .foregroundColor: color]))
+                if let t = CTLineCreateTruncatedLine(l, Double(maxW), .end, dots) { l = t }
+                var asc: CGFloat = 0, desc: CGFloat = 0
+                let w = CGFloat(CTLineGetTypographicBounds(l, &asc, &desc, nil))
+                ctx.textPosition = CGPoint(x: x, y: midY - (asc - desc) / 2)
+                CTLineDraw(l, ctx)
+                return w
+            }
+            let pad = height * 0.14
+            var x = logoW + pad
+            if !tag.isEmpty {
+                let f = NSFont.systemFont(ofSize: topH * 0.36, weight: .heavy)
+                let tw = (tag as NSString).size(withAttributes: [.font: f]).width
+                ctx.setFillColor(NSColor.black.withAlphaComponent(0.25).cgColor)
+                ctx.fill(CGRect(x: x, y: botH + topH * 0.2, width: tw + pad * 0.8, height: topH * 0.6))
+                _ = line(tag, font: f, color: .white, x: x + pad * 0.4, maxW: tw + 4, midY: botH + topH / 2)
+                x += tw + pad * 1.4
+            }
+            _ = line(title.uppercased(), font: NSFont.systemFont(ofSize: topH * 0.52, weight: .heavy), color: .white,
+                     x: x, maxW: width - x - pad, midY: botH + topH / 2)
+            _ = line(text, font: NSFont.systemFont(ofSize: botH * 0.42, weight: .semibold), color: .black,
+                     x: logoW + pad, maxW: width - logoW - 2 * pad, midY: botH / 2)
+        }
+    }
+
     /// Title card text (audio-only video, empty frames).
     static func title(_ text: String, fontSize: CGFloat, maxWidth: CGFloat) -> CIImage? {
         let para = NSMutableParagraphStyle()

@@ -21,6 +21,9 @@ final class RenderScene: @unchecked Sendable {
     let title: String
     struct SponsorCard { let start: Double; let end: Double; let name: String; let copy: String?; let logo: CIImage? }
     let sponsorCards: [SponsorCard]
+    /// Cintillos del director ya dibujados (se colocan abajo a la izquierda y entran deslizándose).
+    struct CintilloCard { let start: Double; let end: Double; let image: CIImage }
+    var cintillos: [CintilloCard] = []
 
     private var cache: [String: CIImage] = [:]
     private let lock = NSLock()
@@ -142,6 +145,19 @@ final class RenderScene: @unchecked Sendable {
             }
         }
 
+        // Cintillos del director: abajo a la izquierda, entran desde la izquierda y salen igual
+        var cintilloTop: CGFloat = 0
+        for c in cintillos where t >= c.start && t < c.end {
+            let img = c.image
+            let m = min(W, H) * 0.04
+            let p = min(1, (t - c.start) / 0.4), q = min(1, (c.end - t) / 0.3)
+            let k = CGFloat(1 - pow(1 - min(p, q), 3))
+            let x = m - (img.extent.width + m) * (1 - k)
+            let y = format.isVertical ? H * 0.30 : m
+            out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
+            cintilloTop = max(cintilloTop, y + img.extent.height)
+        }
+
         if style.enabled, let (idx, line) = caption(at: t) {
             let active = line.words.lastIndex { $0.start <= t + 0.02 }
             let base = min(W, H)
@@ -157,7 +173,7 @@ final class RenderScene: @unchecked Sendable {
                 let x = (W - img.extent.width) / 2
                 let y: CGFloat
                 switch style.position {
-                case .bottom: y = format.isVertical ? H * 0.20 : H * 0.07
+                case .bottom: y = max(format.isVertical ? H * 0.20 : H * 0.07, cintilloTop > 0 && !format.isVertical ? cintilloTop + H * 0.03 : 0)
                 case .center: y = (H - img.extent.height) / 2 - (format.isVertical ? H * 0.05 : 0)
                 case .top: y = H - img.extent.height - H * (format.isVertical ? 0.14 : 0.07)
                 }
