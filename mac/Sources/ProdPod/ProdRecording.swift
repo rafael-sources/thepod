@@ -92,6 +92,20 @@ extension ProdStudio {
             if let f = m["filename"] as? String { play(f) }
         case "chat":
             receiveChat(m)
+        case "overlay_inject":
+            if var o = Overlay.from(m) {
+                overlays.removeAll { $0.id == o.id }
+                overlays.append(o)
+                let sid = session.id
+                Task {
+                    o.image = await OverlayImages.load(sessionId: sid, filePath: o.filePath)
+                    if let i = overlays.firstIndex(where: { $0.id == o.id }) { overlays[i].image = o.image }
+                }
+            }
+        case "overlay_remove":
+            if let id = m["event_id"] as? Int { overlays.removeAll { $0.id == id } }
+        case "director_chat":
+            if let t = m["text"] as? String, !t.isEmpty { flash("Director: \(t)") }
         case "hand_raise":
             if let id = m["identity"] as? String {
                 let up = (m["up"] as? Bool) ?? false
@@ -367,6 +381,7 @@ extension ProdStudio {
 
     /// Cada décima de segundo mientras se graba: reloj, avisos de sponsor y momento automático.
     func tickRecording() {
+        if !overlays.isEmpty { overlays.removeAll { ($0.expires ?? .distantFuture) < Date() } }
         guard recording else { return }
         let t = Date().timeIntervalSince(recordStart)
         recSeconds = Int(t)

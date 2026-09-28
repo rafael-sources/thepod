@@ -19,6 +19,8 @@ final class AppModel: ObservableObject {
     @Published var prodRequest: Int?
     /// La sala abierta en prod (sigue conectada aunque cambies a pre o post).
     @Published var studio: ProdStudio?
+    /// Cuarto de control abierto (director).
+    @Published var director: DirectorStudio?
     @Published var projects: [Project] = []
     @Published var session: ProjectSession?
     @Published var importJob: JobState?

@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -156,6 +156,46 @@ enum SelfTest {
         }
     }
 
+    /// Cintillos con los logos y sponsors reales de un podcast (solo lectura, no entra a ninguna sala).
+    @MainActor
+    static func cintilloSnapshot(slug: String, dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var s = ProdPodClient.Session(id: 0, title: "Prueba")
+        s.source_slug = slug
+        let d = DirectorStudio(session: s)
+        Task { @MainActor in
+            await d.loadBranding()
+            let sp = d.sponsors.first
+            let view = VStack(alignment: .leading, spacing: 30) {
+                if let sp {
+                    Cintillo(overlay: Overlay(id: 1, kind: "sponsor", title: sp.name, text: sp.copy.isEmpty ? "Gracias por acompañarnos" : sp.copy,
+                                              filePath: nil, image: d.sponsorLogo(sp), expires: nil))
+                }
+                Cintillo(overlay: Overlay(id: 2, kind: "banner", title: d.podcastName, text: "Síguenos en todas las plataformas y comparte el episodio",
+                                          filePath: nil, image: d.podcastLogo, expires: nil))
+                Cintillo(overlay: Overlay(id: 3, kind: "segment", title: "La cláusula de la vulnerabilidad", text: "Por qué pedir ayuda nos parece una debilidad",
+                                          filePath: nil, image: nil, expires: nil))
+            }
+            .padding(40)
+            .frame(width: 1280, height: 720, alignment: .bottomLeading)
+            .background(LinearGradient(colors: [Color(white: 0.25), Color(white: 0.12)], startPoint: .top, endPoint: .bottom))
+            let host = NSHostingView(rootView: view)
+            host.frame = NSRect(x: 0, y: 0, width: 1280, height: 720)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.contentView = host
+            win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+            win.orderFrontRegardless()
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            host.layoutSubtreeIfNeeded()
+            if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                host.cacheDisplay(in: host.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("cintillos.png"))
+            }
+            print("sponsors=\(d.sponsors.map(\.name)) logo=\(d.podcastLogo != nil)")
+            fflush(stdout); exit(0)
+        }
+    }
+
     /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
     @MainActor
     static func prepodTest() {
@@ -251,11 +291,18 @@ enum SelfTest {
             }
             return
         }
+        if let i = args.firstIndex(of: "--cintillo-snapshot"), args.count > i + 2 {
+            let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { cintilloSnapshot(slug: slug, dir: dir) }
+            return
+        }
         if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod
             Task { @MainActor in
                 do {
                     let list = try await ProdPodClient.shared.sessions()
                     print("OK prodPod sesiones=\(list.count)")
+                    let dp = (try? await ProdPodClient.shared.directorProjects()) ?? []
+                    print("director de: \(dp.count) podcasts; salas dirigibles: \(list.filter { dp.contains($0.shared_project_id ?? "-") }.map(\.id))")
                     for s in list.prefix(8) { print("  #\(s.id) · \(s.title) · \(s.status ?? "-")") }
                 } catch { print("ERROR \(error.localizedDescription)") }
                 fflush(stdout); exit(0)

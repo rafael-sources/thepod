@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return .terminateCancel
         }
+        if let dir = DirectorStudio.current, dir.connected, !leavingRoom {
+            leavingRoom = true
+            Task { @MainActor in await dir.leave(); sender.terminate(nil) }
+            return .terminateCancel
+        }
         guard Self.soundOnQuit, !SelfTest.isRequested, player == nil,
               let url = Bundle.main.url(forResource: "thepod-logout", withExtension: "wav"),
               let p = try? AVAudioPlayer(contentsOf: url) else { return .terminateNow }

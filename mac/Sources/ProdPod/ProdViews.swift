@@ -10,11 +10,14 @@ struct ProdHomeView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var showFinished = false
+    @State private var directing: Set<String> = []
 
     var body: some View {
         Group {
             if let studio = app.studio {
                 StudioView(studio: studio)
+            } else if let dir = app.director {
+                DirectorView(dir: dir)
             } else {
                 list
             }
@@ -60,13 +63,13 @@ struct ProdHomeView: View {
                 if !open.isEmpty {
                     Text("Por grabar").font(.title2.bold())
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], spacing: 14) {
-                        ForEach(open) { s in SessionCard(session: s) { enter(s) } }
+                        ForEach(open) { s in SessionCard(session: s, canDirect: canDirect(s), direct: { direct(s) }) { enter(s) } }
                     }
                 }
                 if !done.isEmpty {
                     DisclosureGroup(isExpanded: $showFinished) {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], spacing: 14) {
-                            ForEach(done) { s in SessionCard(session: s) { enter(s) } }
+                            ForEach(done) { s in SessionCard(session: s, canDirect: canDirect(s), direct: { direct(s) }) { enter(s) } }
                         }
                         .padding(.top, 8)
                     } label: {
@@ -86,6 +89,7 @@ struct ProdHomeView: View {
             defer { loading = false }
             do {
                 sessions = try await ProdPodClient.shared.sessions()
+                directing = (try? await ProdPodClient.shared.directorProjects()) ?? []
                 error = nil
                 if let want = app.prodRequest {
                     app.prodRequest = nil
@@ -98,13 +102,25 @@ struct ProdHomeView: View {
     }
 
     private func enter(_ s: ProdPodClient.Session) {
-        guard app.studio == nil else { return }
+        guard app.studio == nil, app.director == nil else { return }
         app.studio = ProdStudio(session: s)
+    }
+
+    private func canDirect(_ s: ProdPodClient.Session) -> Bool {
+        guard let sp = s.shared_project_id else { return false }
+        return directing.contains(sp)
+    }
+
+    private func direct(_ s: ProdPodClient.Session) {
+        guard app.studio == nil, app.director == nil else { return }
+        app.director = DirectorStudio(session: s)
     }
 }
 
 private struct SessionCard: View {
     let session: ProdPodClient.Session
+    var canDirect = false
+    var direct: () -> Void = {}
     let enter: () -> Void
     @State private var hover = false
     @State private var sending = false
@@ -151,6 +167,10 @@ private struct SessionCard: View {
                     Button { export() } label: { Label(sending ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill") }
                         .disabled(sending)
                         .help("Manda las pistas de esta grabación a postPod")
+                }
+                if canDirect {
+                    Button(action: direct) { Label("Dirigir", systemImage: "film.stack") }
+                        .help("Entrar al cuarto de control como director")
                 }
                 Button(action: enter) { Label("Entrar", systemImage: "arrow.right") }
                     .buttonStyle(.borderedProminent)
@@ -404,6 +424,13 @@ struct StudioView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay { countdownOverlay }
                 .overlay(alignment: .top) { banners }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(studio.overlays) { o in Cintillo(overlay: o, scale: 0.9) }
+                    }
+                    .padding(28)
+                    .animation(.spring(duration: 0.4), value: studio.overlays)
+                }
 
                 HStack(spacing: 14) {
                     recordControls

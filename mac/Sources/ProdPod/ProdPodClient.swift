@@ -21,6 +21,7 @@ actor ProdPodClient {
         var source_episode_id: Int?
         var created_at: String?
         var finished_at: String?
+        var shared_project_id: String?
     }
 
     struct Person: Decodable, Identifiable, Hashable {
@@ -174,6 +175,36 @@ actor ProdPodClient {
     }
 
     func leave(_ id: Int) async { _ = try? await send("POST", "/api/sessions/\(id)/leave") }
+
+    // MARK: Director
+
+    struct DirectorJoin: Decodable {
+        let participant_id: Int
+        let display_name: String
+        let livekit_ws_url: String
+        let livekit_token: String
+    }
+
+    func directorJoin(_ id: Int) async throws -> DirectorJoin {
+        try JSONDecoder().decode(DirectorJoin.self, from: await send("GET", "/api/sessions/\(id)/director-token"))
+    }
+
+    /// Podcasts (shared_project_id) donde tu cuenta es director.
+    func directorProjects() async throws -> Set<String> {
+        let d = try await send("GET", "/api/director/my-podcasts")
+        let list = (try? JSONSerialization.jsonObject(with: d) as? [[String: Any]]) ?? []
+        return Set(list.compactMap { $0["shared_project_id"] as? String })
+    }
+
+    /// Sube una imagen para los cintillos; devuelve su file_path en el servidor.
+    func uploadDirectorAsset(_ sid: Int, data: Data, name: String) async throws -> String {
+        let (code, obj) = try await multipart("/api/sessions/\(sid)/director/assets", fields: [:], fileField: "file",
+                                              fileName: name, fileData: data)
+        guard (200..<300).contains(code), let fp = obj["file_path"] as? String else {
+            throw PrePodClient.Failure(message: obj["error"] as? String ?? "No se pudo subir la imagen (\(code))")
+        }
+        return fp
+    }
 
     func participants(_ id: Int) async throws -> [Person] {
         try JSONDecoder().decode([Person].self, from: await send("GET", "/api/sessions/\(id)/participants"))

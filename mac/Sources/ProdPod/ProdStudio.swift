@@ -129,6 +129,7 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var backstage: [ChatMsg] = []
     @Published var unreadChat = 0
     @Published var hands: [String: Bool] = [:]
+    @Published var overlays: [Overlay] = []
     @Published var myHand = false
     @Published var liveStream: [String: Any]?
     @Published var rtmpPresets: [[String: String]] = []
