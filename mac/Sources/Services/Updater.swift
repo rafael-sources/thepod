@@ -200,13 +200,30 @@ final class Updater: ObservableObject {
         guard let newApp = stagedApp else { return }
         let target = Bundle.main.bundleURL
         let pid = ProcessInfo.processInfo.processIdentifier
+        // Nunca borra la app instalada antes de tener la nueva copiada y completa al lado.
+        // Si algo falla, deja la que había y la vuelve a abrir. Todo queda en ~/Library/Logs/thePod-actualizacion.log
+        let t = target.path, n = target.path + ".nueva", o = target.path + ".anterior"
+        let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/thePod-actualizacion.log").path
         let script = """
+        exec >>'\(log)' 2>&1
+        echo "== $(date) actualizando"
         while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done
-        rm -rf '\(target.path)'
-        /usr/bin/ditto '\(newApp.path)' '\(target.path)'
-        /usr/bin/xattr -dr com.apple.quarantine '\(target.path)' 2>/dev/null
+        rm -rf '\(n)' '\(o)'
+        if /usr/bin/ditto '\(newApp.path)' '\(n)' && [ -x '\(n)/Contents/MacOS/thePod' ]; then
+          /usr/bin/xattr -dr com.apple.quarantine '\(n)' 2>/dev/null
+          if mv '\(t)' '\(o)' && mv '\(n)' '\(t)'; then
+            rm -rf '\(o)'; echo "ok"
+          else
+            echo "no se pudo reemplazar; se deja la anterior"
+            [ -d '\(t)' ] || mv '\(o)' '\(t)'
+            rm -rf '\(n)'
+          fi
+        else
+          echo "no se pudo copiar la nueva; se deja la anterior"
+          rm -rf '\(n)'
+        fi
         rm -rf '\(newApp.deletingLastPathComponent().path)'
-        /usr/bin/open '\(target.path)'
+        /usr/bin/open '\(t)'
         """
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
