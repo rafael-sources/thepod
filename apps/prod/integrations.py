@@ -161,15 +161,33 @@ def import_from_prepod():
         source_slug = (podcast.get("slug") or "").strip() or None
         source_episode_id = episode.get("id")
 
+        # Branding y sponsors para los cintillos del director: prePod los
+        # manda en el payload; se guardan con la sesión.
+        branding = podcast.get("branding") or {}
+        podcast_logo_url = (branding.get("logo_url") or "").strip() or None
+        sponsors_json = None
+        sponsors_in = episode.get("sponsors") or []
+        if sponsors_in:
+            try:
+                sponsors_json = _json.dumps([
+                    {"name": s.get("name"), "copy": s.get("copy"),
+                     "logo_url": s.get("logo_url")}
+                    for s in sponsors_in if isinstance(s, dict) and s.get("name")
+                ], ensure_ascii=False)
+            except (TypeError, ValueError):
+                sponsors_json = None
+
         cur = db.execute(
             """
             INSERT INTO sessions (title, description, max_participants,
                                   created_by, shared_project_id, status,
-                                  source_url, source_slug, source_episode_id)
-            VALUES (?, ?, ?, ?, ?, 'preparing', ?, ?, ?)
+                                  source_url, source_slug, source_episode_id,
+                                  podcast_name, podcast_logo_url, sponsors_json)
+            VALUES (?, ?, ?, ?, ?, 'preparing', ?, ?, ?, ?, ?, ?)
             """,
             (session_title, description, MAX_SESSION_PARTICIPANTS, creator, spid,
-             source_url, source_slug, source_episode_id),
+             source_url, source_slug, source_episode_id,
+             podcast_name, podcast_logo_url, sponsors_json),
         )
         sid = cur.lastrowid
         room_name = room_name_for_session(sid)

@@ -541,6 +541,74 @@ function _newTakeId() {
   catch (_) { return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
 }
 
+/* ==========================================================================
+   Cintillos del director (mismo contrato que la app de Mac)
+   overlay_inject: {type, event_type, payload, event_id, file_path,
+   duration_seconds} — duration 0 = hasta overlay_remove.
+   ========================================================================== */
+
+var CINTILLO_TYPES = ["sponsor", "banner", "segment"];
+
+function cintilloTitle(ov) {
+  var p = ov.payload || {};
+  if (ov.event_type === "sponsor") return p.sponsor_name || "Sponsor";
+  if (ov.event_type === "banner")  return p.name || p.title || "";
+  return p.title || "";
+}
+function cintilloText(ov) {
+  var p = ov.payload || {};
+  if (ov.event_type === "sponsor") return p.sponsor_copy || "";
+  if (ov.event_type === "banner")  return p.title || "";
+  return p.subtitle || "";
+}
+function fmtCountdown(s) {
+  s = Math.max(0, Math.round(+s || 0));
+  var m = Math.floor(s / 60), r = s % 60;
+  return m > 0 ? (m + ":" + String(r).padStart(2, "0")) : (r + "s");
+}
+
+function _dropOverlay(activeOverlays, eventId) {
+  var i = activeOverlays.findIndex(function (o) { return o.event_id === eventId; });
+  if (i !== -1) {
+    if (activeOverlays[i]._tick) clearInterval(activeOverlays[i]._tick);
+    activeOverlays.splice(i, 1);
+  }
+}
+
+/* Alta de un overlay: respeta duration_seconds si viene (0 = hasta que lo
+   quiten); si no viene, la tabla histórica. El countdown cuenta de verdad. */
+function _admitOverlay(activeOverlays, msg) {
+  _dropOverlay(activeOverlays, msg.event_id);  // por si llega repetido
+  activeOverlays.push({
+    event_id: msg.event_id,
+    event_type: msg.event_type,
+    payload: msg.payload || {},
+    file_path: msg.file_path || null,
+    remaining: null,
+  });
+  var ov = activeOverlays[activeOverlays.length - 1];  // proxy reactivo
+  if (msg.event_type === "countdown") {
+    var secs = Math.max(0, +((msg.payload || {}).seconds) || 0);
+    var endsAt = Date.now() + secs * 1000;
+    ov.remaining = secs;
+    ov._tick = setInterval(function () {
+      ov.remaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      if (ov.remaining <= 0) _dropOverlay(activeOverlays, msg.event_id);
+    }, 400);
+    return;
+  }
+  var ms;
+  if (msg.duration_seconds != null && msg.duration_seconds !== "") {
+    ms = (+msg.duration_seconds || 0) * 1000;
+  } else {
+    var table = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000 };
+    ms = table[msg.event_type] != null ? table[msg.event_type] : 10000;
+  }
+  if (ms > 0) {
+    setTimeout(function () { _dropOverlay(activeOverlays, msg.event_id); }, ms);
+  }
+}
+
 function createChunkUploader(opts) {
   // opts: { sid, token, trackType, takeId, onStatus(st), sendData(state, bytes) }
   var skey = "s" + opts.sid + ":" + (opts.token || "host") + ":" + (opts.trackType || "video");
@@ -1018,6 +1086,17 @@ var StudioView = {
 
     // ---- Director signals (host receives these) ----
     var activeOverlays = reactive([]);
+    var cintilloOverlays = computed(function () {
+      return activeOverlays.filter(function (o) { return CINTILLO_TYPES.indexOf(o.event_type) !== -1; });
+    });
+    var otherOverlays = computed(function () {
+      return activeOverlays.filter(function (o) { return CINTILLO_TYPES.indexOf(o.event_type) === -1; });
+    });
+    function ovLogoUrl(ov) {
+      if (!ov.file_path) return null;
+      return "/api/sessions/" + props.session.id + "/director/assets/" +
+             encodeURIComponent(String(ov.file_path).split("/").pop());
+    }
     var activeCue = ref(null);
     var cueTimer = null;
     var ifbActive = ref(false);
@@ -1819,18 +1898,9 @@ var StudioView = {
         error.value = "El host te desconectó.";
         disconnect();
       } else if (msg.type === "overlay_inject") {
-        activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload, file_path: msg.file_path });
-        var _ovDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
-        var _ovMs = _ovDur[msg.event_type] || 10000;
-        if (_ovMs > 0) {
-          setTimeout(function () {
-            var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
-            if (oi !== -1) activeOverlays.splice(oi, 1);
-          }, _ovMs);
-        }
+        _admitOverlay(activeOverlays, msg);
       } else if (msg.type === "overlay_remove") {
-        var idx = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
-        if (idx !== -1) activeOverlays.splice(idx, 1);
+        _dropOverlay(activeOverlays, msg.event_id);
       } else if (msg.type === "director_cue") {
         var cueMap = { "CERRAR TEMA": "wrap-up", "SIGUIENTE TEMA": "next-topic", "PAUSA": "break", "MÁS RÁPIDO": "speed-up", "MÁS LENTO": "slow-down", "LEER ANUNCIO": "ad-read", "CUSTOM": "custom" };
         if (msg.target === "all" || msg.target === myIdentity.value) {
@@ -2717,7 +2787,9 @@ var StudioView = {
       askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
       layoutMode: layoutMode, spotlightId: spotlightId, toggleLayout: toggleLayout,
       spotlightParticipant: spotlightParticipant, pinSpotlight: pinSpotlight,
-      activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
+      activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
+      ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
+      activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
       amaPanel: amaPanel, amaEmbedUrl: amaEmbedUrl, amaEventId: amaEventId, amaBusy: amaBusy,
       startAma: startAma, closeAma: closeAma,
     };
@@ -2808,31 +2880,24 @@ var StudioView = {
         <div v-if="activeCue.text" style="font-size: 13px; font-weight: 400; margin-top: 4px;">{{ activeCue.text }}</div>
       </div>
 
-      <div v-if="activeOverlays.length" class="director-overlay">
-        <div v-for="ov in activeOverlays" :key="ov.event_id" class="overlay-card" :class="ov.event_type">
-          <template v-if="ov.event_type === 'banner'">
-            <div class="ov-name">{{ ov.payload.name }}</div>
-            <div class="ov-title">{{ ov.payload.title }}</div>
-          </template>
-          <template v-else-if="ov.event_type === 'segment'">
-            <div class="ov-title">{{ ov.payload.title }}</div>
-            <div class="ov-subtitle">{{ ov.payload.subtitle }}</div>
-          </template>
-          <template v-else-if="ov.event_type === 'comment'">
+      <div v-if="cintilloOverlays.length" class="cintillo-layer">
+        <div v-for="ov in cintilloOverlays" :key="ov.event_id" class="cintillo" :class="ov.event_type">
+          <div v-if="ovLogoUrl(ov)" class="c-logo"><img :src="ovLogoUrl(ov)" alt=""></div>
+          <div class="c-bars">
+            <div class="c-title">{{ cintilloTitle(ov) }}</div>
+            <div v-if="cintilloText(ov)" class="c-text">{{ cintilloText(ov) }}</div>
+          </div>
+        </div>
+      </div>
+      <div v-if="otherOverlays.length" class="director-overlay">
+        <div v-for="ov in otherOverlays" :key="ov.event_id" class="overlay-card" :class="ov.event_type">
+          <template v-if="ov.event_type === 'comment'">
             <div class="ov-author">{{ ov.payload.author }} · {{ ov.payload.platform }}</div>
             <div class="ov-text">{{ ov.payload.text }}</div>
           </template>
           <template v-else-if="ov.event_type === 'countdown'">
             <div class="ov-label">{{ ov.payload.label }}</div>
-            <div class="ov-timer">{{ ov.payload.seconds }}s</div>
-          </template>
-          <template v-else-if="ov.event_type === 'sponsor'">
-            <div class="ov-sponsor-name">{{ ov.payload.sponsor_name }}</div>
-            <div class="ov-title">{{ ov.payload.sponsor_copy }}</div>
-          </template>
-          <template v-else-if="ov.event_type === 'graphic'">
-            <img v-if="ov.file_path" :src="'/api/sessions/' + session.id + '/director/assets/' + ov.file_path.split('/').pop()" />
-            <div v-if="ov.payload.caption" class="ov-title">{{ ov.payload.caption }}</div>
+            <div class="ov-timer">{{ fmtCountdown(ov.remaining) }}</div>
           </template>
         </div>
       </div>
@@ -3559,6 +3624,18 @@ var GuestStudioView = {
 
     // Director state
     var activeOverlays = reactive([]);
+    var cintilloOverlays = computed(function () {
+      return activeOverlays.filter(function (o) { return CINTILLO_TYPES.indexOf(o.event_type) !== -1; });
+    });
+    var otherOverlays = computed(function () {
+      return activeOverlays.filter(function (o) { return CINTILLO_TYPES.indexOf(o.event_type) === -1; });
+    });
+    function ovLogoUrl(ov) {
+      if (!ov.file_path) return null;
+      return "/api/sessions/" + props.joinData.session_id + "/director/assets/" +
+             encodeURIComponent(String(ov.file_path).split("/").pop()) +
+             "?token=" + encodeURIComponent(props.inviteToken);
+    }
     var activeCue = ref(null);
     var cueTimer = null;
     var ifbActive = ref(false);
@@ -3652,18 +3729,9 @@ var GuestStudioView = {
         error.value = "El host te desconectó.";
         leave();
       } else if (msg.type === "overlay_inject") {
-        activeOverlays.push({ event_id: msg.event_id, event_type: msg.event_type, payload: msg.payload });
-        var _gOvDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
-        var _gOvMs = _gOvDur[msg.event_type] || 10000;
-        if (_gOvMs > 0) {
-          setTimeout(function () {
-            var gi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
-            if (gi !== -1) activeOverlays.splice(gi, 1);
-          }, _gOvMs);
-        }
+        _admitOverlay(activeOverlays, msg);
       } else if (msg.type === "overlay_remove") {
-        var oi = activeOverlays.findIndex(function (o) { return o.event_id === msg.event_id; });
-        if (oi !== -1) activeOverlays.splice(oi, 1);
+        _dropOverlay(activeOverlays, msg.event_id);
       } else if (msg.type === "director_cue") {
         if (!guestCuesVisible.value) return;
         var gCueMap = { "CERRAR TEMA": "wrap-up", "SIGUIENTE TEMA": "next-topic", "PAUSA": "break", "MÁS RÁPIDO": "speed-up", "MÁS LENTO": "slow-down", "LEER ANUNCIO": "ad-read" };
@@ -4096,7 +4164,9 @@ var GuestStudioView = {
              recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB,
              uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
              postRecording: postRecording,
-             activeOverlays: activeOverlays, activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
+             activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
+             ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
+             activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
   },
   template: `
     <div class="studio">
@@ -4192,22 +4262,23 @@ var GuestStudioView = {
           <div class="countdown-num">{{ countdown > 0 ? countdown : '●' }}</div>
           <div class="countdown-label">{{ countdown > 0 ? 'preparándose…' : 'GRABANDO' }}</div>
         </div>
-        <div v-if="activeOverlays.length" class="director-overlay">
-          <div v-for="ov in activeOverlays" :key="ov.event_id" class="overlay-card" :class="'overlay-' + ov.event_type">
-            <template v-if="ov.event_type === 'banner'">
-              <div class="ov-name">{{ ov.payload.name }}</div><div class="ov-title">{{ ov.payload.title }}</div>
+        <div v-if="cintilloOverlays.length" class="cintillo-layer">
+          <div v-for="ov in cintilloOverlays" :key="ov.event_id" class="cintillo" :class="ov.event_type">
+            <div v-if="ovLogoUrl(ov)" class="c-logo"><img :src="ovLogoUrl(ov)" alt=""></div>
+            <div class="c-bars">
+              <div class="c-title">{{ cintilloTitle(ov) }}</div>
+              <div v-if="cintilloText(ov)" class="c-text">{{ cintilloText(ov) }}</div>
+            </div>
+          </div>
+        </div>
+        <div v-if="otherOverlays.length" class="director-overlay">
+          <div v-for="ov in otherOverlays" :key="ov.event_id" class="overlay-card" :class="ov.event_type">
+            <template v-if="ov.event_type === 'comment'">
+              <div class="ov-author">{{ ov.payload.author }}</div><div class="ov-text">{{ ov.payload.text }}</div>
             </template>
-            <template v-else-if="ov.event_type === 'segment'">
-              <div class="ov-name">{{ ov.payload.title }}</div><div class="ov-title">{{ ov.payload.subtitle }}</div>
-            </template>
-            <template v-else-if="ov.event_type === 'comment'">
-              <div class="ov-name">{{ ov.payload.author }}</div><div class="ov-title">{{ ov.payload.text }}</div>
-            </template>
-            <template v-else-if="ov.event_type === 'sponsor'">
-              <div class="ov-name">{{ ov.payload.sponsor_name }}</div><div class="ov-title">{{ ov.payload.sponsor_copy }}</div>
-            </template>
-            <template v-else>
-              <div class="ov-name">{{ ov.event_type }}</div>
+            <template v-else-if="ov.event_type === 'countdown'">
+              <div class="ov-label">{{ ov.payload.label }}</div>
+              <div class="ov-timer">{{ fmtCountdown(ov.remaining) }}</div>
             </template>
           </div>
         </div>
@@ -4356,15 +4427,96 @@ var DirectorView = {
     var countdown = ref(null);
     var countdownHandle = null;
 
-    // Injection forms
-    var injectType = ref("banner");
+    // Injection forms (comment / countdown — pestaña "Otros")
+    var injectType = ref("comment");
     var injectFields = reactive({
-      name: "", title: "", subtitle: "",
-      sponsor_name: "", sponsor_copy: "",
       author: "", text: "", platform: "youtube",
       seconds: 180, label: "Volvemos en",
-      caption: "",
     });
+
+    // ---- Cintillos (Sponsor / Podcast / Segmento), mismo contrato que la Mac ----
+    var branding = ref({ podcast_name: "", podcast_logo_url: null, sponsors: [] });
+    var cin = reactive({
+      tab: "sponsor",          // sponsor | podcast | segment | otros
+      sponsorIdx: 0,
+      text: "",                // texto editable (copy del sponsor / momento del podcast)
+      podTitle: "",            // título del cintillo de podcast (default: nombre)
+      segTitle: "", segSubtitle: "",
+      duration: 8,             // 8 | 15 | 30 | 0 (hasta quitarlo)
+      busy: false,
+    });
+    var _assetCache = {};      // logo_url -> file_path (subido una vez por sesión)
+
+    async function loadBranding() {
+      try {
+        branding.value = await api("/api/sessions/" + props.session.id + "/director/branding");
+        if (!cin.podTitle) cin.podTitle = branding.value.podcast_name || "";
+        _prefillSponsor();
+      } catch (_) {}
+    }
+    function _prefillSponsor() {
+      var sp = (branding.value.sponsors || [])[cin.sponsorIdx];
+      if (cin.tab === "sponsor") cin.text = (sp && sp.copy) || "";
+    }
+    watch(function () { return cin.sponsorIdx; }, _prefillSponsor);
+    watch(function () { return cin.tab; }, function (t) {
+      if (t === "sponsor") _prefillSponsor();
+      else if (t === "podcast") cin.text = "";
+    });
+
+    // Vista previa exacta: mismo objeto que se manda por overlay_inject.
+    var cinPreview = computed(function () {
+      if (cin.tab === "sponsor") {
+        var sp = (branding.value.sponsors || [])[cin.sponsorIdx] || {};
+        return { event_type: "sponsor", logo: sp.logo_url || null,
+                 payload: { sponsor_name: sp.name || "Sponsor", sponsor_copy: cin.text, style: "cintillo" } };
+      }
+      if (cin.tab === "podcast") {
+        return { event_type: "banner", logo: branding.value.podcast_logo_url,
+                 payload: { name: cin.podTitle || branding.value.podcast_name || "Podcast", title: cin.text, style: "cintillo" } };
+      }
+      return { event_type: "segment", logo: null,
+               payload: { title: cin.segTitle, subtitle: cin.segSubtitle, style: "cintillo" } };
+    });
+
+    async function _assetFor(logoUrl) {
+      if (!logoUrl) return null;
+      if (_assetCache[logoUrl]) return _assetCache[logoUrl];
+      var res = await api("/api/sessions/" + props.session.id + "/director/assets/from-url", {
+        method: "POST", body: { url: logoUrl },
+      });
+      _assetCache[logoUrl] = res.file_path;
+      return res.file_path;
+    }
+
+    async function airCintillo() {
+      var pv = cinPreview.value;
+      if (!cintilloTitle(pv)) {
+        if (window.toast) window.toast({ type: "warn", text: "Falta el título del cintillo" });
+        return;
+      }
+      cin.busy = true;
+      try {
+        var file_path = null;
+        try { file_path = await _assetFor(pv.logo); }
+        catch (_) { /* sin logo: el cintillo sale igual */ }
+        var res = await api("/api/sessions/" + props.session.id + "/director/inject", {
+          method: "POST",
+          body: { event_type: pv.event_type, payload: pv.payload,
+                  file_path: file_path, duration_seconds: cin.duration },
+        });
+        var msg = { type: "overlay_inject", event_type: pv.event_type, payload: pv.payload,
+                    event_id: res.event_id, file_path: file_path, duration_seconds: cin.duration };
+        sendData(msg);
+        _admitOverlay(activeOverlays, msg);
+        if (window.toast) window.toast({ type: "success",
+          text: "Al aire" + (cin.duration > 0 ? " (" + cin.duration + " s)" : " — hasta que lo quites") });
+      } catch (e) {
+        if (window.toast) window.toast({ type: "error", text: e.message });
+      } finally {
+        cin.busy = false;
+      }
+    }
 
     // Cue target
     var cueTarget = ref("all");
@@ -4416,33 +4568,22 @@ var DirectorView = {
       catch (_) {}
     }
 
-    // --- Overlay injection ---
+    // --- Overlay injection (pestaña "Otros": comentario y countdown) ---
     async function injectOverlay() {
       var payload = {};
       var t = injectType.value;
-      if (t === "banner") payload = { name: injectFields.name, title: injectFields.title };
-      else if (t === "segment") payload = { title: injectFields.title, subtitle: injectFields.subtitle };
-      else if (t === "comment") payload = { author: injectFields.author, text: injectFields.text, platform: injectFields.platform };
+      if (t === "comment") payload = { author: injectFields.author, text: injectFields.text, platform: injectFields.platform };
       else if (t === "countdown") payload = { seconds: injectFields.seconds, label: injectFields.label };
-      else if (t === "sponsor") payload = { sponsor_name: injectFields.sponsor_name, sponsor_copy: injectFields.sponsor_copy };
-      else if (t === "graphic") payload = { caption: injectFields.caption };
+      else return;
 
       try {
         var res = await api("/api/sessions/" + props.session.id + "/director/inject", {
           method: "POST", body: { event_type: t, payload: payload },
         });
-        var evId = res.event_id;
-        sendData({ type: "overlay_inject", event_type: t, payload: payload, event_id: evId });
-        activeOverlays.push({ event_id: evId, event_type: t, payload: payload });
-        var _dOvDur = { banner: 10000, segment: 12000, comment: 10000, sponsor: 15000, graphic: 10000, countdown: 0 };
-        var _dOvMs = _dOvDur[t] || 10000;
-        if (_dOvMs > 0) {
-          setTimeout(function () {
-            var di = activeOverlays.findIndex(function (o) { return o.event_id === evId; });
-            if (di !== -1) activeOverlays.splice(di, 1);
-          }, _dOvMs);
-        }
-        if (window.toast) window.toast({ type: "success", text: "Overlay inyectado (" + Math.round((_dOvMs || 10000) / 1000) + "s)" });
+        var msg = { type: "overlay_inject", event_type: t, payload: payload, event_id: res.event_id };
+        sendData(msg);
+        _admitOverlay(activeOverlays, msg);
+        if (window.toast) window.toast({ type: "success", text: "Overlay inyectado" });
       } catch (e) {
         if (window.toast) window.toast({ type: "error", text: e.message });
       }
@@ -4452,8 +4593,7 @@ var DirectorView = {
       try {
         await api("/api/sessions/" + props.session.id + "/director/events/" + ov.event_id + "/remove", { method: "POST" });
         sendData({ type: "overlay_remove", event_id: ov.event_id });
-        var idx = activeOverlays.findIndex(function (o) { return o.event_id === ov.event_id; });
-        if (idx !== -1) activeOverlays.splice(idx, 1);
+        _dropOverlay(activeOverlays, ov.event_id);
       } catch (_) {}
     }
 
@@ -4563,9 +4703,16 @@ var DirectorView = {
     var directorChat = ref([]);
     var directorChatInput = ref("");
 
+    function _chatRow(r) {
+      // El servidor guarda author_name/message_text; el front usa author/text.
+      return { id: r.id, author: r.author_name || r.author || "",
+               text: r.message_text || r.text || "" };
+    }
+
     async function loadDirectorChat() {
       try {
-        directorChat.value = await api("/api/sessions/" + props.session.id + "/chat?channel=director");
+        var rows = await api("/api/sessions/" + props.session.id + "/chat?channel=director");
+        directorChat.value = (rows || []).map(_chatRow);
       } catch (_) {}
     }
 
@@ -4573,9 +4720,10 @@ var DirectorView = {
       var text = (directorChatInput.value || "").trim();
       if (!text) return;
       try {
-        var msg = await api("/api/sessions/" + props.session.id + "/chat", {
+        var raw = await api("/api/sessions/" + props.session.id + "/chat", {
           method: "POST", body: { text: text, channel: "director" },
         });
+        var msg = _chatRow(raw);
         directorChatInput.value = "";
         directorChat.value.push(msg);
         sendData({ type: "director_chat", id: msg.id, author: msg.author, text: msg.text });
@@ -4744,7 +4892,7 @@ var DirectorView = {
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     }
 
-    onMounted(function () { loadParticipants(); loadStreams(); loadSounds(); loadDirectorChat(); });
+    onMounted(function () { loadParticipants(); loadStreams(); loadSounds(); loadDirectorChat(); loadBranding(); });
     onBeforeUnmount(function () { disconnect(); });
 
     return {
@@ -4755,6 +4903,8 @@ var DirectorView = {
       recording: recording, readyMap: readyMap, countdown: countdown,
       allParticipantsReady: allParticipantsReady, startRecording: startRecording, stopRecording: stopRecording,
       injectType: injectType, injectFields: injectFields, injectOverlay: injectOverlay,
+      branding: branding, cin: cin, cinPreview: cinPreview, airCintillo: airCintillo,
+      cintilloTitle: cintilloTitle, cintilloText: cintilloText,
       expandedSection: expandedSection,
       sendCue: sendCue, cueTarget: cueTarget,
       guestCuesVisible: guestCuesVisible, toggleGuestCues: toggleGuestCues,
@@ -4844,45 +4994,78 @@ var DirectorView = {
       </div>\
 \
       <div class="cr-right">\
-        <div class="eyebrow" style="padding:0 0 6px 2px;">INYECTAR OVERLAY</div>\
+        <div class="eyebrow" style="padding:0 0 6px 2px;">CINTILLOS</div>\
 \
-        <select v-model="injectType" class="input" style="font-size:11px;padding:4px 6px;margin-bottom:6px;">\
-          <option value="banner">Banner</option>\
-          <option value="segment">Segmento</option>\
-          <option value="comment">Comentario</option>\
-          <option value="countdown">Countdown</option>\
-          <option value="sponsor">Sponsor</option>\
-        </select>\
-        <div class="cr-section">\
-          <div class="cr-section-body">\
-            <template v-if="injectType === \'banner\'">\
-              <div class="form-row"><input v-model="injectFields.name" placeholder="Nombre" class="input" /></div>\
-              <div class="form-row"><input v-model="injectFields.title" placeholder="Título" class="input" /></div>\
-            </template>\
-            <template v-else-if="injectType === \'segment\'">\
-              <div class="form-row"><input v-model="injectFields.title" placeholder="Título segmento" class="input" /></div>\
-              <div class="form-row"><input v-model="injectFields.subtitle" placeholder="Subtítulo" class="input" /></div>\
-            </template>\
-            <template v-else-if="injectType === \'comment\'">\
+        <div style="display:flex;gap:4px;margin-bottom:8px;">\
+          <button v-for="t in [[\'sponsor\',\'Sponsor\'],[\'podcast\',\'Podcast\'],[\'segment\',\'Segmento\'],[\'otros\',\'Otros\']]" :key="t[0]"\
+                  class="ghost" style="flex:1;font-size:10px;padding:5px 2px;"\
+                  :style="cin.tab === t[0] ? \'background:var(--accent);color:#1a1410;font-weight:700;\' : \'\'"\
+                  @click="cin.tab = t[0]">{{ t[1] }}</button>\
+        </div>\
+\
+        <div class="cr-section"><div class="cr-section-body">\
+          <template v-if="cin.tab === \'sponsor\'">\
+            <div v-if="!branding.sponsors.length" class="muted" style="font-size:11px;margin-bottom:6px;">Este episodio no tiene sponsors en prePod.</div>\
+            <div v-else class="form-row">\
+              <select v-model.number="cin.sponsorIdx" class="input" style="font-size:11px;padding:4px 6px;">\
+                <option v-for="(sp, i) in branding.sponsors" :key="i" :value="i">{{ sp.name }}</option>\
+              </select>\
+            </div>\
+            <div class="form-row"><input v-model="cin.text" placeholder="Texto del sponsor (editable)" class="input" /></div>\
+          </template>\
+          <template v-else-if="cin.tab === \'podcast\'">\
+            <div class="form-row"><input v-model="cin.podTitle" placeholder="Título (nombre del podcast)" class="input" /></div>\
+            <div class="form-row"><input v-model="cin.text" placeholder="Texto del momento" class="input" /></div>\
+          </template>\
+          <template v-else-if="cin.tab === \'segment\'">\
+            <div class="form-row"><input v-model="cin.segTitle" placeholder="Título del segmento" class="input" /></div>\
+            <div class="form-row"><input v-model="cin.segSubtitle" placeholder="Subtítulo" class="input" /></div>\
+          </template>\
+\
+          <template v-if="cin.tab !== \'otros\'">\
+            <div class="form-row">\
+              <select v-model.number="cin.duration" class="input" style="font-size:11px;padding:4px 6px;">\
+                <option :value="8">8 segundos</option>\
+                <option :value="15">15 segundos</option>\
+                <option :value="30">30 segundos</option>\
+                <option :value="0">Hasta quitarlo</option>\
+              </select>\
+            </div>\
+            <div class="cintillo-preview" style="margin:6px 0 0;height:56px;overflow:visible;">\
+              <div class="cintillo" :class="cinPreview.event_type">\
+                <div v-if="cinPreview.logo" class="c-logo"><img :src="cinPreview.logo" alt=""></div>\
+                <div class="c-bars" style="min-width:180px;max-width:300px;">\
+                  <div class="c-title" style="font-size:13px;">{{ cintilloTitle(cinPreview) || \'Título\' }}</div>\
+                  <div v-if="cintilloText(cinPreview)" class="c-text" style="font-size:11px;">{{ cintilloText(cinPreview) }}</div>\
+                </div>\
+              </div>\
+            </div>\
+            <button class="cr-inject-btn" @click="airCintillo()" :disabled="cin.busy" style="margin-top:6px;">\
+              {{ cin.busy ? "Subiendo logo…" : "📡 Poner al aire" }}\
+            </button>\
+          </template>\
+\
+          <template v-else>\
+            <select v-model="injectType" class="input" style="font-size:11px;padding:4px 6px;margin-bottom:6px;">\
+              <option value="comment">Comentario</option>\
+              <option value="countdown">Countdown</option>\
+            </select>\
+            <template v-if="injectType === \'comment\'">\
               <div class="form-row"><input v-model="injectFields.author" placeholder="@usuario" class="input" /></div>\
               <div class="form-row"><input v-model="injectFields.text" placeholder="Texto del comentario" class="input" /></div>\
             </template>\
-            <template v-else-if="injectType === \'countdown\'">\
+            <template v-else>\
               <div class="form-row"><input v-model.number="injectFields.seconds" type="number" placeholder="Segundos" class="input" /></div>\
               <div class="form-row"><input v-model="injectFields.label" placeholder="Etiqueta" class="input" /></div>\
             </template>\
-            <template v-else-if="injectType === \'sponsor\'">\
-              <div class="form-row"><input v-model="injectFields.sponsor_name" placeholder="Nombre sponsor" class="input" /></div>\
-              <div class="form-row"><input v-model="injectFields.sponsor_copy" placeholder="Copy" class="input" /></div>\
-            </template>\
             <button class="cr-inject-btn" @click="injectOverlay()">Inyectar {{ injectType }}</button>\
-          </div>\
-        </div>\
+          </template>\
+        </div></div>\
 \
         <div v-if="activeOverlays.length" style="margin-top:8px;">\
-          <div class="eyebrow" style="padding:0 0 4px 2px;">ACTIVOS</div>\
-          <div v-for="ov in activeOverlays" :key="ov.event_id" class="active-overlay-pill" style="margin-bottom:4px;cursor:pointer;" @click="removeOverlay(ov)">\
-            {{ ov.event_type }} ✕\
+          <div class="eyebrow" style="padding:0 0 4px 2px;">AL AIRE AHORA</div>\
+          <div v-for="ov in activeOverlays" :key="ov.event_id" class="active-overlay-pill" style="margin-bottom:4px;cursor:pointer;" @click="removeOverlay(ov)" title="Quitar del aire">\
+            {{ ov.event_type }} · {{ cintilloTitle(ov) || (ov.payload && (ov.payload.label || ov.payload.author)) || \'\' }} ✕\
           </div>\
         </div>\
 \

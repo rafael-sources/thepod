@@ -197,6 +197,10 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "participants", "recording_bitrate", "recording_bitrate INTEGER")
     # Toma a la que pertenece cada grabación (uuid del cliente); NULL = legacy
     _ensure_column(conn, "recordings", "take_id", "take_id TEXT")
+    # Branding del podcast (de prePod) para los cintillos del director
+    _ensure_column(conn, "sessions", "podcast_name", "podcast_name TEXT")
+    _ensure_column(conn, "sessions", "podcast_logo_url", "podcast_logo_url TEXT")
+    _ensure_column(conn, "sessions", "sponsors_json", "sponsors_json TEXT")
     _migrate_participants_check(conn)
     return conn
 

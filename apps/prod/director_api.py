@@ -301,9 +301,102 @@ def list_assets(sid):
     return jsonify(files)
 
 
-@bp.get("/api/sessions/<int:sid>/director/assets/<path:filename>")
+@bp.get("/api/sessions/<int:sid>/director/branding")
 @require_auth
+def director_branding(sid):
+    """Branding del podcast + sponsors del episodio, para armar cintillos.
+    Sesiones viejas sin sponsors_json caen a los sponsors de los bloques
+    (chapter markers) que prePod ya importó."""
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+        keys = sess.keys()
+        name = (sess["podcast_name"] if "podcast_name" in keys else None) \
+            or (sess["title"] or "").split("·")[0].strip() or "Podcast"
+        logo = sess["podcast_logo_url"] if "podcast_logo_url" in keys else None
+        sponsors = []
+        raw = sess["sponsors_json"] if "sponsors_json" in keys else None
+        if raw:
+            try:
+                sponsors = json.loads(raw)
+            except (TypeError, ValueError):
+                sponsors = []
+        if not sponsors:
+            rows = db.execute(
+                "SELECT DISTINCT sponsor_name, sponsor_copy, sponsor_logo_url "
+                "FROM chapter_markers WHERE session_id=? AND sponsor_name IS NOT NULL",
+                (sid,),
+            ).fetchall()
+            sponsors = [{"name": r["sponsor_name"], "copy": r["sponsor_copy"],
+                         "logo_url": r["sponsor_logo_url"]} for r in rows]
+        return jsonify({"podcast_name": name, "podcast_logo_url": logo,
+                        "sponsors": sponsors})
+    finally:
+        db.close()
+
+
+@bp.post("/api/sessions/<int:sid>/director/assets/from-url")
+@require_auth
+def upload_asset_from_url(sid):
+    """Descarga una imagen (p. ej. el logo alojado en prePod) y la guarda
+    como asset del director — evita el CORS de re-subirla desde el navegador."""
+    db = get_db()
+    try:
+        _require_director(db, sid)
+    finally:
+        db.close()
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return jsonify({"error": "url inválida"}), 400
+    import requests as _rq
+    try:
+        resp = _rq.get(url, timeout=15, stream=True)
+        resp.raise_for_status()
+    except _rq.RequestException as e:
+        return jsonify({"error": f"no se pudo descargar: {e}"}), 502
+    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    ext_by_type = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif",
+                   "image/webp": ".webp", "image/svg+xml": ".svg"}
+    ext = ext_by_type.get(ctype) or Path(url.split("?")[0]).suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"):
+        return jsonify({"error": f"tipo no soportado: {ctype or ext}"}), 400
+    import uuid
+    dest_dir = session_dir(sid) / "director_assets"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = f"asset_{uuid.uuid4().hex[:8]}{ext}"
+    dest = dest_dir / safe_name
+    size = 0
+    with open(dest, "wb") as out:
+        for chunk in resp.iter_content(65536):
+            size += len(chunk)
+            if size > 5 * 1024 * 1024:
+                out.close()
+                dest.unlink(missing_ok=True)
+                return jsonify({"error": "imagen demasiado grande (máx 5 MB)"}), 413
+            out.write(chunk)
+    return jsonify({"file_path": f"director_assets/{safe_name}",
+                    "filename": safe_name, "size_bytes": size}), 201
+
+
+@bp.get("/api/sessions/<int:sid>/director/assets/<path:filename>")
 def serve_asset(sid, filename):
+    # Con sesión iniciada (host/director) o con el invite token de un
+    # participante de ESTA sesión — los invitados también ven los logos.
+    if not current_user():
+        token = request.args.get("token") or ""
+        db = get_db()
+        try:
+            ok = token and db.execute(
+                "SELECT 1 FROM participants WHERE session_id=? AND invite_token=?",
+                (sid, token),
+            ).fetchone()
+        finally:
+            db.close()
+        if not ok:
+            return jsonify({"error": "no autenticado"}), 401
     import os
     from flask import send_from_directory
     base = (session_dir(sid) / "director_assets").resolve()
