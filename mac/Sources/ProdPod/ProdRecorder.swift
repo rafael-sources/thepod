@@ -186,6 +186,7 @@ actor ChunkUploader {
         var sessionId: Int
         var file: String
         var trackType: String? = "video"
+        var takeId: String? = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         var sent: Int64 = 0
         var recordingDone = false      // la grabación terminó (el archivo ya no crece)
         var finalized = false
@@ -300,6 +301,7 @@ actor ChunkUploader {
     /// Devuelve cuántos bytes tiene el servidor.
     private func post(_ j: Job, chunk: Data?, offset: Int64, finalize: Bool) async throws -> Int64 {
         var fields = ["track_type": j.trackType ?? "video", "ext": ".mp4", "offset": String(offset)]
+        if let t = j.takeId { fields["take_id"] = t }      // cada grabación es su propia toma
         if finalize { fields["finalize"] = "1"; fields["duration_seconds"] = String(format: "%.2f", j.duration) }
         let (code, obj) = try await ProdPodClient.shared.multipart("/api/sessions/\(j.sessionId)/recordings/stream",
                                                                   fields: fields, fileField: chunk == nil ? nil : "chunk",

@@ -65,8 +65,7 @@ extension ProdStudio {
 
     func updateDirectorPresence() {
         let inRoom = room?.remoteParticipants.values.contains { $0.identity?.stringValue.hasPrefix("director_") ?? false } ?? false
-        let listed = participants.contains { $0.role == "director" && $0.status == "connected" }
-        directorPresent = inRoom || listed
+        directorPresent = inRoom        // igual que la web: solo cuenta si está conectado ahora
     }
 
     // MARK: Mensajes de la sala
@@ -81,6 +80,8 @@ extension ProdStudio {
         case "ready_toggle":
             if let id = m["identity"] as? String { readyMap[id] = (m["ready"] as? Bool) ?? false }
             if isOwner && !directorPresent { maybeFireCountdown() }
+        case "ready_request":           // el director pregunta quién está preparado
+            send(["type": "ready_toggle", "identity": myIdentity, "ready": ownReady])
         case "countdown_start":
             if let ms = (m["start_at_ms"] as? Double) ?? (m["start_at_ms"] as? Int).map(Double.init) { beginCountdown(ms) }
         case "recording_stop":
