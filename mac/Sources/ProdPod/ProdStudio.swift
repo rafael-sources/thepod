@@ -147,6 +147,8 @@ final class ProdStudio: NSObject, ObservableObject {
 
     /// La sala abierta ahora (para salir bien al cerrar la app).
     static weak var current: ProdStudio?
+    /// Transmitir en vivo queda escondido hasta la última etapa del plan.
+    static let liveEnabled = false
 
     init(session: ProdPodClient.Session) {
         self.session = session

@@ -444,7 +444,7 @@ struct StudioView: View {
                     if !studio.sponsors.isEmpty { sponsorsCard }
                     peopleCard(title: "Personas")
                     chatCard
-                    if studio.isOwner { liveCard }
+                    if studio.isOwner && ProdStudio.liveEnabled { liveCard }   // en vivo: al final del plan
                     Card {
                         Label("Invitar a alguien más", systemImage: "person.badge.plus").font(.headline)
                         TextField("Nombre", text: $inviteName).textFieldStyle(.roundedBorder)
