@@ -195,6 +195,8 @@ def get_db() -> sqlite3.Connection:
     # Calidad de grabación local decidida por la prueba inicial (preflight)
     _ensure_column(conn, "participants", "recording_quality", "recording_quality TEXT")
     _ensure_column(conn, "participants", "recording_bitrate", "recording_bitrate INTEGER")
+    # Toma a la que pertenece cada grabación (uuid del cliente); NULL = legacy
+    _ensure_column(conn, "recordings", "take_id", "take_id TEXT")
     _migrate_participants_check(conn)
     return conn
 

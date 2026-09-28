@@ -536,8 +536,13 @@ function _idbDelete(ids) {
    - si la cola crece (red lenta), sube MÁS LENTO durante la llamada para no
      pelearle ancho de banda a la sala, y termina de subir al final
    - guarda lo pendiente en IndexedDB por si se cierra la pestaña */
+function _newTakeId() {
+  try { return crypto.randomUUID(); }
+  catch (_) { return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+}
+
 function createChunkUploader(opts) {
-  // opts: { sid, token, trackType, onStatus(st), sendData(state, bytes) }
+  // opts: { sid, token, trackType, takeId, onStatus(st), sendData(state, bytes) }
   var skey = "s" + opts.sid + ":" + (opts.token || "host") + ":" + (opts.trackType || "video");
   var queue = [];          // [{ idbId, offset, blob }]
   var nextOffset = 0;      // bytes generados localmente
@@ -565,7 +570,7 @@ function createChunkUploader(opts) {
     nextOffset += blob.size;
     pendingBytes += blob.size;
     queue.push(rec);
-    _idbPut({ skey: skey, offset: rec.offset, ext: ext, blob: blob }).then(function (id) { rec.idbId = id; });
+    _idbPut({ skey: skey, offset: rec.offset, ext: ext, take: opts.takeId || null, blob: blob }).then(function (id) { rec.idbId = id; });
     emit();
   }
 
@@ -580,6 +585,7 @@ function createChunkUploader(opts) {
       form.append("offset", String(entries[0].offset));
     }
     if (opts.token) form.append("token", opts.token);
+    if (opts.takeId) form.append("take_id", opts.takeId);
     form.append("track_type", opts.trackType || "video");
     form.append("ext", ext);
     if (finalize) {
@@ -736,7 +742,10 @@ async function recoverPendingUpload(sid, token, trackType) {
   var rows = await _idbAllFor(skey);
   if (!rows.length) return false;
   rows.sort(function (a, b) { return a.offset - b.offset; });
-  var up = createChunkUploader({ sid: sid, token: token, trackType: trackType });
+  // La toma interrumpida conserva su take_id: los offsets se corresponden
+  // con SU archivo de streaming en el servidor, no con el de otra toma.
+  var up = createChunkUploader({ sid: sid, token: token, trackType: trackType,
+                                 takeId: rows[0].take || null });
   up.seed(rows);
   return up.finalize(0);
 }
@@ -1024,6 +1033,8 @@ var StudioView = {
     var screenRecordOnly = ref(false);  // I am sharing but NOT publishing to LiveKit
     var screenStream = null;            // local MediaStream from getDisplayMedia
     var screenRecorder = null;          // MediaRecorder for the screen
+    var _screenUploader = null;         // subida por chunks de la pantalla
+    var _screenStartMs = null;          // inicio del share, para duration_seconds
     var screenPub = null;               // LiveKit screen track publication
     var remoteScreen = ref(null);       // {identity, name} of the participant currently sharing
     // Soundboard triggers are logged with their offset from record-start
@@ -1662,16 +1673,31 @@ var StudioView = {
         }
       }
 
-      // Local MediaRecorder for the upload to postPod.
+      // Local MediaRecorder for the upload to postPod. La pantalla sube por
+      // /recordings/stream con offset (igual que la cámara): si la conexión
+      // se corta no se pierde. En ensayo se graba y descarta, sin subir.
       try {
-        screenRecorder = _startRecorder(
-          screenStream,
-          function (blob) { uploadRecording(blob, "screen"); },
-          1000
-        );
+        _screenStartMs = Date.now();
+        if (practiceMode.value) {
+          _screenUploader = null;
+          screenRecorder = _startRecorder(screenStream, function () {}, 1000);
+        } else {
+          _screenUploader = createChunkUploader({
+            sid: props.session.id,
+            token: null,
+            trackType: "screen",
+            takeId: _newTakeId(),
+          });
+          screenRecorder = _startRecorder(screenStream, function () {}, 1000, false, function (data) {
+            _screenUploader.push(data);
+          });
+          _screenUploader.setExt(screenRecorder._ext ? ("." + screenRecorder._ext) : ".webm");
+          _screenUploader.start();
+        }
       } catch (e) {
         // Best-effort — keep the share going even if recording fails.
         screenRecorder = null;
+        _screenUploader = null;
       }
 
       // If the user clicks "Stop sharing" on the browser bar, the track ends.
@@ -1688,9 +1714,24 @@ var StudioView = {
       if (!screenSharing.value && !screenStream) return;
       // Stop the recorder first so the final chunk gets uploaded.
       if (screenRecorder) {
-        try { screenRecorder.stop(); } catch (_) {}
+        await new Promise(function (resolve) {
+          screenRecorder.onstop = resolve;
+          try { screenRecorder.stop(); } catch (_) { resolve(); }
+        });
         screenRecorder = null;
       }
+      if (_screenUploader) {
+        var secs = _screenStartMs ? (Date.now() - _screenStartMs) / 1000 : 0;
+        var up = _screenUploader;
+        _screenUploader = null;
+        up.finalize(secs).then(function (ok) {
+          if (window.toast) {
+            window.toast(ok ? { type: "success", text: "📺 Grabación de pantalla subida" }
+                            : { type: "error", text: "No se pudo subir la grabación de pantalla" });
+          }
+        });
+      }
+      _screenStartMs = null;
       if (screenPub && room) {
         try { await room.localParticipant.unpublishTrack(screenPub.track || screenPub.videoTrack); } catch (_) {}
         screenPub = null;
@@ -1754,6 +1795,9 @@ var StudioView = {
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
         if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
+      } else if (msg.type === "ready_request") {
+        // Alguien (p. ej. un director recién conectado) pide los estados.
+        sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
       } else if (msg.type === "countdown_start") {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
@@ -1935,6 +1979,8 @@ var StudioView = {
           if (p.identity && p.identity.startsWith("director_")) {
             directorConnected.value = true;
             if (window.toast) window.toast({ type: "info", text: "Director conectado" });
+            // El director entró tarde: reenviarle mi estado de PREPARADO.
+            sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
           } else {
             if (window.toast) window.toast({ type: "info", text: name + " entró al estudio" });
           }
@@ -2214,7 +2260,14 @@ var StudioView = {
     /* ---------- recording (ready + countdown + sync start) ---------- */
 
     function _hasDirector() {
-      return participants.value.some(function(p) { return p.role === "director"; });
+      // Director "presente" = conectado AHORA a la sala de LiveKit, no
+      // apenas registrado con ese rol (pudo entrar una vez e irse).
+      if (!room) return false;
+      var found = false;
+      room.remoteParticipants.forEach(function (p) {
+        if (p.identity && p.identity.startsWith("director_")) found = true;
+      });
+      return found;
     }
 
     function connectedIdentities() {
@@ -2320,10 +2373,19 @@ var StudioView = {
         }
       }
       if (!recorder && localStream) {
+        // ENSAYO: se graba local para probar el flujo, pero los chunks se
+        // descartan — nada llega al servidor.
+        if (practiceMode.value) {
+          _hostUploader = null;
+          recorder = _startRecorder(localStream, function () {}, 1000, false, null,
+                                    { videoBitsPerSecond: recProfile().bitrate });
+          return;
+        }
         _hostUploader = createChunkUploader({
           sid: props.session.id,
           token: null,
           trackType: "video",
+          takeId: _newTakeId(),
           onStatus: function (st) {
             hostStreamedBytes.value = st.sentBytes;
             hostPendingMB.value = st.pendingBytes / (1024 * 1024);
@@ -2358,8 +2420,8 @@ var StudioView = {
         _hostRecStream.getTracks().forEach(function (t) { t.stop(); });
         _hostRecStream = null;
       }
-      hostUploadStatus.state = "finalizing";
       if (_hostUploader) {
+        hostUploadStatus.state = "finalizing";
         var ok = await _hostUploader.finalize(timecode.value);
         if (ok) {
           hostUploadStatus.state = "done";
@@ -2402,20 +2464,6 @@ var StudioView = {
       } catch (_) { /* best-effort */ }
     }
 
-    async function uploadRecording(blob, trackType) {
-      if (practiceMode.value) return;
-      try {
-        var ext = blob._ext || "webm";
-        var form = new FormData();
-        form.append("file", blob, trackType + "." + ext);
-        form.append("track_type", trackType);
-        form.append("duration_seconds", String(timecode.value));
-        await fetch("/api/sessions/" + props.session.id + "/recordings", {
-          method: "POST", credentials: "same-origin", body: form,
-        });
-      } catch (e) { error.value = "upload falló: " + e.message; }
-    }
-
     function toggleReady() {
       if (recording.value || countdown.value !== null) return;
       ownReady.value = !ownReady.value;
@@ -2427,7 +2475,8 @@ var StudioView = {
     async function stopRecording() {
       if (!recording.value) return;
       try {
-        if (props.user.username === props.session.created_by) {
+        // En ensayo NO se llama /stop: la sesión no debe quedar 'finished'.
+        if (!practiceMode.value && props.user.username === props.session.created_by) {
           try { await api("/api/sessions/" + props.session.id + "/stop", { method: "POST" }); } catch (_) {}
         }
         sendData({ type: "recording_stop" });
@@ -3586,6 +3635,8 @@ var GuestStudioView = {
         scrollChatBottom();
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
+      } else if (msg.type === "ready_request") {
+        sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
       } else if (msg.type === "countdown_start") {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
@@ -3691,7 +3742,11 @@ var GuestStudioView = {
         recordingCaps.hasMic = hasMic;
         recorder = _startRecorder(stream, function () {}, 1000, false, _onRecordingChunk,
                                   { videoBitsPerSecond: recProfileG().bitrate });
-        _startChunkStreaming(recorder._ext ? ("." + recorder._ext) : ".webm");
+        // ENSAYO: sin uploader — _onRecordingChunk descarta los chunks y
+        // nada se sube al servidor.
+        if (!practiceMode.value) {
+          _startChunkStreaming(recorder._ext ? ("." + recorder._ext) : ".webm");
+        }
         if (!hasCam && window.toast) {
           window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });
         }
@@ -3790,6 +3845,7 @@ var GuestStudioView = {
         sid: props.joinData.session_id,
         token: props.inviteToken,
         trackType: "video",
+        takeId: _newTakeId(),
         onStatus: function (st) {
           streamedBytes.value = st.sentBytes;
           pendingMB.value = st.pendingBytes / (1024 * 1024);
@@ -3854,7 +3910,11 @@ var GuestStudioView = {
           }
         });
         newRoom.on(LK.RoomEvent.ParticipantConnected, function (p) {
-          if (p.identity.startsWith("director_")) directorConnected.value = true;
+          if (p.identity.startsWith("director_")) {
+            directorConnected.value = true;
+            // Director recién conectado: que sepa si ya estoy PREPARADO.
+            sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
+          }
         });
         newRoom.on(LK.RoomEvent.ParticipantDisconnected, function (p) {
           if (p.identity.startsWith("director_")) { directorConnected.value = false; return; }
@@ -4637,6 +4697,10 @@ var DirectorView = {
         await room.connect(tokenData.livekit_ws_url, tokenData.livekit_token);
         connected.value = true;
         if (window.toast) window.toast({ type: "success", text: "Conectado al Control Room" });
+        // Pedir a todos su estado de PREPARADO (por si el director entra tarde).
+        setTimeout(function () {
+          try { room.localParticipant.publishData(_encodeMsg({ type: "ready_request" }), LK.DataPacket_Kind.RELIABLE); } catch (_) {}
+        }, 800);
 
         // Mount tracks from participants already in the room
         room.remoteParticipants.forEach(function (p) {

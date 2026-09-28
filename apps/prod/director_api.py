@@ -319,12 +319,30 @@ def serve_asset(sid, filename):
 # Force-mute
 # ---------------------------------------------------------------------------
 
+def _require_director_or_host(db, sid):
+    """Director, host o co-host de la sesión (los invitados no)."""
+    username = current_user()
+    if _is_director(db, sid, username):
+        return username
+    sess = db.execute("SELECT created_by FROM sessions WHERE id=?", (sid,)).fetchone()
+    if sess and sess["created_by"] == username:
+        return username
+    row = db.execute(
+        "SELECT 1 FROM participants WHERE session_id=? AND username=? "
+        "AND role IN ('host', 'co-host')",
+        (sid, username),
+    ).fetchone()
+    if row:
+        return username
+    abort(403, description="solo el director o un conductor puede realizar esta acción")
+
+
 @bp.post("/api/sessions/<int:sid>/participants/<int:pid>/force-mute")
 @require_auth
 def force_mute(sid, pid):
     db = get_db()
     try:
-        username = _require_director(db, sid)
+        username = _require_director_or_host(db, sid)
         p = db.execute(
             "SELECT id, display_name FROM participants WHERE id=? AND session_id=?",
             (pid, sid),

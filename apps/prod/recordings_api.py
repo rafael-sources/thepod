@@ -29,7 +29,7 @@ from integrations import notify_source
 bp = Blueprint("recordings_api", __name__)
 
 
-ALLOWED_KINDS = {"audio", "video", "mixed_output", "soundboard"}
+ALLOWED_KINDS = {"audio", "video", "screen", "mixed_output", "soundboard"}
 ALLOWED_EXTS = {".webm", ".mp4", ".mp3", ".wav", ".ogg", ".m4a"}
 
 
@@ -313,18 +313,33 @@ def stream_recording_chunk(sid):
         if not ext.startswith("."):
             ext = "." + ext
 
+        # take_id (opcional): un uuid por grabación. Mismo take_id = misma
+        # toma (los reintentos van al mismo archivo); take_id distinto = toma
+        # nueva que se guarda aparte. Sin take_id: comportamiento histórico.
+        take_id = re.sub(r"[^A-Za-z0-9_-]", "", request.form.get("take_id") or "")[:64] or None
+
         dest_dir = session_dir(sid) / "recordings"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        streaming_name = f"p{participant_id}_{track_type}_streaming{ext}"
+        take_suffix = f"_t{take_id}" if take_id else ""
+        streaming_name = f"p{participant_id}_{track_type}_streaming{take_suffix}{ext}"
         streaming_path = dest_dir / streaming_name
 
         finalize = request.form.get("finalize") == "1"
 
-        already_finalized = db.execute(
-            "SELECT id, filename, file_path, size_bytes FROM recordings "
-            "WHERE session_id=? AND participant_id=? AND track_type=?",
-            (sid, participant_id, track_type),
-        ).fetchone()
+        if take_id:
+            already_finalized = db.execute(
+                "SELECT id, filename, file_path, size_bytes FROM recordings "
+                "WHERE session_id=? AND participant_id=? AND track_type=? AND take_id=?",
+                (sid, participant_id, track_type, take_id),
+            ).fetchone()
+        else:
+            # Clientes legacy: una grabación por participante+pista, entre
+            # las filas sin take_id (las tomas nuevas no se tocan).
+            already_finalized = db.execute(
+                "SELECT id, filename, file_path, size_bytes FROM recordings "
+                "WHERE session_id=? AND participant_id=? AND track_type=? AND take_id IS NULL",
+                (sid, participant_id, track_type),
+            ).fetchone()
 
         chunk = request.files.get("chunk")
         if chunk:
@@ -369,7 +384,7 @@ def stream_recording_chunk(sid):
                                    (already_finalized["id"],)).fetchone()),
                                     "size_bytes": already_finalized["size_bytes"]}), 201
                 return jsonify({"error": "no hay datos de streaming"}), 400
-            fname = f"p{participant_id}_{track_type}_{uuid.uuid4().hex[:8]}{ext}"
+            fname = f"p{participant_id}_{track_type}{take_suffix}_{uuid.uuid4().hex[:8]}{ext}"
             final_path = dest_dir / fname
             streaming_path.rename(final_path)
 
@@ -403,8 +418,8 @@ def stream_recording_chunk(sid):
                 else:
                     cur = db.execute(
                         "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
-                        "duration_seconds, size_bytes, mime_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (sid, participant_id, track_type, fname, str(final_path), dur, size, mime or "video/webm"),
+                        "duration_seconds, size_bytes, mime_type, take_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (sid, participant_id, track_type, fname, str(final_path), dur, size, mime or "video/webm", take_id),
                     )
                     db.commit()
                     row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
