@@ -1582,10 +1582,22 @@ def _apply_topic_lowerthirds(parts, current_label, segments, total_duration, W, 
     return current_label
 
 
+_CINTILLO_COLORS = {
+    "sponsor": "0xE8A020",   # dorado
+    "banner":  "0xC03428",   # rojo noticiero (podcast)
+    "segment": "0x1D4E89",   # azul
+}
+
+
 def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
                               heading_font=None):
-    """Render director_events as timed lower-third overlays during export.
-    Each event with a recording_offset_seconds gets a 6s drawbox+drawtext."""
+    """Cintillos tipo noticiero (mismo diseño que prodPod web y la app de
+    Mac): logo a la izquierda, barra de color con el título en MAYÚSCULAS y
+    barra blanca con el texto, abajo a la izquierda.
+
+    Solo se dibujan sponsor / banner / segment. Los 'cue' y 'action' son
+    avisos PRIVADOS del director durante la sesión: nunca van al video
+    final (comment/countdown/graphic tampoco — eran elementos del vivo)."""
     if not W or not H:
         return current_label
 
@@ -1605,23 +1617,48 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
     font_part = _font_part_for(heading_font, fallback)
     uid = 0
 
-    type_labels = {
-        "banner": "BANNER", "segment": "SEGMENTO", "comment": "COMENTARIO",
-        "sponsor": "SPONSOR", "countdown": "COUNTDOWN", "graphic": "GRÁFICO",
-        "cue": "CUE",
-    }
+    # Geometría del cintillo (relativa a la altura del video)
+    ts = max(18, int(H * 0.030))       # tamaño del título
+    bs = max(14, int(H * 0.023))       # tamaño del texto
+    pad = max(8, int(H * 0.011))       # padding de las cajas (boxborderw)
+    x0 = int(W * 0.045)
+    y_base = int(H * 0.80)
+    logo_box = ts + bs + 4 * pad + 2   # cuadrado del logo = alto de ambas barras
+    logo_inner = logo_box - 2 * max(4, pad // 2)
+    drawn_spans = []                   # [(t0, t1)] — para apilar los simultáneos
 
     for ev in rows:
+        etype = (ev["event_type"] or "").strip().lower()
+        if etype not in ("sponsor", "banner", "segment"):
+            continue
+
         t0 = float(ev["recording_offset_seconds"])
-        dur = float(ev["duration_seconds"] or 6.0)
+
+        # Duración: duration_seconds > 0 manda; 0 = hasta removed_at (si nunca
+        # lo quitaron, hasta el final); sin nada, removed_at o 8 s (legacy).
+        raw_dur = ev["duration_seconds"]
+        try:
+            raw_dur = float(raw_dur) if raw_dur is not None else None
+        except (TypeError, ValueError):
+            raw_dur = None
+
+        removed_dur = None
         if ev["removed_at"] and ev["injected_at"]:
             try:
                 from datetime import datetime as _dt
                 injected = _dt.fromisoformat(ev["injected_at"].replace("Z", "+00:00"))
                 removed = _dt.fromisoformat(ev["removed_at"].replace("Z", "+00:00"))
-                dur = max(1.0, (removed - injected).total_seconds())
+                removed_dur = max(1.0, (removed - injected).total_seconds())
             except (ValueError, TypeError):
-                pass
+                removed_dur = None
+
+        if raw_dur and raw_dur > 0:
+            dur = raw_dur
+        elif raw_dur == 0:
+            dur = removed_dur if removed_dur is not None else (total_duration - t0)
+        else:
+            dur = removed_dur if removed_dur is not None else 8.0
+
         t1 = min(t0 + dur, total_duration)
         if t1 - t0 < 0.3:
             continue
@@ -1633,52 +1670,91 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
             except (TypeError, ValueError):
                 pass
 
-        etype = ev["event_type"] or "overlay"
-        prefix = type_labels.get(etype, etype.upper())
+        if etype == "sponsor":
+            title = payload.get("sponsor_name") or "Sponsor"
+            text = payload.get("sponsor_copy") or ""
+        elif etype == "banner":
+            title = payload.get("name") or payload.get("title") or ""
+            text = payload.get("title") or ""
+            if text == title:
+                text = ""
+        else:  # segment
+            title = payload.get("title") or ""
+            text = payload.get("subtitle") or ""
 
-        if etype == "banner":
-            text = f"{payload.get('name', '')} — {payload.get('title', '')}"
-        elif etype == "segment":
-            text = payload.get("title", "")
-            if payload.get("subtitle"):
-                text += f" · {payload['subtitle']}"
-        elif etype == "comment":
-            text = f"@{payload.get('author', '')}\\: {payload.get('text', '')}"
-        elif etype == "sponsor":
-            text = f"{payload.get('sponsor_name', '')} — {payload.get('sponsor_copy', '')}"
-        elif etype == "cue":
-            text = payload.get("cue", "")
-        else:
-            text = payload.get("caption", "") or payload.get("text", "") or etype
-
-        text = text.strip()
-        if not text:
+        title = (title or "").strip()
+        text = (text or "").strip()
+        if not title:
             continue
-        escaped = _escape_drawtext(f"{prefix}\\: {text}")
+
         enable = f"between(t,{t0:.3f},{t1:.3f})"
+        color = _CINTILLO_COLORS.get(etype, "0xC03428")
 
-        bar_y = int(H * 0.85)
-        bar_h = int(H * 0.08)
-        title_size = max(16, int(H * 0.026))
+        # Cintillos que coinciden en el tiempo se apilan hacia arriba (igual
+        # que la capa del vivo), en vez de dibujarse uno encima del otro.
+        depth = sum(1 for (a, b) in drawn_spans if a < t1 and t0 < b)
+        drawn_spans.append((t0, t1))
+        y_title = y_base - depth * (logo_box + 10)
+        y_text = y_title + ts + 2 * pad + 2
 
+        # Logo (si el evento trae file_path y el archivo existe en el proyecto)
+        logo_path = None
+        if ev["file_path"]:
+            cand = (PROJECTS_DIR / slug / ev["file_path"]).resolve()
+            base = (PROJECTS_DIR / slug).resolve()
+            if str(cand).startswith(str(base)) and cand.is_file() \
+                    and cand.suffix.lower() != ".svg":
+                logo_path = cand
+
+        x_text = x0 + (logo_box + 6 if logo_path else 0)
+
+        if logo_path:
+            # Caja blanca detrás del logo
+            uid += 1
+            box_lbl = f"dov{uid}"
+            parts.append(
+                f"[{current_label}]drawbox=x={x0}:y={y_title}:w={logo_box}:h={logo_box}"
+                f":color=white@0.96:t=fill:enable='{enable}'[{box_lbl}]"
+            )
+            current_label = box_lbl
+            # El logo entra al grafo con el filtro movie (no requiere otro -i)
+            uid += 1
+            src_lbl = f"dovlogo{uid}"
+            out_lbl = f"dov{uid}"
+            mpath = str(logo_path).replace("\\", "\\\\").replace("'", r"\'")
+            parts.append(
+                f"movie='{mpath}',scale="
+                f"'if(gt(a,1),{logo_inner},-1)':'if(gt(a,1),-1,{logo_inner})'[{src_lbl}]"
+            )
+            parts.append(
+                f"[{current_label}][{src_lbl}]overlay="
+                f"x='{x0}+({logo_box}-w)/2':y='{y_title}+({logo_box}-h)/2'"
+                f":enable='{enable}'[{out_lbl}]"
+            )
+            current_label = out_lbl
+
+        # Barra de color con el título en MAYÚSCULAS (box=1 se ajusta al texto)
         uid += 1
-        bg_lbl = f"dov{uid}"
+        ti_lbl = f"dov{uid}"
         parts.append(
-            f"[{current_label}]drawbox=x=0:y={bar_y}:w={W}:h={bar_h}"
-            f":color=black@0.7:t=fill:enable='{enable}'[{bg_lbl}]"
+            f"[{current_label}]drawtext=text='{_escape_drawtext(title.upper())}'"
+            f"{font_part}:fontsize={ts}:fontcolor=white"
+            f":box=1:boxcolor={color}@0.96:boxborderw={pad}"
+            f":x={x_text + pad}:y={y_title + pad}:enable='{enable}'[{ti_lbl}]"
         )
-        current_label = bg_lbl
+        current_label = ti_lbl
 
-        uid += 1
-        tx_lbl = f"dov{uid}"
-        tx_x = int(W * 0.04)
-        tx_y = bar_y + int(bar_h * 0.25)
-        parts.append(
-            f"[{current_label}]drawtext=text='{escaped}'"
-            f"{font_part}:fontsize={title_size}:fontcolor=white"
-            f":x={tx_x}:y={tx_y}:enable='{enable}'[{tx_lbl}]"
-        )
-        current_label = tx_lbl
+        # Barra blanca con el texto
+        if text:
+            uid += 1
+            tx_lbl = f"dov{uid}"
+            parts.append(
+                f"[{current_label}]drawtext=text='{_escape_drawtext(text)}'"
+                f"{font_part}:fontsize={bs}:fontcolor=0x1A1510"
+                f":box=1:boxcolor=white@0.96:boxborderw={pad}"
+                f":x={x_text + pad}:y={y_text + pad}:enable='{enable}'[{tx_lbl}]"
+            )
+            current_label = tx_lbl
 
     return current_label
 
