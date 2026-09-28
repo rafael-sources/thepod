@@ -119,6 +119,23 @@ final class ProdStudio: NSObject, ObservableObject {
     var keyMonitor: Any?
     var ifbOn = false
 
+    // Etapa 3: pantalla, chat, manos, transmisión
+    let screen = ScreenShare()
+    let screenRecorder = FragmentRecorder()
+    var screenFile: URL?
+    @Published var screenOn = false
+    @Published var remoteScreen: (name: String, track: VideoTrack)?
+    @Published var chat: [ChatMsg] = []
+    @Published var backstage: [ChatMsg] = []
+    @Published var unreadChat = 0
+    @Published var hands: [String: Bool] = [:]
+    @Published var myHand = false
+    @Published var liveStream: [String: Any]?
+    @Published var rtmpPresets: [[String: String]] = []
+    var hostIdentities: [String] = []
+
+    struct ChatMsg: Identifiable, Equatable { let id: Int; let author: String; let text: String; let mine: Bool }
+
     let pipe = CameraPipe()
     private(set) var room: Room?
     private var videoTrack: LocalVideoTrack?
@@ -326,6 +343,15 @@ final class ProdStudio: NSObject, ObservableObject {
                                    lastSpokeAt: lastSpoke[id] ?? .distantPast))
         }
         people = list
+        var scr: (String, VideoTrack)?
+        for p in room.remoteParticipants.values {
+            if let pub = p.videoTracks.first(where: { $0.source == .screenShareVideo }), !pub.isMuted, let t = pub.track as? VideoTrack {
+                scr = (p.name ?? "Alguien", t)
+            }
+        }
+        if (scr == nil) != (remoteScreen == nil) || scr?.1 !== remoteScreen?.track {
+            remoteScreen = scr.map { (name: $0.0, track: $0.1) }
+        }
     }
 
     /// Quien habla (o habló último) va grande en la vista "quien habla". Si nadie habló, el primero que no seas tú.

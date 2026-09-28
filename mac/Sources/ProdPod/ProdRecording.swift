@@ -59,6 +59,8 @@ extension ProdStudio {
         updateDirectorPresence()
         await loadSounds()
         await loadSponsors()
+        await loadChat()
+        await loadStreams()
     }
 
     func updateDirectorPresence() {
@@ -87,6 +89,14 @@ extension ProdStudio {
             practice = (m["active"] as? Bool) ?? false
         case "sound_trigger":
             if let f = m["filename"] as? String { play(f) }
+        case "chat":
+            receiveChat(m)
+        case "hand_raise":
+            if let id = m["identity"] as? String {
+                let up = (m["up"] as? Bool) ?? false
+                hands[id] = up
+                if up { flash("\(people.first(where: { $0.id == id })?.name ?? "Alguien") levantó la mano") }
+            }
         case "upload_status":
             if let id = m["identity"] as? String {
                 remoteUploads[id] = UploadState(state: m["state"] as? String ?? "", bytes: Int64(m["bytes"] as? Int ?? 0))
@@ -194,6 +204,7 @@ extension ProdStudio {
         voiceFeed.attach(raw ? nil : recorder)
         pipe.recorder = recorder
         recording = true
+        if screenOn { startScreenRecording() }
         if !practice {
             await ChunkUploader.shared.begin(sessionId: session.id, file: file)
             myUpload = UploadState(state: "streaming", bytes: 0)
@@ -217,6 +228,7 @@ extension ProdStudio {
         pipe.recorder = nil
         voiceFeed.attach(nil)
         await recorder.finish()
+        await stopScreenRecording()
         let wasPractice = practice
         if let file = recordFile, !wasPractice {
             await ChunkUploader.shared.markDone(file: file, duration: recorder.duration)

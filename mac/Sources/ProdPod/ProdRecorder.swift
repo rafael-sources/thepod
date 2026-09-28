@@ -48,7 +48,8 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
         lock.withLock { (firstPTS.isValid && lastPTS.isValid) ? CMTimeGetSeconds(lastPTS - firstPTS) : 0 }
     }
 
-    func start(to url: URL, quality: RecordingQuality) throws {
+    /// withAudio=false para la pantalla compartida (solo imagen).
+    func start(to url: URL, quality: RecordingQuality, withAudio: Bool = true, fps: Int = 30) throws {
         try? FileManager.default.removeItem(at: url)
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let h = try FileHandle(forWritingTo: url)
@@ -66,7 +67,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
                 AVVideoAverageBitRateKey: quality.bitrate,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
                 AVVideoMaxKeyFrameIntervalDurationKey: 2,
-                AVVideoExpectedSourceFrameRateKey: 30,
+                AVVideoExpectedSourceFrameRateKey: fps,
             ],
         ])
         v.expectsMediaDataInRealTime = true
@@ -76,10 +77,11 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
             AVEncoderBitRateKey: 256_000,
         ])
         a.expectsMediaDataInRealTime = true
-        guard w.canAdd(v), w.canAdd(a) else { throw PrePodClient.Failure(message: "No se pudo preparar la grabación") }
-        w.add(v); w.add(a)
+        guard w.canAdd(v), !withAudio || w.canAdd(a) else { throw PrePodClient.Failure(message: "No se pudo preparar la grabación") }
+        w.add(v)
+        if withAudio { w.add(a) }
         lock.withLock {
-            writer = w; videoIn = v; audioIn = a; handle = h; fileURL = url
+            writer = w; videoIn = v; audioIn = withAudio ? a : nil; handle = h; fileURL = url
             started = false; bytesWritten = 0; firstPTS = .invalid; lastPTS = .invalid
         }
     }
@@ -183,6 +185,7 @@ actor ChunkUploader {
     struct Job: Codable, Equatable {
         var sessionId: Int
         var file: String
+        var trackType: String? = "video"
         var sent: Int64 = 0
         var recordingDone = false      // la grabación terminó (el archivo ya no crece)
         var finalized = false
@@ -220,8 +223,8 @@ actor ChunkUploader {
 
     func pending() -> [Job] { Array(jobs.values) }
 
-    func begin(sessionId: Int, file: URL) {
-        jobs[file.path] = Job(sessionId: sessionId, file: file.path)
+    func begin(sessionId: Int, file: URL, trackType: String = "video") {
+        jobs[file.path] = Job(sessionId: sessionId, file: file.path, trackType: trackType)
         save()
         kick(file.path)
     }
@@ -296,7 +299,7 @@ actor ChunkUploader {
 
     /// Devuelve cuántos bytes tiene el servidor.
     private func post(_ j: Job, chunk: Data?, offset: Int64, finalize: Bool) async throws -> Int64 {
-        var fields = ["track_type": "video", "ext": ".mp4", "offset": String(offset)]
+        var fields = ["track_type": j.trackType ?? "video", "ext": ".mp4", "offset": String(offset)]
         if finalize { fields["finalize"] = "1"; fields["duration_seconds"] = String(format: "%.2f", j.duration) }
         let (code, obj) = try await ProdPodClient.shared.multipart("/api/sessions/\(j.sessionId)/recordings/stream",
                                                                   fields: fields, fileField: chunk == nil ? nil : "chunk",

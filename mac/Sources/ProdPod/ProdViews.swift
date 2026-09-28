@@ -32,6 +32,12 @@ struct ProdHomeView: View {
                     SectionSwitcher()
                     Spacer()
                     if loading { ProgressView().controlSize(.small) }
+                    Button {
+                        Task {
+                            do { if try await SessionBundle.importZip() { load() } } catch { self.error = error.localizedDescription }
+                        }
+                    } label: { Label("Importar sala…", systemImage: "square.and.arrow.down") }
+                        .buttonStyle(.bordered).help("Sube el paquete .zip de una sala de prodPod")
                     Button { load() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.bordered).help("Actualizar")
                     SettingsLink { Label("Ajustes", systemImage: "gearshape") }.buttonStyle(.bordered)
                 }
@@ -154,6 +160,57 @@ private struct SessionCard: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(hover ? Color(white: 1, opacity: 0.08) : Theme.panel))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.stroke))
         .onHover { hover = $0 }
+        .contextMenu {
+            Button("Descargar paquete de la sala (.zip)…") {
+                Task {
+                    do { if let u = try await SessionBundle.export(session) { NSWorkspace.shared.activateFileViewerSelecting([u]) } }
+                    catch { result = error.localizedDescription }
+                }
+            }
+        }
+    }
+}
+
+/// Datos para transmitir: plataforma, dirección y clave de transmisión (la clave la pones tú).
+struct LiveSheet: View {
+    @ObservedObject var studio: ProdStudio
+    @Environment(\.dismiss) private var dismiss
+    @State private var preset = "youtube"
+    @State private var url = ""
+    @State private var key = ""
+    @State private var layout = "speaker"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Transmitir en vivo").font(.title2.bold())
+            Picker("Plataforma", selection: $preset) {
+                ForEach(studio.rtmpPresets, id: \.self) { p in Text(p["name"] ?? p["key"] ?? "").tag(p["key"] ?? "") }
+                Text("Otra").tag("custom")
+            }
+            .onChange(of: preset) { _, v in url = studio.rtmpPresets.first { $0["key"] == v }?["rtmp_url"] ?? "" }
+            TextField("Dirección (rtmp://…)", text: $url).textFieldStyle(.roundedBorder)
+            SecureField("Clave de transmisión", text: $key).textFieldStyle(.roundedBorder)
+            Text("La clave está en YouTube Studio o en el panel de Twitch. No la compartas con nadie.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            Picker("Vista", selection: $layout) {
+                Text("Quien habla").tag("speaker")
+                Text("Todos iguales").tag("grid")
+            }
+            .pickerStyle(.segmented)
+            HStack {
+                Spacer()
+                Button("Cancelar") { dismiss() }
+                Button("Transmitir") {
+                    studio.startStream(platform: preset == "custom" ? "custom" : preset, url: url, key: key, layout: layout)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(key.isEmpty || !(url.hasPrefix("rtmp://") || url.hasPrefix("rtmps://")))
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+        .onAppear { url = studio.rtmpPresets.first { $0["key"] == preset }?["rtmp_url"] ?? "" }
     }
 }
 
@@ -355,6 +412,23 @@ struct StudioView: View {
                         .help(studio.micOn ? "Silenciar micrófono" : "Activar micrófono")
                     RoundButton(on: studio.camOn, onSymbol: "video.fill", offSymbol: "video.slash.fill", big: true) { studio.toggleCam() }
                         .help(studio.camOn ? "Apagar cámara" : "Encender cámara")
+                    Menu {
+                        if studio.screenOn {
+                            Button("Dejar de compartir") { studio.stopScreen() }
+                        } else {
+                            Button("Compartir una pantalla o ventana…") { studio.shareScreen(recordOnly: false) }
+                            Button("Solo grabarla (no se muestra en la sala)…") { studio.shareScreen(recordOnly: true) }
+                        }
+                    } label: {
+                        Image(systemName: studio.screenOn ? "rectangle.on.rectangle.slash" : "rectangle.on.rectangle")
+                            .font(.system(size: 20, weight: .semibold))
+                            .frame(width: 52, height: 52)
+                            .background(Circle().fill(studio.screenOn ? Color.prodPod : Color(white: 1, opacity: 0.16)))
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    .help("Compartir pantalla")
+                    RoundButton(on: !studio.myHand, onSymbol: "hand.raised", offSymbol: "hand.raised.fill", big: true) { studio.toggleHand() }
+                        .help(studio.myHand ? "Bajar la mano" : "Levantar la mano")
                     Button { close() } label: {
                         Label("Salir", systemImage: "phone.down.fill").font(.headline).padding(.horizontal, 10).padding(.vertical, 6)
                     }
@@ -369,6 +443,8 @@ struct StudioView: View {
                     if !studio.sounds.isEmpty { soundboard }
                     if !studio.sponsors.isEmpty { sponsorsCard }
                     peopleCard(title: "Personas")
+                    chatCard
+                    if studio.isOwner { liveCard }
                     Card {
                         Label("Invitar a alguien más", systemImage: "person.badge.plus").font(.headline)
                         TextField("Nombre", text: $inviteName).textFieldStyle(.roundedBorder)
@@ -534,6 +610,72 @@ struct StudioView: View {
         }
     }
 
+    // MARK: Chat
+
+    @State private var chatText = ""
+    @State private var chatHosts = false
+
+    private var chatCard: some View {
+        Card {
+            HStack {
+                Label("Chat", systemImage: "bubble.left.and.bubble.right").font(.headline)
+                Spacer()
+                Picker("", selection: $chatHosts) {
+                    Text("Sala").tag(false)
+                    Text("Conductores").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 170)
+            }
+            let msgs = chatHosts ? studio.backstage : studio.chat
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(msgs) { m in
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(m.author).font(.caption2.bold()).foregroundStyle(m.mine ? Color.prodPod : Theme.secondary)
+                                Text(m.text).font(.callout).textSelection(.enabled)
+                            }
+                            .id(m.id)
+                        }
+                        if msgs.isEmpty {
+                            Text(chatHosts ? "Solo lo ven los conductores y el director." : "Todos en la sala lo ven.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 160)
+                .onChange(of: msgs.count) { _, _ in if let l = msgs.last { proxy.scrollTo(l.id, anchor: .bottom) } }
+            }
+            HStack {
+                TextField("Escribe…", text: $chatText).textFieldStyle(.roundedBorder)
+                    .onSubmit { studio.sendChat(chatText, backstage: chatHosts); chatText = "" }
+                Button { studio.sendChat(chatText, backstage: chatHosts); chatText = "" } label: { Image(systemName: "paperplane.fill") }
+                    .disabled(chatText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .onAppear { studio.unreadChat = 0 }
+    }
+
+    // MARK: En vivo
+
+    @State private var showLive = false
+
+    private var liveCard: some View {
+        Card {
+            Label("Transmitir en vivo", systemImage: "dot.radiowaves.left.and.right").font(.headline)
+            if let s = studio.liveStream {
+                Label("En vivo en \((s["platform"] as? String ?? "").capitalized)", systemImage: "circle.fill")
+                    .foregroundStyle(Color.prodPod).font(.callout.bold())
+                Button("Detener transmisión", role: .destructive) { studio.stopStream() }
+            } else {
+                Text("YouTube o Twitch, con todos los de la sala.").font(.caption).foregroundStyle(Theme.secondary)
+                Button("Empezar transmisión…") { showLive = true }
+            }
+        }
+        .sheet(isPresented: $showLive) { LiveSheet(studio: studio) }
+    }
+
     private var grid: some View {
         let n = studio.people.count
         let cols = Array(repeating: GridItem(.flexible(), spacing: 12), count: n <= 1 ? 1 : 2)
@@ -544,9 +686,28 @@ struct StudioView: View {
     }
 
     private var speaker: some View {
-        let main = studio.featured
+        let screenShown = studio.remoteScreen != nil || (studio.screenOn && !studio.screen.recordOnly)
+        let main = screenShown ? nil : studio.featured
         let others = studio.people.filter { $0.id != main?.id }
         return VStack(spacing: 12) {
+            if let rs = studio.remoteScreen {
+                ZStack(alignment: .bottomLeading) {
+                    RoundedRectangle(cornerRadius: 14).fill(Color.black)
+                    SwiftUIVideoView(rs.track, layoutMode: .fit).clipShape(RoundedRectangle(cornerRadius: 14))
+                    Label("Pantalla de \(rs.name)", systemImage: "rectangle.on.rectangle")
+                        .font(.callout.weight(.semibold)).padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(.black.opacity(0.6))).padding(10)
+                }
+                .aspectRatio(16 / 9, contentMode: .fit)
+            } else if studio.screenOn && !studio.screen.recordOnly {
+                VStack(spacing: 10) {
+                    Image(systemName: "rectangle.on.rectangle").font(.system(size: 50)).foregroundStyle(Color.prodPod)
+                    Text("Estás compartiendo tu pantalla").font(.title3.bold())
+                    Button("Dejar de compartir") { studio.stopScreen() }
+                }
+                .frame(maxWidth: .infinity).aspectRatio(16 / 9, contentMode: .fit)
+                .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.08)))
+            }
             if let main { PersonTile(person: main, big: true) }
             if !others.isEmpty {
                 HStack(spacing: 12) {
@@ -572,9 +733,16 @@ struct StudioView: View {
                             .foregroundStyle(live.contains(p.display_name) ? Theme.good : Theme.secondary)
                     }
                     Spacer()
+                    if studio.hands["participant_\(p.id)"] == true {
+                        Image(systemName: "hand.raised.fill").foregroundStyle(.yellow).help("Levantó la mano")
+                    }
                     if p.role == "guest", let u = p.invite_url {
                         Button { studio.copyInvite(u, name: p.display_name) } label: { Image(systemName: "link") }
                             .buttonStyle(.borderless).help("Copiar el link de \(p.display_name)")
+                    }
+                    if studio.isOwner, studio.phase == .inRoom, p.role == "guest", live.contains(p.display_name) {
+                        Button { studio.kick(p) } label: { Image(systemName: "person.fill.xmark") }
+                            .buttonStyle(.borderless).foregroundStyle(.red).help("Sacar a \(p.display_name) de la sala")
                     }
                 }
             }
