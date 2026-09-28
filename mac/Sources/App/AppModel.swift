@@ -7,7 +7,7 @@ struct JobState: Equatable {
     var fraction: Double? = nil      // nil = indeterminate
 }
 
-enum AppSection: String { case pre, prod, post }
+enum AppSection: String { case pre, prod, post, ama }
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -21,6 +21,8 @@ final class AppModel: ObservableObject {
     @Published var studio: ProdStudio?
     /// Cuarto de control abierto (director).
     @Published var director: DirectorStudio?
+    /// Evento de amaPod abierto (preguntas del público).
+    @Published var ama: AmaStudio?
     @Published var projects: [Project] = []
     @Published var session: ProjectSession?
     @Published var importJob: JobState?

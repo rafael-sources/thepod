@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -152,6 +152,59 @@ enum SelfTest {
                 if await ChunkUploader.shared.pending().isEmpty { break }
             }
             print(await ChunkUploader.shared.pending().isEmpty ? "OK subida finalizada" : "ERROR la subida no terminó")
+            fflush(stdout); exit(0)
+        }
+    }
+
+    /// Capturas de amaPod con datos de ejemplo (no abre ningún evento; solo lee tu lista de eventos, sin cambiar nada).
+    @MainActor
+    static func amaSnapshot(dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let defaults = UserDefaults.standard
+        let oldTab = defaults.object(forKey: "amaPestana")
+        Task { @MainActor in
+            do { let evs = try await AmaClient.shared.events(); print("amaPod OK: \(evs.count) eventos") }
+            catch { print("amaPod ERROR: \(error.localizedDescription)") }
+            let ev = AmaClient.Event(id: 7, title: "Pregúntanos lo que quieras — Lee La Letra Chica", description: "Contratos, letra chica y todo lo que nunca te explicaron.",
+                                     status: "active", chat_mode: "free", like_count: 128, spectator_count: 342)
+            let s = AmaStudio(event: ev)
+            func person(_ id: Int, _ n: String, _ st: String, _ pos: Int?, _ q: [String], pre: Int = 0) -> AmaClient.Person {
+                AmaClient.Person(id: id, display_name: n, status: st, queue_position: pos, is_preconnected: pre, is_censored: 0, questions: q)
+            }
+            s.queue = [
+                person(11, "Carla Méndez", "on_air", nil, ["¿Qué cláusula debo revisar primero en un contrato de alquiler?", "¿Sirve un contrato firmado por WhatsApp?"]),
+                person(12, "Luis Andrade", "in_queue", 1, ["¿Me pueden cobrar una multa que no estaba en el contrato?"], pre: 1),
+                person(13, "Ana Torres", "in_queue", 2, [], pre: 1),
+                person(14, "Pedro Salas", "in_queue", 3, ["¿Qué hago si el banco cambió la tasa sin avisar?"]),
+            ]
+            s.requests = [person(15, "María José", "pending", nil, ["¿Cómo leo la letra chica de un seguro médico?", "¿Qué es una cláusula abusiva?"]),
+                          person(16, "Pedro Paz", "pending", nil, [])]
+            s.chat = [AmaClient.Message(id: 1, sender_name: "Sofía", is_host: 0, message: "¡Saludos desde Quito!"),
+                      AmaClient.Message(id: 2, sender_name: "host", is_host: 1, message: "Bienvenidos, ya empezamos con las preguntas")]
+            s.likes = 128; s.spectators = 342; s.recording = true
+            s.phase = .live
+            let host = NSHostingView(rootView: AmaStudioView(studio: s, preview: true)
+                .environmentObject(AppModel()).frame(width: 1440, height: 900).preferredColorScheme(.dark))
+            host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.appearance = NSAppearance(named: .darkAqua)
+            win.contentView = host
+            win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+            win.orderFrontRegardless()
+            func shot(_ name: String) async {
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                host.layoutSubtreeIfNeeded()
+                if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                    print("snapshot \(name)")
+                }
+            }
+            for (i, name) in ["1-solicitudes", "2-cola", "3-chat", "4-compartir"].enumerated() {
+                defaults.set(i, forKey: "amaPestana"); await shot(name)
+            }
+            s.phase = .prejoin; await shot("5-antes")
+            if let oldTab { defaults.set(oldTab, forKey: "amaPestana") } else { defaults.removeObject(forKey: "amaPestana") }
             fflush(stdout); exit(0)
         }
     }
@@ -371,6 +424,11 @@ enum SelfTest {
                 }
                 fflush(stdout); exit(0)
             }
+            return
+        }
+        if let i = args.firstIndex(of: "--ama-snapshot"), args.count > i + 1 {
+            let dir = URL(fileURLWithPath: args[i + 1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { amaSnapshot(dir: dir) }
             return
         }
         if let i = args.firstIndex(of: "--director-snapshot"), args.count > i + 2 {

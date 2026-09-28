@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return .terminateCancel
         }
+        if let ama = AmaStudio.current, ama.phase == .live, !leavingRoom {
+            leavingRoom = true
+            Task { @MainActor in await ama.leave(); sender.terminate(nil) }
+            return .terminateCancel
+        }
         if let dir = DirectorStudio.current, dir.connected, !leavingRoom {
             leavingRoom = true
             Task { @MainActor in await dir.leave(); sender.terminate(nil) }

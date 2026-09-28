@@ -144,6 +144,7 @@ struct SectionSwitcher: View {
             chip(.pre, "pre", .prePod)
             chip(.prod, "prod", .prodPod)
             chip(.post, "post", Theme.accent)
+            chip(.ama, "ama", .amaPod)
         }
         .padding(3)
         .background(Capsule().fill(Theme.panel))
@@ -153,6 +154,9 @@ struct SectionSwitcher: View {
             HStack(spacing: 5) {
                 if s == .prod, app.studio?.phase == .inRoom {
                     Circle().fill(app.section == s ? Color.black : Color.prodPod).frame(width: 7, height: 7)
+                }
+                if s == .ama, app.ama?.phase == .live {
+                    Circle().fill(app.section == s ? Color.black : Color.amaPod).frame(width: 7, height: 7)
                 }
                 Text(label)
             }
