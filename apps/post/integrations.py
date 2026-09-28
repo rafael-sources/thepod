@@ -938,9 +938,11 @@ def import_track_from_prodpod():
     finally:
         db.close()
 
-    # Auto-place on timeline if track_number was provided by prodPod
+    # Auto-place on timeline if track_number was provided by prodPod.
+    # "screen" (pantalla compartida) va como pista aparte con su propio
+    # track_number — nunca pisa la cámara de esa persona.
     track_number = request.form.get("track_number")
-    if track_number and track_type == "video":
+    if track_number and track_type in ("video", "screen"):
         try:
             tn = int(track_number)
             tdb = get_db(slug)
