@@ -45,6 +45,8 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     private(set) var room: Room?
     private var ifbTrack: LocalAudioTrack?
+    private var ifbWork: Task<Void, Never>?                 // publicar/silenciar el audio al oído (se espera antes de salir)
+    private var leaving = false
     private var recStart = Date()
     private var timer: Timer?
     private var myIdentity = ""
@@ -95,8 +97,20 @@ final class DirectorStudio: NSObject, ObservableObject {
     }
 
     func leave() async {
+        guard !leaving else { return }
+        leaving = true
+        defer { leaving = false }
         timer?.invalidate(); timer = nil
-        if ifbTarget != nil { ifbRelease() }
+        ifbTarget = nil
+        // Nunca cortar la conexión con una publicación a medias: eso tumbaba la app.
+        await ifbWork?.value
+        ifbWork = nil
+        if let t = ifbTrack, let room {
+            try? await t.mute()
+            try? await room.localParticipant.unpublishAll(notify: false)
+            _ = t
+        }
+        ifbTrack = nil
         await room?.disconnect()
         room = nil
         connected = false
@@ -226,9 +240,12 @@ final class DirectorStudio: NSObject, ObservableObject {
     // MARK: Hablar al oído (mantener presionado)
 
     func ifbPress(_ target: String) {
-        guard ifbTarget == nil, let room else { return }
+        guard ifbTarget == nil, connected, !leaving, let room else { return }
         ifbTarget = target
-        Task {
+        let previous = ifbWork
+        ifbWork = Task {
+            await previous?.value
+            guard !leaving, ifbTarget != nil else { return }
             if ifbTrack == nil {
                 let t = await LocalAudioTrack.createTrack(name: "ifb_audio")
                 _ = try? await room.localParticipant.publish(audioTrack: t, options: AudioPublishOptions(name: "ifb_audio"))
@@ -242,7 +259,9 @@ final class DirectorStudio: NSObject, ObservableObject {
     func ifbRelease() {
         guard ifbTarget != nil else { return }
         ifbTarget = nil
-        Task {
+        let previous = ifbWork
+        ifbWork = Task {
+            await previous?.value
             try? await ifbTrack?.mute()
             send(["type": "ifb_stop"])
         }
