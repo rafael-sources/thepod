@@ -10,6 +10,7 @@ struct Overlay: Identifiable, Equatable {
     var filePath: String?
     var image: NSImage?
     var expires: Date?
+    var endsAt: Date?            // cuenta regresiva: hasta cuándo
 
     static func == (a: Overlay, b: Overlay) -> Bool { a.id == b.id && a.title == b.title && a.text == b.text && (a.image == nil) == (b.image == nil) }
 
@@ -33,9 +34,11 @@ struct Overlay: Identifiable, Equatable {
         default: title = p["caption"] as? String ?? ""
         }
         let secs = (m["duration_seconds"] as? Double) ?? (m["duration_seconds"] as? Int).map(Double.init) ?? seconds(for: kind)
-        return Overlay(id: id, kind: kind, title: title, text: text,
-                       filePath: (m["file_path"] as? String) ?? (p["file_path"] as? String),
-                       image: nil, expires: secs > 0 ? Date().addingTimeInterval(secs) : nil)
+        var o = Overlay(id: id, kind: kind, title: title, text: text,
+                        filePath: (m["file_path"] as? String) ?? (p["file_path"] as? String),
+                        image: nil, expires: secs > 0 ? Date().addingTimeInterval(secs) : nil)
+        if kind == "countdown" { o.endsAt = Date().addingTimeInterval(Double(p["seconds"] as? Int ?? 180)) }
+        return o
     }
 
     var accent: Color {
@@ -94,12 +97,22 @@ struct Cintillo: View {
                 .padding(.horizontal, 12 * scale)
                 .frame(maxWidth: .infinity, minHeight: 34 * scale, alignment: .leading)
                 .background(overlay.accent)
-                Text(overlay.text.isEmpty ? " " : overlay.text)
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                Text(displayText(ctx.date))
                     .font(.system(size: 16 * scale, weight: .semibold)).foregroundStyle(.black).lineLimit(2)
                     .padding(.horizontal, 12 * scale)
                     .frame(maxWidth: .infinity, minHeight: 44 * scale, alignment: .leading)
                     .background(Color.white.opacity(0.94))
+                }
             }
+    }
+
+    private func displayText(_ now: Date) -> String {
+        if let end = overlay.endsAt {
+            let r = max(0, Int(end.timeIntervalSince(now)))
+            return String(format: "%d:%02d", r / 60, r % 60)
+        }
+        return overlay.text.isEmpty ? " " : overlay.text
     }
 }
 

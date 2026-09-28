@@ -153,7 +153,8 @@ final class RenderScene: @unchecked Sendable {
             let p = min(1, (t - c.start) / 0.4), q = min(1, (c.end - t) / 0.3)
             let k = CGFloat(1 - pow(1 - min(p, q), 3))
             let x = m - (img.extent.width + m) * (1 - k)
-            let y = format.isVertical ? H * 0.30 : m
+            // Si hay dos a la vez, el segundo va encima del primero (como en vivo)
+            let y = max(format.isVertical ? H * 0.30 : m, cintilloTop > 0 ? cintilloTop + m * 0.4 : 0)
             out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
             cintilloTop = max(cintilloTop, y + img.extent.height)
         }

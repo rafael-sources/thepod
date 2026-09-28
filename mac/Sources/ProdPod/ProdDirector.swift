@@ -275,7 +275,7 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     /// Logos del podcast y de sus sponsors (desde prePod).
     func loadBranding() async {
-        guard let slug = session.source_slug, !slug.isEmpty else { return }
+        guard let slug = session.source_slug, !slug.isEmpty else { await applyEpisodeBranding(); return }
         let pre = PrePodClient.shared
         if let cfg = try? await pre.podcastConfig(slug) {
             podcastName = cfg.name
@@ -290,6 +290,25 @@ final class DirectorStudio: NSObject, ObservableObject {
                 if let u = s.logoUrl, !u.isEmpty, let d = try? await pre.media(u) { sponsorLogos[s.id] = d }
             }
         }
+        await applyEpisodeBranding()
+    }
+
+    /// Los sponsors de ESTE episodio (los que prodPod guardó al crear la sala) van primero.
+    private func applyEpisodeBranding() async {
+        guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/director/branding"),
+              let b = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
+        if podcastName.isEmpty, let n = b["podcast_name"] as? String { podcastName = n }
+        let eps = (b["sponsors"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+        guard !eps.isEmpty else { return }
+        var ordered: [SponsorInfo] = []
+        for (i, n) in eps.enumerated() {
+            if let s = sponsors.first(where: { $0.name.caseInsensitiveCompare(n) == .orderedSame }) { ordered.append(s) }
+            else {
+                let copy = (b["sponsors"] as? [[String: Any]])?[i]["copy"] as? String ?? ""
+                ordered.append(SponsorInfo(id: -1000 - i, name: n, copy: copy, logoURL: nil))
+            }
+        }
+        sponsors = ordered + sponsors.filter { s in !ordered.contains { $0.id == s.id } }
     }
 
     func sponsorLogo(_ s: SponsorInfo) -> NSImage? { sponsorLogos[s.id].flatMap(NSImage.init(data:)) }
