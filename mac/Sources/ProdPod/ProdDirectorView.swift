@@ -1,82 +1,219 @@
 import SwiftUI
 import LiveKit
 
-/// Cuarto de control del director.
+// MARK: - Estilo del cuarto de control
+
+private enum CR {
+    static let bg = Color(red: 0.055, green: 0.055, blue: 0.07)
+    static let side = Color(red: 0.085, green: 0.085, blue: 0.105)
+    static let field = Color(white: 1, opacity: 0.06)
+    static let line = Color(white: 1, opacity: 0.08)
+    static let sponsor = Color(red: 0.70, green: 0.45, blue: 1.0)
+    static let podcast = Color.prodPod
+    static let segment = Color(red: 0.40, green: 0.62, blue: 1.0)
+}
+
+/// Título de sección pequeño, en mayúsculas.
+private struct SectionTitle: View {
+    let text: String
+    var trailing: String? = nil
+    var body: some View {
+        HStack {
+            Text(text.uppercased()).font(.system(size: 11, weight: .bold)).kerning(0.8).foregroundStyle(Theme.secondary)
+            Spacer()
+            if let trailing { Text(trailing).font(.caption).foregroundStyle(Theme.secondary) }
+        }
+    }
+}
+
+/// Opción tipo píldora (para elegir destino, duración, etc.).
+private struct Pill: View {
+    let text: String
+    var symbol: String? = nil
+    let selected: Bool
+    var color: Color = .prodPod
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if let symbol { Image(systemName: symbol).font(.caption.weight(.bold)) }
+                Text(text).font(.callout.weight(.semibold)).lineLimit(1)
+            }
+            .padding(.horizontal, 12).frame(height: 30)
+            .foregroundStyle(selected ? Color.black : .white)
+            .background(Capsule().fill(selected ? color : Color(white: 1, opacity: hover ? 0.12 : 0.07)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+    }
+}
+
+/// Botón grande y sólido del cuarto de control.
+private struct CRButton: View {
+    let title: String
+    let symbol: String
+    var color: Color = .prodPod
+    var enabled = true
+    let action: () -> Void
+    @State private var hover = false
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol).font(.system(size: 15, weight: .bold))
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .foregroundStyle(enabled ? Color.black : Theme.secondary)
+                .background(RoundedRectangle(cornerRadius: 11).fill(enabled ? color.opacity(hover ? 1 : 0.9) : Color(white: 1, opacity: 0.07)))
+                .contentShape(RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain).disabled(!enabled)
+        .onHover { hover = $0 }
+    }
+}
+
+/// Campo de texto con el estilo del cuarto de control.
+private struct CRField: View {
+    let placeholder: String
+    @Binding var text: String
+    var lines: ClosedRange<Int> = 1...1
+    var onSubmit: () -> Void = {}
+    var body: some View {
+        TextField(placeholder, text: $text, axis: lines.upperBound > 1 ? .vertical : .horizontal)
+            .lineLimit(lines)
+            .textFieldStyle(.plain).font(.system(size: 14))
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 9).fill(CR.field))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(CR.line))
+            .onSubmit(onSubmit)
+    }
+}
+
+// MARK: - Cuarto de control
+
 struct DirectorView: View {
     @EnvironmentObject var app: AppModel
     @ObservedObject var dir: DirectorStudio
+    var preview = false
+    @AppStorage("directorPestana") private var tab = 0
+    @State private var seenChat = 0
+
+    private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), ("Avisos", "megaphone.fill"),
+                                            ("Sala", "person.2.fill"), ("Chat", "bubble.left.and.bubble.right.fill"),
+                                            ("Sonidos", "speaker.wave.2.fill")]
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 topBar
-                Divider()
-                if dir.connected { feedsGrid } else { connectPrompt }
-                Divider()
+                Rectangle().fill(CR.line).frame(height: 1)
+                if dir.connected || preview { feedsGrid } else { connectPrompt }
+                if !dir.overlays.isEmpty { onAirBar }
                 ifbBar
             }
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    CintillosCard(dir: dir)
-                    CuesCard(dir: dir)
-                    peopleCard
-                    uploadsCard
-                    DirectorChatCard(dir: dir)
-                    if !dir.sounds.isEmpty { soundsCard }
-                }
-                .padding(16)
-            }
-            .frame(width: 390)
-            .background(Color.black.opacity(0.25))
+            .background(CR.bg)
+            Rectangle().fill(CR.line).frame(width: 1)
+            sidePanel.frame(width: 400).background(CR.side)
         }
         .tint(.prodPod)
-        .onAppear { dir.join() }
+        .onAppear { if !preview { dir.join() }; if tab == 3 { seenChat = dir.chat.count } }
+        .onChange(of: dir.chat.count) { _, n in if tab == 3 { seenChat = n } }
         .alert("Algo salió mal", isPresented: Binding(get: { dir.error != nil }, set: { if !$0 { dir.error = nil } })) {
             Button("Entendido", role: .cancel) {}
         } message: { Text(dir.error ?? "") }
         .overlay(alignment: .top) {
             if let n = dir.note {
-                Text(n).font(.callout.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(.black.opacity(0.75))).padding(.top, 60)
+                Text(n).font(.callout.weight(.semibold)).padding(.horizontal, 16).padding(.vertical, 9)
+                    .background(Capsule().fill(.black.opacity(0.85)))
+                    .overlay(Capsule().strokeBorder(CR.line))
+                    .padding(.top, 70)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .animation(.easeOut(duration: 0.2), value: dir.note)
     }
 
     private func close() { Task { await dir.leave(); app.director = nil } }
 
     // MARK: Barra superior
 
+    private var readyCount: (Int, Int) {
+        let hosts = dir.hostsInRoom
+        return (hosts.filter { dir.readyMap["participant_\($0.id)"] == true }.count, hosts.count)
+    }
+
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button { close() } label: { Image(systemName: "chevron.left") }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
-            Text("DIRECTOR").font(.caption.weight(.heavy)).padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Capsule().fill(Color.prodPod)).foregroundStyle(.black)
-            Text(dir.session.title).font(.headline).lineLimit(1)
-            if dir.practice { Chip(text: "ENSAYO", color: .yellow, filled: true) }
-            Spacer()
-            Text(String(format: "%d:%02d", dir.recSeconds / 60, dir.recSeconds % 60))
-                .font(.title2.monospacedDigit().weight(.semibold))
-                .foregroundStyle(dir.recording ? Color.prodPod : Theme.secondary)
-            if let c = dir.countdown {
-                Text("\(c)").font(.title.weight(.black)).foregroundStyle(Color.prodPod).frame(width: 40)
+        HStack(spacing: 14) {
+            Button { close() } label: {
+                Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
+                    .frame(width: 30, height: 30).background(Circle().fill(CR.field))
             }
-            if dir.recording {
-                Button { dir.stopRecording() } label: { Label("Detener", systemImage: "stop.fill").font(.headline) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-            } else {
-                Button { dir.startRecording() } label: { Label("Grabar", systemImage: "record.circle").font(.headline) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                    .disabled(!dir.allHostsReady || dir.countdown != nil || !dir.connected)
-                    .help(dir.allHostsReady ? "Empieza la cuenta regresiva para todos"
-                                            : "Se habilita cuando todos los conductores en la sala marquen Preparado")
+            .buttonStyle(.plain).help("Salir del cuarto de control")
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text("DIRECTOR").font(.system(size: 10, weight: .heavy)).kerning(0.6)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.prodPod)).foregroundStyle(.black)
+                    if dir.practice { Chip(text: "ENSAYO", color: .yellow, filled: true) }
+                    if !dir.podcastName.isEmpty {
+                        Text(dir.podcastName).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
+                    }
+                }
+                Text(dir.session.title).font(.system(size: 15, weight: .semibold)).lineLimit(1).truncationMode(.tail)
             }
+            .layoutPriority(-1)
+
+            Spacer(minLength: 12)
+
+            let (r, t) = readyCount
+            if t > 0 {
+                HStack(spacing: 5) {
+                    Image(systemName: r == t ? "checkmark.circle.fill" : "hourglass").font(.caption.weight(.bold))
+                    Text("\(r)/\(t) preparados").font(.callout.weight(.semibold)).fixedSize()
+                }
+                .foregroundStyle(r == t ? Theme.good : Theme.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Circle().fill(dir.recording ? Color.prodPod : Color(white: 1, opacity: 0.25)).frame(width: 9, height: 9)
+                if let c = dir.countdown {
+                    Text("Empieza en \(c)").font(.system(size: 17, weight: .bold).monospacedDigit()).foregroundStyle(Color.prodPod)
+                } else {
+                    Text(String(format: "%d:%02d", dir.recSeconds / 60, dir.recSeconds % 60))
+                        .font(.system(size: 17, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(dir.recording ? .white : Theme.secondary)
+                }
+            }
+            .padding(.horizontal, 14).frame(height: 36)
+            .background(Capsule().fill(dir.recording ? Color.prodPod.opacity(0.18) : CR.field))
+            .fixedSize()
+
+            recordButton
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
+        .padding(.horizontal, 18).frame(height: 64)
+    }
+
+    private var recordButton: some View {
+        let canStart = dir.allHostsReady && dir.countdown == nil && dir.connected
+        return Button {
+            dir.recording ? dir.stopRecording() : dir.startRecording()
+        } label: {
+            Label(dir.recording ? "Detener" : "Grabar", systemImage: dir.recording ? "stop.fill" : "record.circle")
+                .font(.system(size: 14, weight: .bold))
+                .padding(.horizontal, 18).frame(height: 36)
+                .foregroundStyle(dir.recording || canStart ? Color.black : Theme.secondary)
+                .background(Capsule().fill(dir.recording ? Color.white : canStart ? Color.prodPod : CR.field))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain).fixedSize()
+        .disabled(!dir.recording && !canStart)
+        .help(dir.recording ? "Detiene la grabación de todos"
+              : dir.allHostsReady ? "Empieza la cuenta regresiva para todos"
+              : "Se habilita cuando todos los conductores en la sala marquen Preparado")
     }
 
     private var connectPrompt: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             if dir.joining { ProgressView("Entrando al cuarto de control…") }
             else {
                 Image(systemName: "film.stack").font(.system(size: 44)).foregroundStyle(Theme.secondary)
@@ -88,129 +225,256 @@ struct DirectorView: View {
 
     // MARK: Cámaras
 
+    private struct Tile: Identifiable {
+        let id: String; let name: String; let video: VideoTrack?; let speaking: Bool; let micOn: Bool; let ready: Bool; let isScreen: Bool
+    }
+
     private var feedsGrid: some View {
-        let tiles: [(String, String, VideoTrack?, Bool, Bool, Bool)] = dir.feeds.flatMap { f -> [(String, String, VideoTrack?, Bool, Bool, Bool)] in
-            var t = [(f.id, f.name, f.camera, f.speaking, f.micOn, dir.readyMap[f.id] == true)]
-            if let s = f.screen { t.append((f.id + "-screen", "Pantalla de \(f.name)", s, false, true, false)) }
+        let tiles: [Tile] = dir.feeds.flatMap { f -> [Tile] in
+            var t = [Tile(id: f.id, name: f.name, video: f.camera, speaking: f.speaking, micOn: f.micOn,
+                          ready: dir.readyMap[f.id] == true, isScreen: false)]
+            if let s = f.screen { t.append(Tile(id: f.id + "-screen", name: "Pantalla de \(f.name)", video: s, speaking: false, micOn: true, ready: false, isScreen: true)) }
             return t
         }
-        return ZStack(alignment: .bottomLeading) {
+        let cols = tiles.count <= 1 ? 1 : 2
+        return GeometryReader { geo in
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 360), spacing: 12)], spacing: 12) {
-                    ForEach(tiles, id: \.0) { t in
-                        ZStack(alignment: .bottomLeading) {
-                            RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.08))
-                            if let v = t.2 { SwiftUIVideoView(v, layoutMode: .fit).clipShape(RoundedRectangle(cornerRadius: 12)) }
-                            else { Avatar(name: t.1, size: 60).frame(maxWidth: .infinity, maxHeight: .infinity) }
-                            HStack(spacing: 6) {
-                                Image(systemName: t.4 ? "mic.fill" : "mic.slash.fill").foregroundStyle(t.4 ? .white : .red)
-                                Text(t.1).font(.callout.weight(.semibold))
-                                if t.5 { Text("PREPARADO").font(.caption2.weight(.heavy)).foregroundStyle(Theme.good) }
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Capsule().fill(.black.opacity(0.6))).padding(8)
-                        }
-                        .aspectRatio(16 / 9, contentMode: .fit)
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(t.3 ? Theme.good : Theme.stroke, lineWidth: t.3 ? 3 : 1))
-                    }
-                }
-                .padding(16)
                 if tiles.isEmpty {
-                    Text("Todavía no hay nadie en la sala.").foregroundStyle(Theme.secondary).padding(40)
+                    VStack(spacing: 10) {
+                        Image(systemName: "person.crop.rectangle.stack").font(.system(size: 40)).foregroundStyle(Theme.secondary)
+                        Text("Todavía no hay nadie en la sala.").foregroundStyle(Theme.secondary)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: cols), spacing: 12) {
+                        ForEach(tiles) { t in feedTile(t) }
+                    }
+                    .padding(16)
+                    .frame(minHeight: geo.size.height)
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(dir.overlays) { o in Cintillo(overlay: o, scale: 0.8) }
-            }
-            .padding(24)
-            .animation(.spring(duration: 0.4), value: dir.overlays)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func feedTile(_ t: Tile) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.1))
+            if let v = t.video { SwiftUIVideoView(v, layoutMode: .fit).clipShape(RoundedRectangle(cornerRadius: 12)) }
+            else { Avatar(name: t.name, size: 72).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                .clipShape(RoundedRectangle(cornerRadius: 12)).allowsHitTesting(false)
+            HStack(spacing: 7) {
+                Image(systemName: t.isScreen ? "rectangle.on.rectangle" : t.micOn ? "mic.fill" : "mic.slash.fill")
+                    .font(.caption.weight(.bold)).foregroundStyle(t.micOn ? .white : .red)
+                Text(t.name).font(.callout.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 6)
+                if t.ready {
+                    Text("PREPARADO").font(.system(size: 10, weight: .heavy))
+                        .padding(.horizontal, 7).padding(.vertical, 3)
+                        .background(Capsule().fill(Theme.good)).foregroundStyle(.black)
+                }
+            }
+            .padding(12)
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(t.speaking ? Theme.good : CR.line, lineWidth: t.speaking ? 3 : 1))
+    }
+
+    // MARK: Al aire
+
+    private var onAirBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle().fill(Color.prodPod).frame(width: 7, height: 7)
+                Text("AL AIRE").font(.system(size: 11, weight: .heavy)).kerning(0.8).foregroundStyle(Color.prodPod)
+                Text("lo que ven los conductores y queda en la grabación").font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(dir.overlays) { o in
+                        HStack(spacing: 10) {
+                            Cintillo(overlay: o, scale: 0.55).fixedSize()
+                            VStack(spacing: 6) {
+                                if let e = o.expires {
+                                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                                        Text("\(max(0, Int(e.timeIntervalSince(ctx.date))))s")
+                                            .font(.caption.monospacedDigit().weight(.semibold)).foregroundStyle(Theme.secondary)
+                                    }
+                                }
+                                Button { dir.removeOverlay(o) } label: {
+                                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                                        .frame(width: 26, height: 26).background(Circle().fill(CR.field))
+                                }
+                                .buttonStyle(.plain).help("Quitar de pantalla")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.prodPod.opacity(0.06))
+        .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
+        .animation(.spring(duration: 0.35), value: dir.overlays)
     }
 
     // MARK: Hablar al oído
 
     private var ifbBar: some View {
         HStack(spacing: 10) {
-            Image(systemName: "headphones").foregroundStyle(Theme.secondary)
-            Text("Hablar al oído (mantén presionado):").font(.callout).foregroundStyle(Theme.secondary)
-            HoldButton(title: "A todos los conductores", active: dir.ifbTarget == "all_hosts") { down in
-                down ? dir.ifbPress("all_hosts") : dir.ifbRelease()
+            VStack(alignment: .leading, spacing: 1) {
+                Label("Hablar al oído", systemImage: "headphones").font(.callout.weight(.semibold))
+                Text("mantén presionado").font(.caption).foregroundStyle(Theme.secondary)
             }
-            ForEach(dir.hostsInRoom) { p in
-                HoldButton(title: p.display_name, active: dir.ifbTarget == "participant_\(p.id)") { down in
-                    down ? dir.ifbPress("participant_\(p.id)") : dir.ifbRelease()
+            .padding(.trailing, 6)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    HoldButton(title: "Todos los conductores", active: dir.ifbTarget == "all_hosts") { down in
+                        down ? dir.ifbPress("all_hosts") : dir.ifbRelease()
+                    }
+                    ForEach(dir.hostsInRoom) { p in
+                        HoldButton(title: p.display_name, active: dir.ifbTarget == "participant_\(p.id)") { down in
+                            down ? dir.ifbPress("participant_\(p.id)") : dir.ifbRelease()
+                        }
+                    }
                 }
+            }
+        }
+        .padding(.horizontal, 18).frame(height: 62)
+        .background(Color.black.opacity(0.25))
+        .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
+        .disabled(!dir.connected && !preview)
+    }
+
+    // MARK: Panel lateral
+
+    private var sidePanel: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 2) {
+                ForEach(Array(tabs.enumerated()), id: \.offset) { i, t in
+                    if i == 4 && dir.sounds.isEmpty { EmptyView() } else {
+                        Button { tab = i; if i == 3 { seenChat = dir.chat.count } } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: t.1).font(.system(size: 15, weight: .semibold))
+                                    .overlay(alignment: .topTrailing) {
+                                        if i == 3 && dir.chat.count > seenChat && tab != 3 {
+                                            Circle().fill(Color.prodPod).frame(width: 8, height: 8).offset(x: 6, y: -3)
+                                        }
+                                    }
+                                Text(t.0).font(.system(size: 11, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity).frame(height: 52)
+                            .foregroundStyle(tab == i ? Color.white : Theme.secondary)
+                            .background(RoundedRectangle(cornerRadius: 9).fill(tab == i ? CR.field : .clear))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(8)
+            Rectangle().fill(CR.line).frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    switch tab {
+                    case 1: CuesPanel(dir: dir)
+                    case 2: roomPanel
+                    case 3: DirectorChatPanel(dir: dir)
+                    case 4: soundsPanel
+                    default: CintillosPanel(dir: dir)
+                    }
+                }
+                .padding(18)
+            }
+        }
+    }
+
+    // MARK: Sala: personas y pistas
+
+    private var roomPanel: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Personas")
+                let people = dir.participants.filter { $0.role != "director" }
+                if people.isEmpty { Text("Nadie invitado todavía.").font(.callout).foregroundStyle(Theme.secondary) }
+                ForEach(people) { p in personRow(p) }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                SectionTitle(text: "Pistas grabadas")
+                if dir.uploads.isEmpty {
+                    Text(dir.recording ? "Esperando que empiecen a subir…" : "Aparecen al grabar.").font(.callout).foregroundStyle(Theme.secondary)
+                }
+                ForEach(dir.uploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, st in
+                    let name = dir.feeds.first { $0.id == id }?.name ?? dir.participants.first { "participant_\($0.id)" == id }?.display_name ?? id
+                    let mb = Double(dir.uploadBytes[id] ?? 0) / 1_048_576
+                    HStack {
+                        Image(systemName: st == "done" ? "checkmark.circle.fill" : st == "error" ? "exclamationmark.triangle.fill" : "arrow.up.circle")
+                            .foregroundStyle(st == "done" ? Theme.good : st == "error" ? .red : Theme.secondary)
+                        Text(name).font(.callout)
+                        Spacer()
+                        Text(st == "error" ? "Error" : String(format: "%.0f MB", mb))
+                            .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                    }
+                    .padding(.horizontal, 12).frame(height: 40)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(CR.field))
+                }
+                if !dir.recording && dir.allUploadsDone {
+                    CRButton(title: dir.exporting ? "Enviando…" : "Enviar a post", symbol: "paperplane.fill", color: Theme.good,
+                              enabled: !dir.exporting) { dir.exportToPost() }
+                }
+                if let r = dir.exportResult { Text(r).font(.caption).foregroundStyle(Theme.good) }
+            }
+        }
+    }
+
+    private func personRow(_ p: ProdPodClient.Person) -> some View {
+        let id = "participant_\(p.id)"
+        let inRoom = dir.feeds.contains { $0.id == id }
+        let ready = dir.readyMap[id] == true
+        return HStack(spacing: 10) {
+            Avatar(name: p.display_name, size: 32)
+                .overlay(alignment: .bottomTrailing) {
+                    Circle().fill(inRoom ? Theme.good : Color(white: 0.4)).frame(width: 10, height: 10)
+                        .overlay(Circle().strokeBorder(CR.side, lineWidth: 2))
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(p.display_name).font(.callout.weight(.semibold)).lineLimit(1)
+                Text([p.roleTitle, inRoom ? (ready ? "preparado" : "en la sala") : "fuera",
+                      p.recording_quality.map { "graba en \($0)" }].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(ready ? Theme.good : Theme.secondary).lineLimit(1)
             }
             Spacer()
-        }
-        .padding(12)
-        .disabled(!dir.connected)
-    }
-
-    // MARK: Personas, subidas, sonidos
-
-    private var peopleCard: some View {
-        Card {
-            Label("Personas", systemImage: "person.2").font(.headline)
-            ForEach(dir.participants.filter { $0.role != "director" }) { p in
-                let id = "participant_\(p.id)"
-                let inRoom = dir.feeds.contains { $0.id == id }
-                HStack(spacing: 8) {
-                    Avatar(name: p.display_name, size: 26)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(p.display_name).font(.callout.weight(.semibold))
-                        Text([p.roleTitle, inRoom ? "en la sala" : "fuera", dir.readyMap[id] == true ? "preparado" : nil,
-                              p.recording_quality.map { "REC \($0)" }].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption).foregroundStyle(dir.readyMap[id] == true ? Theme.good : Theme.secondary)
-                    }
-                    Spacer()
-                    if inRoom {
-                        Button { dir.forceMute(p) } label: { Image(systemName: "mic.slash") }
-                            .buttonStyle(.borderless).help("Silenciar a \(p.display_name)")
-                        Button { dir.kick(p) } label: { Image(systemName: "person.fill.xmark") }
-                            .buttonStyle(.borderless).foregroundStyle(.red).help("Sacar a \(p.display_name)")
-                    }
-                }
+            if inRoom {
+                iconAction("mic.slash.fill", help: "Silenciar a \(p.display_name)") { dir.forceMute(p) }
+                iconAction("person.fill.xmark", color: .red, help: "Sacar a \(p.display_name)") { dir.kick(p) }
             }
         }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(CR.field))
     }
 
-    private var uploadsCard: some View {
-        Card {
-            Label("Pistas", systemImage: "arrow.up.circle").font(.headline)
-            if dir.uploads.isEmpty {
-                Text(dir.recording ? "Esperando que empiecen a subir…" : "Aparecen al grabar.").font(.caption).foregroundStyle(Theme.secondary)
-            }
-            ForEach(dir.uploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, st in
-                let name = dir.feeds.first { $0.id == id }?.name ?? dir.participants.first { "participant_\($0.id)" == id }?.display_name ?? id
-                let mb = Double(dir.uploadBytes[id] ?? 0) / 1_048_576
-                HStack {
-                    Text(name).font(.callout)
-                    Spacer()
-                    Text(st == "done" ? "✓ \(String(format: "%.0f", mb)) MB" : st == "error" ? "Error" : "↑ \(String(format: "%.0f", mb)) MB")
-                        .font(.caption.monospacedDigit()).foregroundStyle(st == "done" ? Theme.good : st == "error" ? .red : Theme.secondary)
-                }
-            }
-            if !dir.recording && dir.allUploadsDone {
-                Button { dir.exportToPost() } label: {
-                    Label(dir.exporting ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent).disabled(dir.exporting)
-            }
-            if let r = dir.exportResult { Text(r).font(.caption).foregroundStyle(Theme.good) }
+    private func iconAction(_ symbol: String, color: Color = .white, help: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
+                .frame(width: 30, height: 30).background(Circle().fill(Color(white: 1, opacity: 0.08)))
         }
+        .buttonStyle(.plain).help(help)
     }
 
-    private var soundsCard: some View {
-        Card {
-            Label("Soundboard", systemImage: "speaker.wave.3.fill").font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 6)], spacing: 6) {
+    private var soundsPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle(text: "Soundboard", trailing: "suena en la sala")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                 ForEach(dir.sounds) { pad in
+                    let c = pad.color.map { Color(hex: $0) } ?? .gray
                     Button { dir.trigger(pad) } label: {
-                        Text(pad.name).font(.caption.weight(.semibold)).lineLimit(1)
-                            .frame(maxWidth: .infinity, minHeight: 34)
-                            .background(RoundedRectangle(cornerRadius: 8).fill((pad.color.map { Color(hex: $0) } ?? .gray).opacity(0.55)))
+                        Text(pad.name).font(.callout.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 56).padding(.horizontal, 6)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(c.opacity(0.22)))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(c.opacity(0.5)))
+                            .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                 }
@@ -226,19 +490,25 @@ struct HoldButton: View {
     let change: (Bool) -> Void
     @State private var down = false
     var body: some View {
-        Text(title).font(.callout.weight(.semibold))
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Capsule().fill(active ? Color.prodPod : Color(white: 1, opacity: 0.12)))
-            .foregroundStyle(active ? .black : .white)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !down { down = true; change(true) } }
-                .onEnded { _ in down = false; change(false) })
+        HStack(spacing: 6) {
+            Image(systemName: active ? "waveform" : "mic.fill").font(.caption.weight(.bold))
+            Text(title).font(.callout.weight(.semibold)).lineLimit(1)
+        }
+        .padding(.horizontal, 14).frame(height: 34)
+        .background(Capsule().fill(active ? Color.prodPod : Color(white: 1, opacity: 0.08)))
+        .overlay(Capsule().strokeBorder(active ? Color.clear : Color(white: 1, opacity: 0.1)))
+        .foregroundStyle(active ? .black : .white)
+        .fixedSize()
+        .contentShape(Capsule())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in if !down { down = true; change(true) } }
+            .onEnded { _ in down = false; change(false) })
     }
 }
 
 // MARK: - Cintillos
 
-struct CintillosCard: View {
+struct CintillosPanel: View {
     @ObservedObject var dir: DirectorStudio
     @State private var mode = 0
     @State private var sponsorId: Int?
@@ -249,13 +519,29 @@ struct CintillosCard: View {
     @State private var segSub = ""
     @State private var seconds: Double = 15
 
+    private let kinds: [(String, String, Color)] = [("Sponsor", "star.fill", CR.sponsor), ("Podcast", "mic.fill", CR.podcast),
+                                                    ("Segmento", "text.alignleft", CR.segment)]
+    private var accent: Color { kinds[mode].2 }
+
     var body: some View {
-        Card {
-            Label("Cintillos", systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
-            Picker("", selection: $mode) {
-                Text("Sponsor").tag(0); Text("Podcast").tag(1); Text("Segmento").tag(2)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 8) {
+                ForEach(Array(kinds.enumerated()), id: \.offset) { i, k in
+                    Button { mode = i } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: k.1).font(.system(size: 15, weight: .bold))
+                            Text(k.0).font(.system(size: 12, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 58)
+                        .foregroundStyle(mode == i ? Color.black : .white)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(mode == i ? k.2 : CR.field))
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .pickerStyle(.segmented).labelsHidden()
+
+            previewBox
 
             switch mode {
             case 0: sponsorForm
@@ -264,30 +550,49 @@ struct CintillosCard: View {
             }
 
             if mode != 2 {
-                Picker("En pantalla", selection: $seconds) {
-                    Text("8 s").tag(8.0); Text("15 s").tag(15.0); Text("30 s").tag(30.0); Text("Hasta quitarlo").tag(0.0)
-                }
-                .pickerStyle(.segmented)
-            }
-
-            Button { launch() } label: { Label("Poner al aire", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity) }
-                .buttonStyle(.borderedProminent).controlSize(.large)
-                .disabled(!dir.connected || !canLaunch)
-
-            if !dir.overlays.isEmpty {
-                Text("Al aire ahora").font(.caption.bold()).foregroundStyle(Theme.secondary)
-                ForEach(dir.overlays) { o in
-                    HStack {
-                        Circle().fill(o.accent).frame(width: 8, height: 8)
-                        Text(o.title).font(.caption).lineLimit(1)
-                        Spacer()
-                        Button("Quitar") { dir.removeOverlay(o) }.controlSize(.small)
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Tiempo en pantalla")
+                    HStack(spacing: 6) {
+                        ForEach([(8.0, "8 s"), (15.0, "15 s"), (30.0, "30 s"), (0.0, "Hasta quitarlo")], id: \.0) { v, l in
+                            Pill(text: l, selected: seconds == v, color: accent) { seconds = v }
+                        }
                     }
                 }
             }
+
+            CRButton(title: "Poner al aire", symbol: "play.fill", color: accent, enabled: dir.connected && canLaunch) { launch() }
         }
         .onAppear { if podTitle.isEmpty { podTitle = dir.podcastName } }
         .onChange(of: dir.podcastName) { _, v in if podTitle.isEmpty { podTitle = v } }
+    }
+
+    /// Vista previa sobre un fondo tipo pantalla, a escala.
+    private var previewBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Vista previa")
+            ZStack(alignment: .bottomLeading) {
+                LinearGradient(colors: [Color(white: 0.2), Color(white: 0.09)], startPoint: .top, endPoint: .bottom)
+                Cintillo(overlay: previewOverlay, scale: 0.5).padding(12)
+            }
+            .frame(height: 130)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(CR.line))
+        }
+    }
+
+    private var previewOverlay: Overlay {
+        switch mode {
+        case 0:
+            let s = sponsor
+            return Overlay(id: -1, kind: "sponsor", title: s?.name ?? "Sponsor", text: sponsorText, filePath: nil,
+                           image: s.flatMap { dir.sponsorLogo($0) }, expires: nil)
+        case 1:
+            return Overlay(id: -2, kind: "banner", title: podTitle.isEmpty ? dir.podcastName : podTitle,
+                           text: podText.isEmpty ? "Lo que quieras decir ahora" : podText, filePath: nil, image: dir.podcastLogo, expires: nil)
+        default:
+            return Overlay(id: -3, kind: "segment", title: segTitle.isEmpty ? "Título del segmento" : segTitle,
+                           text: segSub, filePath: nil, image: nil, expires: nil)
+        }
     }
 
     private var sponsor: DirectorStudio.SponsorInfo? { dir.sponsors.first { $0.id == sponsorId } ?? dir.sponsors.first }
@@ -302,33 +607,63 @@ struct CintillosCard: View {
 
     @ViewBuilder private var sponsorForm: some View {
         if dir.sponsors.isEmpty {
-            Text("Este podcast no tiene sponsors activos en prePod.").font(.caption).foregroundStyle(Theme.secondary)
+            Text("Este podcast no tiene sponsors activos en prePod.").font(.callout).foregroundStyle(Theme.secondary)
         } else {
-            Picker("Sponsor", selection: Binding(get: { sponsor?.id ?? 0 }, set: { v in
-                sponsorId = v
-                sponsorText = dir.sponsors.first { $0.id == v }?.copy ?? ""
-            })) {
-                ForEach(dir.sponsors) { s in Text(s.name).tag(s.id) }
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Sponsor")
+                VStack(spacing: 6) {
+                    ForEach(dir.sponsors) { s in
+                        let on = sponsor?.id == s.id
+                        Button { sponsorId = s.id; sponsorText = s.copy } label: {
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 6).fill(.white)
+                                    if let img = dir.sponsorLogo(s) { Image(nsImage: img).resizable().scaledToFit().padding(3) }
+                                    else { Text(String(s.name.prefix(1))).font(.headline.weight(.black)).foregroundStyle(CR.sponsor) }
+                                }
+                                .frame(width: 34, height: 34)
+                                Text(s.name).font(.callout.weight(.semibold)).lineLimit(1)
+                                Spacer()
+                                if on { Image(systemName: "checkmark.circle.fill").foregroundStyle(CR.sponsor) }
+                            }
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(on ? CR.sponsor.opacity(0.14) : CR.field))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? CR.sponsor.opacity(0.6) : .clear))
+                            .contentShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .onAppear { if sponsorText.isEmpty { sponsorText = sponsor?.copy ?? "" } }
-            TextField("Texto del cintillo", text: $sponsorText, axis: .vertical).lineLimit(2...3).textFieldStyle(.roundedBorder)
-            if let s = sponsor {
-                Cintillo(overlay: Overlay(id: -1, kind: "sponsor", title: s.name, text: sponsorText, filePath: nil,
-                                          image: dir.sponsorLogo(s), expires: nil), scale: 0.45)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Texto")
+                CRField(placeholder: "Texto del cintillo", text: $sponsorText, lines: 2...3)
             }
         }
     }
 
     @ViewBuilder private var podcastForm: some View {
-        TextField("Título (por defecto, el nombre del podcast)", text: $podTitle).textFieldStyle(.roundedBorder)
-        TextField("Qué decir ahora", text: $podText, axis: .vertical).lineLimit(2...3).textFieldStyle(.roundedBorder)
-        Cintillo(overlay: Overlay(id: -2, kind: "banner", title: podTitle.isEmpty ? dir.podcastName : podTitle,
-                                  text: podText, filePath: nil, image: dir.podcastLogo, expires: nil), scale: 0.45)
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Título")
+            CRField(placeholder: dir.podcastName.isEmpty ? "Nombre del podcast" : dir.podcastName, text: $podTitle)
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Qué decir ahora")
+            CRField(placeholder: "Ej.: Síguenos en todas las plataformas", text: $podText, lines: 2...3)
+        }
     }
 
     @ViewBuilder private var segmentForm: some View {
-        TextField("Título del segmento", text: $segTitle).textFieldStyle(.roundedBorder)
-        TextField("Subtítulo (opcional)", text: $segSub).textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Título del segmento")
+            CRField(placeholder: "Ej.: La pregunta de la semana", text: $segTitle)
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionTitle(text: "Subtítulo", trailing: "opcional")
+            CRField(placeholder: "Una línea que lo explique", text: $segSub)
+        }
+        Text("El segmento se queda en pantalla 12 segundos.").font(.caption).foregroundStyle(Theme.secondary)
     }
 
     private func launch() {
@@ -342,61 +677,164 @@ struct CintillosCard: View {
 
 // MARK: - Avisos
 
-struct CuesCard: View {
+struct CuesPanel: View {
     @ObservedObject var dir: DirectorStudio
     @State private var target = "all"
     @State private var custom = ""
     @State private var guestsSee = false
+    @State private var sent: String?
+
+    static let look: [String: (String, String, Color)] = [
+        "CERRAR TEMA": ("Cerrar tema", "flag.checkered", Color.orange),
+        "SIGUIENTE TEMA": ("Siguiente tema", "forward.end.fill", CR.segment),
+        "PAUSA": ("Pausa", "pause.fill", Color.yellow),
+        "MÁS RÁPIDO": ("Más rápido", "hare.fill", Theme.good),
+        "MÁS LENTO": ("Más lento", "tortoise.fill", Color.teal),
+        "LEER ANUNCIO": ("Leer anuncio", "megaphone.fill", CR.sponsor),
+    ]
 
     var body: some View {
-        Card {
-            Label("Avisos a los conductores", systemImage: "megaphone").font(.headline)
-            Picker("Para", selection: $target) {
-                Text("Todos").tag("all")
-                ForEach(dir.hostsInRoom) { p in Text(p.display_name).tag("participant_\(p.id)") }
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Para")
+                FlowPills(items: [("all", "Todos")] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
+                          selected: $target)
             }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-                ForEach(DirectorStudio.cues, id: \.self) { c in
-                    Button(c) { dir.sendCue(c, target: target) }.frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Avisos rápidos", trailing: "salen en su pantalla")
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
+                    ForEach(DirectorStudio.cues, id: \.self) { c in cueTile(c) }
                 }
             }
-            HStack {
-                TextField("Aviso escrito…", text: $custom).textFieldStyle(.roundedBorder)
-                    .onSubmit { dir.sendCue("CUSTOM", text: custom, target: target); custom = "" }
-                Button("Enviar") { dir.sendCue("CUSTOM", text: custom, target: target); custom = "" }
-                    .disabled(custom.trimmingCharacters(in: .whitespaces).isEmpty)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Aviso escrito")
+                HStack(spacing: 8) {
+                    CRField(placeholder: "Ej.: Faltan 5 minutos", text: $custom) { sendCustom() }
+                    Button { sendCustom() } label: {
+                        Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold))
+                            .frame(width: 40, height: 40)
+                            .background(RoundedRectangle(cornerRadius: 9).fill(custom.isEmpty ? CR.field : Color.prodPod))
+                            .foregroundStyle(custom.isEmpty ? Theme.secondary : .black)
+                    }
+                    .buttonStyle(.plain).disabled(custom.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
             Toggle("Los invitados también ven los avisos", isOn: $guestsSee)
-                .toggleStyle(.checkbox).font(.caption)
+                .toggleStyle(.switch).controlSize(.small).font(.callout)
                 .onChange(of: guestsSee) { _, v in dir.setGuestCues(v) }
         }
         .disabled(!dir.connected)
     }
+
+    private func sendCustom() {
+        let t = custom.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        dir.sendCue("CUSTOM", text: t, target: target); custom = ""
+    }
+
+    private func cueTile(_ c: String) -> some View {
+        let l = Self.look[c] ?? (c.capitalized, "bell.fill", Color.gray)
+        let justSent = sent == c
+        return Button {
+            dir.sendCue(c, target: target)
+            sent = c
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { if sent == c { sent = nil } }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: justSent ? "checkmark" : l.1).font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(justSent ? Color.black : l.2)
+                    .frame(width: 30, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(justSent ? l.2 : l.2.opacity(0.16)))
+                Text(justSent ? "Enviado" : l.0).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).frame(height: 50)
+            .background(RoundedRectangle(cornerRadius: 11).fill(CR.field))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(justSent ? l.2 : CR.line))
+            .contentShape(RoundedRectangle(cornerRadius: 11))
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.15), value: justSent)
+    }
 }
 
-struct DirectorChatCard: View {
+/// Píldoras que bajan de línea si no caben.
+private struct FlowPills: View {
+    let items: [(String, String)]
+    @Binding var selected: String
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items, id: \.0) { id, name in
+                Pill(text: name, symbol: id == "all" ? "person.3.fill" : nil, selected: selected == id) { selected = id }
+            }
+        }
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let w = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, maxX: CGFloat = 0
+        for s in subviews {
+            let z = s.sizeThatFits(.unspecified)
+            if x > 0 && x + z.width > w { x = 0; y += row + spacing; row = 0 }
+            x += z.width + spacing; row = max(row, z.height); maxX = max(maxX, x - spacing)
+        }
+        return CGSize(width: proposal.width ?? maxX, height: y + row)
+    }
+    func placeSubviews(in b: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = b.minX, y = b.minY, row: CGFloat = 0
+        for s in subviews {
+            let z = s.sizeThatFits(.unspecified)
+            if x > b.minX && x + z.width > b.maxX { x = b.minX; y += row + spacing; row = 0 }
+            s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(z))
+            x += z.width + spacing; row = max(row, z.height)
+        }
+    }
+}
+
+// MARK: - Chat de dirección
+
+struct DirectorChatPanel: View {
     @ObservedObject var dir: DirectorStudio
     @State private var text = ""
     var body: some View {
-        Card {
-            Label("Chat de dirección", systemImage: "bubble.left.and.bubble.right").font(.headline)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(dir.chat, id: \.id) { m in
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(m.author).font(.caption2.bold()).foregroundStyle(Theme.secondary)
-                            Text(m.text).font(.callout)
-                        }
-                    }
-                    if dir.chat.isEmpty { Text("Los conductores lo ven como aviso.").font(.caption).foregroundStyle(Theme.secondary) }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionTitle(text: "Chat de dirección", trailing: "los conductores lo ven como aviso")
+            VStack(alignment: .leading, spacing: 8) {
+                if dir.chat.isEmpty {
+                    Text("Todavía no hay mensajes.").font(.callout).foregroundStyle(Theme.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 80)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(dir.chat, id: \.id) { m in
+                    HStack(alignment: .top, spacing: 8) {
+                        Avatar(name: m.author, size: 26)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(m.author).font(.caption.bold()).foregroundStyle(Theme.secondary)
+                            Text(m.text).font(.callout).fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(CR.field))
+                }
             }
-            .frame(height: 110)
-            HStack {
-                TextField("Escribe…", text: $text).textFieldStyle(.roundedBorder).onSubmit { dir.sendChat(text); text = "" }
-                Button { dir.sendChat(text); text = "" } label: { Image(systemName: "paperplane.fill") }
+            HStack(spacing: 8) {
+                CRField(placeholder: "Escribe…", text: $text) { send() }
+                Button { send() } label: {
+                    Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold))
+                        .frame(width: 40, height: 40)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(text.isEmpty ? CR.field : Color.prodPod))
+                        .foregroundStyle(text.isEmpty ? Theme.secondary : .black)
+                }
+                .buttonStyle(.plain)
             }
         }
+    }
+    private func send() {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        dir.sendChat(t); text = ""
     }
 }

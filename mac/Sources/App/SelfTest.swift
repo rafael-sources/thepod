@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -152,6 +152,68 @@ enum SelfTest {
                 if await ChunkUploader.shared.pending().isEmpty { break }
             }
             print(await ChunkUploader.shared.pending().isEmpty ? "OK subida finalizada" : "ERROR la subida no terminó")
+            fflush(stdout); exit(0)
+        }
+    }
+
+    /// Capturas del cuarto de control con datos de ejemplo (no entra a ninguna sala; solo lee la marca del podcast).
+    @MainActor
+    static func directorSnapshot(slug: String, dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var s = ProdPodClient.Session(id: 0, title: "Ep 15: Lo que no se dice en las reuniones de trabajo")
+        s.source_slug = slug
+        let defaults = UserDefaults.standard
+        let oldTab = defaults.object(forKey: "directorPestana")
+        Task { @MainActor [s] in
+            var s = s
+            if let list = try? await PrePodClient.shared.podcasts(),
+               let m = list.first(where: { $0.slug == slug }) ?? list.first(where: { $0.slug.contains(slug) || $0.name.lowercased().contains(slug.lowercased()) }) {
+                s.source_slug = m.slug
+                print("podcast: \(m.slug)")
+            }
+            let d = DirectorStudio(session: s)
+            await d.loadBranding()
+            d.connected = true
+            d.participants = [
+                ProdPodClient.Person(id: 1, display_name: "Ana Torres", role: "host", recording_quality: "1080p"),
+                ProdPodClient.Person(id: 2, display_name: "María Fernanda", role: "co-host", recording_quality: "1080p"),
+                ProdPodClient.Person(id: 3, display_name: "Invitado Especial", role: "guest", recording_quality: "720p"),
+            ]
+            d.feeds = [
+                .init(id: "participant_1", pid: 1, name: "Ana Torres", camera: nil, screen: nil, speaking: true, micOn: true),
+                .init(id: "participant_2", pid: 2, name: "María Fernanda", camera: nil, screen: nil, speaking: false, micOn: true),
+                .init(id: "participant_3", pid: 3, name: "Invitado Especial", camera: nil, screen: nil, speaking: false, micOn: false),
+            ]
+            d.readyMap = ["participant_1": true, "participant_2": true]
+            d.recording = true; d.recSeconds = 754
+            d.uploads = ["participant_1": "uploading", "participant_2": "done"]
+            d.uploadBytes = ["participant_1": 182_000_000, "participant_2": 240_000_000]
+            d.chat = [(id: 1, author: "María Fernanda", text: "¿Cuánto nos queda para el corte?"), (id: 2, author: "Director", text: "Unos 5 minutos")]
+            if let sp = d.sponsors.first {
+                d.overlays = [Overlay(id: 9, kind: "sponsor", title: sp.name, text: sp.copy.isEmpty ? "Gracias por acompañarnos" : sp.copy,
+                                      filePath: nil, image: d.sponsorLogo(sp), expires: Date().addingTimeInterval(12))]
+            }
+            let host = NSHostingView(rootView: DirectorView(dir: d, preview: true)
+                .environmentObject(AppModel())
+                .frame(width: 1440, height: 900)
+                .preferredColorScheme(.dark))
+            host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.appearance = NSAppearance(named: .darkAqua)
+            win.contentView = host
+            win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+            win.orderFrontRegardless()
+            for (i, name) in ["1-cintillos", "2-avisos", "3-sala", "4-chat"].enumerated() {
+                defaults.set(i, forKey: "directorPestana")
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                host.layoutSubtreeIfNeeded()
+                if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                    print("snapshot \(name)")
+                }
+            }
+            if let oldTab { defaults.set(oldTab, forKey: "directorPestana") } else { defaults.removeObject(forKey: "directorPestana") }
             fflush(stdout); exit(0)
         }
     }
@@ -309,6 +371,11 @@ enum SelfTest {
                 }
                 fflush(stdout); exit(0)
             }
+            return
+        }
+        if let i = args.firstIndex(of: "--director-snapshot"), args.count > i + 2 {
+            let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { directorSnapshot(slug: slug, dir: dir) }
             return
         }
         if let i = args.firstIndex(of: "--cintillo-snapshot"), args.count > i + 2 {
