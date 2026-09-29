@@ -2168,3 +2168,165 @@ a.mark:hover { opacity: 0.8; }
   font-family: var(--font-mono);
   text-transform: uppercase;
 }
+
+/* ==========================================================================
+   Invitado — pensado primero para teléfono y tablet
+   ========================================================================== */
+
+/* Link de invitación */
+.invite-wrapper { padding: 24px 16px; overflow-x: hidden; }
+.invite-card { width: 100%; max-width: 460px; box-sizing: border-box; }
+.invite-card h2 { font-size: clamp(26px, 7vw, 36px); line-height: 1.1; overflow-wrap: anywhere; }
+.invite-state { text-align: center; padding: 22px 0 6px; }
+.invite-state-icon { font-size: 34px; margin-bottom: 10px; }
+.invite-pulse { animation: invite-pulse 1.8s ease-in-out infinite; }
+@keyframes invite-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+.invite-state-title { font-size: 18px; color: var(--paper); margin: 0 0 6px; font-weight: 600; }
+.invite-state-text { font-size: 14px; color: var(--paper-dim); margin: 0; line-height: 1.45; }
+.invite-steps { list-style: none; padding: 0; margin: 18px 0 18px; display: grid; gap: 8px; }
+.invite-steps li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--paper); }
+.invite-steps li span {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: rgba(255,59,59,0.14); color: var(--signal); font-size: 12px; font-weight: 700;
+}
+.invite-card input { font-size: 16px; padding: 12px 14px; }   /* 16px: iPhone no hace zoom al escribir */
+.invite-go { width: 100%; margin-top: 12px; padding: 15px; font-size: 16px; }
+.invite-note { text-align: center; font-size: 12px; color: var(--paper-dim); margin: 12px 0 0; }
+
+/* Sala del invitado (todos los tamaños) */
+.guest-studio .guest-title { min-width: 0; }
+.guest-studio .guest-title h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.guest-studio .guest-sub { font-size: 12px; color: var(--paper-dim); margin-top: 2px; }
+.guest-studio .guest-banner { padding: 8px 16px; text-align: center; font-size: 13px; background: var(--ink-panel); border-bottom: 2px solid var(--signal-cool); }
+.guest-studio .guest-banner.warn { background: #5a3a00; border-bottom-color: var(--signal); color: #ffd9a8; font-weight: 600; cursor: pointer; }
+.guest-studio .guest-error { font-size: 15px; padding: 12px 14px; background: #5a1a1a; color: #fff; border: 1px solid #c33; border-radius: 8px; margin-bottom: 12px; }
+.guest-studio .guest-prejoin { grid-template-columns: 1fr; max-width: 540px; }
+.guest-studio .guest-prejoin-title { margin: 0 0 12px; font-size: 18px; text-align: center; }
+.guest-studio .guest-preview { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; }
+.guest-studio .guest-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+.guest-studio .guest-mic { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; align-items: center; gap: 8px;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(6px); padding: 6px 10px; border-radius: 999px; }
+.guest-studio .guest-mic-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); overflow: hidden; }
+.guest-studio .guest-mic-bar div { height: 100%; background: var(--signal-cool); transition: width .08s linear; }
+.guest-studio .guest-hint { font-size: 13px; color: var(--paper-dim); margin: 8px 0 12px; text-align: center; }
+.guest-studio .guest-quality { font-size: 14px; margin-bottom: 12px; line-height: 1.4; }
+.guest-studio .guest-quality-more { margin-top: 6px; font-size: 12px; color: var(--paper-dim); }
+.guest-studio .guest-quality-more summary { cursor: pointer; }
+.guest-studio .guest-quality-more select { margin-top: 6px; width: 100%; font-size: 14px; }
+.guest-studio .guest-tips { list-style: none; margin: 0 0 16px; padding: 12px 14px; background: var(--ink-sunken); border-radius: 10px;
+  display: grid; gap: 6px; font-size: 13px; color: var(--paper); }
+.guest-studio .guest-join { width: 100%; padding: 16px; font-size: 17px; }
+.guest-studio .guest-busy { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 60px 20px; text-align: center; font-size: 16px; }
+.guest-studio .guest-spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,255,255,.15); border-top-color: var(--signal); animation: guest-spin 0.9s linear infinite; }
+@keyframes guest-spin { to { transform: rotate(360deg); } }
+.guest-studio .guest-alone { display: grid; place-items: center; color: var(--paper-dim); font-size: 14px; border: 1px dashed var(--ink-line); border-radius: var(--r-lg); aspect-ratio: 16/9; }
+.guest-studio .guest-self video { transform: scaleX(-1); }
+.guest-studio .guest-side-head { display: none; }
+.guest-studio .guest-chat { flex: 1; display: flex; flex-direction: column; min-height: 200px; }
+.guest-studio .guest-chat-list { flex: 1; overflow-y: auto; background: var(--ink-sunken); border: 1px solid var(--ink-line); border-radius: var(--r-md); padding: 8px; margin-bottom: 6px; min-height: 100px; font-size: 13px; }
+.guest-studio .guest-chat-msg { margin-bottom: 6px; }
+.guest-studio .guest-chat-msg strong { color: var(--signal); margin-right: 4px; }
+.guest-studio .guest-chat-msg span { color: var(--paper); }
+.guest-studio .guest-chat-input { display: flex; gap: 6px; }
+.guest-studio .guest-chat-input input { flex: 1; font-size: 14px; padding: 8px 10px; }
+.guest-studio .guest-chat-input button { padding: 8px 14px; }
+.guest-studio .gc-btn { display: inline-flex; align-items: center; gap: 6px; position: relative; }
+.guest-studio .gc-txt { font-size: 13px; }
+.guest-studio .gc-chat { display: none; }
+.guest-studio .gc-badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--signal); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.guest-studio .ifb-indicator { font-size: 13px; }
+.guest-studio .guest-post, .guest-studio .guest-end { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 20px; }
+.guest-studio .guest-end { grid-column: 1 / -1; grid-row: 1 / -1; }
+.guest-studio .guest-post { grid-column: 1 / -1; }
+.guest-studio .guest-post-box { max-width: 460px; }
+.guest-studio .guest-post-icon, .guest-studio .guest-end-icon { font-size: 54px; margin-bottom: 12px; }
+.guest-studio .guest-post-icon.ok, .guest-studio .guest-end-icon { color: var(--signal-cool); }
+.guest-studio .guest-post-icon.bad { color: #f66; }
+.guest-studio .guest-post h2, .guest-studio .guest-end h2 { margin: 0 0 8px; font-size: clamp(22px, 6vw, 30px); color: var(--paper); }
+.guest-studio .guest-post-big { font-size: 22px; font-weight: 700; color: var(--paper); margin: 4px 0 10px; }
+.guest-studio .guest-post-btn { margin-top: 20px; padding: 16px 56px; font-size: 18px; }
+
+/* Teléfono y tablet (cualquier pantalla táctil) */
+@media (max-width: 900px), (pointer: coarse) {
+  .guest-studio {
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+    position: relative;
+  }
+  .guest-studio .studio-top { padding: 10px 14px; gap: 10px; padding-top: max(10px, env(safe-area-inset-top)); }
+  .guest-studio .guest-title { flex: 1; }
+  .guest-studio .studio-top .spacer { display: none; }
+  .guest-studio .studio-top .timecode, .guest-studio .studio-top .rehearsal-badge { flex: none; }
+  .guest-studio .studio-top h3 { font-size: 17px; }
+  .guest-studio .studio-top .timecode { font-size: 15px; min-width: 0; padding: 4px 8px; }
+  .guest-studio .studio-top .vu-master { display: none; }
+  .guest-studio .studio-main { flex: 1; padding: 12px; position: relative; overflow-y: auto; }
+  .guest-studio .prejoin { padding: 4px 0 16px; align-items: flex-start; }
+  .guest-studio .prejoin-card { padding: 16px; border-radius: 14px; }
+
+  /* En la sala: tarjetas 16:9 una debajo de otra (con 3 o más, en dos columnas) */
+  .guest-studio .guest-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-content: start; }
+  .guest-studio .guest-grid.n2, .guest-studio .guest-grid.n3 { grid-template-columns: 1fr 1fr; }
+  .guest-studio .guest-grid .participant-card { aspect-ratio: 16 / 9; }
+  .guest-studio .guest-grid .guest-self { order: 99; }
+  .guest-studio .guest-grid.n0 .guest-self, .guest-studio .guest-grid.n1 .guest-self { width: 100%; }
+  .guest-studio .guest-grid .guest-self .initials { width: 54px; height: 54px; font-size: 22px; }
+  .guest-studio .guest-alone { aspect-ratio: 16 / 9; }
+  .guest-studio .studio-top .tally { display: none; }
+  .guest-studio .studio-top .timecode { position: relative; padding-left: 20px; }
+  .guest-studio .studio-top .timecode::before { content: ""; position: absolute; left: 7px; top: 50%; width: 8px; height: 8px; margin-top: -4px;
+    border-radius: 50%; background: var(--signal); box-shadow: 0 0 8px var(--signal); }
+
+  /* Chat como panel que sube desde abajo; el soundboard no va en el teléfono */
+  .guest-studio .guest-side {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    height: 70vh; height: 70dvh; border-radius: 16px 16px 0 0; border: 1px solid var(--ink-line);
+    box-shadow: 0 -12px 40px rgba(0,0,0,.6); padding: 14px 14px max(14px, env(safe-area-inset-bottom));
+  }
+  .guest-studio.chat-open .guest-side { display: flex; }
+  .guest-studio .guest-side-head { display: flex; align-items: center; justify-content: space-between; }
+  .guest-studio .guest-side-head .label { font-size: 15px; font-weight: 600; color: var(--paper); letter-spacing: 0; text-transform: none; }
+  .guest-studio .guest-chat-head, .guest-studio .guest-sounds { display: none; }
+  .guest-studio .guest-chat-input input { font-size: 16px; padding: 12px; }
+  .guest-studio .guest-chat-input button { padding: 12px 18px; }
+
+  /* Botones grandes abajo */
+  .guest-studio .guest-controls {
+    padding: 10px 12px max(10px, env(safe-area-inset-bottom)); gap: 8px; flex-wrap: wrap;
+  }
+  .guest-studio .gc-btn, .guest-studio .gc-leave { min-height: 52px; min-width: 64px; flex-direction: column; gap: 2px; padding: 6px 10px; font-size: 20px; border-radius: 12px; }
+  .guest-studio .gc-txt { font-size: 11px; }
+  .guest-studio .gc-chat { display: inline-flex; }
+  .guest-studio .gc-leave { font-size: 14px; }
+  .guest-studio .director-badge, .guest-studio .ifb-indicator { order: 10; width: 100%; text-align: center; font-size: 12px; }
+
+  /* Cintillos y avisos a la medida */
+  .guest-studio .cintillo-layer { left: 12px; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .guest-studio .cintillo-layer .cintillo { max-width: 100%; }
+  .guest-studio .director-cue { font-size: 22px; left: 12px; right: 12px; transform: translateY(-50%); padding: 22px 18px; text-align: center; }
+  .guest-studio .countdown-num { font-size: 150px; }
+}
+
+/* Teléfono acostado: todo el ancho para la sala */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .guest-studio .studio-top { padding: 6px 12px; }
+  .guest-studio .guest-sub { display: none; }
+  .guest-studio .guest-grid, .guest-studio .guest-grid.n1 { grid-template-columns: 1fr 1fr; }
+  .guest-studio .guest-controls { padding: 6px 12px; }
+  .guest-studio .gc-btn, .guest-studio .gc-leave { min-height: 42px; }
+}
+
+/* Tablet acostada: la sala en dos columnas y el chat como panel a la derecha */
+@media (pointer: coarse) and (min-width: 1000px) {
+  .guest-studio .guest-grid, .guest-studio .guest-grid.n1 { grid-template-columns: 1fr 1fr; }
+  .guest-studio .guest-side {
+    left: auto; top: 0; width: 380px; height: 100%; border-radius: 0; box-shadow: -12px 0 40px rgba(0,0,0,.5);
+  }
+}
+@media (pointer: coarse) and (min-width: 1000px) {
+  .guest-studio .guest-grid { min-height: 100%; align-content: center; }
+}
+@media (min-width: 901px) and (pointer: fine) {
+  .guest-studio .gc-txt { display: none; }
+}

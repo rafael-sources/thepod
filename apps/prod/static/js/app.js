@@ -2919,9 +2919,9 @@ var StudioView = {
               </div>
             </div>
             <div class="prejoin-controls">
-              <h3 style="margin: 0 0 4px;">Probá tu equipo antes de entrar</h3>
+              <h3 style="margin: 0 0 4px;">Prueba tu equipo antes de entrar</h3>
               <p class="muted" style="margin: 0 0 18px; font-size: 12px;">
-                Hablá frente al mic y mirá que el medidor responda. Al entrar conectás a la sesión con estos dispositivos.
+                Habla frente al micrófono y mira que el medidor se mueva. Al entrar te conectas a la sesión con estos equipos.
               </p>
               <div class="form-row" style="margin-bottom: 12px;">
                 <label>📷 Cámara</label>
@@ -3477,7 +3477,7 @@ var InviteView = {
           body: { display_name: name.value.trim() },
         });
         stopPolling();
-        props.onJoined(r);
+        props.onJoined(Object.assign({ session_title: invite.value && invite.value.session_title }, r));
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
@@ -3488,36 +3488,43 @@ var InviteView = {
     return { invite, error, busy, name, waitingForHost, join };
   },
   template: `
-    <div class="login-wrapper">
-      <div class="login-card" style="width: 440px;">
-        <div class="eyebrow">INVITACIÓN · LIVE BOOTH</div>
+    <div class="login-wrapper invite-wrapper">
+      <div class="login-card invite-card">
+        <div class="eyebrow">Invitación a grabar</div>
         <h2 v-if="invite">{{ invite.session_title }}</h2>
         <h2 v-else>Cargando…</h2>
-        <div v-if="invite && !invite.expired" class="subtitle">{{ invite.session_description || "Te invitaron a grabar en prodPod." }}</div>
+        <div v-if="invite && !invite.expired && invite.session_description" class="subtitle">{{ invite.session_description }}</div>
 
         <!-- Session expired -->
-        <div v-if="invite && invite.expired" style="text-align: center; padding: 20px 0;">
-          <div style="font-size: 32px; margin-bottom: 12px;">⏹</div>
-          <p style="font-size: 15px; color: var(--paper-dim);">Esta sesión ya finalizó.<br>La invitación ya no es válida.</p>
+        <div v-if="invite && invite.expired" class="invite-state">
+          <div class="invite-state-icon">⏹</div>
+          <p class="invite-state-title">Esta grabación ya terminó</p>
+          <p class="invite-state-text">El link ya no sirve. Si todavía tienen que grabar, pídele al anfitrión un link nuevo.</p>
         </div>
 
         <!-- Waiting for host -->
-        <div v-else-if="waitingForHost" style="text-align: center; padding: 20px 0;">
-          <div style="font-size: 32px; margin-bottom: 12px;">⏳</div>
-          <p style="font-size: 15px; color: var(--paper-dim);">Esperando a que el host se conecte…</p>
-          <p style="font-size: 12px; color: var(--paper-dim); margin-top: 8px;">La página se actualizará automáticamente.</p>
+        <div v-else-if="waitingForHost" class="invite-state">
+          <div class="invite-state-icon invite-pulse">⏳</div>
+          <p class="invite-state-title">El anfitrión todavía no llega</p>
+          <p class="invite-state-text">Deja esta página abierta: se habilita sola cuando entre. No hace falta recargar.</p>
         </div>
 
         <!-- Ready to join -->
         <template v-else-if="invite && !invite.expired">
+          <ol class="invite-steps">
+            <li><span>1</span>Escribe tu nombre</li>
+            <li><span>2</span>Prueba tu cámara y micrófono</li>
+            <li><span>3</span>Entra a la sala</li>
+          </ol>
           <div v-if="error" class="error">{{ error }}</div>
           <div class="form-row">
             <label>Tu nombre</label>
-            <input type="text" v-model="name" placeholder="Cómo quieres aparecer">
+            <input type="text" v-model="name" placeholder="Cómo quieres aparecer" autocomplete="name" enterkeyhint="go" @keyup.enter="name.trim() && !busy && join()">
           </div>
-          <button class="primary" :disabled="busy || !name.trim()" @click="join" style="width:100%; margin-top: 12px; padding: 12px;">
-            {{ busy ? "Entrando…" : "🎙 Entrar al estudio" }}
+          <button class="primary invite-go" :disabled="busy || !name.trim()" @click="join">
+            {{ busy ? "Un momento…" : "Continuar" }}
           </button>
+          <p class="invite-note">Mejor con audífonos y en un lugar sin ruido.</p>
         </template>
 
         <div v-if="error && !invite" class="error">{{ error }}</div>
@@ -3538,6 +3545,8 @@ var GuestStudioView = {
     // ---- Prueba de calidad de grabación en la pantalla previa ----
     var preflightVideoEl = ref(null);
     var _preflightStream = null;
+    var _preflightMeterStop = null;
+    var preMeter = ref(0);
     var recPreflight = reactive({ state: "idle", upMbps: null, fps: 0, profileId: null, choiceId: null });
     var recProfileChoices = computed(function () {
       if (!recPreflight.profileId) return REC_PROFILES;
@@ -3557,6 +3566,8 @@ var GuestStudioView = {
         });
         await nextTick();
         if (preflightVideoEl.value) preflightVideoEl.value.srcObject = _preflightStream;
+        var _preMic = _preflightStream.getAudioTracks()[0];
+        if (_preMic) _preflightMeterStop = _attachMeter({ mediaStreamTrack: _preMic }, function (lvl) { preMeter.value = lvl; });
         var r = await runRecordingPreflight(_preflightStream, props.inviteToken);
         recPreflight.upMbps = r.upMbps;
         recPreflight.fps = r.device.fps;
@@ -3569,6 +3580,7 @@ var GuestStudioView = {
       recPreflight.state = "done";
     }
     function stopGuestPreflight() {
+      if (_preflightMeterStop) { try { _preflightMeterStop(); } catch (_) {} _preflightMeterStop = null; }
       if (_preflightStream) {
         _preflightStream.getTracks().forEach(function (t) { try { t.stop(); } catch (_) {} });
         _preflightStream = null;
@@ -3609,6 +3621,47 @@ var GuestStudioView = {
     var playingPad = ref(null);
     var chat = ref([]);
     var chatInput = ref("");
+    var chatOpen = ref(false);
+    var chatSeen = ref(0);
+    var chatUnread = computed(function () { return chatOpen.value ? 0 : Math.max(0, chat.value.length - chatSeen.value); });
+    function toggleChat() {
+      chatOpen.value = !chatOpen.value;
+      chatSeen.value = chat.value.length;
+      if (chatOpen.value) scrollChatBottom();
+    }
+    watch(function () { return chat.value.length; }, function (n) { if (chatOpen.value) chatSeen.value = n; });
+    var left = ref(false);
+    var awayWhileRecording = ref(false);
+
+    // Pantalla encendida mientras estás en la sala: si el teléfono se bloquea, Safari corta la cámara y la grabación.
+    var _wakeLock = null;
+    async function keepAwake() {
+      try {
+        if (!("wakeLock" in navigator) || _wakeLock) return;
+        _wakeLock = await navigator.wakeLock.request("screen");
+        _wakeLock.addEventListener("release", function () { _wakeLock = null; });
+      } catch (_) {}
+    }
+    function releaseAwake() {
+      try { if (_wakeLock) _wakeLock.release(); } catch (_) {}
+      _wakeLock = null;
+    }
+    function onVisibility() {
+      if (document.visibilityState === "hidden") {
+        if (recording.value) awayWhileRecording.value = true;
+      } else if (connected.value) {
+        keepAwake();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+
+    var qualityText = computed(function () {
+      if (recPreflight.state !== "done") return "";
+      var p = recProfileG();
+      if (p.id === "1080p8" || p.id === "1080p5") return "Tu conexión está muy bien: grabarás en alta calidad (1080p).";
+      if (p.id === "720p25") return "Tu conexión está bien: grabarás en buena calidad (720p).";
+      return "Tu conexión está justa: grabarás en calidad liviana (720p) para no cortarte.";
+    });
 
     var triggerLog = [];
     var recordingStartedAtMs = null;
@@ -3935,7 +3988,7 @@ var GuestStudioView = {
       if (!LK) { error.value = "LiveKit client no cargado"; busy.value = false; return; }
       busy.value = true;
       error.value = "";
-      connectStep.value = "preparando…";
+      connectStep.value = "Preparando…";
       try {
         myIdentity.value = "participant_" + props.joinData.participant_id;
         // La vista previa de la prueba suelta la cámara antes de que LiveKit
@@ -4006,19 +4059,19 @@ var GuestStudioView = {
           });
         }
 
-        connectStep.value = "1/4 conectando WebSocket a LiveKit…";
+        connectStep.value = "Conectando con el estudio…";
         await withTimeout(
           newRoom.connect(props.joinData.livekit_ws_url, props.joinData.livekit_token),
           15000,
           "WebSocket a LiveKit"
         );
 
-        connectStep.value = "2/4 pidiendo permiso de micrófono…";
+        connectStep.value = "Activando tu micrófono…";
         var micPub = null, camPub = null;
         try { micPub = await withTimeout(newRoom.localParticipant.setMicrophoneEnabled(true), 30000, "Permiso de micrófono"); }
         catch (me) { error.value = me.message; }
 
-        connectStep.value = "3/4 pidiendo permiso de cámara…";
+        connectStep.value = "Activando tu cámara…";
         try { camPub = await withTimeout(newRoom.localParticipant.setCameraEnabled(true), 30000, "Permiso de cámara"); }
         catch (ce) { error.value = (error.value ? error.value + " · " : "") + ce.message; }
         _savedCamPub = camPub;
@@ -4039,7 +4092,7 @@ var GuestStudioView = {
           }
         }
 
-        connectStep.value = "4/4 montando streams locales…";
+        connectStep.value = "Ya casi…";
 
         var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
@@ -4053,6 +4106,7 @@ var GuestStudioView = {
 
         room = newRoom;
         connected.value = true;
+        keepAwake();
         persistRecQuality();  // guarda la calidad de grabación para el director
         await nextTick();
         // Try several times to attach the local video — the <video> ref might
@@ -4125,8 +4179,11 @@ var GuestStudioView = {
         });
       } catch (_) {}
       if (room) { try { await room.disconnect(); } catch (_) {} }
+      room = null;
       localStream = null;
-      window.location.href = "/";
+      releaseAwake();
+      connected.value = false;
+      left.value = true;
     }
 
     onMounted(function () {
@@ -4138,6 +4195,8 @@ var GuestStudioView = {
       });
     });
     onBeforeUnmount(function () {
+      document.removeEventListener("visibilitychange", onVisibility);
+      releaseAwake();
       if (timerHandle) clearInterval(timerHandle);
       stopGuestPreflight();
       if (_roomCamTrack) { try { _roomCamTrack.stop(); } catch (_) {} _roomCamTrack = null; }
@@ -4166,81 +4225,110 @@ var GuestStudioView = {
              postRecording: postRecording,
              activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
              ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
-             activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected };
+             activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
+             preMeter: preMeter, chatOpen: chatOpen, chatUnread: chatUnread, toggleChat: toggleChat,
+             left: left, awayWhileRecording: awayWhileRecording, qualityText: qualityText };
   },
   template: `
-    <div class="studio">
+    <div class="studio guest-studio" :class="{ 'is-connected': connected, 'chat-open': chatOpen }">
+      <!-- Terminó: gracias -->
+      <div v-if="left" class="guest-end">
+        <div class="guest-end-icon">{{ error ? "✕" : "✓" }}</div>
+        <h2>{{ error ? error : "¡Gracias por participar!" }}</h2>
+        <p class="muted" v-if="!error">Ya puedes cerrar esta pestaña.</p>
+      </div>
+      <template v-else>
       <div class="studio-top" :class="{ recording: recording }">
-        <h3>{{ joinData.display_name }} · invitado</h3>
-        <span class="badge-id">{{ joinData.role }}</span>
+        <div class="guest-title">
+          <h3>{{ joinData.session_title || "Sala de grabación" }}</h3>
+          <div class="guest-sub">Entras como <strong>{{ joinData.display_name }}</strong></div>
+        </div>
         <div class="spacer"></div>
+        <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
         <div v-if="recording" class="timecode mono">{{ formatTC(timecode) }}</div>
-        <div v-if="connected" class="vu-master">
+        <span v-if="connected && recording" class="tally live"><span class="dot"></span>GRABANDO</span>
+        <div v-if="connected && !recording" class="vu-master">
           <span class="vu-label">MIC</span>
           <div class="vu-h" :style="'--vu:' + localMeter"></div>
         </div>
-        <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
-        <span v-if="connected && recording" class="tally live"><span class="dot"></span>ON AIR</span>
       </div>
-      <div v-if="recording && !recordingCaps.hasCam" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
-        ⚠ GRABANDO SOLO AUDIO — tu cámara no está disponible
+      <div v-if="recording && !recordingCaps.hasCam" class="upload-banner guest-banner warn">
+        ⚠ Grabando solo tu voz: tu cámara no está disponible
       </div>
-      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
-        Subiendo en tiempo real · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB enviados<span v-if="pendingMB > 0.5"> · falta {{ pendingMB.toFixed(1) }} MB</span>
+      <div v-if="awayWhileRecording && recording" class="upload-banner guest-banner warn" @click="awayWhileRecording = false">
+        ⚠ Saliste de esta pantalla mientras grababas. Quédate aquí y no bloquees el teléfono hasta que termine. <u>Entendido</u>
       </div>
-      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner" style="background:#5a3a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
-        ⚠ Conexión inestable — reintentando subida (tu grabación local sigue activa)
+      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries < 2" class="upload-banner guest-banner">
+        Guardando tu grabación en el servidor · {{ (streamedBytes / (1024*1024)).toFixed(1) }} MB<span v-if="pendingMB > 0.5"> · faltan {{ pendingMB.toFixed(1) }} MB</span>
       </div>
-      <div v-if="postRecording" style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);">
-        <div v-if="uploadStatus.state === 'finalizing'" style="text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">⏳</div>
-          <h2 style="margin:0 0 8px;color:var(--paper);">Subiendo… falta {{ pendingMB.toFixed(1) }} MB</h2>
-          <p class="muted" style="font-size:14px;">No cierres esta pestaña. Tu grabación se está terminando de subir.</p>
+      <div v-if="!postRecording && uploadStatus.state === 'streaming' && chunkRetries >= 2" class="upload-banner guest-banner warn">
+        ⚠ Tu conexión está inestable. Tu grabación sigue guardándose en este aparato y se sube cuando mejore.
+      </div>
+      <div v-if="postRecording" class="guest-post">
+        <div v-if="uploadStatus.state === 'finalizing'" class="guest-post-box">
+          <div class="guest-post-icon">⏳</div>
+          <h2>Terminando de subir tu grabación…</h2>
+          <p class="guest-post-big">{{ pendingMB > 0.05 ? "Faltan " + pendingMB.toFixed(1) + " MB" : "Casi listo" }}</p>
+          <p class="muted">No cierres esta pestaña ni bloquees el teléfono hasta que diga “listo”.</p>
         </div>
-        <div v-else-if="uploadStatus.state === 'done'" style="text-align:center;">
-          <div style="font-size:64px;margin-bottom:16px;">✓</div>
-          <h2 style="margin:0 0 8px;color:#6c6;">Grabación subida correctamente</h2>
-          <p class="muted" style="margin-bottom:32px;font-size:14px;">{{ uploadStatus.sizeMB }} MB enviados</p>
-          <button class="primary" @click="leave" style="padding:18px 64px;font-size:20px;border-radius:var(--r-lg);">SALIR</button>
+        <div v-else-if="uploadStatus.state === 'done'" class="guest-post-box">
+          <div class="guest-post-icon ok">✓</div>
+          <h2>Listo, tu grabación llegó completa</h2>
+          <p class="muted">{{ uploadStatus.sizeMB }} MB enviados. Ya puedes salir.</p>
+          <button class="primary guest-post-btn" @click="leave">Salir</button>
         </div>
-        <div v-else-if="uploadStatus.state === 'error'" style="text-align:center;">
-          <div style="font-size:48px;margin-bottom:16px;">✕</div>
-          <h2 style="margin:0 0 8px;color:#f66;">Error al subir grabación</h2>
-          <p style="color:#f66;margin-bottom:16px;font-size:14px;">{{ uploadStatus.error }}</p>
-          <p class="muted" style="font-size:13px;">NO cierres esta pestaña — contacta al equipo técnico.</p>
+        <div v-else-if="uploadStatus.state === 'error'" class="guest-post-box">
+          <div class="guest-post-icon bad">✕</div>
+          <h2>No se pudo subir tu grabación</h2>
+          <p style="color:#f66;">{{ uploadStatus.error }}</p>
+          <p class="muted">No cierres esta pestaña: tu grabación sigue guardada aquí. Avísale al anfitrión.</p>
         </div>
       </div>
       <div v-if="!postRecording" class="studio-main">
-        <div v-if="error" class="error" style="font-size: 16px; padding: 14px; background: #5a1a1a; color: #fff; border: 2px solid red;">⚠ {{ error }}</div>
+        <div v-if="error" class="error guest-error">⚠ {{ error }}</div>
         <div v-if="!connected && !busy" class="prejoin">
-          <div class="prejoin-card">
-            <div class="prejoin-controls" style="text-align: center;">
-              <h3 style="margin: 0 0 6px;">{{ joinData.display_name }}, listo para entrar</h3>
-              <p class="muted" style="margin: 0 0 12px; font-size: 12px;">
-                Activa cámara y micrófono para conectarte al estudio. Vas a poder probar todo antes de que empiecen a grabar.
-              </p>
-              <video ref="preflightVideoEl" autoplay muted playsinline
-                     style="width: 100%; max-height: 220px; border-radius: 8px; background: #000; object-fit: cover; margin-bottom: 10px;"></video>
-              <div style="font-size: 12px; margin-bottom: 14px; min-height: 18px;">
-                <span v-if="recPreflight.state === 'testing'" class="muted">📶 Probando tu conexión y tu equipo (~5 s)…</span>
+          <div class="prejoin-card guest-prejoin">
+            <div class="prejoin-controls">
+              <h3 class="guest-prejoin-title">Revisa cómo te ves y te escuchas</h3>
+              <div class="guest-preview">
+                <video ref="preflightVideoEl" autoplay muted playsinline></video>
+                <div class="guest-mic">
+                  <span>🎤</span>
+                  <div class="guest-mic-bar"><div :style="{ width: Math.min(100, Math.round(preMeter * 140)) + '%' }"></div></div>
+                </div>
+              </div>
+              <p class="guest-hint">Habla un poco: la barra verde se mueve si tu micrófono funciona.</p>
+              <div class="guest-quality">
+                <span v-if="recPreflight.state === 'testing'" class="muted">📶 Revisando tu conexión (unos 5 segundos)…</span>
                 <template v-else-if="recPreflight.state === 'done'">
-                  ✓ Tu grabación irá en <strong>{{ recProfileG().quality }}</strong>
-                  <span class="muted" v-if="recPreflight.upMbps"> · subida {{ recPreflight.upMbps.toFixed(1) }} Mbps</span>
-                  <select v-model="recPreflight.choiceId" class="quality-pick" style="margin-left: 8px;"
-                          title="La prueba puso el máximo; puedes bajarla, no subirla.">
-                    <option v-for="p in recProfileChoices" :key="p.id" :value="p.id">REC {{ p.desc }}</option>
-                  </select>
+                  <span>✓ {{ qualityText }}</span>
+                  <details class="guest-quality-more">
+                    <summary>Cambiar calidad</summary>
+                    <select v-model="recPreflight.choiceId" class="quality-pick"
+                            title="La prueba puso el máximo; puedes bajarla, no subirla.">
+                      <option v-for="p in recProfileChoices" :key="p.id" :value="p.id">{{ p.desc }}</option>
+                    </select>
+                  </details>
                 </template>
               </div>
-              <button class="primary" @click="connect" style="width: 100%; padding: 14px;">
-                🎙 Activar cámara y entrar
+              <ul class="guest-tips">
+                <li>🎧 Usa audífonos para que no haya eco.</li>
+                <li>📱 Apoya el teléfono y no cambies de app mientras graban.</li>
+                <li>🔋 Mejor conectado al cargador.</li>
+              </ul>
+              <button class="primary guest-join" @click="connect" :disabled="recPreflight.state === 'testing'">
+                {{ recPreflight.state === 'testing' ? "Revisando…" : "Entrar a la sala" }}
               </button>
             </div>
           </div>
         </div>
-        <div v-else-if="busy" class="muted" style="text-align:center; padding: 60px;">{{ connectStep || "Pidiendo permisos…" }}</div>
-        <div v-else class="participants-grid">
-          <div class="participant-card">
+        <div v-else-if="busy" class="guest-busy">
+          <div class="guest-spinner"></div>
+          <div>{{ connectStep || "Un momento…" }}</div>
+          <div class="muted" style="font-size:13px;">Si tu navegador pregunta, permite la cámara y el micrófono.</div>
+        </div>
+        <div v-else class="participants-grid guest-grid" :class="'n' + Object.keys(remoteMap).length">
+          <div class="participant-card guest-self">
             <video ref="localVideoEl" autoplay muted playsinline></video>
             <div v-if="localCamOff" class="initials" style="position:absolute;">{{ initials(joinData.display_name) }}</div>
             <div class="label">
@@ -4257,10 +4345,11 @@ var GuestStudioView = {
             </div>
             <div class="vu" :style="'--vu:' + (t.meter || 0)"></div>
           </div>
+          <div v-if="Object.keys(remoteMap).length === 0" class="guest-alone">Esperando a los demás…</div>
         </div>
         <div v-if="countdown !== null" class="countdown-overlay">
           <div class="countdown-num">{{ countdown > 0 ? countdown : '●' }}</div>
-          <div class="countdown-label">{{ countdown > 0 ? 'preparándose…' : 'GRABANDO' }}</div>
+          <div class="countdown-label">{{ countdown > 0 ? 'EMPIEZA LA GRABACIÓN' : 'GRABANDO' }}</div>
         </div>
         <div v-if="cintilloOverlays.length" class="cintillo-layer">
           <div v-for="ov in cintilloOverlays" :key="ov.event_id" class="cintillo" :class="ov.event_type">
@@ -4286,8 +4375,12 @@ var GuestStudioView = {
           {{ activeCue.cue }}
         </div>
       </div>
-      <aside v-if="!postRecording" class="studio-side">
-        <div>
+      <aside v-if="!postRecording" class="studio-side guest-side">
+        <div class="guest-side-head">
+          <span class="label">Chat</span>
+          <button class="ghost guest-side-close" @click="toggleChat">Cerrar</button>
+        </div>
+        <div v-if="sounds.length" class="guest-sounds">
           <div class="sb-head"><span class="label">Soundboard</span><span class="tiny">teclas</span></div>
           <div class="sb-grid">
             <button v-for="s in sounds" :key="s.id" class="sb-pad"
@@ -4299,28 +4392,40 @@ var GuestStudioView = {
             </button>
           </div>
         </div>
-        <div style="flex: 1; display: flex; flex-direction: column; min-height: 200px;">
-          <div class="sb-head"><span class="label">Chat</span><span class="tiny">{{ chat.length }}</span></div>
-          <div id="guest-chat-scroll" style="flex: 1; overflow-y: auto; background: var(--ink-sunken); border: 1px solid var(--ink-line); border-radius: var(--r-md); padding: 8px; margin-bottom: 6px; min-height: 100px; font-size: 12px;">
-            <div v-for="m in chat" :key="m.id" style="margin-bottom: 6px;">
-              <strong style="color: var(--signal);">{{ m.author }}:</strong>
-              <span style="color: var(--paper);">{{ m.text }}</span>
+        <div class="guest-chat">
+          <div class="sb-head guest-chat-head"><span class="label">Chat</span><span class="tiny">{{ chat.length }}</span></div>
+          <div id="guest-chat-scroll" class="guest-chat-list">
+            <div v-if="!chat.length" class="muted" style="font-size:13px;">Aquí aparecen los mensajes de la sala.</div>
+            <div v-for="m in chat" :key="m.id" class="guest-chat-msg">
+              <strong>{{ m.author }}</strong>
+              <span>{{ m.text }}</span>
             </div>
           </div>
-          <div style="display: flex; gap: 4px;">
-            <input type="text" v-model="chatInput" @keyup.enter="sendChat" placeholder="Mensaje..." style="flex: 1; font-size: 12px; padding: 6px 10px;">
-            <button class="primary" @click="sendChat" :disabled="!chatInput.trim()" style="padding: 6px 12px;">↑</button>
+          <div class="guest-chat-input">
+            <input type="text" v-model="chatInput" @keyup.enter="sendChat" placeholder="Escribe un mensaje…" enterkeyhint="send">
+            <button class="primary" @click="sendChat" :disabled="!chatInput.trim()">↑</button>
           </div>
         </div>
       </aside>
-      <div v-if="!postRecording" class="controls-bar">
-        <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
-        <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
-        <span v-if="ifbActive" class="ifb-indicator">IFB</span>
-        <span v-if="directorConnected" class="director-badge">Director conectado</span>
+      <div v-if="!postRecording" class="controls-bar guest-controls">
+        <template v-if="connected">
+          <button class="gc-btn" :class="{ muted: localMuted }" @click="toggleMute">
+            <span class="gc-ico">{{ localMuted ? "🔇" : "🎤" }}</span><span class="gc-txt">{{ localMuted ? "Activar" : "Micrófono" }}</span>
+          </button>
+          <button class="gc-btn" :class="{ 'cam-off': localCamOff }" @click="toggleCam">
+            <span class="gc-ico">{{ localCamOff ? "📷" : "🎥" }}</span><span class="gc-txt">{{ localCamOff ? "Activar" : "Cámara" }}</span>
+          </button>
+          <button class="gc-btn gc-chat" @click="toggleChat">
+            <span class="gc-ico">💬</span><span class="gc-txt">Chat</span>
+            <span v-if="chatUnread" class="gc-badge">{{ chatUnread }}</span>
+          </button>
+        </template>
+        <span v-if="ifbActive" class="ifb-indicator">🎧 Te habla el director</span>
+        <span v-else-if="directorConnected" class="director-badge">Director conectado</span>
         <div class="spacer"></div>
-        <button class="ghost" @click="leave">Salir</button>
+        <button class="ghost gc-leave" @click="leave">Salir</button>
       </div>
+      </template>
     </div>
   `,
 };
