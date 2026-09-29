@@ -202,7 +202,7 @@ var DashboardView = {
           <h2>Studio <em style="color:var(--signal);font-style:italic;">live</em></h2>
         </div>
         <div class="spacer"></div>
-        <button class="ghost" @click="triggerImport" :disabled="importing" style="margin-right:8px;">
+        <button class="ghost d-only" @click="triggerImport" :disabled="importing" style="margin-right:8px;">
           {{ importing ? "Importando…" : "↑ Importar" }}
         </button>
         <button class="primary" @click="showCreate = true">＋ Nueva sesión</button>
@@ -229,7 +229,7 @@ var DashboardView = {
           </div>
           <div class="bottom">
             <span class="tiny">{{ fmtDate(s.created_at) }} · {{ s.max_participants }}p</span>
-            <button class="ghost" style="font-size:11px;padding:3px 8px;" @click="exportSession(s, $event)">↓ Exportar</button>
+            <button class="ghost d-only" style="font-size:11px;padding:3px 8px;" @click="exportSession(s, $event)">↓ Exportar</button>
             <button class="danger" @click="remove(s, $event)">Eliminar</button>
           </div>
         </div>
@@ -1218,6 +1218,25 @@ var StudioView = {
     var newSound = reactive({ name: "", shortcut_key: "", color: "#5a8bff" });
 
     var chat = ref([]);
+    // En teléfono/tablet el panel lateral se abre por pestañas: chat, personas, sponsors
+    var sideTab = ref(null);
+    var chatSeenH = ref(0);
+    var chatUnreadH = computed(function () { return sideTab.value === "chat" ? 0 : Math.max(0, chat.value.length - chatSeenH.value); });
+    function openSide(t) {
+      sideTab.value = sideTab.value === t ? null : t;
+      if (sideTab.value === "chat") chatSeenH.value = chat.value.length;
+    }
+    watch(function () { return chat.value.length; }, function (n) { if (sideTab.value === "chat") chatSeenH.value = n; });
+    var _hostWake = null;
+    async function hostKeepAwake() {
+      try { if ("wakeLock" in navigator && !_hostWake) { _hostWake = await navigator.wakeLock.request("screen"); _hostWake.addEventListener("release", function () { _hostWake = null; }); } } catch (_) {}
+    }
+    function hostVisibility() { if (document.visibilityState === "visible" && connected.value) hostKeepAwake(); }
+    document.addEventListener("visibilitychange", hostVisibility);
+    onBeforeUnmount(function () {
+      document.removeEventListener("visibilitychange", hostVisibility);
+      try { if (_hostWake) _hostWake.release(); } catch (_) {}
+    });
     var chatInput = ref("");
     // Backstage chat: hosts-only side channel.
     var backstageChat = ref([]);
@@ -2224,6 +2243,7 @@ var StudioView = {
 
         room = newRoom;
         connected.value = true;     // first: makes the participants-grid render
+        hostKeepAwake();
         await nextTick();           // wait for <video ref="localVideoEl"> to mount
         if (localVideoEl.value && camPub && camPub.track) {
           try { camPub.track.attach(localVideoEl.value); } catch (_) {}
@@ -2791,36 +2811,37 @@ var StudioView = {
       ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
       activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
       amaPanel: amaPanel, amaEmbedUrl: amaEmbedUrl, amaEventId: amaEventId, amaBusy: amaBusy,
+      sideTab: sideTab, openSide: openSide, chatUnreadH: chatUnreadH,
       startAma: startAma, closeAma: closeAma,
     };
   },
   template: `
-    <div class="studio">
+    <div class="studio host-studio" :class="[{ 'side-open': !!sideTab, 'is-connected': connected }, sideTab ? 'tab-' + sideTab : '']">
       <div class="studio-top" :class="{ recording: recording }">
-        <button class="ghost" @click="safeBack">← Sesiones</button>
+        <button class="ghost hs-back" @click="safeBack">← <span class="d-only">Sesiones</span></button>
         <h3>{{ session.title }}</h3>
-        <span class="badge-id">#{{ session.id }}</span>
+        <span class="badge-id d-only">#{{ session.id }}</span>
         <a v-if="session.source_url && session.source_slug && session.source_episode_id"
            :href="session.source_url + '/#/podcasts/' + session.source_slug + '/episodes/' + session.source_episode_id"
-           target="_blank" class="ghost" style="font-size:11px;padding:3px 8px;margin-left:6px;text-decoration:none;"
+           target="_blank" class="ghost d-only" style="font-size:11px;padding:3px 8px;margin-left:6px;text-decoration:none;"
            title="Abrir episodio en prePod">📋 prePod</a>
         <div class="spacer"></div>
-        <div class="timecode mono">{{ formatTC(timecode) }}</div>
-        <div v-if="connected" class="vu-master">
+        <div class="timecode mono" :class="{ 'hs-idle': !recording }">{{ formatTC(timecode) }}</div>
+        <div v-if="connected" class="vu-master d-only">
           <span class="vu-label">MIC</span>
           <div class="vu-h" :style="'--vu:' + localMeter"></div>
         </div>
         <span v-if="ifbActive" class="ifb-indicator">🎧 Director hablándote...</span>
         <span v-if="directorConnected" class="director-badge">🎬 Director</span>
-        <label v-if="!recording && countdown === null && isHost" class="practice-toggle"
+        <label v-if="!recording && countdown === null && isHost" class="practice-toggle d-only"
                :title="'En modo ensayo nada se sube al servidor — solo prueba.'">
           <input type="checkbox" v-model="practiceMode">
           <span>Ensayo</span>
         </label>
         <span v-if="practiceMode" class="rehearsal-badge">🟡 ENSAYO</span>
-        <span v-if="!connected && recPreflight.state === 'testing'" class="quality-pick"
+        <span v-if="!connected && recPreflight.state === 'testing'" class="quality-pick d-only"
               title="Midiendo tu subida y tu equipo (~5 s)">📶 Probando calidad…</span>
-        <select v-else-if="!connected && recPreflight.state === 'done'" v-model="recPreflight.choiceId" class="quality-pick"
+        <select v-else-if="!connected && recPreflight.state === 'done'" v-model="recPreflight.choiceId" class="quality-pick d-only"
                 :title="'La prueba puso el máximo (' + recPreflight.profileId + '). Puedes bajarla, no subirla.'">
           <option v-for="p in recProfileChoices" :key="p.id" :value="p.id">REC {{ p.desc }}</option>
         </select>
@@ -2833,10 +2854,10 @@ var StudioView = {
             {{ ownReady ? "✓ Listo" : "● Prepararse" }}
           </button>
         </template>
-        <button v-if="connected" class="ghost" style="margin-right: 8px;"
+        <button v-if="connected" class="ghost d-only" style="margin-right: 8px;"
                 :class="{ primary: ownHandUp }" @click="toggleHand"
                 title="Levantar/bajar la mano">✋</button>
-        <button v-if="recording" class="ghost" style="margin-right: 8px;"
+        <button v-if="recording" class="ghost d-only" style="margin-right: 8px;"
                 @click="markChapter"
                 title="Marcar momento durante la grabación">📍 Momento</button>
         <button v-if="recording" class="rec-btn" style="background: var(--signal); color: #fff;"
@@ -2847,17 +2868,17 @@ var StudioView = {
         <span v-if="activeStreams.length" class="tally live" style="margin-left: 8px;" :title="activeStreams.length + ' stream(s) activos'">
           <span class="dot"></span>EN VIVO
         </span>
-        <button v-if="connected && !screenSharing" class="ghost" style="margin-left: 8px;"
+        <button v-if="connected && !screenSharing" class="ghost d-only" style="margin-left: 8px;"
                 :disabled="!!remoteScreen"
                 :title="remoteScreen ? ('Ya está compartiendo ' + remoteScreen.name) : 'Compartir o grabar pantalla'"
                 @click="askStartScreenShare">📺 Pantalla</button>
-        <button v-if="connected && screenSharing" class="ghost" style="margin-left: 8px; background: rgba(255,59,59,0.16); color: #ff7373;"
+        <button v-if="connected && screenSharing" class="ghost d-only" style="margin-left: 8px; background: rgba(255,59,59,0.16); color: #ff7373;"
                 @click="stopScreenShare" :title="screenRecordOnly ? 'Detener (solo grabando local)' : 'Dejar de compartir'">
           ■ {{ screenRecordOnly ? 'Detener pantalla' : 'Dejar de compartir' }}
         </button>
-        <button v-if="isHost && connected" class="ghost" style="margin-left: 8px;" @click="showStream = true" title="Transmitir a RTMP">📡 Stream</button>
-        <button v-if="isHost" class="ghost" style="margin-left: 8px;" @click="showDiagnostic" title="Ver quién está conectado a la sala según LiveKit">🔍 Diagnóstico</button>
-        <button v-if="!connected" class="primary" style="margin-left: 8px; padding: 6px 14px;" @click="connect" :disabled="busy" title="Conectar este navegador a la sala de LiveKit">
+        <button v-if="isHost && connected" class="ghost d-only" style="margin-left: 8px;" @click="showStream = true" title="Transmitir a RTMP">📡 Stream</button>
+        <button v-if="isHost" class="ghost d-only" style="margin-left: 8px;" @click="showDiagnostic" title="Ver quién está conectado a la sala según LiveKit">🔍 Diagnóstico</button>
+        <button v-if="!connected" class="primary d-only" style="margin-left: 8px; padding: 6px 14px;" @click="connect" :disabled="busy" title="Conectar este navegador a la sala de LiveKit">
           {{ busy ? "Conectando…" : "🟢 Conectar" }}
         </button>
       </div>
@@ -2940,7 +2961,7 @@ var StudioView = {
                 </select>
               </div>
 
-              <div class="mic-check-panel" style="margin: 0 0 18px; padding: 12px; border: 1px solid var(--ink-line); border-radius: 8px; background: var(--ink-sunken, rgba(0,0,0,0.18));">
+              <div class="mic-check-panel d-only" style="margin: 0 0 18px; padding: 12px; border: 1px solid var(--ink-line); border-radius: 8px; background: var(--ink-sunken, rgba(0,0,0,0.18));">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                   <span class="eyebrow">MIC CHECK</span>
                   <span v-if="micCheckAppliedGain"
@@ -3005,7 +3026,7 @@ var StudioView = {
               </div>
 
               <button class="primary" @click="connect" :disabled="busy" style="width: 100%; padding: 14px;">
-                {{ busy ? "Conectando…" : "🎙 Entrar al estudio" }}
+                {{ busy ? "Conectando…" : "Entrar al estudio" }}
               </button>
             </div>
           </div>
@@ -3152,8 +3173,15 @@ var StudioView = {
         </div>
       </div>
 
-      <aside class="studio-side">
-        <div>
+      <aside class="studio-side hs-side">
+        <div class="hs-sheet-head">
+          <button :class="{ on: sideTab === 'chat' }" @click="openSide('chat')">Chat</button>
+          <button :class="{ on: sideTab === 'people' }" @click="openSide('people')">Personas</button>
+          <button v-if="sponsorMarkers.length" :class="{ on: sideTab === 'sponsors' }" @click="openSide('sponsors')">Sponsors</button>
+          <div class="spacer"></div>
+          <button class="hs-close" @click="sideTab = null">Cerrar</button>
+        </div>
+        <div class="hs-sound">
           <div class="sb-head">
             <span class="label">Soundboard</span>
             <div class="spacer"></div>
@@ -3215,7 +3243,7 @@ var StudioView = {
           </div>
         </div>
 
-        <div>
+        <div class="hs-people">
           <div class="sb-head">
             <span class="label">Participantes</span>
             <span class="tiny">{{ participants.length }}/{{ session.max_participants }}</span>
@@ -3236,7 +3264,7 @@ var StudioView = {
           </div>
         </div>
 
-        <div v-if="inviteLinks.length">
+        <div v-if="inviteLinks.length" class="hs-people">
           <div class="sb-head"><span class="label">Links generados</span></div>
           <div v-for="l in inviteLinks" :key="l.invite_token" class="invite-row" style="cursor: pointer;" @click="copyInvite(l)" title="Click para copiar">
             <span class="who">{{ l.invite_url }}</span>
@@ -3244,7 +3272,7 @@ var StudioView = {
           </div>
         </div>
 
-        <div v-if="isHost && Object.keys(participantUploads).length">
+        <div v-if="isHost && Object.keys(participantUploads).length" class="hs-people">
           <div class="sb-head"><span class="label">Subidas invitados</span></div>
           <div v-for="(u, id) in participantUploads" :key="id" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;padding:0 2px;">
             <span style="min-width:24px;">{{ id.replace('participant_', 'P') }}</span>
@@ -3255,14 +3283,14 @@ var StudioView = {
           </div>
         </div>
 
-        <div v-if="isHost" style="padding:4px 2px;">
+        <div v-if="isHost" class="hs-people" style="padding:4px 2px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--paper-dim);cursor:pointer;">
             <input type="checkbox" :checked="guestCuesVisible" @change="toggleGuestCues" style="margin:0;" />
             Invitados ven cues
           </label>
         </div>
 
-        <div v-if="sponsorMarkers.length" class="sponsor-teleprompter">
+        <div v-if="sponsorMarkers.length" class="sponsor-teleprompter hs-sponsors">
           <div class="sb-head">
             <span class="label">📢 Sponsors</span>
             <span class="tiny">{{ sponsorMarkers.length }}</span>
@@ -3292,7 +3320,7 @@ var StudioView = {
           </div>
         </div>
 
-        <div style="flex: 1; display: flex; flex-direction: column; min-height: 200px;">
+        <div class="hs-chat" style="flex: 1; display: flex; flex-direction: column; min-height: 200px;">
           <div class="sb-head" style="display: flex; align-items: center; gap: 8px;">
             <span class="label" style="cursor: pointer;"
                   :style="{ opacity: chatChannel === 'main' ? 1 : 0.55 }"
@@ -3329,14 +3357,20 @@ var StudioView = {
         </div>
       </aside>
 
-      <div class="controls-bar">
-        <button v-if="connected" :class="{ muted: localMuted }" @click="toggleMute">{{ localMuted ? "🔇" : "🎤" }}</button>
-        <button v-if="connected" :class="{ 'cam-off': localCamOff }" @click="toggleCam">{{ localCamOff ? "📷" : "🎥" }}</button>
-        <button v-if="connected" class="layout-toggle" @click="toggleLayout" :title="layoutMode === 'grid' ? 'Cambiar a vista de speaker' : 'Cambiar a grilla'">{{ layoutMode === 'grid' ? '◫' : '⊞' }}</button>
-        <button v-if="connected && isHost" @click="amaPanel ? closeAma() : startAma()" :disabled="amaBusy" :class="{ primary: amaPanel }" title="Q&A con audiencia">❓ AMA</button>
+      <div class="controls-bar hs-controls">
+        <button v-if="connected" class="hs-btn" :class="{ muted: localMuted }" @click="toggleMute"><span class="hs-ico">{{ localMuted ? "🔇" : "🎤" }}</span><span class="hs-txt">Micrófono</span></button>
+        <button v-if="connected" class="hs-btn" :class="{ 'cam-off': localCamOff }" @click="toggleCam"><span class="hs-ico">{{ localCamOff ? "📷" : "🎥" }}</span><span class="hs-txt">Cámara</span></button>
+        <button v-if="connected && recording" class="hs-btn m-only" @click="markChapter"><span class="hs-ico">📍</span><span class="hs-txt">Momento</span></button>
+        <button v-if="connected" class="hs-btn m-only" :class="{ on: sideTab === 'chat' }" @click="openSide('chat')">
+          <span class="hs-ico">💬</span><span class="hs-txt">Chat</span><span v-if="chatUnreadH" class="gc-badge">{{ chatUnreadH }}</span>
+        </button>
+        <button v-if="connected" class="hs-btn m-only" :class="{ on: sideTab === 'people' }" @click="openSide('people')"><span class="hs-ico">👥</span><span class="hs-txt">Personas</span></button>
+        <button v-if="connected && sponsorMarkers.length" class="hs-btn m-only" :class="{ on: sideTab === 'sponsors' }" @click="openSide('sponsors')"><span class="hs-ico">📢</span><span class="hs-txt">Sponsors</span></button>
+        <button v-if="connected" class="layout-toggle d-only" @click="toggleLayout" :title="layoutMode === 'grid' ? 'Cambiar a vista de speaker' : 'Cambiar a grilla'">{{ layoutMode === 'grid' ? '◫' : '⊞' }}</button>
+        <button v-if="connected && isHost" class="d-only" @click="amaPanel ? closeAma() : startAma()" :disabled="amaBusy" :class="{ primary: amaPanel }" title="Q&A con audiencia">❓ AMA</button>
         <div class="spacer"></div>
-        <span v-if="connected" class="join-pill">EN VIVO · {{ (participants.filter(p => p.status === 'connected').length) }} conectado(s)</span>
-        <button v-if="connected" class="ghost" @click="disconnect">Salir del estudio</button>
+        <span v-if="connected" class="join-pill d-only">EN VIVO · {{ (participants.filter(p => p.status === 'connected').length) }} conectado(s)</span>
+        <button v-if="connected" class="ghost hs-leave" @click="disconnect">Salir<span class="d-only"> del estudio</span></button>
       </div>
 
       <div v-if="showStream" class="modal-backdrop" @click.self="showStream = false">
@@ -5376,26 +5410,26 @@ var App = {
       <header class="app-header">
         <div class="brand">
           <a :href="thepodUrl || '#'" class="mark" title="Ir a thePod">prod<em>Pod</em></a>
-          <span class="tag">live booth · v0.1</span>
+          <span class="tag d-only">live booth · v0.1</span>
         </div>
-        <div class="sibling-apps" v-if="siblingApps">
+        <div class="sibling-apps d-only" v-if="siblingApps">
           <a v-for="a in siblingApps" :key="a.key" :href="a.url" class="sibling-link" :title="'Ir a ' + a.name">
             <span class="ico" :data-app="a.key"></span>
             <span>{{ a.name }}</span>
           </a>
         </div>
-        <div class="tally" :class="{ live: anyRecording }">
+        <div class="tally d-only" :class="{ live: anyRecording }">
           <span class="dot"></span>
           <span>{{ anyRecording ? 'ON AIR' : 'STANDBY' }}</span>
         </div>
         <div class="spacer"></div>
-        <div v-if="state.route === 'studio'">
+        <div v-if="state.route === 'studio'" class="d-only">
           <button class="ghost" @click="backToDash">← Sesiones</button>
         </div>
         <button v-if="isDirector && state.route !== 'director-dashboard' && state.route !== 'director'"
                 class="ghost" style="color: var(--signal-cyan);" @click="openDirectorDash">🎬 Director</button>
         <div class="user-chip">
-          <span class="tiny">OP</span>
+          <span class="tiny d-only">OP</span>
           <span class="name">{{ state.user.display_name || state.user.username }}</span>
           <button class="ghost" @click="logout">Salir</button>
         </div>
