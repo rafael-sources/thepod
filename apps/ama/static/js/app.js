@@ -173,7 +173,7 @@ var DashboardView = {
 <div>\
   <header class="app-header">\
     <span class="brand">ama<span class="brand-accent">Pod</span></span>\
-    <div class="sibling-apps">\
+    <div class="sibling-apps d-only">\
       <a v-for="a in apps" :key="a.key" :href="a.url" class="sibling-link"><span class="ico" :data-app="a.key"></span> {{ a.name }}</a>\
     </div>\
     <span class="spacer"></span>\
@@ -185,7 +185,7 @@ var DashboardView = {
   <div class="dashboard-view">\
     <header class="dash-header">\
       <h1>Eventos</h1>\
-      <button @click="showCreate = true" class="primary">+ Nuevo evento</button>\
+      <button @click="showCreate = true" class="primary dash-new">+ Nuevo evento</button>\
     </header>\
     <div v-if="showCreate" class="create-modal-overlay" @click.self="showCreate = false">\
       <div class="create-modal">\
@@ -212,7 +212,7 @@ var DashboardView = {
     <div v-else-if="!events.length" class="empty-state">No hay eventos. Crea el primero.</div>\
     <div v-else class="events-grid">\
       <div v-for="e in events" :key="e.id" class="event-card" @click="openEvent(e)">\
-        <div class="event-status" :class="e.status">{{ e.status }}</div>\
+        <div class="event-status" :class="e.status">{{ ({ created: "Sin empezar", active: "En vivo", finished: "Terminado" })[e.status] || e.status }}</div>\
         <h3>{{ e.title }}</h3>\
         <p class="event-desc">{{ e.description || "Sin descripcion" }}</p>\
         <div v-if="e.like_count || e.spectator_count" class="event-meta" style="margin-top:4px">&#10084; {{ e.like_count || 0 }} &middot; &#128065; {{ e.spectator_count || 0 }}</div>\
@@ -243,6 +243,46 @@ var HostView = {
     var spectatorCount = ref(0);
     var pollTimer = ref(null);
     var chatPollTimer = ref(null);
+
+    // Móvil / iPad: una sola sección del panel a la vez
+    var sideTab = ref("solicitudes");
+    var seenRequests = ref(0);
+    var seenChat = ref(0);
+    var now = ref(Date.now());
+    var ticker = null;
+    var _wakeH = null;
+    async function keepAwakeH() {
+      try { if ("wakeLock" in navigator && !_wakeH) { _wakeH = await navigator.wakeLock.request("screen"); _wakeH.addEventListener("release", function () { _wakeH = null; }); } } catch (_) {}
+    }
+    function onVisH() { if (document.visibilityState === "visible" && phase.value === "live") keepAwakeH(); }
+    function setTab(t) {
+      sideTab.value = t;
+      if (t === "solicitudes") seenRequests.value = requests.value.length;
+      if (t === "chat") { seenChat.value = chatMessages.value.length; scrollChat(); }
+    }
+    var newRequests = computed(function () {
+      if (sideTab.value === "solicitudes") return 0;
+      return Math.max(0, requests.value.length - seenRequests.value);
+    });
+    var unreadChat = computed(function () {
+      if (sideTab.value === "chat") return 0;
+      return Math.max(0, chatMessages.value.length - seenChat.value);
+    });
+    var turnTime = computed(function () {
+      var p = currentParticipant.value;
+      if (!p || !p.turn_started_at) return "";
+      var t = p.turn_started_at; var d = new Date(/Z$|[+-]\d\d:?\d\d$/.test(t) ? t : t.replace(" ", "T") + "Z");
+      var sec = Math.max(0, Math.floor((now.value - d.getTime()) / 1000));
+      if (isNaN(sec)) return "";
+      return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+    });
+    function statusLabel(st) { return { created: "Sin empezar", active: "En vivo", finished: "Terminado" }[st] || st; }
+    function shareLink(kind) {
+      var url = kind === "join" ? joinLink.value : watchLink.value;
+      var text = kind === "join" ? "Haz tu pregunta en vivo: " : "Mira el evento en vivo: ";
+      if (navigator.share) { navigator.share({ title: eventData.value.title, text: text + eventData.value.title, url: url }).catch(function () {}); }
+      else if (kind === "join") copyJoinLink(); else copyWatchLink();
+    }
 
     var devices = ref({ cameras: [], mics: [] });
     var selectedCamera = ref("");
@@ -353,6 +393,7 @@ var HostView = {
 
         startPolling();
         startChatPolling();
+        keepAwakeH();
       } catch (e) {
         window.toast({ type: "error", text: "Error al conectar: " + e.message });
       }
@@ -518,8 +559,12 @@ var HostView = {
 
     // ── Chat ──
 
+    var chatLoaded = false;
     async function loadChat() {
-      try { chatMessages.value = await api("/api/events/" + eventData.value.id + "/chat"); } catch (_) {}
+      try {
+        chatMessages.value = await api("/api/events/" + eventData.value.id + "/chat");
+        if (!chatLoaded) { chatLoaded = true; seenChat.value = chatMessages.value.length; }
+      } catch (_) {}
     }
 
     function startChatPolling() {
@@ -573,9 +618,14 @@ var HostView = {
 
     onMounted(function () {
       listDevices().then(startPreview);
+      ticker = setInterval(function () { now.value = Date.now(); }, 1000);
+      document.addEventListener("visibilitychange", onVisH);
     });
 
     onBeforeUnmount(function () {
+      if (ticker) clearInterval(ticker);
+      document.removeEventListener("visibilitychange", onVisH);
+      if (_wakeH) { try { _wakeH.release(); } catch (_) {} _wakeH = null; }
       stopPreview();
       stopPolling();
       stopChatPolling();
@@ -596,138 +646,170 @@ var HostView = {
       censorParticipant: censorParticipant, uncensorParticipant: uncensorParticipant,
       startRecording: startRecording, stopRecording: stopRecording,
       sendChat: sendChat, copyJoinLink: copyJoinLink, copyWatchLink: copyWatchLink, initials: initials,
+      sideTab: sideTab, setTab: setTab, newRequests: newRequests, unreadChat: unreadChat, turnTime: turnTime,
+      statusLabel: statusLabel, shareLink: shareLink, watchLink: watchLink,
     };
   },
   template: '\
-<div v-if="phase === \'prejoin\'" class="prejoin">\
+<div v-if="phase === \'prejoin\'" class="prejoin ama-prejoin">\
   <div class="prejoin-card">\
     <div class="prejoin-preview">\
       <video id="prejoin-video" autoplay muted playsinline style="transform:scaleX(-1)"></video>\
-      <div v-if="!devices.cameras.length" class="prejoin-placeholder">Sin camara detectada</div>\
+      <div v-if="!devices.cameras.length" class="prejoin-placeholder">Sin cámara detectada</div>\
     </div>\
     <div class="prejoin-controls">\
-      <h2 style="margin:0 0 4px">{{ eventData.title }}</h2>\
-      <p class="muted">{{ eventData.description || "" }}</p>\
-      <label>Camara</label>\
-      <select v-model="selectedCamera">\
-        <option v-for="d in devices.cameras" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Camara " + d.deviceId.slice(0,6) }}</option>\
-      </select>\
-      <label>Microfono</label>\
-      <select v-model="selectedMic">\
-        <option v-for="d in devices.mics" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Mic " + d.deviceId.slice(0,6) }}</option>\
-      </select>\
-      <div v-if="eventData.status === \'finished\'" style="margin-top:12px;padding:12px;background:var(--ink-hover);border-radius:8px">\
-        <div style="text-align:center;margin-bottom:8px"><span class="muted">Evento finalizado</span></div>\
-        <div style="display:flex;gap:16px;justify-content:center;font-size:13px">\
-          <span>&#10084; {{ eventData.like_count || 0 }} likes</span>\
-          <span>&#128065; {{ eventData.spectator_count || 0 }} espectadores</span>\
-        </div>\
+      <div class="pj-top"><button class="ghost pj-back" @click="$props.onBack">&#8592; Eventos</button><span class="event-status" :class="eventData.status">{{ statusLabel(eventData.status) }}</span></div>\
+      <h2 class="pj-title">{{ eventData.title }}</h2>\
+      <p v-if="eventData.description" class="muted pj-desc">{{ eventData.description }}</p>\
+      <template v-if="eventData.status !== \'finished\'">\
+        <label>Cámara</label>\
+        <select v-model="selectedCamera">\
+          <option v-for="d in devices.cameras" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Cámara " + d.deviceId.slice(0,6) }}</option>\
+        </select>\
+        <label>Micrófono</label>\
+        <select v-model="selectedMic">\
+          <option v-for="d in devices.mics" :key="d.deviceId" :value="d.deviceId">{{ d.label || "Micrófono " + d.deviceId.slice(0,6) }}</option>\
+        </select>\
+      </template>\
+      <div v-if="eventData.status === \'finished\'" class="pj-ended">\
+        <div class="muted">Evento terminado</div>\
+        <div class="pj-stats"><span>&#10084; {{ eventData.like_count || 0 }} me gusta</span><span>&#128065; {{ eventData.spectator_count || 0 }} espectadores</span></div>\
       </div>\
-      <button v-else class="primary" @click="startEvent" style="margin-top:8px">Entrar al evento</button>\
-      <div style="display:flex;gap:8px;margin-top:8px">\
-        <button class="ghost" style="flex:1" @click="copyJoinLink" title="Copiar link de participante">&#128279; Link participar</button>\
-        <button class="ghost" style="flex:1" @click="copyWatchLink" title="Copiar link de espectador">&#128065; Link ver</button>\
+      <button v-else class="primary pj-go" @click="startEvent">{{ eventData.status === \'active\' ? \'Volver al evento\' : \'Empezar el evento\' }}</button>\
+      <p v-if="eventData.status === \'created\'" class="muted pj-hint">Al empezar, se abre la sala y comienza la grabación.</p>\
+      <div class="pj-share">\
+        <button @click="shareLink(\'join\')">&#128279; Link para preguntar</button>\
+        <button @click="shareLink(\'watch\')">&#128065; Link para mirar</button>\
       </div>\
-      <button class="ghost" @click="$props.onBack" style="margin-top:4px">Volver</button>\
     </div>\
   </div>\
 </div>\
-<div v-else class="host-layout">\
+<div v-else class="host-layout ama-host">\
   <div class="host-header">\
-    <button class="ghost" @click="$props.onBack" title="Volver">&#8592;</button>\
-    <h2 style="font-size:16px;margin:0">{{ eventData.title }}</h2>\
-    <span class="event-status" :class="eventData.status" style="margin-left:8px">{{ eventData.status }}</span>\
-    <span v-if="isRecording" class="rec-indicator" style="margin-left:12px"><span class="rec-dot"></span> REC</span>\
-    <span v-if="spectatorCount" class="muted" style="margin-left:12px;font-size:12px">&#128065; {{ spectatorCount }}</span>\
-    <span v-if="likeCount" class="muted" style="margin-left:8px;font-size:12px">&#10084; {{ likeCount }}</span>\
-    <span class="spacer"></span>\
-    <button class="ghost" @click="copyJoinLink" title="Copiar link de participante">&#128279; Participar</button>\
-    <button class="ghost" @click="copyWatchLink" title="Copiar link de espectador">&#128065; Ver</button>\
+    <button class="ghost hh-back" @click="$props.onBack" title="Volver">&#8592;</button>\
+    <h2 class="hh-title">{{ eventData.title }}</h2>\
+    <span class="event-status" :class="eventData.status">{{ statusLabel(eventData.status) }}</span>\
+    <span v-if="isRecording" class="rec-indicator"><span class="rec-dot"></span> REC</span>\
+    <span class="hh-stats"><span title="Espectadores">&#128065; {{ spectatorCount }}</span><span title="Me gusta">&#10084; {{ likeCount }}</span></span>\
+    <span class="spacer d-only"></span>\
+    <button class="ghost d-only" @click="copyJoinLink" title="Copiar link de participante">&#128279; Participar</button>\
+    <button class="ghost d-only" @click="copyWatchLink" title="Copiar link de espectador">&#128065; Ver</button>\
   </div>\
-  <div class="video-area">\
-    <div class="video-card" :class="currentParticipant ? \'split\' : \'host-solo\'">\
+  <div class="video-area" :class="{ \'has-guest\': currentParticipant }">\
+    <div class="video-card host-card" :class="currentParticipant ? \'split\' : \'host-solo\'">\
       <video id="host-video" autoplay muted playsinline style="transform:scaleX(-1)"></video>\
-      <div class="video-label">Tu (Host)</div>\
+      <div class="video-label">Tú</div>\
     </div>\
-    <div v-if="currentParticipant" class="video-card split">\
+    <div v-if="currentParticipant" class="video-card split guest-card">\
       <video id="participant-video" autoplay playsinline></video>\
-      <div v-if="currentParticipant.is_censored" class="censor-overlay">Censurado</div>\
+      <div v-if="currentParticipant.is_censored" class="censor-overlay">&#128263; Silenciado</div>\
       <div class="video-label">{{ currentParticipant.display_name }}</div>\
+    </div>\
+    <div v-if="!currentParticipant" class="stage-hint m-only">\
+      <template v-if="inQueueOnly.length">Hay {{ inQueueOnly.length }} en la cola. Toca <b>Siguiente</b> para darle la palabra.</template>\
+      <template v-else-if="requests.length">Tienes {{ requests.length }} {{ requests.length === 1 ? \'solicitud\' : \'solicitudes\' }} por revisar.</template>\
+      <template v-else>Nadie en la cola todavía. Comparte el link para preguntar.</template>\
+    </div>\
+  </div>\
+  <div v-if="currentParticipant" class="onair-strip m-only">\
+    <span class="on-air-badge">Al aire</span>\
+    <div class="oa-body">\
+      <div class="oa-name">{{ currentParticipant.display_name }} <span v-if="turnTime" class="oa-time mono">{{ turnTime }}</span></div>\
+      <div v-if="currentParticipant.questions && currentParticipant.questions.length" class="oa-q">{{ currentParticipant.questions[0] }}</div>\
     </div>\
   </div>\
   <div class="controls-bar">\
-    <button class="primary" @click="nextTurnAction" :disabled="!inQueueOnly.length">Siguiente &#9654;</button>\
-    <button v-if="currentParticipant && !currentParticipant.is_censored" class="danger" @click="censorParticipant(currentParticipant.id)">Censurar</button>\
-    <button v-if="currentParticipant && currentParticipant.is_censored" @click="uncensorParticipant(currentParticipant.id)">Quitar censura</button>\
-    <button v-if="currentParticipant" class="danger" @click="removeParticipant(currentParticipant.id)" title="Expulsar participante">Expulsar</button>\
-    <span class="spacer"></span>\
-    <button v-if="!isRecording" @click="startRecording">&#9679; Grabar</button>\
-    <button v-else class="danger" @click="stopRecording">&#9632; Parar grabacion</button>\
-    <button class="danger" @click="finishEvent" :disabled="eventData.status === \'finished\'">Finalizar</button>\
+    <button class="primary hc-next" @click="nextTurnAction" :disabled="!inQueueOnly.length && !currentParticipant">{{ inQueueOnly.length ? \'Siguiente\' : (currentParticipant ? \'Terminar turno\' : \'Siguiente\') }} &#9654;</button>\
+    <button v-if="currentParticipant && !currentParticipant.is_censored" class="hc-btn" @click="censorParticipant(currentParticipant.id)">&#128263; Silenciar</button>\
+    <button v-if="currentParticipant && currentParticipant.is_censored" class="hc-btn on" @click="uncensorParticipant(currentParticipant.id)">&#128264; Devolver audio</button>\
+    <button v-if="currentParticipant" class="danger hc-btn" @click="removeParticipant(currentParticipant.id)" title="Sacar de la sala">Sacar</button>\
+    <span class="spacer d-only"></span>\
+    <button v-if="!isRecording" class="d-only" @click="startRecording">&#9679; Grabar</button>\
+    <button v-else class="danger d-only" @click="stopRecording">&#9632; Parar grabación</button>\
+    <button class="danger d-only" @click="finishEvent" :disabled="eventData.status === \'finished\'">Terminar evento</button>\
   </div>\
-  <div class="queue-sidebar">\
-    <div class="queue-section">\
-      <h3>SOLICITUDES ({{ requests.length }})</h3>\
-      <div v-if="!requests.length" class="muted" style="padding:4px 0">Sin solicitudes</div>\
+  <div class="queue-sidebar" :class="\'tab-\' + sideTab">\
+    <div class="queue-section hs-sol">\
+      <h3>Solicitudes ({{ requests.length }})</h3>\
+      <div v-if="!requests.length" class="muted hs-empty">Cuando alguien se anote para preguntar, aparece aquí para que lo apruebes.</div>\
       <div v-for="r in requests" :key="r.id" class="request-item">\
         <div class="avatar">{{ initials(r.display_name) }}</div>\
-        <div style="flex:1;min-width:0">\
+        <div class="qi-body">\
           <span class="name">{{ r.display_name }}</span>\
           <div v-if="r.questions && r.questions.length" class="participant-questions">\
             <div v-for="(q, i) in r.questions" :key="i" class="pq-item">{{ q }}</div>\
           </div>\
         </div>\
         <div class="actions">\
-          <button class="icon" @click="approveRequest(r.id)" title="Aprobar" style="color:var(--signal-cool)">&#10003;</button>\
-          <button class="icon danger" @click="rejectRequest(r.id)" title="Rechazar">&#10005;</button>\
+          <button class="icon ok" @click="approveRequest(r.id)" title="Aprobar" aria-label="Aprobar">&#10003;</button>\
+          <button class="icon danger" @click="rejectRequest(r.id)" title="Rechazar" aria-label="Rechazar">&#10005;</button>\
         </div>\
       </div>\
     </div>\
-    <div class="queue-section">\
-      <h3>COLA ({{ inQueueOnly.length }})</h3>\
-      <div v-if="!inQueueOnly.length" class="muted" style="padding:4px 0">Cola vacia</div>\
-      <div v-for="p in inQueueOnly" :key="p.id" class="queue-item">\
-        <div class="avatar">{{ initials(p.display_name) }}</div>\
-        <div style="flex:1;min-width:0">\
-          <span class="name">{{ p.display_name }}</span>\
+    <div class="queue-section hs-cola">\
+      <h3>Cola ({{ inQueueOnly.length }})</h3>\
+      <div v-if="!inQueueOnly.length" class="muted hs-empty">La cola está vacía. Las solicitudes que apruebes pasan aquí.</div>\
+      <div v-for="(p, idx) in inQueueOnly" :key="p.id" class="queue-item">\
+        <div class="avatar">{{ idx + 1 }}</div>\
+        <div class="qi-body">\
+          <span class="name">{{ p.display_name }} <span v-if="p.is_preconnected" class="qi-ready" title="Listo, esperando">&#9679; listo</span></span>\
           <div v-if="p.questions && p.questions.length" class="participant-questions">\
             <div v-for="(q, i) in p.questions" :key="i" class="pq-item">{{ q }}</div>\
           </div>\
         </div>\
-        <span v-if="p.is_preconnected" style="color:var(--signal);font-size:10px" title="Pre-conectado">&#9679;</span>\
         <div class="actions">\
-          <button class="icon" @click="skipTo(p.id)" title="Saltar a este">&#9654;</button>\
-          <button class="icon danger" @click="removeParticipant(p.id)" title="Remover">&#10005;</button>\
+          <button class="icon" @click="skipTo(p.id)" title="Darle la palabra ahora" aria-label="Darle la palabra ahora">&#9654;</button>\
+          <button class="icon danger" @click="removeParticipant(p.id)" title="Quitar de la cola" aria-label="Quitar de la cola">&#10005;</button>\
         </div>\
       </div>\
     </div>\
-    <div v-if="currentParticipant" class="queue-section">\
-      <h3>AL AIRE</h3>\
+    <div v-if="currentParticipant" class="queue-section hs-aire">\
+      <h3>Al aire</h3>\
       <div class="queue-item on-air">\
         <div class="avatar">{{ initials(currentParticipant.display_name) }}</div>\
-        <div style="flex:1;min-width:0">\
+        <div class="qi-body">\
           <span class="name">{{ currentParticipant.display_name }}</span>\
           <div v-if="currentParticipant.questions && currentParticipant.questions.length" class="participant-questions">\
             <div v-for="(q, i) in currentParticipant.questions" :key="i" class="pq-item">{{ q }}</div>\
           </div>\
         </div>\
-        <span class="on-air-badge">EN VIVO</span>\
+        <span class="on-air-badge">En vivo</span>\
       </div>\
     </div>\
-    <div class="chat-panel">\
-      <div class="queue-section"><h3>CHAT</h3></div>\
+    <div class="chat-panel hs-chat">\
+      <div class="queue-section"><h3>Chat</h3></div>\
       <div class="chat-messages">\
+        <div v-if="!chatMessages.length" class="muted hs-empty">Todavía no hay mensajes.</div>\
         <div v-for="m in chatMessages" :key="m.id || m.sender_name + m.message" class="chat-msg">\
           <span class="sender" :class="{ host: m.is_host }">{{ m.sender_name }}:</span>\
           <span class="text"> {{ m.message }}</span>\
         </div>\
       </div>\
       <div class="chat-input">\
-        <input type="text" v-model="chatInput" placeholder="Escribe un mensaje..." @keyup.enter="sendChat">\
+        <input type="text" v-model="chatInput" placeholder="Escribe un mensaje..." @keyup.enter="sendChat" enterkeyhint="send">\
         <button class="primary" @click="sendChat" :disabled="!chatInput.trim()">Enviar</button>\
       </div>\
     </div>\
+    <div class="queue-section hs-mas">\
+      <h3>Compartir</h3>\
+      <div class="mas-grid">\
+        <button @click="shareLink(\'join\')">&#128279; Link para preguntar</button>\
+        <button @click="shareLink(\'watch\')">&#128065; Link para mirar</button>\
+      </div>\
+      <h3 class="mas-h">Grabación</h3>\
+      <button v-if="!isRecording" class="mas-wide" @click="startRecording">&#9679; Empezar a grabar</button>\
+      <button v-else class="mas-wide" @click="stopRecording"><span class="rec-dot"></span> Grabando · parar</button>\
+      <h3 class="mas-h">Evento</h3>\
+      <button class="mas-wide danger-solid" @click="finishEvent" :disabled="eventData.status === \'finished\'">Terminar el evento</button>\
+      <p class="muted mas-note">Se desconecta a todos y se detiene la grabación.</p>\
+    </div>\
   </div>\
+  <nav class="host-tabs m-only">\
+    <button :class="{ on: sideTab === \'solicitudes\' }" @click="setTab(\'solicitudes\')"><span class="ht-ico">&#9995;</span>Solicitudes<i v-if="requests.length" class="ht-badge" :class="{ hot: newRequests }">{{ requests.length }}</i></button>\
+    <button :class="{ on: sideTab === \'cola\' }" @click="setTab(\'cola\')"><span class="ht-ico">&#9776;</span>Cola<i v-if="inQueueOnly.length" class="ht-badge">{{ inQueueOnly.length }}</i></button>\
+    <button :class="{ on: sideTab === \'chat\' }" @click="setTab(\'chat\')"><span class="ht-ico">&#128172;</span>Chat<i v-if="unreadChat" class="ht-badge hot">{{ unreadChat }}</i></button>\
+    <button :class="{ on: sideTab === \'mas\' }" @click="setTab(\'mas\')"><span class="ht-ico">&#8943;</span>Más</button>\
+  </nav>\
 </div>'
 };
 
