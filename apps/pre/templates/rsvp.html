@@ -60,6 +60,18 @@
       margin-top: 28px; padding: 22px; border-radius: 10px;
       background: rgba(255,80,80,0.12); border: 1px solid rgba(255,80,80,0.35);
     }
+    .actions button.chosen { outline: 3px solid rgba(255,255,255,0.85); outline-offset: 2px; }
+    .actions.answered button:not(.chosen) { opacity: 0.55; }
+    .actions button { font-size: 17px; min-height: 54px; }
+    .when-box { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+    .when-box #when { font-size: 18px; font-weight: 600; display: block; margin-top: 2px; }
+    .feedback { font-size: 16px; text-align: center; }
+    .ical-link { font-size: 15px; padding: 12px 16px; }
+    @media (max-width: 600px) {
+      .wrap { padding: calc(28px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom)); }
+      h1 { font-size: 26px; }
+      .ical-link { display: block; text-align: center; }
+    }
     .footer { margin-top: 36px; opacity: 0.45; font-size: 11px; text-align: center; letter-spacing: 0.1em; }
   </style>
 </head>
@@ -77,15 +89,15 @@
       <div class="ep-meta">
         Hola <strong>{{ guest.name }}</strong>, te invitamos a participar.
         {% if episode.scheduled_at or episode.scheduled_date %}
-          <div style="margin-top: 8px;">
-            <span class="eyebrow">Cuándo</span><br>
+          <div class="when-box">
+            <span class="eyebrow">Cuándo</span>
             <span id="when">{{ episode.scheduled_at or episode.scheduled_date }}</span>
-            {% if episode.duration_estimate %}<span style="opacity:0.7;"> · ~{{ episode.duration_estimate|int }} min</span>{% endif %}
+            {% if episode.duration_estimate %}<span style="opacity:0.75;">Dura aprox. {{ episode.duration_estimate|int }} min</span>{% endif %}
           </div>
         {% endif %}
         <div style="margin-top: 12px;">
-          <span class="eyebrow">Estado actual</span>
-          <span id="status-pill" class="pill {{ guest.rsvp_status }}">{{ guest.rsvp_status }}</span>
+          <span class="eyebrow">Tu respuesta</span>
+          <span id="status-pill" class="pill {{ guest.rsvp_status }}">{{ {"pending": "Sin responder", "yes": "Confirmado", "maybe": "Tal vez", "no": "No puedo"}.get(guest.rsvp_status, guest.rsvp_status) }}</span>
         </div>
       </div>
 
@@ -93,14 +105,14 @@
         <div class="ep-desc">{{ episode.description }}</div>
       {% endif %}
 
-      <div class="actions">
+      <div class="actions{% if guest.rsvp_status != 'pending' %} answered{% endif %}" data-current="{{ guest.rsvp_status }}">
         <button class="yes"   data-action="yes">✓ Confirmo, ahí estoy</button>
         <button class="maybe" data-action="maybe">? Tal vez, no estoy seguro</button>
         <button class="no"    data-action="no">✕ No puedo</button>
       </div>
 
       {% if episode.scheduled_at or episode.scheduled_date %}
-        <a class="ical-link" href="/rsvp/{{ guest.rsvp_token }}/calendar.ics">📅 Agregar al calendario (.ics)</a>
+        <a class="ical-link" href="/rsvp/{{ guest.rsvp_token }}/calendar.ics">📅 Agregar a mi calendario</a>
       {% endif %}
 
       <div id="feedback" class="feedback" style="display: none;"></div>
@@ -117,10 +129,15 @@
       var feedback = document.getElementById("feedback");
       var buttons = document.querySelectorAll(".actions button");
 
+      var LABELS = { pending: "Sin responder", yes: "Confirmado", maybe: "Tal vez", no: "No puedo" };
+      var actionsBox = document.querySelector(".actions");
       function setPill(status) {
         pill.className = "pill " + status;
-        pill.textContent = status;
+        pill.textContent = LABELS[status] || status;
+        buttons.forEach(function (b) { b.classList.toggle("chosen", b.getAttribute("data-action") === status); });
+        actionsBox.classList.toggle("answered", status !== "pending");
       }
+      setPill(actionsBox.getAttribute("data-current") || "pending");
 
       function showFeedback(text) {
         feedback.textContent = text;
@@ -161,9 +178,13 @@
       var when = document.getElementById("when");
       if (when) {
         var raw = when.textContent.trim();
-        var d = new Date(raw);
+        var dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+        var d = new Date(dateOnly ? raw + "T12:00" : raw);
         if (!isNaN(d.getTime())) {
-          when.textContent = d.toLocaleString();
+          var opts = { weekday: "long", day: "numeric", month: "long" };
+          if (!dateOnly) { opts.hour = "numeric"; opts.minute = "2-digit"; }
+          var txt = d.toLocaleString("es", opts);
+          when.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
         }
       }
     })();

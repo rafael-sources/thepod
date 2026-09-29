@@ -163,7 +163,7 @@ button.icon {
   font-size: 14px;
 }
 
-input[type=text], input[type=password], input[type=file], input[type=color], textarea, select {
+input[type=text], input[type=password], input[type=email], input[type=url], input[type=search], input[type=date], input[type=datetime-local], input:not([type]), input[type=file], input[type=color], textarea, select {
   width: 100%;
   background: var(--ink-sunken);
   color: var(--paper);
@@ -180,6 +180,8 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(90,139,255,0.12);
 }
 textarea { resize: vertical; min-height: 80px; }
+input[type=number] { background: var(--ink-sunken); color: var(--paper); border: 1px solid var(--ink-line); border-radius: var(--r-md); padding: 8px 10px; font-family: var(--font-ui); font-size: 14px; }
+input[type=number].ep-number-input { background: transparent; border: 0; padding: 0; font-family: var(--font-mono); font-size: 18px; border-radius: 0; }
 input[type=color] {
   width: 56px;
   height: 36px;
@@ -1977,9 +1979,10 @@ label.btn.disabled { opacity: 0.6; pointer-events: none; }
 
 .container.calendar-wide { max-width: none; width: 100%; padding: 22px 28px; overflow-y: auto; flex: 1; }
 
+.cal-month-label::first-letter { text-transform: uppercase; }
 .cal-month-label {
+  display: inline-block;
   margin: 0 14px;
-  text-transform: capitalize;
   font-size: 14px;
   letter-spacing: 0.04em;
   color: var(--paper);
@@ -2189,7 +2192,9 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 .show-notes-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .show-notes-actions button { font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border, #dee2e6); background: white; cursor: pointer; }
 .show-notes-actions button:hover { background: var(--accent-bg, #e7f1ff); }
-.publish-section { margin-top: 1.5rem; padding: 1rem; background: var(--surface-2, #f8f9fa); border-radius: 8px; border: 1px solid var(--border, #dee2e6); }
+.publish-section { margin-top: 1.5rem; padding: 1rem; background: var(--ink-raised); border-radius: 8px; border: 1px solid var(--ink-line); }
+.publish-section h4 { color: var(--paper); }
+.publish-section p, .publish-section .muted { color: var(--paper-dim); }
 .publish-section h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
 .publish-btn { padding: 8px 16px; border-radius: 6px; border: none; background: var(--accent, #0d6efd); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
 .publish-btn:hover { opacity: 0.9; }
@@ -2211,3 +2216,164 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 .dist-steps { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
 .dist-step { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
 .dist-step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent, #5a8bff); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* Escritorio: el nombre del podcast no se parte en varias líneas y las pestañas se deslizan si no caben */
+.podcast-view-wrap .page-bar h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.podcast-view-wrap .page-bar .mode-tabs { overflow-x: auto; flex: 0 1 auto; min-width: 0; scrollbar-width: none; }
+.podcast-view-wrap .page-bar .mode-tabs button { white-space: nowrap; }
+.podcast-view-wrap > div:not([class]) { padding: 20px 32px; overflow-y: auto; flex: 1; }
+.ep-meta-grid input, .ep-meta-grid select { width: 100%; min-width: 0; }
+
+/* ==========================================================================
+   Celular / iPad — el anfitrión en emergencia y los invitados
+   ========================================================================== */
+
+.m-only { display: none !important; }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .m-only { display: revert !important; }
+  .d-only { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=url],
+  input[type=datetime-local], input[type=date], textarea, select { font-size: 16px !important; }
+  button, a.btn { min-height: 40px; }
+  button.icon { min-width: 40px; min-height: 40px; }
+
+  /* Encabezado */
+  .app-header { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; gap: 10px; }
+  .app-header .brand .mark { font-size: 20px; }
+  .user-chip { gap: 6px; }
+  .user-chip .tiny { display: none; }
+  .settings-btn { min-height: 36px; }
+
+  /* Login y lista de podcasts */
+  .login-wrapper { min-height: 100dvh; padding: 20px; }
+  .login-card { width: 100%; max-width: 400px; padding: 32px 22px; }
+  .login-card button[type=submit] { padding: 14px; font-size: 16px; }
+  .container { padding: 18px 14px calc(24px + env(safe-area-inset-bottom)); }
+  .page-head { flex-wrap: wrap; gap: 10px; }
+  .podcast-list { grid-template-columns: 1fr; }
+
+  /* Vista del podcast: barra con nombre + contenido + pestañas abajo */
+  .podcast-view-wrap { height: calc(100dvh - 58px - env(safe-area-inset-top)); }
+  .podcast-view-wrap .page-bar { padding: 8px 12px; gap: 8px; }
+  .podcast-view-wrap .page-bar > button.ghost { padding: 6px 8px; white-space: nowrap; flex: none; }
+  .podcast-view-wrap .page-bar h3 { font-size: 18px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .podcast-view-wrap > :not(.page-bar):not(.pod-tabs):not(.pod-sheet-backdrop) { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+  .pod-tabs { display: grid !important; grid-template-columns: repeat(4, 1fr); flex: none; background: var(--ink-panel); border-top: 1px solid var(--ink-line); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .pod-tabs button { background: transparent; border: 0; color: var(--paper-dim); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; padding: 6px 2px; min-height: 52px; border-radius: 10px; text-transform: none; letter-spacing: 0; }
+  .pod-tabs button.on { color: var(--signal); background: rgba(90,139,255,0.1); }
+  .pod-tabs .pt-ico { font-size: 18px; line-height: 1; }
+  .pod-sheet-backdrop { display: block !important; position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.55); }
+  .pod-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--ink-panel); border-top: 1px solid var(--ink-line); border-radius: 16px 16px 0 0; padding: 8px 12px calc(14px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr 1fr; gap: 8px; animation: sheet-up 180ms ease-out; }
+  .pod-sheet-grab { grid-column: 1 / -1; width: 40px; height: 4px; border-radius: 2px; background: var(--ink-line); margin: 2px auto 6px; }
+  .pod-sheet button, .pod-sheet .pod-sheet-link { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px; border-radius: 12px; background: var(--ink-raised); border: 1px solid var(--ink-line); color: var(--paper); font-size: 15px; text-transform: none; letter-spacing: 0; text-decoration: none; }
+  .pod-sheet button.on { border-color: var(--signal); color: var(--signal); }
+  .pod-sheet span { font-size: 18px; }
+  @keyframes sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* Tablero de episodios: una columna por pantalla, deslizando de lado */
+  .kanban { padding: 12px; gap: 10px; scroll-snap-type: x mandatory; overflow-y: hidden; scroll-padding: 12px; }
+  .kanban-col { flex: 0 0 calc(100% - 44px); min-width: 0; max-width: none; scroll-snap-align: start; }
+  .kanban-col.collapsed { flex: 0 0 48px; }
+  @media (min-width: 600px) { .kanban-col { flex-basis: calc(50% - 22px); } }
+  .kanban-col-body { overflow-y: auto; }
+  .ep-card { padding: 12px 14px; }
+  .ep-card .ep-title { font-size: 16px; }
+  .ep-card .ep-card-del, .ep-card .ep-reorder { display: none; }
+  .add-btn-head { min-width: 36px; }
+
+  /* Detalle del episodio: todo en una columna */
+  .episode-detail { display: block; overflow-y: auto; }
+  .episode-detail .main { overflow: visible; padding: 14px 14px 90px; }
+  .episode-detail .side { border-left: 0; border-top: 1px solid var(--ink-line); padding: 14px 14px 100px; overflow: visible; }
+  .ep-meta-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ep-meta-grid > * { min-width: 0; }
+  .ep-meta-grid select, .ep-meta-grid input { width: 100%; min-width: 0; }
+  .ep-meta-grid > :nth-child(2) { grid-column: 1 / -1; }
+  input[type=number].ep-number-input { font-size: 18px !important; width: 48px; }
+  .podcast-view-wrap > div:not([class]) { padding: 14px; }
+  .podcast-view-wrap:has(.pod-tabs) .save-bar { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .episode-detail .section-head input[type=text] { font-size: 19px !important; }
+  .rundown-block .rb-pos { display: none; }
+  .rundown-block { grid-template-columns: auto minmax(0, 1fr) 64px 40px; grid-template-areas: "mv kind dur del" "title title title title" "notes notes notes notes"; }
+  .ep-meta-grid > :first-child { grid-column: 1 / -1; }
+  .section { padding: 16px 14px; }
+  .section .section-head { flex-wrap: wrap; row-gap: 8px; }
+  .save-bar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: flex-end; }
+  .save-bar .save-btn { min-height: 46px; padding: 0 22px; font-size: 15px; }
+
+  /* Guion por bloques */
+  .rundown-block { grid-template-columns: auto auto minmax(0, 1fr) 72px 40px; grid-template-areas: "mv pos kind dur del" "title title title title title" "notes notes notes notes notes"; row-gap: 8px; cursor: default; padding: 10px; }
+  .rundown-block .rb-move { grid-area: mv; display: inline-flex !important; gap: 4px; }
+  .rundown-block .rb-move .icon { min-width: 34px; min-height: 34px; width: 34px; height: 34px; padding: 0; font-size: 12px; }
+  .rundown-block .rb-pos { grid-area: pos; }
+  .rundown-block .rb-kind { grid-area: kind; }
+  .rundown-block .rb-title { grid-area: title; }
+  .rundown-block .rb-dur { grid-area: dur; }
+  .rundown-block .rb-notes { grid-area: notes; }
+  .rundown-block > .icon.danger { grid-area: del; }
+  .rundown-sponsor-link { margin-left: 0 !important; }
+  .rundown-sponsor-link > div { flex-wrap: wrap; }
+
+  /* Invitados */
+  .guest-row, .guest-row:nth-of-type(2) { grid-template-columns: 1fr; display: grid; }
+  .guest-card .guest-row:first-child { grid-template-columns: minmax(0, 1fr) auto 40px; }
+  .guest-card .guest-row:first-child select { grid-column: 1 / 2; grid-row: 2; }
+  .guest-card .guest-row:first-child .rsvp-badge { grid-column: 2; grid-row: 1; align-self: center; }
+  .guest-card .guest-row[style] { grid-template-columns: 1fr 1fr; }
+  .guest-invite { flex-wrap: wrap; }
+  .guest-invite a { word-break: break-all; }
+  .guest-invite .ghost { min-height: 40px; }
+  .guest-add { grid-template-columns: 1fr 1fr; }
+  .guest-add input { grid-column: 1 / -1; }
+
+  /* Formularios y editores en general */
+  .grid-2, .grid-3, .socials-grid, .editor { grid-template-columns: 1fr !important; }
+  .editor .side { border-left: 0; }
+  .link-row, .link-add { grid-template-columns: 1fr auto; }
+  .link-row > :first-child, .link-add > :first-child { grid-column: 1 / -1; }
+  .member-card { grid-template-columns: 64px 1fr; }
+  .member-card > :last-child { grid-column: 1 / -1; }
+  .landing-top { flex-wrap: wrap; }
+  .landing-preview { height: 70vh; }
+  .modal-backdrop > * { max-width: calc(100vw - 24px); max-height: calc(100dvh - 40px); overflow-y: auto; }
+  .sound-grid { grid-template-columns: 1fr; }
+
+  /* Calendario: días chicos con marca + lista del mes */
+  .container.calendar-wide { padding: 12px; }
+  .calendar-wide .section-head { gap: 6px; }
+  .calendar-wide .section-head h3 { flex-basis: 100%; }
+  .calendar-wide .section-head .spacer { display: none; }
+  .cal-month-label { min-width: 0; flex: 1; margin: 0 4px; font-size: 13px; }
+  .calendar-wide .section-head .btn.primary { min-height: 36px; display: inline-flex; align-items: center; }
+  .cal-weekdays { gap: 3px; letter-spacing: 0.05em; }
+  .cal-weekdays > div { padding: 4px 0; text-align: center; }
+  .cal-grid { gap: 3px; }
+  .cal-cell { min-height: 52px; padding: 4px 3px; gap: 2px; align-items: center; }
+  .cal-add { display: none; }
+  .cal-day-head { justify-content: center; }
+  .cal-ep { padding: 0; height: 6px; width: 70%; border-left: 0; border-radius: 3px; background: var(--signal); }
+  .cal-ep .cal-ep-time, .cal-ep .cal-ep-title { display: none; }
+  .cal-agenda { display: block !important; margin-top: 18px; }
+  .cal-agenda-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; margin-top: 8px; background: var(--ink-raised); border: 1px solid var(--ink-line); border-radius: 12px; color: var(--paper); text-transform: none; letter-spacing: 0; }
+  .ca-date { display: flex; flex-direction: column; align-items: center; min-width: 40px; }
+  .ca-date b { font-size: 20px; font-family: var(--font-display); line-height: 1; }
+  .ca-date small { font-size: 10px; color: var(--paper-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+  .ca-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .ca-title { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ca-time { font-size: 11px; color: var(--paper-dim); }
+  .ca-go { color: var(--paper-dim); font-size: 22px; }
+  .ca-empty { padding: 12px 0; }
+  .ca-hint { margin-top: 12px; font-size: 12px; }
+}
+
+/* iPad horizontal: sobra espacio, dos columnas del tablero a la vez y detalle con panel lateral */
+@media (pointer: coarse) and (min-width: 1000px) {
+  .kanban-col { flex: 0 0 calc(50% - 20px); }
+  .episode-detail { display: grid; grid-template-columns: minmax(0, 1fr) 340px; overflow: hidden; }
+  .episode-detail .main { overflow-y: auto; }
+  .episode-detail .side { overflow-y: auto; border-top: 0; border-left: 1px solid var(--ink-line); }
+  .cal-cell { min-height: 80px; }
+}

@@ -72,6 +72,11 @@ function debounce(fn, ms = 400) {
    Login
    ========================================================================== */
 
+// Celular / iPad: la misma regla que usa el CSS para el modo táctil.
+function isTouchLayout() {
+  try { return window.matchMedia("(max-width: 900px), (pointer: coarse)").matches; } catch (_) { return false; }
+}
+
 var LoginView = {
   props: { onLoggedIn: { type: Function, required: true } },
   setup(props) {
@@ -1811,6 +1816,14 @@ var RundownEditor = {
     function onDragStart(b)   { dragging.value = b.id; }
     function onDragEnd()      { dragging.value = null; }
     function onDragOver(ev)   { ev.preventDefault(); }
+    function moveBlock(b, dir) {
+      const idx = blocks.value.findIndex(x => x.id === b.id);
+      const target = blocks.value[idx + dir];
+      if (!target) return;
+      dragging.value = b.id;
+      onDrop(target);
+    }
+
     async function onDrop(target) {
       const fromId = dragging.value;
       dragging.value = null;
@@ -1858,7 +1871,7 @@ var RundownEditor = {
     }
 
     watch(() => props.episodeId, () => { load(); loadSponsors(); }, { immediate: true });
-    return {
+    return { moveBlock, 
       blocks, sponsors, error, dragging, kinds: BLOCK_KINDS,
       add, remove, save, onDragStart, onDragEnd, onDragOver, onDrop,
       totalMin, fmtMin, kindLabel, setSponsor, fmtOffset, parseOffset, sponsorCopy, sponsorLogo,
@@ -1885,7 +1898,8 @@ var RundownEditor = {
                draggable="true"
                @dragstart="onDragStart(b)" @dragend="onDragEnd"
                @dragover="onDragOver" @drop="onDrop(b)">
-            <span class="rb-handle" title="Arrastra para reordenar">⋮⋮</span>
+            <span class="rb-handle d-only" title="Arrastra para reordenar">⋮⋮</span>
+            <span class="rb-move m-only"><button class="icon" @click="moveBlock(b, -1)" :disabled="idx === 0" aria-label="Subir">▲</button><button class="icon" @click="moveBlock(b, 1)" :disabled="idx === blocks.length - 1" aria-label="Bajar">▼</button></span>
             <span class="rb-pos">#{{ idx + 1 }}</span>
             <select v-model="b.kind" @change="save(b)" class="rb-kind">
               <option v-for="k in kinds" :key="k.value" :value="k.value">{{ k.label }}</option>
@@ -2017,6 +2031,12 @@ var GuestsPanel = {
       } catch (e) { error.value = "no pude copiar al portapapeles"; }
     }
 
+    const canShare = typeof navigator !== "undefined" && !!navigator.share;
+    function shareRsvp(g) {
+      const url = g._rsvp_full_url || (window.location.origin + (g.rsvp_url || ""));
+      navigator.share({ title: "Invitación", text: `Hola ${g.name}, te invitamos al podcast. Confirma aquí:`, url }).catch(() => {});
+    }
+
     async function copyRsvp(g) {
       const url = g._rsvp_full_url || (window.location.origin + (g.rsvp_url || ""));
       if (!url) return;
@@ -2094,7 +2114,7 @@ var GuestsPanel = {
     }
 
     watch(() => props.episodeId, load, { immediate: true });
-    return {
+    return { canShare, shareRsvp, 
       guests, error, newName, newEmail, newRole,
       roles: GUEST_ROLES, rsvpLabels: RSVP_LABELS, rsvpColors: RSVP_COLORS,
       add, remove, saveGuest, copyInvite, copyRsvp, sendRsvp,
@@ -2148,6 +2168,7 @@ var GuestsPanel = {
             <button class="ghost" :disabled="g._rsvp_sending || !g.email" @click="sendRsvp(g)" style="font-size: 12px; padding: 4px 10px;">
               {{ g._rsvp_sending ? "Enviando…" : "📧 Invitar" }}
             </button>
+            <button v-if="canShare" class="ghost rsvp-share" @click="shareRsvp(g)" style="font-size: 12px; padding: 4px 10px;">📤 Compartir</button>
             <a :href="g.rsvp_url" target="_blank" rel="noopener" class="ghost" style="font-size: 12px; padding: 4px 10px; text-decoration: none;">↗ Abrir</a>
             <button class="icon" @click="copyRsvp(g)" :title="g._rsvp_copied ? 'copiado' : 'copiar link RSVP'">{{ g._rsvp_copied ? '✓' : '⧉' }}</button>
             <button class="ghost" :disabled="g._prep_sending || !g.email" @click="sendPreRecording(g)" style="font-size: 12px; padding: 4px 10px;">
@@ -3218,7 +3239,7 @@ var CalendarView = {
           <span class="mono cal-month-label">{{ monthLabel }}</span>
           <a class="btn primary" :href="'/api/podcasts/' + slug + '/calendar.ics'" download>📥 .ics</a>
         </div>
-        <p class="muted" style="margin-top: -6px; font-size: 12px;">Click en un día para crear un episodio · Click en un episodio para abrirlo.</p>
+        <p class="muted d-only" style="margin-top: -6px; font-size: 12px;">Click en un día para crear un episodio · Click en un episodio para abrirlo.</p>
 
         <div v-if="error" class="error">{{ error }}</div>
 
@@ -3250,6 +3271,19 @@ var CalendarView = {
               </div>
             </template>
           </div>
+        </div>
+
+        <div class="cal-agenda m-only">
+          <div class="eyebrow">EN ESTE MES</div>
+          <template v-for="cell in grid" :key="'ag' + cell.key">
+            <button v-for="ep in (cell.blank ? [] : cell.eps)" :key="'a' + ep.id" class="cal-agenda-item" @click="openEp(ep)">
+              <span class="ca-date"><b>{{ cell.d }}</b><small>{{ ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(cell.dateStr + 'T12:00').getDay()] }}</small></span>
+              <span class="ca-body"><span class="ca-title">{{ ep.title }}</span><span class="ca-time mono">{{ timeOf(ep) || 'sin hora' }}</span></span>
+              <span class="ca-go">›</span>
+            </button>
+          </template>
+          <div v-if="!grid.some(c => !c.blank && c.eps && c.eps.length)" class="muted ca-empty">No hay episodios programados este mes.</div>
+          <p class="muted ca-hint">Toca un día del calendario para crear un episodio en esa fecha.</p>
         </div>
 
         <transition name="toast-fade">
@@ -4403,8 +4437,20 @@ var PodcastView = {
   components: { BrandingEditor, EpisodesBoard, EpisodeDetail, LandingPanel, SoundboardLibrary, CalendarView, TemplatesPanel, SponsorsPanel, ExportsPanel, DistributionPanel },
   props: { podcast: Object, onBack: Function, onUpdated: Function },
   setup(props) {
-    const mode = ref("branding");
+    // En celular/iPad se entra directo a los episodios: es lo que se usa en una emergencia.
+    const mode = ref(isTouchLayout() ? "episodes" : "branding");
     const selectedEpId = ref(null);
+    const moreOpen = ref(false);
+    const MORE_MODES = [
+      { key: "branding", label: "Branding", ico: "🎨" },
+      { key: "sounds", label: "Sonidos", ico: "🔊" },
+      { key: "templates", label: "Plantillas", ico: "🧩" },
+      { key: "sponsors", label: "Sponsors", ico: "📢" },
+      { key: "exports", label: "Archivos", ico: "📁" },
+      { key: "distribution", label: "Distribución", ico: "📡" },
+    ];
+    function goMode(m) { mode.value = m; moreOpen.value = false; selectedEpId.value = null; }
+    const inMore = computed(() => MORE_MODES.some(m => m.key === mode.value));
 
     function openEpisode(id) { selectedEpId.value = id; mode.value = "episode-detail"; }
     function backToBoard() { selectedEpId.value = null; mode.value = "episodes"; }
@@ -4421,7 +4467,7 @@ var PodcastView = {
     onMounted(() => window.addEventListener("keydown", onEpisodeKey));
     onBeforeUnmount(() => window.removeEventListener("keydown", onEpisodeKey));
 
-    return { mode, selectedEpId, openEpisode, backToBoard };
+    return { mode, selectedEpId, openEpisode, backToBoard, moreOpen, MORE_MODES, goMode, inMore };
   },
   template: `
     <div class="podcast-view-wrap">
@@ -4429,7 +4475,7 @@ var PodcastView = {
         <button v-if="mode === 'episode-detail'" class="ghost" @click="backToBoard">← Episodios</button>
         <button v-else class="ghost" @click="onBack">← Podcasts</button>
         <h3>{{ podcast.name }}</h3>
-        <div v-if="mode !== 'episode-detail'" class="mode-tabs" style="margin-left: 10px;">
+        <div v-if="mode !== 'episode-detail'" class="mode-tabs d-only" style="margin-left: 10px;">
           <button :class="{active: mode === 'branding'}" @click="mode = 'branding'">Branding</button>
           <button :class="{active: mode === 'episodes'}" @click="mode = 'episodes'">Episodios</button>
           <button :class="{active: mode === 'calendar'}" @click="mode = 'calendar'">Calendario</button>
@@ -4442,8 +4488,8 @@ var PodcastView = {
         </div>
         <div class="spacer"></div>
         <a :href="'/api/podcasts/' + podcast.slug + '/export-bundle'" download
-           class="ghost" style="font-size:11px;padding:4px 10px;text-decoration:none;margin-right:8px;">↓ Exportar</a>
-        <span class="badge-id" :title="podcast.shared_project_id">id · {{ podcast.shared_project_id ? podcast.shared_project_id.slice(0, 8) + '…' : '—' }}</span>
+           class="ghost d-only" style="font-size:11px;padding:4px 10px;text-decoration:none;margin-right:8px;">↓ Exportar</a>
+        <span class="badge-id d-only" :title="podcast.shared_project_id">id · {{ podcast.shared_project_id ? podcast.shared_project_id.slice(0, 8) + '…' : '—' }}</span>
       </div>
 
       <BrandingEditor v-if="mode === 'branding'" :podcast="podcast" :on-updated="onUpdated" />
@@ -4456,6 +4502,20 @@ var PodcastView = {
       <ExportsPanel v-else-if="mode === 'exports'" :slug="podcast.slug" />
       <DistributionPanel v-else-if="mode === 'distribution'" :slug="podcast.slug" />
       <EpisodeDetail v-else-if="mode === 'episode-detail'" :slug="podcast.slug" :episode-id="selectedEpId" @back="backToBoard" />
+
+      <nav v-if="mode !== 'episode-detail'" class="pod-tabs m-only">
+        <button :class="{ on: mode === 'episodes' }" @click="goMode('episodes')"><span class="pt-ico">🎙</span>Episodios</button>
+        <button :class="{ on: mode === 'calendar' }" @click="goMode('calendar')"><span class="pt-ico">📅</span>Calendario</button>
+        <button :class="{ on: mode === 'landing' }" @click="goMode('landing')"><span class="pt-ico">🌐</span>Landing</button>
+        <button :class="{ on: inMore || moreOpen }" @click="moreOpen = !moreOpen"><span class="pt-ico">⋯</span>Más</button>
+      </nav>
+      <div v-if="moreOpen" class="pod-sheet-backdrop m-only" @click.self="moreOpen = false">
+        <div class="pod-sheet">
+          <div class="pod-sheet-grab"></div>
+          <button v-for="m in MORE_MODES" :key="m.key" :class="{ on: mode === m.key }" @click="goMode(m.key)"><span>{{ m.ico }}</span>{{ m.label }}</button>
+          <a class="pod-sheet-link" :href="'/api/podcasts/' + podcast.slug + '/export-bundle'" download><span>↓</span>Exportar podcast</a>
+        </div>
+      </div>
     </div>
   `,
 };
@@ -4709,20 +4769,20 @@ var App = {
       <header class="app-header">
         <div class="brand">
           <a :href="thepodUrl || '#'" class="mark" title="Ir a thePod">pre<em>Pod</em></a>
-          <span class="tag">green room · v0.1</span>
+          <span class="tag d-only">green room · v0.1</span>
         </div>
-        <div class="sibling-apps" v-if="siblingApps">
+        <div class="sibling-apps d-only" v-if="siblingApps">
           <a v-for="a in siblingApps" :key="a.key" :href="a.url" class="sibling-link" :title="'Ir a ' + a.name">
             <span class="ico" :data-app="a.key"></span>
             <span>{{ a.name }}</span>
           </a>
         </div>
-        <div class="stage-light">
+        <div class="stage-light d-only">
           <span class="dot"></span>
           <span>IN PREP</span>
         </div>
         <div class="spacer"></div>
-        <div v-if="state.currentPodcast" class="row">
+        <div v-if="state.currentPodcast" class="row d-only">
           <button class="ghost" @click="onBack">← Podcasts</button>
         </div>
         <button v-if="state.isAdmin" class="settings-btn" @click="state.showUsers = true" title="Administrar usuarios">👥</button>
