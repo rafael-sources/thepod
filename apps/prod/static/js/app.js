@@ -2006,7 +2006,7 @@ var StudioView = {
       // microphone/camera capture is possible.
       if (sessionEnded.value) {
         await podSwal.info(
-          "Esta sesión ya finalizó. Podés ver y exportar las grabaciones, pero no se puede volver a entrar al estudio.",
+          "Esta sesión ya finalizó. Puedes ver y exportar las grabaciones, pero no se puede volver a entrar al estudio.",
           "Sesión finalizada"
         );
         return;
