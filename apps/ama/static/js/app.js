@@ -736,22 +736,38 @@ var HostView = {
 var JoinView = {
   props: { eventId: [Number, String] },
   emits: ["joined"],
-  setup: function (props, ctx) {
+  setup: function (props) {
     var eventInfo = ref(null);
     var loading = ref(true);
     var displayName = ref("");
-    var photoUrl = ref("");
+    var questions = ref(["", "", ""]);
     var error = ref("");
     var busy = ref(false);
     var submitted = ref(false);
     var participantData = ref(null);
+    var KEY = "amapod.participante." + props.eventId;
 
     async function loadEventInfo() {
       loading.value = true;
+      // ¿Ya estabas anotado desde este teléfono? (se recarga la página, se cierra Safari…)
+      try {
+        var saved = JSON.parse(localStorage.getItem(KEY) || "null");
+        if (saved && saved.access_token) {
+          var st = await api("/api/events/" + props.eventId + "/my-status?token=" + saved.access_token);
+          if (st && ["pending", "approved", "in_queue", "on_air"].indexOf(st.status) !== -1) {
+            st.access_token = saved.access_token;
+            participantData.value = st;
+            submitted.value = true;
+            loading.value = false;
+            return;
+          }
+          localStorage.removeItem(KEY);
+        }
+      } catch (_) { try { localStorage.removeItem(KEY); } catch (__) {} }
       try {
         eventInfo.value = await api("/api/events/" + props.eventId + "/public-info");
       } catch (e) {
-        error.value = "Evento no encontrado";
+        error.value = "No encontramos este evento. Revisa el link.";
       }
       loading.value = false;
     }
@@ -763,12 +779,23 @@ var JoinView = {
       try {
         var result = await api("/api/events/" + props.eventId + "/request-access", {
           method: "POST",
-          body: { name: displayName.value.trim(), photo_url: photoUrl.value || null },
+          body: { name: displayName.value.trim() },
         });
+        var qs = questions.value.map(function (q) { return q.trim(); }).filter(Boolean);
+        if (qs.length) {
+          try {
+            await api("/api/events/" + props.eventId + "/my-questions?token=" + result.access_token, { method: "PUT", body: { questions: qs } });
+          } catch (_) {}
+        }
+        result.display_name = displayName.value.trim();
+        result.questions = qs;
+        try { localStorage.setItem(KEY, JSON.stringify({ id: result.id, access_token: result.access_token })); } catch (_) {}
         participantData.value = result;
         submitted.value = true;
       } catch (e) {
-        error.value = e.message;
+        error.value = e.status === 409
+          ? "Ya hay alguien anotado con ese nombre. Si eres tú, abre el link desde el mismo teléfono; si no, agrega tu apellido."
+          : e.message;
       }
       busy.value = false;
     }
@@ -776,31 +803,48 @@ var JoinView = {
     onMounted(loadEventInfo);
 
     return {
-      eventInfo: eventInfo, loading: loading, displayName: displayName,
-      photoUrl: photoUrl, error: error, busy: busy, submitted: submitted,
+      eventInfo: eventInfo, loading: loading, displayName: displayName, questions: questions,
+      error: error, busy: busy, submitted: submitted,
       participantData: participantData, requestAccess: requestAccess,
     };
   },
-  template: '\
-<div class="join-view" v-if="!submitted">\
-  <div v-if="loading" class="loading">Cargando evento...</div>\
-  <div v-else-if="error && !eventInfo" class="join-card"><p class="error-text">{{ error }}</p></div>\
-  <div v-else class="join-card">\
-    <h1 class="brand" style="margin-bottom:4px">ama<span class="brand-accent">Pod</span></h1>\
-    <h2 style="margin:0 0 4px">{{ eventInfo.title }}</h2>\
-    <p class="event-desc" v-if="eventInfo.description">{{ eventInfo.description }}</p>\
-    <p class="muted" style="margin-bottom:16px">Evento de {{ eventInfo.host_username }} &middot; {{ eventInfo.status === "active" ? "EN VIVO" : eventInfo.status }}</p>\
-    <form @submit.prevent="requestAccess">\
-      <label>Tu nombre</label>\
-      <input type="text" v-model="displayName" placeholder="Nombre para mostrar" autofocus required>\
-      <label style="margin-top:8px">Foto (opcional)</label>\
-      <input type="url" v-model="photoUrl" placeholder="URL de tu foto">\
-      <button class="primary" :disabled="busy || !displayName.trim()" type="submit" style="margin-top:12px">{{ busy ? "Enviando..." : "Solicitar acceso" }}</button>\
-      <p v-if="error" class="error-text">{{ error }}</p>\
-    </form>\
-  </div>\
-</div>\
-<participant-view v-else :participant-data="participantData" :event-id="eventId" />'
+  template: `
+<div class="join-view ama-public" v-if="!submitted">
+  <div v-if="loading" class="ama-loading"><div class="ama-spinner"></div></div>
+  <div v-else-if="error && !eventInfo" class="join-card"><p class="error-text">{{ error }}</p></div>
+  <div v-else class="join-card">
+    <div class="ama-brand">ama<span class="brand-accent">Pod</span>
+      <span v-if="eventInfo.status === 'active'" class="ama-live">EN VIVO</span>
+    </div>
+    <h2 class="ama-title">{{ eventInfo.title }}</h2>
+    <p class="event-desc" v-if="eventInfo.description">{{ eventInfo.description }}</p>
+    <template v-if="eventInfo.status === 'finished'">
+      <div class="ama-state"><div class="ama-state-icon">⏹</div><p class="ama-state-title">Este evento ya terminó</p></div>
+    </template>
+    <template v-else>
+      <ol class="ama-steps">
+        <li><span>1</span>Anótate con tu nombre y tu pregunta</li>
+        <li><span>2</span>Espera tu turno en esta página</li>
+        <li><span>3</span>Sales al aire con tu cámara</li>
+      </ol>
+      <form @submit.prevent="requestAccess">
+        <label>Tu nombre</label>
+        <input type="text" v-model="displayName" placeholder="Cómo quieres aparecer" autocomplete="name" required>
+        <label style="margin-top:6px">Tu pregunta</label>
+        <textarea v-model="questions[0]" rows="2" placeholder="Escribe lo que quieres preguntar"></textarea>
+        <details class="ama-more">
+          <summary>Agregar otra pregunta</summary>
+          <textarea v-model="questions[1]" rows="2" placeholder="Pregunta 2 (opcional)"></textarea>
+          <textarea v-model="questions[2]" rows="2" placeholder="Pregunta 3 (opcional)"></textarea>
+        </details>
+        <button class="primary ama-go" :disabled="busy || !displayName.trim()" type="submit">{{ busy ? "Enviando…" : "Anotarme para preguntar" }}</button>
+        <p v-if="error" class="error-text">{{ error }}</p>
+      </form>
+      <a class="ama-alt" :href="'/watch/' + eventId">Solo quiero mirar →</a>
+    </template>
+  </div>
+</div>
+<participant-view v-else :participant-data="participantData" :event-id="eventId" />`
 };
 
 // ── ParticipantView ──────────────────────────────────────────────────
@@ -811,61 +855,49 @@ var ParticipantView = {
     var pdata = ref(props.participantData);
     var room = ref(null);
     var connected = ref(false);
-    var lkToken = ref(null);
     var statusPoll = ref(null);
     var isCensored = ref(false);
     var waitingForTap = ref(false);
     var lkError = ref("");
+    var KEY = "amapod.participante." + props.eventId;
 
-    var statusLabel = computed(function () {
-      if (!pdata.value) return "";
-      switch (pdata.value.status) {
-        case "pending": return "Tu solicitud fue enviada. Esperando aprobacion...";
-        case "approved": case "in_queue": return "Estas en la cola. Posicion aproximada: " + (pdata.value.approximate_position || "en la cola");
-        case "on_air": return "EN VIVO";
-        case "done": return "Gracias por participar";
-        case "rejected": return "Tu solicitud no fue aprobada";
-        case "left": return "Has salido del evento";
-        default: return pdata.value.status;
-      }
+    var state = computed(function () {
+      if (!pdata.value) return "pending";
+      var s = pdata.value.status;
+      if (s === "approved") return "in_queue";
+      return s;
     });
-
-    var showVideo = computed(function () {
-      return pdata.value && pdata.value.status === "on_air";
-    });
-
-    var showPreconnect = computed(function () {
-      return pdata.value && pdata.value.is_preconnected && pdata.value.status === "in_queue";
-    });
-
-    var canAskQuestions = computed(function () {
-      return pdata.value && (pdata.value.status === "pending" || pdata.value.status === "in_queue" || pdata.value.status === "approved");
-    });
+    var showVideo = computed(function () { return state.value === "on_air"; });
+    var nearTurn = computed(function () { return state.value === "in_queue" && !!pdata.value.is_preconnected; });
+    var canAskQuestions = computed(function () { return ["pending", "in_queue"].indexOf(state.value) !== -1; });
 
     var myQuestions = ref(["", "", ""]);
+    (function () {
+      var qs = (props.participantData && props.participantData.questions) || [];
+      for (var i = 0; i < 3; i++) myQuestions.value[i] = qs[i] || "";
+    })();
     var questionsSaved = ref(false);
+    var editing = ref(false);
 
     async function saveQuestions() {
       if (!pdata.value || !pdata.value.access_token) return;
       var qs = myQuestions.value.filter(function (q) { return q.trim(); });
       try {
-        await api("/api/events/" + props.eventId + "/my-questions?token=" + pdata.value.access_token, {
-          method: "PUT",
-          body: { questions: qs },
-        });
+        await api("/api/events/" + props.eventId + "/my-questions?token=" + pdata.value.access_token, { method: "PUT", body: { questions: qs } });
         questionsSaved.value = true;
+        editing.value = false;
         setTimeout(function () { questionsSaved.value = false; }, 2000);
       } catch (_) {}
     }
 
-    watch(function () { return props.participantData; }, function (v) {
-      if (v) {
-        if (!v.access_token && pdata.value && pdata.value.access_token) {
-          v.access_token = pdata.value.access_token;
-        }
-        pdata.value = v;
-      }
-    }, { deep: true });
+    // Pantalla encendida mientras esperas o estás al aire
+    var _wake = null;
+    async function keepAwake() {
+      try { if ("wakeLock" in navigator && !_wake) { _wake = await navigator.wakeLock.request("screen"); _wake.addEventListener("release", function () { _wake = null; }); } } catch (_) {}
+    }
+    function releaseAwake() { try { if (_wake) _wake.release(); } catch (_) {} _wake = null; }
+    function onVisible() { if (document.visibilityState === "visible" && ["pending", "in_queue", "on_air"].indexOf(state.value) !== -1) { keepAwake(); pollStatus(); } }
+    document.addEventListener("visibilitychange", onVisible);
 
     async function pollStatus() {
       if (!pdata.value || !pdata.value.access_token) return;
@@ -876,12 +908,16 @@ var ParticipantView = {
         s.access_token = savedToken;
         pdata.value = s;
         isCensored.value = !!s.is_censored;
-
-        if (s.is_preconnected && !connected.value && s.status === "in_queue") {
-          getTokenAndConnect(false);
-        }
+        if (!editing.value && s.questions) for (var i = 0; i < 3; i++) myQuestions.value[i] = s.questions[i] || "";
+        if (s.is_preconnected && !connected.value && s.status === "in_queue") getTokenAndConnect(false);
         if (s.status === "on_air" && oldStatus !== "on_air") {
           waitingForTap.value = true;
+          try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (_) {}
+        }
+        if (["done", "rejected", "left"].indexOf(s.status) !== -1) {
+          try { localStorage.removeItem(KEY); } catch (_) {}
+          releaseAwake();
+          stopPolling();
         }
       } catch (_) {}
     }
@@ -890,85 +926,49 @@ var ParticipantView = {
       if (!pdata.value) return;
       try {
         var tokenData = await api("/api/events/" + props.eventId + "/participant-token/" + pdata.value.id + "?token=" + pdata.value.access_token);
-        lkToken.value = tokenData.token;
         var wsUrl = await getLivekitWsUrl();
         var newRoom = new LK.Room({ adaptiveStream: true, dynacast: true });
-
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           if (participant.identity.startsWith("host_")) {
             if (track.kind === LK.Track.Kind.Video) {
-              nextTick(function () {
-                var el = document.getElementById("pv-host-video");
-                if (el) track.attach(el);
-              });
+              nextTick(function () { var el = document.getElementById("pv-host-video"); if (el) track.attach(el); });
             } else if (track.kind === LK.Track.Kind.Audio) {
-              var a = track.attach();
-              document.body.appendChild(a);
+              document.body.appendChild(track.attach());
             }
           }
         });
-
-        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) {
-          track.detach().forEach(function (el) { el.remove(); });
-        });
-
+        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) { track.detach().forEach(function (el) { el.remove(); }); });
         newRoom.on(LK.RoomEvent.DataReceived, function (payload) {
           var msg = _decodeMsg(payload);
           if (!msg) return;
-          if (msg.type === "censor" && msg.participant_id === pdata.value.id) {
-            isCensored.value = true;
-          }
-          if (msg.type === "uncensor" && msg.participant_id === pdata.value.id) {
-            isCensored.value = false;
-            enablePublish();
-          }
-          if (msg.type === "event_ended") {
-            pdata.value.status = "left";
-            if (newRoom) newRoom.disconnect();
-          }
+          if (msg.type === "censor" && msg.participant_id === pdata.value.id) isCensored.value = true;
+          if (msg.type === "uncensor" && msg.participant_id === pdata.value.id) { isCensored.value = false; enablePublish(); }
+          if (msg.type === "event_ended") { pdata.value.status = "left"; if (newRoom) newRoom.disconnect(); }
         });
-
-        newRoom.on(LK.RoomEvent.Disconnected, function () {
-          connected.value = false;
-        });
-
+        newRoom.on(LK.RoomEvent.Disconnected, function () { connected.value = false; });
         await newRoom.connect(wsUrl, tokenData.token);
         room.value = newRoom;
         connected.value = true;
-
-        if (canPublish) {
-          await enablePublish();
-        }
+        if (canPublish) await enablePublish();
       } catch (e) {
-        lkError.value = "Error al conectar: " + e.message;
-        window.toast({ type: "error", text: lkError.value });
+        lkError.value = "No se pudo conectar: " + e.message;
       }
     }
 
     async function enablePublish() {
-      if (!room.value) {
-        lkError.value = "Sin conexion a la sala";
-        return;
-      }
+      if (!room.value) { lkError.value = "Sin conexión con la sala"; return; }
       try {
-        // Single getUserMedia for both audio+video avoids iOS Safari
-        // invalidating the first track when the second is requested.
+        // Un solo pedido de cámara+micrófono: iOS Safari invalida el primero si se piden por separado.
         var tracks = await LK.createLocalTracks({ audio: true, video: true });
-        for (var i = 0; i < tracks.length; i++) {
-          await room.value.localParticipant.publishTrack(tracks[i]);
-        }
+        for (var i = 0; i < tracks.length; i++) await room.value.localParticipant.publishTrack(tracks[i]);
         nextTick(function () {
           for (var j = 0; j < tracks.length; j++) {
-            if (tracks[j].kind === LK.Track.Kind.Video) {
-              var el = document.getElementById("pv-local-video");
-              if (el) tracks[j].attach(el);
-            }
+            if (tracks[j].kind === LK.Track.Kind.Video) { var el = document.getElementById("pv-local-video"); if (el) tracks[j].attach(el); }
           }
           attachHostTracks();
         });
       } catch (e) {
-        lkError.value = "No se pudo activar camara/microfono: " + e.message;
-        window.toast({ type: "error", text: lkError.value });
+        lkError.value = "No se pudo activar tu cámara o micrófono. Revisa los permisos del navegador y toca Reintentar.";
       }
     }
 
@@ -978,13 +978,8 @@ var ParticipantView = {
         if (!p.identity.startsWith("host_")) return;
         p.trackPublications.forEach(function (pub) {
           if (!pub.track) return;
-          if (pub.track.kind === LK.Track.Kind.Video) {
-            var el = document.getElementById("pv-host-video");
-            if (el) pub.track.attach(el);
-          } else if (pub.track.kind === LK.Track.Kind.Audio) {
-            var a = pub.track.attach();
-            document.body.appendChild(a);
-          }
+          if (pub.track.kind === LK.Track.Kind.Video) { var el = document.getElementById("pv-host-video"); if (el) pub.track.attach(el); }
+          else if (pub.track.kind === LK.Track.Kind.Audio) document.body.appendChild(pub.track.attach());
         });
       });
     }
@@ -992,98 +987,136 @@ var ParticipantView = {
     async function goLive() {
       waitingForTap.value = false;
       lkError.value = "";
-      // Always reconnect fresh from the user-tap context.
-      // Preconnect may have gone stale (iOS suspends idle WebSockets).
-      if (room.value) {
-        try { room.value.disconnect(); } catch (_) {}
-        room.value = null;
-        connected.value = false;
-      }
+      keepAwake();
+      // Siempre reconectar desde el toque: iOS suspende las conexiones inactivas.
+      if (room.value) { try { room.value.disconnect(); } catch (_) {} room.value = null; connected.value = false; }
       await getTokenAndConnect(true);
     }
 
-    function leaveEvent() {
+    async function leaveEvent() {
+      var wasOnAir = state.value === "on_air";
+      if (!wasOnAir && !confirm("¿Seguro que quieres salir de la cola? Perderás tu lugar.")) return;
       if (room.value) { room.value.disconnect(); room.value = null; }
       connected.value = false;
       stopPolling();
-      pdata.value.status = "left";
+      try { await api("/api/events/" + props.eventId + "/leave?token=" + pdata.value.access_token, { method: "POST" }); } catch (_) {}
+      try { localStorage.removeItem(KEY); } catch (_) {}
+      releaseAwake();
+      pdata.value = Object.assign({}, pdata.value, { status: wasOnAir ? "done" : "left" });
     }
 
-    function startPoll() {
-      statusPoll.value = setInterval(pollStatus, 3000);
-    }
-
-    function stopPolling() {
-      if (statusPoll.value) { clearInterval(statusPoll.value); statusPoll.value = null; }
-    }
+    function startPoll() { pollStatus(); statusPoll.value = setInterval(pollStatus, 3000); keepAwake(); }
+    function stopPolling() { if (statusPoll.value) { clearInterval(statusPoll.value); statusPoll.value = null; } }
 
     onMounted(startPoll);
     onBeforeUnmount(function () {
       stopPolling();
+      releaseAwake();
+      document.removeEventListener("visibilitychange", onVisible);
       if (room.value) { room.value.disconnect(); room.value = null; }
     });
 
     return {
-      pdata: pdata, connected: connected, statusLabel: statusLabel,
-      showVideo: showVideo, showPreconnect: showPreconnect, isCensored: isCensored,
-      waitingForTap: waitingForTap, goLive: goLive, leaveEvent: leaveEvent, lkError: lkError,
-      canAskQuestions: canAskQuestions, myQuestions: myQuestions, saveQuestions: saveQuestions, questionsSaved: questionsSaved,
+      pdata: pdata, state: state, connected: connected, showVideo: showVideo, nearTurn: nearTurn,
+      isCensored: isCensored, waitingForTap: waitingForTap, goLive: goLive, leaveEvent: leaveEvent, lkError: lkError,
+      canAskQuestions: canAskQuestions, myQuestions: myQuestions, saveQuestions: saveQuestions,
+      questionsSaved: questionsSaved, editing: editing,
     };
   },
-  template: '\
-<div class="participant-view">\
-  <div v-if="waitingForTap" class="participant-status" style="text-align:center">\
-    <h1 class="brand" style="margin-bottom:16px">ama<span class="brand-accent">Pod</span></h1>\
-    <h2>{{ pdata && pdata.display_name }}</h2>\
-    <p style="margin-bottom:20px">El host te puso al aire</p>\
-    <button class="primary" @click="goLive" style="font-size:18px;padding:14px 32px">Entrar en vivo</button>\
-    <p class="muted" style="margin-top:12px;font-size:13px">Se activara tu camara y microfono</p>\
-  </div>\
-  <div v-else-if="showVideo" style="width:100%;max-width:900px">\
-    <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">\
-      <div class="video-card split">\
-        <video id="pv-host-video" autoplay muted playsinline></video>\
-        <div class="video-label">Host</div>\
-      </div>\
-      <div class="video-card split" style="position:relative">\
-        <video id="pv-local-video" autoplay muted playsinline style="transform:scaleX(-1)"></video>\
-        <div v-if="isCensored" class="censor-overlay">Tu audio y video fueron pausados</div>\
-        <div class="video-label">Tu</div>\
-      </div>\
-    </div>\
-    <div v-if="lkError" style="text-align:center;margin-top:12px;padding:10px;background:#fee;border-radius:8px;color:#c00;font-size:14px">{{ lkError }}</div>\
-    <div style="text-align:center;margin-top:12px">\
-      <span class="on-air-badge">EN VIVO</span>\
-      <button class="primary" @click="goLive" style="margin-left:12px" v-if="lkError">Reintentar</button>\
-      <button class="danger" @click="leaveEvent" style="margin-left:12px">Abandonar</button>\
-    </div>\
-  </div>\
-  <div v-else class="participant-status">\
-    <h1 class="brand" style="margin-bottom:16px">ama<span class="brand-accent">Pod</span></h1>\
-    <h2>{{ pdata && pdata.display_name }}</h2>\
-    <p>{{ statusLabel }}</p>\
-    <div v-if="pdata && pdata.status === \'pending\'" style="margin-top:16px">\
-      <div class="muted">Esperando que el host apruebe tu solicitud...</div>\
-    </div>\
-    <div v-if="showPreconnect" style="margin-top:12px">\
-      <div class="muted">Pre-conectado. Tu turno esta cerca.</div>\
-    </div>\
-    <div v-if="canAskQuestions" style="margin-top:20px;width:100%;max-width:360px">\
-      <h4 style="margin:0 0 8px;font-size:14px">Tus preguntas <span class="muted" style="font-weight:normal">(opcional, max 3)</span></h4>\
-      <input type="text" v-model="myQuestions[0]" placeholder="Pregunta 1" style="margin-bottom:6px;width:100%;box-sizing:border-box">\
-      <input type="text" v-model="myQuestions[1]" placeholder="Pregunta 2" style="margin-bottom:6px;width:100%;box-sizing:border-box">\
-      <input type="text" v-model="myQuestions[2]" placeholder="Pregunta 3" style="margin-bottom:8px;width:100%;box-sizing:border-box">\
-      <button class="primary" @click="saveQuestions" style="font-size:13px;padding:6px 16px">Guardar preguntas</button>\
-      <span v-if="questionsSaved" style="color:var(--signal-cool);margin-left:8px;font-size:13px">&#10003; Guardado</span>\
-    </div>\
-    <div v-if="pdata && (pdata.status === \'done\' || pdata.status === \'left\' || pdata.status === \'rejected\')" style="margin-top:16px">\
-      <div class="muted">Puedes cerrar esta ventana.</div>\
-    </div>\
-    <div v-if="pdata && (pdata.status === \'in_queue\' || pdata.status === \'pending\')" style="margin-top:16px">\
-      <button class="ghost" @click="leaveEvent">Abandonar la cola</button>\
-    </div>\
-  </div>\
-</div>'
+  template: `
+<div class="participant-view ama-public" :class="{ 'is-live': showVideo }">
+  <!-- Te toca -->
+  <div v-if="waitingForTap" class="ama-call">
+    <div class="ama-call-ring">🎙</div>
+    <h2>¡Te toca, {{ pdata && pdata.display_name }}!</h2>
+    <p>El anfitrión te dio la palabra.</p>
+    <button class="primary ama-call-btn" @click="goLive">Salir al aire</button>
+    <p class="muted">Se activan tu cámara y tu micrófono.</p>
+  </div>
+
+  <!-- Al aire -->
+  <div v-else-if="showVideo" class="ama-onair">
+    <div class="ama-onair-top"><span class="on-air-badge">EN VIVO</span><span class="muted">{{ pdata && pdata.display_name }}</span></div>
+    <div class="ama-onair-stage">
+      <div class="video-card ama-host-card">
+        <video id="pv-host-video" autoplay playsinline muted></video>
+        <div class="video-label">Anfitrión</div>
+      </div>
+      <div class="video-card ama-self-card">
+        <video id="pv-local-video" autoplay muted playsinline style="transform:scaleX(-1)"></video>
+        <div v-if="isCensored" class="censor-overlay">El anfitrión pausó tu cámara y micrófono</div>
+        <div class="video-label">Tú</div>
+      </div>
+    </div>
+    <div v-if="lkError" class="ama-error">{{ lkError }}</div>
+    <div class="ama-onair-actions">
+      <button class="primary" @click="goLive" v-if="lkError">Reintentar</button>
+      <button class="ghost ama-end" @click="leaveEvent">Terminar mi turno</button>
+    </div>
+  </div>
+
+  <!-- Esperando, en la cola, fin -->
+  <div v-else class="participant-status ama-wait">
+    <div class="ama-brand">ama<span class="brand-accent">Pod</span></div>
+    <template v-if="state === 'pending'">
+      <div class="ama-state-icon ama-pulse">⏳</div>
+      <h2>Listo, {{ pdata && pdata.display_name }}</h2>
+      <p class="ama-lead">Tu solicitud llegó. El anfitrión la está revisando.</p>
+    </template>
+    <template v-else-if="state === 'in_queue' && nearTurn">
+      <div class="ama-state-icon ama-pulse">🎧</div>
+      <h2>¡Ya casi te toca!</h2>
+      <p class="ama-lead">Estás entre los próximos. Ten a mano tus audífonos y quédate en esta página.</p>
+    </template>
+    <template v-else-if="state === 'in_queue'">
+      <div class="ama-state-icon">🙋</div>
+      <h2>Estás en la cola</h2>
+      <p class="ama-lead">Tu lugar: {{ (pdata && pdata.approximate_position) || "en la cola" }}. Te avisamos aquí cuando te toque.</p>
+    </template>
+    <template v-else-if="state === 'done'">
+      <div class="ama-state-icon">✓</div>
+      <h2>¡Gracias por participar!</h2>
+      <p class="ama-lead">Ya puedes cerrar esta página.</p>
+    </template>
+    <template v-else-if="state === 'rejected'">
+      <div class="ama-state-icon">·</div>
+      <h2>Esta vez no alcanzó</h2>
+      <p class="ama-lead">El anfitrión no pudo tomar tu pregunta. Puedes seguir mirando el evento.</p>
+    </template>
+    <template v-else>
+      <div class="ama-state-icon">·</div>
+      <h2>Saliste de la cola</h2>
+      <p class="ama-lead">Si quieres volver a preguntar, abre el link otra vez.</p>
+    </template>
+
+    <div v-if="canAskQuestions" class="ama-questions">
+      <div class="ama-q-head">
+        <span>Tus preguntas</span>
+        <button v-if="!editing" class="ghost ama-q-edit" @click="editing = true">Editar</button>
+      </div>
+      <template v-if="!editing">
+        <ol v-if="myQuestions.some(q => q.trim())" class="ama-q-list"><li v-for="(q, i) in myQuestions.filter(q => q.trim())" :key="i">{{ q }}</li></ol>
+        <p v-else class="muted" style="margin:0">Todavía no escribiste tu pregunta. Ayuda al anfitrión a elegir: toca Editar.</p>
+        <span v-if="questionsSaved" class="ama-saved">✓ Guardado</span>
+      </template>
+      <template v-else>
+        <textarea v-model="myQuestions[0]" rows="2" placeholder="Pregunta 1"></textarea>
+        <textarea v-model="myQuestions[1]" rows="2" placeholder="Pregunta 2 (opcional)"></textarea>
+        <textarea v-model="myQuestions[2]" rows="2" placeholder="Pregunta 3 (opcional)"></textarea>
+        <button class="primary" @click="saveQuestions">Guardar</button>
+      </template>
+    </div>
+
+    <ul v-if="canAskQuestions" class="ama-tips">
+      <li>🎧 Con audífonos se escucha mejor y no hay eco.</li>
+      <li>📱 No cierres esta página: aquí te avisamos cuando te toque.</li>
+    </ul>
+    <div class="ama-wait-actions">
+      <a class="ghost ama-watch" :href="'/watch/' + eventId" target="_blank">Ver el evento en vivo</a>
+      <button v-if="canAskQuestions" class="ghost ama-leave" @click="leaveEvent">Salir de la cola</button>
+    </div>
+  </div>
+</div>`
 };
 
 // ── EmbedHostView ────────────────────────────────────────────────────
@@ -1349,6 +1382,10 @@ var SpectatorView = {
     var likeBurst = ref([]);
     var _burstId = 0;
     var pollTimer = ref(null);
+    var waitTimer = null;
+    var tiles = ref([]);            // [{ id, name }] quién tiene video
+    var needsAudioTap = ref(false);
+    var _tracks = {};
 
     async function loadEvent() {
       loading.value = true;
@@ -1356,13 +1393,38 @@ var SpectatorView = {
         eventInfo.value = await api("/api/events/" + props.eventId + "/public-info");
         likeCount.value = eventInfo.value.like_count || 0;
         spectatorCount.value = eventInfo.value.spectator_count || 0;
-        if (eventInfo.value.status === "active") {
-          await connectToRoom();
-        }
+        if (eventInfo.value.status === "active") await connectToRoom();
+        else if (eventInfo.value.status === "created") waitForStart();
       } catch (e) {
-        error.value = "Evento no encontrado";
+        error.value = "No encontramos este evento. Revisa el link.";
       }
       loading.value = false;
+    }
+
+    // Si todavía no empieza, la página se conecta sola cuando empiece.
+    function waitForStart() {
+      if (waitTimer) return;
+      waitTimer = setInterval(async function () {
+        try {
+          var info = await api("/api/events/" + props.eventId + "/public-info");
+          eventInfo.value = info;
+          if (info.status === "active") { clearInterval(waitTimer); waitTimer = null; await connectToRoom(); }
+          if (info.status === "finished") { clearInterval(waitTimer); waitTimer = null; }
+        } catch (_) {}
+      }, 5000);
+    }
+
+    function mountTile(id) {
+      nextTick(function () {
+        var host = document.querySelector('[data-spec-id="' + id + '"]');
+        var t = _tracks[id];
+        if (host && t && !host.querySelector("video")) {
+          var el = t.attach();
+          el.setAttribute("playsinline", "");
+          el.muted = true;
+          host.appendChild(el);
+        }
+      });
     }
 
     async function connectToRoom() {
@@ -1370,43 +1432,46 @@ var SpectatorView = {
         var tokenData = await api("/api/events/" + props.eventId + "/spectator-token", { method: "POST" });
         var wsUrl = await getLivekitWsUrl();
         var newRoom = new LK.Room({ adaptiveStream: true, dynacast: true });
-
-        newRoom.on(LK.RoomEvent.TrackSubscribed, function (track) {
+        newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
+          var id = participant.identity;
           if (track.kind === LK.Track.Kind.Video) {
-            nextTick(function () {
-              var el = document.getElementById("spec-video");
-              if (el) track.attach(el);
-            });
+            _tracks[id] = track;
+            var name = id.startsWith("host_") ? "Anfitrión" : (participant.name || "Invitado");
+            tiles.value = tiles.value.filter(function (t) { return t.id !== id; })
+              .concat([{ id: id, name: name, host: id.startsWith("host_") }])
+              .sort(function (a, b) { return (b.host ? 1 : 0) - (a.host ? 1 : 0); });
+            mountTile(id);
           } else if (track.kind === LK.Track.Kind.Audio) {
-            var a = track.attach();
-            document.body.appendChild(a);
+            document.body.appendChild(track.attach());
           }
         });
-
-        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track) {
+        newRoom.on(LK.RoomEvent.TrackUnsubscribed, function (track, pub, participant) {
           track.detach().forEach(function (el) { el.remove(); });
+          if (track.kind === LK.Track.Kind.Video) {
+            delete _tracks[participant.identity];
+            tiles.value = tiles.value.filter(function (t) { return t.id !== participant.identity; });
+          }
         });
-
+        newRoom.on(LK.RoomEvent.AudioPlaybackStatusChanged, function () { needsAudioTap.value = !newRoom.canPlaybackAudio; });
         newRoom.on(LK.RoomEvent.DataReceived, function (payload) {
           var msg = _decodeMsg(payload);
-          if (msg && msg.type === "event_ended") {
-            eventInfo.value.status = "finished";
-            if (newRoom) newRoom.disconnect();
-          }
+          if (msg && msg.type === "event_ended") { eventInfo.value.status = "finished"; if (newRoom) newRoom.disconnect(); }
         });
-
-        newRoom.on(LK.RoomEvent.Disconnected, function () {
-          connected.value = false;
-        });
-
+        newRoom.on(LK.RoomEvent.Disconnected, function () { connected.value = false; });
         await newRoom.connect(wsUrl, tokenData.token);
         room.value = newRoom;
         connected.value = true;
-
+        needsAudioTap.value = !newRoom.canPlaybackAudio;
         pollTimer.value = setInterval(pollLikes, 5000);
       } catch (e) {
-        error.value = "Error al conectar: " + e.message;
+        error.value = "No se pudo conectar al evento. Revisa tu conexión y recarga la página.";
       }
+    }
+
+    async function enableAudio() {
+      try { if (room.value) await room.value.startAudio(); } catch (_) {}
+      document.querySelectorAll("audio").forEach(function (a) { try { a.play(); } catch (_) {} });
+      needsAudioTap.value = false;
     }
 
     async function pollLikes() {
@@ -1425,14 +1490,9 @@ var SpectatorView = {
 
     async function sendLike() {
       var id = ++_burstId;
-      likeBurst.value.push({ id: id, x: 20 + Math.random() * 60 });
-      setTimeout(function () {
-        likeBurst.value = likeBurst.value.filter(function (b) { return b.id !== id; });
-      }, 1200);
-      try {
-        var res = await api("/api/events/" + props.eventId + "/like", { method: "POST" });
-        likeCount.value = res.like_count;
-      } catch (_) {}
+      likeBurst.value.push({ id: id, x: 10 + Math.random() * 30 });
+      setTimeout(function () { likeBurst.value = likeBurst.value.filter(function (b) { return b.id !== id; }); }, 1200);
+      try { var res = await api("/api/events/" + props.eventId + "/like", { method: "POST" }); likeCount.value = res.like_count; } catch (_) {}
     }
 
     function leave() {
@@ -1445,43 +1505,59 @@ var SpectatorView = {
     onMounted(loadEvent);
     onBeforeUnmount(function () {
       if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null; }
+      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
       if (room.value) { room.value.disconnect(); room.value = null; }
     });
 
     return {
-      eventInfo: eventInfo, loading: loading, error: error,
+      eventInfo: eventInfo, loading: loading, error: error, eventId: props.eventId,
       connected: connected, likeCount: likeCount, spectatorCount: spectatorCount,
       likeBurst: likeBurst, sendLike: sendLike, leave: leave,
+      tiles: tiles, needsAudioTap: needsAudioTap, enableAudio: enableAudio,
     };
   },
-  template: '\
-<div class="spectator-view">\
-  <div v-if="loading" class="loading" style="padding:40px">Cargando...</div>\
-  <div v-else-if="error && !eventInfo" class="participant-status"><p class="error-text">{{ error }}</p></div>\
-  <div v-else-if="eventInfo && eventInfo.status !== \'active\' && !connected" class="participant-status" style="text-align:center">\
-    <h1 class="brand" style="margin-bottom:16px">ama<span class="brand-accent">Pod</span></h1>\
-    <h2>{{ eventInfo.title }}</h2>\
-    <p class="muted">{{ eventInfo.status === "finished" ? "Este evento ya finalizo" : "El evento aun no comienza" }}</p>\
-  </div>\
-  <template v-else>\
-    <div class="spec-video-wrap" @click="sendLike">\
-      <video id="spec-video" autoplay muted playsinline></video>\
-      <div class="spec-overlay-top">\
-        <span class="brand" style="font-size:14px">ama<span class="brand-accent">Pod</span></span>\
-        <span class="spec-badge">EN VIVO</span>\
-        <span class="spec-viewers">&#128065; {{ spectatorCount }}</span>\
-      </div>\
-      <div class="spec-overlay-bottom">\
-        <h3 style="margin:0;font-size:15px">{{ eventInfo.title }}</h3>\
-      </div>\
-      <div class="spec-like-counter">&#10084; {{ likeCount }}</div>\
-      <div v-for="b in likeBurst" :key="b.id" class="spec-like-float" :style="{ left: b.x + \'%\' }">&#10084;</div>\
-    </div>\
-    <div style="text-align:center;padding:8px">\
-      <button class="ghost" @click="leave" style="font-size:13px">Salir</button>\
-    </div>\
-  </template>\
-</div>'
+  template: `
+<div class="spectator-view ama-public">
+  <div v-if="loading" class="ama-loading"><div class="ama-spinner"></div></div>
+  <div v-else-if="error && !connected" class="participant-status ama-wait"><div class="ama-brand">ama<span class="brand-accent">Pod</span></div><p class="error-text">{{ error }}</p></div>
+  <div v-else-if="eventInfo && eventInfo.status !== 'active' && !connected" class="participant-status ama-wait">
+    <div class="ama-brand">ama<span class="brand-accent">Pod</span></div>
+    <h2>{{ eventInfo.title }}</h2>
+    <template v-if="eventInfo.status === 'created'">
+      <div class="ama-state-icon ama-pulse">⏳</div>
+      <p class="ama-lead">Empieza pronto. Deja esta página abierta: se conecta sola.</p>
+      <a class="primary ama-ask" :href="'/join/' + eventId">Quiero preguntar</a>
+    </template>
+    <template v-else-if="eventInfo.status === 'left'"><p class="ama-lead">Saliste del evento.</p></template>
+    <template v-else><div class="ama-state-icon">⏹</div><p class="ama-lead">Este evento ya terminó.</p></template>
+  </div>
+  <div v-else class="ama-watch-layout">
+    <div class="ama-watch-top">
+      <span class="ama-brand small">ama<span class="brand-accent">Pod</span></span>
+      <span class="ama-live">EN VIVO</span>
+      <span class="spacer"></span>
+      <span class="ama-viewers">👁 {{ spectatorCount }}</span>
+    </div>
+    <div class="ama-watch-stage" :class="'n' + tiles.length" @dblclick="sendLike">
+      <div v-for="t in tiles" :key="t.id" class="ama-watch-tile">
+        <div :data-spec-id="t.id" class="ama-watch-video"></div>
+        <div class="video-label">{{ t.name }}</div>
+      </div>
+      <div v-if="!tiles.length" class="ama-watch-empty">Conectando con el evento…</div>
+      <button v-if="needsAudioTap" class="ama-sound" @click.stop="enableAudio">🔈 Toca para escuchar</button>
+      <div v-for="b in likeBurst" :key="b.id" class="spec-like-float" :style="{ right: b.x + '%' }">❤</div>
+    </div>
+    <div class="ama-watch-info">
+      <h3>{{ eventInfo.title }}</h3>
+      <p v-if="eventInfo.description" class="muted">{{ eventInfo.description }}</p>
+    </div>
+    <div class="ama-watch-actions">
+      <button class="ama-like" @click="sendLike">❤ <span>{{ likeCount }}</span></button>
+      <a class="primary ama-ask" :href="'/join/' + eventId">Quiero preguntar</a>
+      <button class="ghost" @click="leave">Salir</button>
+    </div>
+  </div>
+</div>`
 };
 
 // ── App ──────────────────────────────────────────────────────────────

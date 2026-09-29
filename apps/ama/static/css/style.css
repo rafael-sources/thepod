@@ -680,3 +680,106 @@ label {
   color: var(--signal);
   font-weight: 700;
 }
+
+/* ==========================================================================
+   Público (preguntar y mirar) — pensado primero para el teléfono
+   ========================================================================== */
+.ama-public { box-sizing: border-box; overflow-x: hidden; }
+.ama-public *, .ama-public *::before, .ama-public *::after { box-sizing: border-box; }
+.ama-public input, .ama-public textarea { font-size: 16px; width: 100%; }  /* 16px: el iPhone no hace zoom */
+.ama-public textarea { resize: vertical; min-height: 56px; padding: 10px 12px; border-radius: var(--r-md); background: var(--ink-sunken); border: 1px solid var(--ink-line); color: var(--paper); font-family: inherit; }
+.ama-public a.primary, .ama-public a.ghost { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; border-radius: var(--r-md); padding: 12px 18px; font-weight: 600; }
+.ama-public a.primary { background: var(--signal); color: var(--ink); }
+.ama-public a.ghost { color: var(--paper-soft); border: 1px solid var(--ink-line); }
+.ama-loading { min-height: 100vh; display: grid; place-items: center; }
+.ama-spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,255,255,.12); border-top-color: var(--signal); animation: ama-spin .9s linear infinite; }
+@keyframes ama-spin { to { transform: rotate(360deg); } }
+.ama-brand { font-family: var(--font-display); font-size: 22px; font-weight: 600; display: block; text-align: center; margin-bottom: 14px; }
+.ama-brand .ama-live { margin-left: 8px; vertical-align: middle; }
+.ama-brand.small { font-size: 16px; margin: 0; display: inline; }
+.ama-live { font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--ink); background: var(--signal); padding: 3px 9px; border-radius: 999px; font-family: var(--font-body, sans-serif); animation: pulse 2s infinite; }
+.ama-title { font-size: clamp(24px, 6.5vw, 32px); line-height: 1.15; margin: 0 0 6px; overflow-wrap: anywhere; }
+.ama-state-icon { font-size: 44px; margin: 6px 0 10px; }
+.ama-pulse { animation: pulse 1.8s ease-in-out infinite; }
+.ama-state-title { font-size: 18px; color: var(--paper); font-weight: 600; }
+.ama-lead { font-size: 16px !important; color: var(--paper-soft) !important; line-height: 1.45; margin: 0 0 16px; }
+
+/* Anotarse */
+.ama-public.join-view { padding: 20px 14px; }
+.ama-public .join-card { width: 100%; max-width: 480px; padding: 26px 20px; }
+.ama-public .join-card .ama-brand { text-align: left; }
+.ama-steps { list-style: none; padding: 0; margin: 16px 0 18px; display: grid; gap: 8px; }
+.ama-steps li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--paper); }
+.ama-steps li span { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center; background: rgba(20,184,166,.15); color: var(--signal); font-size: 12px; font-weight: 700; }
+.ama-more { font-size: 14px; color: var(--paper-dim); }
+.ama-more summary { cursor: pointer; padding: 6px 0; }
+.ama-more textarea { margin-top: 6px; }
+.ama-go { width: 100%; padding: 15px; font-size: 16px; margin-top: 8px; }
+.ama-alt { display: block; text-align: center; margin-top: 16px; color: var(--paper-dim); font-size: 14px; text-decoration: none; }
+
+/* Esperando */
+.ama-public.participant-view { padding: 24px 16px; justify-content: flex-start; padding-top: max(28px, env(safe-area-inset-top)); }
+.ama-wait { width: 100%; max-width: 480px; margin: 0 auto; }
+.ama-wait h2 { font-size: clamp(24px, 6.5vw, 30px); }
+.ama-questions { text-align: left; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 12px; padding: 14px; margin: 6px 0 14px; display: grid; gap: 8px; }
+.ama-q-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; color: var(--paper); }
+.ama-q-edit { padding: 4px 10px; font-size: 13px; }
+.ama-q-list { margin: 0; padding-left: 20px; color: var(--paper); font-size: 15px; display: grid; gap: 4px; }
+.ama-saved { color: var(--signal-cool); font-size: 13px; }
+.ama-tips { list-style: none; text-align: left; margin: 0 0 16px; padding: 12px 14px; background: var(--ink-sunken); border-radius: 10px; display: grid; gap: 6px; font-size: 14px; color: var(--paper-soft); }
+.ama-wait-actions { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.ama-wait-actions .ama-leave { color: #ff8a8a; }
+
+/* Te toca */
+.ama-call { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; gap: 6px; }
+.ama-call-ring { font-size: 64px; width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; background: rgba(20,184,166,.15); box-shadow: 0 0 0 0 rgba(20,184,166,.6); animation: ama-ring 1.4s ease-out infinite; margin-bottom: 10px; }
+@keyframes ama-ring { 0% { box-shadow: 0 0 0 0 rgba(20,184,166,.55); } 100% { box-shadow: 0 0 0 36px rgba(20,184,166,0); } }
+.ama-call h2 { font-size: clamp(26px, 7vw, 34px); margin: 0; }
+.ama-call p { color: var(--paper-soft); font-size: 16px; margin: 0 0 12px; }
+.ama-call-btn { font-size: 20px; padding: 18px 44px; border-radius: 14px; }
+
+/* Al aire */
+.ama-public.is-live { padding: 12px; justify-content: flex-start; }
+.ama-onair { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 10px; min-height: calc(100dvh - 24px); }
+.ama-onair-top { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.ama-onair-stage { position: relative; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.ama-host-card { width: 100%; aspect-ratio: 16/9; position: relative; }
+.ama-host-card video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ama-self-card { width: 100%; aspect-ratio: 16/9; }
+.ama-error { padding: 12px; background: #5a1a1a; border: 1px solid #c33; border-radius: 10px; color: #fff; font-size: 15px; }
+.ama-onair-actions { display: flex; gap: 10px; justify-content: center; padding-bottom: env(safe-area-inset-bottom); }
+.ama-onair-actions button { padding: 14px 22px; font-size: 16px; }
+.ama-end { border: 1px solid var(--ink-line) !important; }
+
+/* Mirar */
+.ama-watch-layout { width: 100%; max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.ama-watch-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); }
+.ama-watch-top .spacer { flex: 1; }
+.ama-viewers { font-size: 13px; color: var(--paper-soft); }
+.ama-watch-stage { position: relative; display: grid; grid-template-columns: 1fr; gap: 6px; padding: 0 6px; }
+.ama-watch-stage.n2 { grid-template-columns: 1fr; }
+.ama-watch-tile { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 10px; overflow: hidden; }
+.ama-watch-video, .ama-watch-video video { width: 100%; height: 100%; }
+.ama-watch-video video { object-fit: cover; }
+.ama-watch-empty { aspect-ratio: 16/9; display: grid; place-items: center; background: #000; border-radius: 10px; color: var(--paper-dim); }
+.ama-sound { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; padding: 14px 22px; font-size: 16px; border-radius: 999px; background: rgba(0,0,0,.75); border: 1px solid rgba(255,255,255,.3); color: #fff; }
+.ama-watch-info { padding: 12px 16px 4px; }
+.ama-watch-info h3 { margin: 0 0 4px; font-size: 18px; }
+.ama-watch-info p { margin: 0; font-size: 14px; }
+.ama-watch-actions { display: flex; gap: 10px; padding: 12px 16px max(16px, env(safe-area-inset-bottom)); align-items: center; margin-top: auto; }
+.ama-watch-actions .ama-ask { flex: 1; }
+.ama-like { font-size: 18px; padding: 12px 16px; border-radius: 999px; border: 1px solid var(--ink-line); background: var(--ink-panel); color: #ff6b8a; }
+.ama-like span { color: var(--paper); font-size: 15px; margin-left: 4px; }
+.ama-public .spec-like-float { position: absolute; bottom: 10%; font-size: 28px; color: #ff6b8a; animation: like-float 1.2s ease-out forwards; pointer-events: none; }
+
+@media (min-width: 760px) {
+  .ama-onair-stage { flex-direction: row; }
+  .ama-host-card, .ama-self-card { flex: 1; }
+  .ama-watch-stage.n2 { grid-template-columns: 1fr 1fr; }
+  .ama-watch-actions .ama-ask { flex: none; }
+}
+@media (max-width: 759px) {
+  /* Al aire en el teléfono: el anfitrión grande, tú en pequeño encima */
+  .ama-onair-stage .ama-self-card { position: absolute; right: 8px; top: 8px; width: 34%; aspect-ratio: 3/4; z-index: 3; border: 2px solid rgba(255,255,255,.3); }
+  .ama-onair-stage .ama-host-card { aspect-ratio: auto; flex: 1; min-height: 50vh; }
+}

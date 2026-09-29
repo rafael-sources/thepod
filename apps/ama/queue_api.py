@@ -177,6 +177,43 @@ def update_my_questions(eid):
         db.close()
 
 
+@bp.post("/api/events/<int:eid>/leave")
+def leave_event(eid):
+    """El participante se retira solo (con su token): sale de la cola o termina su turno al aire."""
+    token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token", "")
+    if not token:
+        return jsonify({"error": "token requerido"}), 400
+    db = get_db()
+    try:
+        part = db.execute(
+            "SELECT * FROM participants WHERE event_id = ? AND access_token = ?", (eid, token)
+        ).fetchone()
+        if not part:
+            return jsonify({"error": "participante no encontrado"}), 404
+        was_on_air = part["status"] == "on_air"
+        if part["status"] in ("pending", "approved", "in_queue", "on_air"):
+            db.execute(
+                "UPDATE participants SET status = ?, queue_position = NULL"
+                + (", turn_ended_at = CURRENT_TIMESTAMP" if was_on_air else "")
+                + " WHERE id = ?",
+                ("done" if was_on_air else "left", part["id"]),
+            )
+            _compact_queue(db, eid)
+            _update_preconnect_flags(db, eid)
+            db.commit()
+            ev = db.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+            room_name = (ev and ev["livekit_room_name"]) or room_name_for_event(eid)
+            identity = part["livekit_identity"] or f"participant_{part['id']}"
+            try:
+                lk_remove_participant(room_name, identity)
+            except Exception:
+                pass
+        row = db.execute("SELECT * FROM participants WHERE id = ?", (part["id"],)).fetchone()
+        return jsonify(_serialize_participant(row))
+    finally:
+        db.close()
+
+
 # ── Host-only endpoints ──────────────────────────────────────────────
 
 @bp.get("/api/events/<int:eid>/queue")

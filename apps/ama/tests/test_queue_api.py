@@ -143,3 +143,23 @@ def test_my_status(client):
     result = rv.get_json()
     assert result["status"] == "pending"
     assert "approximate_position" in result
+
+
+def test_participant_leaves_queue(client):
+    eid = _create_active_event(client)
+    a = client.post(f"/api/events/{eid}/request-access", json={"name": "Primero"}).get_json()
+    b = client.post(f"/api/events/{eid}/request-access", json={"name": "Segundo"}).get_json()
+    client.post(f"/api/events/{eid}/approve/{a['id']}")
+    client.post(f"/api/events/{eid}/approve/{b['id']}")
+    rv = client.post(f"/api/events/{eid}/leave?token={a['access_token']}")
+    assert rv.status_code == 200
+    assert rv.get_json()["status"] == "left"
+    queue = client.get(f"/api/events/{eid}/queue").get_json()
+    assert [p["id"] for p in queue] == [b["id"]]
+    assert queue[0]["queue_position"] == 1
+
+
+def test_participant_leave_requires_valid_token(client):
+    eid = _create_active_event(client)
+    assert client.post(f"/api/events/{eid}/leave").status_code == 400
+    assert client.post(f"/api/events/{eid}/leave?token=nope").status_code == 404
