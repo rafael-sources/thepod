@@ -169,16 +169,18 @@ final class AppModel: ObservableObject {
 }
 
 enum Step: String, CaseIterable, Identifiable {
-    case overview, fix, captions, sounds, reels, export, publish
+    case overview, fix, captions, look, sounds, brands, reels, export, publish
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .overview: return "Tu grabación"
-        case .fix: return "Arreglar"
+        case .overview: return "Grabación"
+        case .fix: return "Limpiar sonido"
         case .captions: return "Subtítulos"
-        case .sounds: return "Efectos"
+        case .look: return "Aspecto"
+        case .sounds: return "Música y efectos"
+        case .brands: return "Patrocinios y marcas"
         case .reels: return "Reels"
-        case .export: return "Exportar"
+        case .export: return "Exportar video"
         case .publish: return "Publicar"
         }
     }
@@ -187,10 +189,21 @@ enum Step: String, CaseIterable, Identifiable {
         case .overview: return "person.2.wave.2"
         case .fix: return "wand.and.stars"
         case .captions: return "captions.bubble"
-        case .sounds: return "speaker.wave.3"
+        case .look: return "rectangle.3.group"
+        case .sounds: return "music.note"
+        case .brands: return "tag"
         case .reels: return "iphone.gen3"
         case .export: return "square.and.arrow.up"
         case .publish: return "paperplane"
+        }
+    }
+    /// Bloques de la barra lateral: Preparar y Armar son de ida y vuelta; Entregar va en orden.
+    enum Group: String, CaseIterable { case prepare = "PREPARAR", build = "ARMAR", deliver = "ENTREGAR" }
+    var group: Group {
+        switch self {
+        case .overview, .fix, .captions: return .prepare
+        case .look, .sounds, .brands: return .build
+        case .reels, .export, .publish: return .deliver
         }
     }
     var number: Int { (Step.allCases.firstIndex(of: self) ?? 0) + 1 }
@@ -305,7 +318,7 @@ final class ProjectSession: ObservableObject {
 
     private func rebuildPreview() async {
         let wasPlaying = player.rate > 0
-        let current = player.currentTime().seconds
+        let current = player.currentTime().seconds - (built?.introDuration ?? 0)
         let oldKeep = built?.keep
         do {
             let b = try await CompositionBuilder.build(project: project, format: previewFormat == .audio ? .landscape : previewFormat,
@@ -316,7 +329,7 @@ final class ProjectSession: ObservableObject {
             var target = 0.0
             if let oldKeep, current.isFinite, current > 0 {
                 let tl = EditEngine.toTimeline(current, keep: oldKeep)
-                target = EditEngine.toOutput(tl, keep: b.keep) ?? min(current, b.duration)
+                target = (EditEngine.toOutput(tl, keep: b.keep) ?? min(current, b.duration)) + b.introDuration
             }
             if target > 0 { await player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
             if wasPlaying { player.play() }
@@ -337,9 +350,9 @@ final class ProjectSession: ObservableObject {
     /// Seek preview to a TIMELINE time.
     func seek(timeline t: Double, play: Bool = true) {
         guard let b = built else { return }
-        let o = EditEngine.toOutput(t, keep: b.keep)
+        let o = (EditEngine.toOutput(t, keep: b.keep)
             ?? b.keep.firstIndex { $0.start >= t }.map { i in EditEngine.outputDuration(Array(b.keep.prefix(i))) }
-            ?? 0
+            ?? 0) + b.introDuration
         player.seek(to: CMTime(seconds: o, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         if play { player.play() }
     }
@@ -555,6 +568,43 @@ final class ProjectSession: ObservableObject {
             return urls
     }
 
+    // MARK: Intro y cierre
+
+    func setBumper(isIntro: Bool, _ b: Bumper?) {
+        if isIntro { project.intro = b } else { project.outro = b }
+    }
+    func chooseBumperImage(isIntro: Bool) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
+        panel.allowsMultipleSelection = false
+        panel.message = isIntro ? "Elige la imagen del intro" : "Elige la imagen del cierre"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let rel = "branding/\(isIntro ? "intro" : "outro").\(url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased())"
+        let dest = ProjectStore.url(rel, in: project.id)
+        do {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { errorMessage = error.localizedDescription; return }
+        var b = (isIntro ? project.intro : project.outro) ?? Bumper(imageFile: rel)
+        b.imageFile = rel
+        setBumper(isIntro: isIntro, b)
+    }
+    func chooseBumperMusic(isIntro: Bool) {
+        guard var b = isIntro ? project.intro : project.outro else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
+        panel.allowsMultipleSelection = false
+        panel.message = "Elige la música del \(isIntro ? "intro" : "cierre")"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let to = dest.appendingPathComponent(url.lastPathComponent)
+        if !FileManager.default.fileExists(atPath: to.path) { try? FileManager.default.copyItem(at: url, to: to) }
+        b.musicFile = "sfx/\(url.lastPathComponent)"
+        setBumper(isIntro: isIntro, b)
+    }
+
     // MARK: Sincronizar personas
 
     /// Mueve el inicio de la grabación de una persona (desfase). Arrastra con ella sus palabras transcritas
@@ -643,7 +693,7 @@ final class ProjectSession: ObservableObject {
     var playheadTimeline: Double {
         let t = player.currentTime().seconds
         guard let b = built, t.isFinite else { return 0 }
-        return EditEngine.toTimeline(t, keep: b.keep)
+        return EditEngine.toTimeline(max(0, t - b.introDuration), keep: b.keep)
     }
 
     // MARK: Publishing (via prePod)

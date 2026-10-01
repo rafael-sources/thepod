@@ -17,7 +17,9 @@ struct ProjectView: View {
                     case .overview: OverviewStep(session: session)
                     case .fix: FixStep(session: session)
                     case .captions: CaptionsStep(session: session)
+                    case .look: LookStep(session: session)
                     case .sounds: SoundsStep(session: session)
+                    case .brands: BrandsStep(session: session)
                     case .reels: ReelsStep(session: session)
                     case .export: ExportStep(session: session)
                     case .publish: PublishStep(session: session)
@@ -58,30 +60,37 @@ struct ProjectView: View {
                 .foregroundStyle(Theme.secondary)
                 .padding(.bottom, 18)
 
-            ForEach(Step.allCases) { step in
-                Button {
-                    session.step = step
-                } label: {
-                    HStack(spacing: 10) {
-                        ZStack {
-                            Circle().fill(session.step == step ? Theme.accent : Theme.panelStrong)
-                                .frame(width: 26, height: 26)
-                            if done(step) && session.step != step {
+            ForEach(Step.Group.allCases, id: \.self) { group in
+                Text(group.rawValue)
+                    .font(.system(size: 10.5, weight: .semibold)).tracking(1.2)
+                    .foregroundStyle(Theme.secondary)
+                    .padding(.top, group == .prepare ? 0 : 12).padding(.bottom, 2).padding(.horizontal, 8)
+                ForEach(Step.allCases.filter { $0.group == group }) { step in
+                    let active = session.step == step
+                    Button {
+                        session.step = step
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: step.symbol)
+                                .font(.system(size: 14))
+                                .foregroundStyle(active ? Theme.accent : .white)
+                                .frame(width: 22)
+                            Text(step.title).font(.body.weight(active ? .semibold : .regular))
+                            Spacer()
+                            if done(step) {
                                 Image(systemName: "checkmark").font(.caption.bold()).foregroundStyle(Theme.good)
-                            } else {
-                                Text("\(step.number)").font(.caption.bold())
-                                    .foregroundStyle(session.step == step ? .black : .white)
+                            } else if let h = hint(step) {
+                                Text(h).font(.caption2).foregroundStyle(Theme.secondary)
                             }
                         }
-                        Text(step.title).font(.body.weight(session.step == step ? .semibold : .regular))
-                        Spacer()
+                        .padding(.vertical, 7).padding(.horizontal, 8)
+                        .background(RoundedRectangle(cornerRadius: 9).fill(active ? Theme.panelStrong : .clear))
+                        .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 8).padding(.horizontal, 8)
-                    .background(RoundedRectangle(cornerRadius: 9).fill(session.step == step ? Theme.panelStrong : .clear))
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            readiness
             Spacer()
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([ProjectStore.exportsFolder(for: session.project.id)])
@@ -102,11 +111,50 @@ struct ProjectView: View {
         case .overview: return true
         case .fix: return p.fix.lastRun != nil
         case .captions: return p.isTranscribed
+        case .look: return p.backgroundFile != nil || p.layout != .auto || p.intro != nil
         case .sounds: return !p.audioLane.isEmpty
+        case .brands: return !p.sponsors.isEmpty || !p.cintillos.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
         case .export: return !session.lastExports.isEmpty
         case .publish: return p.episode.publishedAudioURL != nil || p.episode.publishedYouTubeURL != nil
         }
+    }
+
+    /// Pista corta a la derecha de una sección que todavía no está hecha.
+    private func hint(_ step: Step) -> String? {
+        let p = session.project
+        switch step {
+        case .captions: return p.isTranscribed ? nil : "sin transcribir"
+        case .sounds: return p.audioLane.isEmpty ? nil : "\(p.audioLane.count)"
+        case .brands: return p.sponsors.isEmpty ? nil : "\(p.sponsors.count)"
+        default: return nil
+        }
+    }
+
+    /// Cajita "Listo para exportar": qué falta antes de entregar.
+    private var readiness: some View {
+        let p = session.project
+        let items: [(Bool, String, Bool)] = [   // (hecho, texto, opcional)
+            (p.fix.lastRun != nil, "Sonido limpio", false),
+            (p.isTranscribed, "Subtítulos", true),
+            (p.backgroundFile != nil && p.logoFile != nil, "Fondo y logo del podcast", true),
+        ]
+        return VStack(alignment: .leading, spacing: 5) {
+            Text("LISTO PARA EXPORTAR").font(.system(size: 10, weight: .semibold)).tracking(1).foregroundStyle(Theme.secondary)
+            ForEach(Array(items.enumerated()), id: \.offset) { _, it in
+                HStack(spacing: 6) {
+                    Image(systemName: it.0 ? "checkmark" : "circle").font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(it.0 ? Theme.good : Theme.secondary)
+                    Text(it.1 + (it.2 && !it.0 ? " (opcional)" : "")).font(.caption)
+                        .foregroundStyle(it.0 || !it.2 ? .white : Theme.secondary)
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.stroke))
+        .padding(.top, 14)
     }
 }
 

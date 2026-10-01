@@ -26,6 +26,11 @@ final class RenderScene: @unchecked Sendable {
     /// Cintillos del director ya dibujados (se colocan abajo a la izquierda y entran deslizándose).
     struct CintilloCard { let start: Double; let end: Double; let image: CIImage }
     var cintillos: [CintilloCard] = []
+    /// Intro y cierre: imagen fija antes de `contentStart` y después de `contentEnd` (tiempos del video final).
+    var contentStart: Double = 0
+    var contentEnd: Double = .infinity
+    var introImage: CIImage?
+    var outroImage: CIImage?
 
     private var cache: [String: CIImage] = [:]
     private let lock = NSLock()
@@ -78,9 +83,22 @@ final class RenderScene: @unchecked Sendable {
 
     // MARK: Frame
 
-    func render(frames: [Int: CIImage], time t: Double) -> CIImage {
+    func render(frames: [Int: CIImage], time time: Double) -> CIImage {
         let W = renderSize.width, H = renderSize.height
         let full = CGRect(x: 0, y: 0, width: W, height: H)
+        let dark = CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: full)
+        // Intro / cierre: la imagen completa (sin recortar) sobre fondo oscuro, con medio segundo de fundido
+        if time < contentStart - 1e-3 || time >= contentEnd - 1e-3 {
+            let isIntro = time < contentStart
+            guard let img = isIntro ? introImage : outroImage else { return dark }
+            let edge = isIntro ? min(1, max(0, (contentStart - time) / 0.5)) : min(1, max(0, (time - contentEnd) / 0.5))
+            var pic = fit(img, into: full.insetBy(dx: 0, dy: 0)).composited(over: dark)
+            if edge < 1 {
+                pic = pic.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(edge))]).composited(over: dark)
+            }
+            return pic.cropped(to: full)
+        }
+        let t = time - contentStart   // tiempos del contenido (subtítulos, quién habla, cintillos…)
         var out: CIImage = background.map { fill($0, into: full, cropX: 0.5) }
             ?? CIImage(color: CIColor(red: 0.055, green: 0.055, blue: 0.07)).cropped(to: full)
 

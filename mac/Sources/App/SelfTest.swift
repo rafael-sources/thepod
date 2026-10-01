@@ -418,7 +418,8 @@ enum SelfTest {
         Task { @MainActor in
             do {
                 let p = try ProjectStore.load(slug: a[i + 1])
-                let url = try await Exporter.export(project: p, format: fmt, window: (s, e), baseName: "render-test",
+                let window: EditEngine.Span? = (s <= 0 && e >= p.duration) ? nil : (s, e)   // todo el episodio: sin ventana (con intro/cierre)
+                let url = try await Exporter.export(project: p, format: fmt, window: window, baseName: "render-test",
                                                     energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
                 print("OK \(url.path)"); fflush(stdout); exit(0)
             } catch {

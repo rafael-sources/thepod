@@ -589,6 +589,241 @@ struct ReelCard: View {
 
 // MARK: - 5. Export
 
+
+// MARK: - Patrocinios y marcas
+
+struct BrandsStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: "Patrocinios y marcas", subtitle: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo.")
+                    Card {
+                        HStack {
+                            Text("Sponsors").font(.headline)
+                            Spacer()
+                            Button("Buscar en prePod") { session.fetchBranding() }.controlSize(.small)
+                        }
+                        if let st = session.brandingStatus {
+                            Text(st).font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                        if session.project.sponsors.isEmpty {
+                            Text("Este episodio no tiene sponsors. Si los tienes en prePod, usa “Buscar en prePod”.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            Toggle("Mostrar sponsors en su momento del guion", isOn: $session.project.showSponsors)
+                            let apps = session.project.sponsorAppearances()
+                            ForEach(session.project.sponsors) { sp in
+                                HStack(spacing: 10) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 6).fill(Theme.panelStrong)
+                                        if let f = sp.logoFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).padding(4)
+                                        } else {
+                                            Image(systemName: "tag").foregroundStyle(Theme.secondary)
+                                        }
+                                    }
+                                    .frame(width: 48, height: 36)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(sp.name).font(.callout.bold())
+                                        let mine = apps.filter { $0.sponsor.id == sp.id }
+                                        if mine.isEmpty {
+                                            Text("Sin momento en el guion de este episodio").font(.caption).foregroundStyle(Theme.secondary)
+                                        } else {
+                                            Text(mine.map { EditEngine.clock($0.start) }.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    if let a = apps.first(where: { $0.sponsor.id == sp.id }) {
+                                        Button("Ver") { session.seek(timeline: max(0, a.start - 1), play: true) }.controlSize(.small)
+                                    }
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+                            }
+                            if apps.isEmpty {
+                                Text("Hay sponsors pero ningún bloque del guion de este episodio tiene sponsor asignado. Asígnalo en prePod (guion → bloque → sponsor) y vuelve a “Buscar en prePod”.")
+                                    .font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                    }
+                    Card {
+                        Text("Cintillos del director").font(.headline)
+                        if session.project.cintillos.isEmpty {
+                            Text("Este episodio no tiene cintillos puestos en vivo desde prodPod.").font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            Toggle("Mostrar los \(session.project.cintillos.count) cintillos", isOn: $session.project.showCintillos)
+                            ForEach(session.project.cintillos) { c in
+                                HStack {
+                                    Button(EditEngine.clock(c.start)) { session.seek(timeline: max(0, c.start - 1), play: true) }
+                                        .buttonStyle(.link).monospacedDigit()
+                                    Text(c.title).lineLimit(1)
+                                    Spacer()
+                                    Text(c.kind).font(.caption).foregroundStyle(Theme.secondary)
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+    }
+}
+
+// MARK: - Aspecto
+
+struct LookStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: "Aspecto", subtitle: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo.")
+                    let onePerson = session.project.lanes.count <= 1
+                    let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
+                    let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
+                    Card {
+                        Text(onePerson ? "Cómo te ves" : "Cómo se ven las personas").font(.headline)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
+                            ForEach(choices) { l in
+                                Button {
+                                    session.project.layout = l
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Image(systemName: l.symbol).font(.title2)
+                                        Text(l.title).font(.caption)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 60)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(chosen == l ? Theme.panelStrong : .clear))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(chosen == l ? Theme.accent : Theme.stroke))
+                                }
+                                .buttonStyle(.plain)
+                                .help(l.help)
+                            }
+                        }
+                        layoutOptionsView(onePerson: onePerson)
+                        Divider()
+                        Text("Espejo (voltear el video de izquierda a derecha)").font(.caption.bold())
+                        ForEach(session.project.lanes) { lane in
+                            Toggle(session.project.laneName(lane.id), isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
+                                                                                    set: { session.project.laneMirror[lane.id] = $0 }))
+                                .font(.caption)
+                        }
+                    }
+                    Card {
+                        Text("Marca del podcast").font(.headline)
+                        if session.project.backgroundFile != nil {
+                            Toggle("Fondo del podcast detrás del video", isOn: $session.project.showBackground)
+                        }
+                        if session.project.logoFile != nil {
+                            Toggle("Logo arriba a la derecha", isOn: $session.project.showLogo)
+                        }
+                        Toggle("Nombres de las personas", isOn: $session.project.showNames)
+                        HStack(spacing: 8) {
+                            Button(session.project.backgroundFile == nil ? "Elegir imagen de fondo…" : "Cambiar fondo…") { session.chooseBranding(kind: "background") }
+                            Button(session.project.logoFile == nil ? "Elegir logo…" : "Cambiar logo…") { session.chooseBranding(kind: "logo") }
+                            if session.project.backgroundFile == nil || session.project.logoFile == nil {
+                                Button("Buscar en prePod") { session.fetchBranding() }
+                            }
+                        }
+                        .controlSize(.small)
+                        if let st = session.brandingStatus {
+                            Text(st).font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        Text("Intro y cierre").font(.headline)
+                        Text("Una imagen fija unos segundos antes del video y otra al final, con música si quieres. Solo en el video completo (no en reels ni trozos).")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        bumperRow(title: "Intro", kind: "intro", bumper: session.project.intro)
+                        Divider()
+                        bumperRow(title: "Cierre", kind: "outro", bumper: session.project.outro)
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: session.previewFormat == .audio ? .landscape : session.previewFormat) }
+    }
+
+    @ViewBuilder
+    private func bumperRow(title: String, kind: String, bumper: Bumper?) -> some View {
+        let isIntro = kind == "intro"
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(Theme.panelStrong)
+                if let b = bumper, let img = NSImage(contentsOf: ProjectStore.url(b.imageFile, in: session.project.id)) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: "photo").foregroundStyle(Theme.secondary)
+                }
+            }
+            .frame(width: 96, height: 54)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(title).font(.callout.bold())
+                    Spacer()
+                    Button(bumper == nil ? "Elegir imagen…" : "Cambiar imagen…") { session.chooseBumperImage(isIntro: isIntro) }.controlSize(.small)
+                    if bumper != nil {
+                        Button(role: .destructive) { session.setBumper(isIntro: isIntro, nil) } label: { Image(systemName: "trash") }.controlSize(.small).help("Quitar")
+                    }
+                }
+                if let b = bumper {
+                    HStack(spacing: 8) {
+                        Text("Dura").font(.caption)
+                        Slider(value: Binding(get: { b.seconds }, set: { v in var nb = b; nb.seconds = v; session.setBumper(isIntro: isIntro, nb) }), in: 1...15, step: 0.5)
+                        Text(String(format: "%.1f s", b.seconds)).font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: "music.note").foregroundStyle(Theme.secondary)
+                        if let m = b.musicFile {
+                            Text(((m as NSString).lastPathComponent as NSString).deletingPathExtension).font(.caption).lineLimit(1)
+                            Slider(value: Binding(get: { b.musicVolume }, set: { v in var nb = b; nb.musicVolume = v; session.setBumper(isIntro: isIntro, nb) }), in: 0...1.5).frame(width: 90)
+                            Button("Quitar música") { var nb = b; nb.musicFile = nil; session.setBumper(isIntro: isIntro, nb) }.controlSize(.small)
+                        } else {
+                            Button("Agregar música…") { session.chooseBumperMusic(isIntro: isIntro) }.controlSize(.small)
+                            Text("se corta al largo del \(isIntro ? "intro" : "cierre") y baja al final").font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
+    @ViewBuilder
+    private func layoutOptionsView(onePerson: Bool) -> some View {
+        let l = session.project.layout
+        let hasBackground = session.project.backgroundFile != nil
+        VStack(alignment: .leading, spacing: 6) {
+            if l == .auto || l == .solo {
+                Toggle("Con marco de estudio (el fondo del podcast detrás)", isOn: $session.project.layoutOptions.soloStudio)
+                if session.project.layoutOptions.soloStudio && !hasBackground {
+                    Text("Este proyecto no tiene fondo del podcast; se verá un fondo oscuro. Súbelo en prePod → Branding → Fondo.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+            if l == .grid && !onePerson {
+                Toggle("Quien habla en grande, los demás en cuadritos abajo", isOn: $session.project.layoutOptions.gridSpeakerBig)
+            }
+            if l == .pip && !onePerson {
+                Toggle("En grande quien habla (si no, siempre la primera persona)", isOn: $session.project.layoutOptions.pipFollowSpeaker)
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
 struct ExportStep: View {
     @ObservedObject var session: ProjectSession
     @State private var format: ExportFormat = .landscape
@@ -616,70 +851,23 @@ struct ExportStep: View {
                         }
                     }
                     if format != .audio {
-                        let onePerson = session.project.lanes.count <= 1
-                        let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
-                        let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
                         Card {
-                            Text(onePerson ? "Cómo te ves" : "Cómo se ven las personas").font(.headline)
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
-                                ForEach(choices) { l in
-                                    Button {
-                                        session.project.layout = l
-                                        session.setPreview(format: format, layout: nil)
-                                    } label: {
-                                        VStack(spacing: 4) {
-                                            Image(systemName: l.symbol).font(.title2)
-                                            Text(l.title).font(.caption)
-                                        }
-                                        .frame(maxWidth: .infinity, minHeight: 60)
-                                        .background(RoundedRectangle(cornerRadius: 10).fill(chosen == l ? Theme.panelStrong : .clear))
-                                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(chosen == l ? Theme.accent : Theme.stroke))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help(l.help)
-                                }
-                            }
-                            layoutOptionsView(onePerson: onePerson)
-                            Divider()
-                            Text("Espejo (voltear el video de izquierda a derecha)").font(.caption.bold())
-                            ForEach(session.project.lanes) { lane in
-                                Toggle(session.project.laneName(lane.id), isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
-                                                                                        set: { session.project.laneMirror[lane.id] = $0 }))
-                                    .font(.caption)
-                            }
-                        }
-                        Card {
+                            Text("Qué incluir").font(.headline)
                             Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
                                 .disabled(!session.project.isTranscribed)
-                            Toggle("Nombres de las personas", isOn: $session.project.showNames)
-                            if session.project.logoFile != nil {
-                                Toggle("Logo del podcast", isOn: $session.project.showLogo)
-                            }
-                            if session.project.backgroundFile != nil {
-                                Toggle("Fondo del podcast (detrás del video)", isOn: $session.project.showBackground)
-                            }
-                            HStack(spacing: 8) {
-                                Button(session.project.backgroundFile == nil ? "Elegir imagen de fondo…" : "Cambiar imagen de fondo…") { session.chooseBranding(kind: "background") }
-                                Button(session.project.logoFile == nil ? "Elegir logo…" : "Cambiar logo…") { session.chooseBranding(kind: "logo") }
-                                if session.project.backgroundFile == nil {
-                                    Button("Buscar en prePod") { session.fetchBranding() }
-                                }
-                            }
-                            .controlSize(.small)
-                            if let st = session.brandingStatus {
-                                Text(st).font(.caption).foregroundStyle(Theme.secondary)
-                            }
                             if !session.project.sponsors.isEmpty {
-                                Toggle("Sponsors en su momento del guion (\(session.project.sponsorAppearances().count) en este episodio)", isOn: $session.project.showSponsors)
-                                if session.project.sponsorAppearances().isEmpty {
-                                    Text("Hay \(session.project.sponsors.count) sponsor(s) en prePod, pero ningún bloque del guion de este episodio tiene sponsor asignado; por eso no aparecen.")
-                                        .font(.caption).foregroundStyle(Theme.secondary)
-                                }
-                            } else {
-                                Button("Buscar sponsors y guion en prePod") { session.fetchBranding() }.controlSize(.small)
+                                Toggle("Sponsors en su momento del guion (\(session.project.sponsorAppearances().count))", isOn: $session.project.showSponsors)
                             }
                             if !session.project.cintillos.isEmpty {
                                 Toggle("Cintillos del director (\(session.project.cintillos.count))", isOn: $session.project.showCintillos)
+                            }
+                            Divider()
+                            HStack(spacing: 6) {
+                                Image(systemName: "rectangle.3.group").foregroundStyle(Theme.secondary)
+                                Text("Aspecto: \(session.project.layout.title)\(session.project.showBackground && session.project.backgroundFile != nil ? " · fondo" : "")\(session.project.showLogo && session.project.logoFile != nil ? " · logo" : "")\(session.project.intro != nil ? " · intro" : "")\(session.project.outro != nil ? " · cierre" : "")")
+                                    .font(.caption).foregroundStyle(Theme.secondary)
+                                Spacer()
+                                Button("Cambiar") { session.step = .look }.controlSize(.small)
                             }
                         }
                     }
@@ -716,28 +904,7 @@ struct ExportStep: View {
         session.setPreview(format: f == .audio ? .landscape : f)
     }
 
-    /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
-    @ViewBuilder
-    private func layoutOptionsView(onePerson: Bool) -> some View {
-        let l = session.project.layout
-        let hasBackground = session.project.backgroundFile != nil
-        VStack(alignment: .leading, spacing: 6) {
-            if l == .auto || l == .solo {
-                Toggle("Con marco de estudio (el fondo del podcast detrás)", isOn: $session.project.layoutOptions.soloStudio)
-                if session.project.layoutOptions.soloStudio && !hasBackground {
-                    Text("Este proyecto no tiene fondo del podcast; se verá un fondo oscuro. Súbelo en prePod → Branding → Fondo.")
-                        .font(.caption).foregroundStyle(Theme.secondary)
-                }
-            }
-            if l == .grid && !onePerson {
-                Toggle("Quien habla en grande, los demás en cuadritos abajo", isOn: $session.project.layoutOptions.gridSpeakerBig)
-            }
-            if l == .pip && !onePerson {
-                Toggle("En grande quien habla (si no, siempre la primera persona)", isOn: $session.project.layoutOptions.pipFollowSpeaker)
-            }
-        }
-        .padding(.top, 4)
-    }
+
 }
 
 // MARK: - Settings

@@ -12,6 +12,8 @@ struct BuiltComposition {
     let keep: [EditEngine.Span]
     let duration: Double
     let scene: RenderScene?
+    /// Segundos de intro antes del contenido (0 si no hay). El cierre va después del contenido.
+    var introDuration: Double = 0
 
     func playerItem() -> AVPlayerItem {
         let item = AVPlayerItem(asset: asset)
@@ -33,6 +35,13 @@ enum CompositionBuilder {
         let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts, window: window)
         let outDuration = EditEngine.outputDuration(keep)
         guard outDuration > 0.1 else { throw Failure.empty }
+        // Intro y cierre (solo en el video completo, no en trozos ni reels)
+        let wantVideoBumpers = format != .audio && window == nil
+        let intro = wantVideoBumpers ? project.intro : nil
+        let outro = wantVideoBumpers ? project.outro : nil
+        let introDur = intro.map { max(1, $0.seconds) } ?? 0
+        let outroDur = outro.map { max(1, $0.seconds) } ?? 0
+        let contentEnd = introDur + outDuration
 
         let comp = AVMutableComposition()
         var mixParams: [AVMutableAudioMixInputParameters] = []
@@ -59,7 +68,7 @@ enum CompositionBuilder {
                     let src = srcIn + (a - tlStart)
                     let len = min(b - a, max(0, sourceDuration - src))
                     if len > 0.01 {
-                        let at = cursor + (a - k.start)
+                        let at = introDur + cursor + (a - k.start)
                         try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(len)), of: source, at: cm(at))
                         if outStart == nil { outStart = at }
                         outEnd = at + len
@@ -139,6 +148,35 @@ enum CompositionBuilder {
             mixParams.append(p)
         }
 
+        // Música del intro/cierre y relleno para que el video dure hasta el final del cierre
+        func bumperMusic(_ b: Bumper?, at start: Double, length: Double) async throws {
+            guard let b, let rel = b.musicFile else { return }
+            let a = asset(rel)
+            guard let src = try await a.loadTracks(withMediaType: .audio).first else { return }
+            let dur = try await a.load(.duration).seconds
+            let len = min(length, dur)
+            guard len > 0.1 else { return }
+            let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+            try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: src, at: cm(start))
+            let p = AVMutableAudioMixInputParameters(track: track)
+            p.setVolume(Float(b.musicVolume), at: .zero)
+            fades(p, volume: b.musicVolume, span: (start, start + len), fadeIn: 0.3, fadeOut: min(1.5, len / 3))
+            mixParams.append(p)
+        }
+        try await bumperMusic(intro, at: 0, length: introDur)
+        try await bumperMusic(outro, at: contentEnd, length: outroDur)
+        if outroDur > 0 {
+            // Un hueco vacío no alarga el video: metemos silencio real bajo el cierre para que dure hasta el final.
+            if let silence = await Self.silenceAsset(slug: project.id, seconds: outroDur + 1),
+               let src = try? await silence.loadTracks(withMediaType: .audio).first {
+                let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                try? track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(outroDur)), of: src, at: cm(contentEnd))
+                let p = AVMutableAudioMixInputParameters(track: track)
+                p.setVolume(0, at: .zero)
+                mixParams.append(p)
+            }
+        }
+
         let mix = AVMutableAudioMix()
         mix.inputParameters = mixParams
 
@@ -187,17 +225,35 @@ enum CompositionBuilder {
             if project.showCintillos {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }
+            s.contentStart = introDur
+            s.contentEnd = contentEnd
+            s.introImage = intro.flatMap { CIImage(contentsOf: ProjectStore.url($0.imageFile, in: project.id)) }
+            s.outroImage = outro.flatMap { CIImage(contentsOf: ProjectStore.url($0.imageFile, in: project.id)) }
             let vc = AVMutableVideoComposition()
             vc.customVideoCompositorClass = PodCompositor.self
             vc.renderSize = format.renderSize
             vc.frameDuration = CMTime(value: 1, timescale: 30)
-            vc.instructions = [PodInstruction(timeRange: CMTimeRange(start: .zero, duration: cm(outDuration)), scene: s)]
+            vc.instructions = [PodInstruction(timeRange: CMTimeRange(start: .zero, duration: cm(contentEnd + outroDur)), scene: s)]
             videoComposition = vc
             scene = s
         }
 
         return BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
-                                keep: keep, duration: outDuration, scene: scene)
+                                keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
+    }
+
+    /// Un archivo de silencio (lo genera ffmpeg una vez por proyecto) para alargar el video bajo el cierre.
+    static func silenceAsset(slug: String, seconds: Double) async -> AVURLAsset? {
+        let url = ProjectStore.cacheFolder(for: slug).appendingPathComponent("silencio.m4a")
+        let need = max(20, ceil(seconds))
+        if let a = Optional(AVURLAsset(url: url)), FileManager.default.fileExists(atPath: url.path),
+           let d = try? await a.load(.duration).seconds, d >= seconds { return a }
+        guard FFmpeg.isAvailable else { return nil }
+        try? FileManager.default.removeItem(at: url)
+        do {
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(Int(need)), "-c:a", "aac", "-b:a", "32k", url.path])
+        } catch { return nil }
+        return FileManager.default.fileExists(atPath: url.path) ? AVURLAsset(url: url) : nil
     }
 
     /// Dibuja cada cintillo una vez, al tamaño del video, y lo ubica en el tiempo del video editado.

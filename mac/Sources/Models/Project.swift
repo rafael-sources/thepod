@@ -31,6 +31,8 @@ struct Project: Codable, Identifiable, Equatable {
     var layoutOptions = LayoutOptions()  // ajustes de cada diseño (marco de estudio, quien habla en grande…)
     var reelLayout: LayoutTemplate = .auto
     var showBackground: Bool = true     // usar la imagen de fondo del podcast detrás del video
+    var intro: Bumper?                  // imagen (y música) antes del video
+    var outro: Bumper?                  // imagen (y música) al final
     var showNames: Bool = true
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
@@ -245,6 +247,24 @@ struct Reel: Codable, Identifiable, Equatable {
     var length: Double { max(0, end - start) }
 }
 
+/// Intro o cierre: una imagen fija unos segundos, con música opcional (relativa a la carpeta del proyecto).
+struct Bumper: Codable, Equatable {
+    var imageFile: String
+    var seconds: Double = 4
+    var musicFile: String?
+    var musicVolume: Double = 0.8
+    init(imageFile: String, seconds: Double = 4, musicFile: String? = nil, musicVolume: Double = 0.8) {
+        self.imageFile = imageFile; self.seconds = seconds; self.musicFile = musicFile; self.musicVolume = musicVolume
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        imageFile = try c.decode(String.self, forKey: .imageFile)
+        seconds = try c.decodeIfPresent(Double.self, forKey: .seconds) ?? 4
+        musicFile = try c.decodeIfPresent(String.self, forKey: .musicFile)
+        musicVolume = try c.decodeIfPresent(Double.self, forKey: .musicVolume) ?? 0.8
+    }
+}
+
 /// Ajustes de los diseños. Cada campo tiene valor por defecto para que los proyectos viejos abran igual.
 struct LayoutOptions: Codable, Equatable {
     var soloStudio: Bool = false        // Quien habla: un recuadro con marco sobre el fondo del podcast (sin recortar el video)
@@ -433,6 +453,8 @@ extension Project {
         layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
         layoutOptions = try c.decodeIfPresent(LayoutOptions.self, forKey: .layoutOptions) ?? LayoutOptions()
         showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
+        intro = try c.decodeIfPresent(Bumper.self, forKey: .intro)
+        outro = try c.decodeIfPresent(Bumper.self, forKey: .outro)
         reelLayout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .reelLayout) ?? .auto
         showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
