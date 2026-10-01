@@ -28,7 +28,9 @@ struct Project: Codable, Identifiable, Equatable {
 
     var captionStyle = CaptionStyle()
     var layout: LayoutTemplate = .auto
+    var layoutOptions = LayoutOptions()  // ajustes de cada diseño (marco de estudio, quien habla en grande…)
     var reelLayout: LayoutTemplate = .auto
+    var showBackground: Bool = true     // usar la imagen de fondo del podcast detrás del video
     var showNames: Bool = true
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
@@ -221,6 +223,20 @@ struct Reel: Codable, Identifiable, Equatable {
     var length: Double { max(0, end - start) }
 }
 
+/// Ajustes de los diseños. Cada campo tiene valor por defecto para que los proyectos viejos abran igual.
+struct LayoutOptions: Codable, Equatable {
+    var soloStudio: Bool = false        // Quien habla: un recuadro con marco sobre el fondo del podcast (sin recortar el video)
+    var gridSpeakerBig: Bool = false    // Cuadrícula: quien habla en grande arriba, los demás en cuadritos abajo
+    var pipFollowSpeaker: Bool = true   // Ventanita: en grande quien habla (si no, siempre la primera persona)
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        soloStudio = try c.decodeIfPresent(Bool.self, forKey: .soloStudio) ?? false
+        gridSpeakerBig = try c.decodeIfPresent(Bool.self, forKey: .gridSpeakerBig) ?? false
+        pipFollowSpeaker = try c.decodeIfPresent(Bool.self, forKey: .pipFollowSpeaker) ?? true
+    }
+}
+
 enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
     case auto, solo, sideBySide, grid, spotlight, pip, stack, studio
     var id: String { rawValue }
@@ -393,6 +409,8 @@ extension Project {
         enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? false
         captionStyle = try c.decodeIfPresent(CaptionStyle.self, forKey: .captionStyle) ?? CaptionStyle()
         layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
+        layoutOptions = try c.decodeIfPresent(LayoutOptions.self, forKey: .layoutOptions) ?? LayoutOptions()
+        showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
         reelLayout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .reelLayout) ?? .auto
         showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true

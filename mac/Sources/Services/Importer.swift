@@ -431,6 +431,32 @@ enum Importer {
         return project
     }
 
+    // MARK: - Branding desde prePod
+
+    /// El paquete de postPod web solo trae el fondo si allá ya se exportó con fondo. Si el proyecto viene de
+    /// prePod y le falta el fondo o el logo, los bajamos de la configuración del podcast en prePod.
+    /// Devuelve true si cambió algo (el que llama guarda el proyecto). Nunca lanza error: si falla, queda como estaba.
+    static func fetchBrandingFromPrepod(_ project: inout Project) async -> Bool {
+        guard project.backgroundFile == nil || project.logoFile == nil,
+              let slug = project.episode.prepodSlug, !slug.isEmpty else { return false }
+        let api = PrePodClient.shared
+        guard let cfg = try? await api.podcastConfig(slug) else { return false }
+        let fm = FileManager.default
+        var changed = false
+        for (kind, url, current) in [("background", cfg.backgroundUrl, project.backgroundFile), ("logo", cfg.logoUrl, project.logoFile)] {
+            guard current == nil, let url, !url.isEmpty, let data = try? await api.media(url), data.count > 100 else { continue }
+            var ext = (url.split(separator: "?").first.map(String.init) ?? url).split(separator: ".").last.map(String.init)?.lowercased() ?? "jpg"
+            if !["jpg", "jpeg", "png", "webp", "heic", "gif"].contains(ext) { ext = "jpg" }
+            let rel = "branding/\(kind).\(ext)"
+            let dest = ProjectStore.url(rel, in: project.id)
+            try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            guard (try? data.write(to: dest, options: .atomic)) != nil else { continue }
+            if kind == "background" { project.backgroundFile = rel } else { project.logoFile = rel }
+            changed = true
+        }
+        return changed
+    }
+
     // MARK: - Media preparation
 
     static func prepareMedia(_ src: URL, id: Int, slug: String, donors: [URL] = [],

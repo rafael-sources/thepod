@@ -144,6 +144,8 @@ final class AppModel: ObservableObject {
                 importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
                 var project = try await runImport([file])
                 project.postpodSlug = web.slug
+                importJob = JobState(title: "Importando tu grabación", detail: "Buscando el fondo y el logo del podcast en prePod…", fraction: 1)
+                _ = await Importer.fetchBrandingFromPrepod(&project)
                 try? ProjectStore.save(project)
                 importJob = nil
                 reload()
@@ -221,6 +223,15 @@ final class ProjectSession: ObservableObject {
         if project.fix.lastRun != nil { step = .captions }
         refreshExports()
         schedulePreview(immediate: true)
+        // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
+        if project.backgroundFile == nil || project.logoFile == nil, project.episode.prepodSlug != nil {
+            Task { [weak self] in
+                var p = project
+                guard await Importer.fetchBrandingFromPrepod(&p), let self else { return }
+                self.project.backgroundFile = p.backgroundFile
+                self.project.logoFile = p.logoFile
+            }
+        }
     }
 
     // MARK: Persistence & preview

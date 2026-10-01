@@ -143,7 +143,7 @@ enum CompositionBuilder {
                 names: names, showNames: project.showNames,
                 cropX: project.laneCrop,
                 logo: project.showLogo ? project.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) } : nil,
-                background: project.backgroundFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
+                background: (project.showBackground ? project.backgroundFile : nil).flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                     .map { img in
                         img.applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.08])
                     },
@@ -160,7 +160,8 @@ enum CompositionBuilder {
                     project.participant(forLane: lane.id)?.photoFile
                         .flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                         .map { (lane.id, $0) }
-                }))
+                }),
+                options: project.layoutOptions)
             if project.showCintillos {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }

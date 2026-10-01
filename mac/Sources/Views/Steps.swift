@@ -614,28 +614,30 @@ struct ExportStep: View {
                         }
                     }
                     if format != .audio {
-                        if session.project.lanes.count > 1 {
-                            Card {
-                                Text("Cómo se ven las personas").font(.headline)
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
-                                    ForEach(LayoutTemplate.allCases) { l in
-                                        Button {
-                                            session.project.layout = l
-                                            session.setPreview(format: format, layout: nil)
-                                        } label: {
-                                            VStack(spacing: 4) {
-                                                Image(systemName: l.symbol).font(.title2)
-                                                Text(l.title).font(.caption)
-                                            }
-                                            .frame(maxWidth: .infinity, minHeight: 60)
-                                            .background(RoundedRectangle(cornerRadius: 10).fill(session.project.layout == l ? Theme.panelStrong : .clear))
-                                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(session.project.layout == l ? Theme.accent : Theme.stroke))
+                        let onePerson = session.project.lanes.count <= 1
+                        let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
+                        let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
+                        Card {
+                            Text(onePerson ? "Cómo te ves" : "Cómo se ven las personas").font(.headline)
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
+                                ForEach(choices) { l in
+                                    Button {
+                                        session.project.layout = l
+                                        session.setPreview(format: format, layout: nil)
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: l.symbol).font(.title2)
+                                            Text(l.title).font(.caption)
                                         }
-                                        .buttonStyle(.plain)
-                                        .help(l.help)
+                                        .frame(maxWidth: .infinity, minHeight: 60)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(chosen == l ? Theme.panelStrong : .clear))
+                                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(chosen == l ? Theme.accent : Theme.stroke))
                                     }
+                                    .buttonStyle(.plain)
+                                    .help(l.help)
                                 }
                             }
+                            layoutOptionsView(onePerson: onePerson)
                         }
                         Card {
                             Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
@@ -643,6 +645,9 @@ struct ExportStep: View {
                             Toggle("Nombres de las personas", isOn: $session.project.showNames)
                             if session.project.logoFile != nil {
                                 Toggle("Logo del podcast", isOn: $session.project.showLogo)
+                            }
+                            if session.project.backgroundFile != nil {
+                                Toggle("Fondo del podcast (detrás del video)", isOn: $session.project.showBackground)
                             }
                             if !session.project.sponsors.isEmpty {
                                 Toggle("Sponsors en su momento del guion", isOn: $session.project.showSponsors)
@@ -683,6 +688,29 @@ struct ExportStep: View {
     private func select(_ f: ExportFormat) {
         format = f
         session.setPreview(format: f == .audio ? .landscape : f)
+    }
+
+    /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
+    @ViewBuilder
+    private func layoutOptionsView(onePerson: Bool) -> some View {
+        let l = session.project.layout
+        let hasBackground = session.project.backgroundFile != nil
+        VStack(alignment: .leading, spacing: 6) {
+            if l == .auto || l == .solo {
+                Toggle("Con marco de estudio (el fondo del podcast detrás)", isOn: $session.project.layoutOptions.soloStudio)
+                if session.project.layoutOptions.soloStudio && !hasBackground {
+                    Text("Este proyecto no tiene fondo del podcast; se verá un fondo oscuro. Súbelo en prePod → Branding → Fondo.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+            if l == .grid && !onePerson {
+                Toggle("Quien habla en grande, los demás en cuadritos abajo", isOn: $session.project.layoutOptions.gridSpeakerBig)
+            }
+            if l == .pip && !onePerson {
+                Toggle("En grande quien habla (si no, siempre la primera persona)", isOn: $session.project.layoutOptions.pipFollowSpeaker)
+            }
+        }
+        .padding(.top, 4)
     }
 }
 

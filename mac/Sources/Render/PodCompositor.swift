@@ -7,6 +7,7 @@ final class RenderScene: @unchecked Sendable {
     let renderSize: CGSize
     let format: ExportFormat
     let layout: LayoutTemplate
+    let options: LayoutOptions
     let laneOrder: [Int]
     let trackIDs: [Int: CMPersistentTrackID]        // lane → composition video track
     let captions: [CaptionLine]
@@ -32,8 +33,9 @@ final class RenderScene: @unchecked Sendable {
          trackIDs: [Int: CMPersistentTrackID], captions: [CaptionLine], style: CaptionStyle,
          switches: [SpeakerSwitch], names: [Int: (name: String, handle: String?)], showNames: Bool,
          cropX: [Int: Double], logo: CIImage?, background: CIImage?, title: String,
-         sponsorCards: [SponsorCard] = [], photos: [Int: CIImage] = [:]) {
+         sponsorCards: [SponsorCard] = [], photos: [Int: CIImage] = [:], options: LayoutOptions = LayoutOptions()) {
         self.sponsorCards = sponsorCards
+        self.options = options
         self.photos = photos
         self.renderSize = renderSize
         self.format = format
@@ -96,7 +98,12 @@ final class RenderScene: @unchecked Sendable {
             }
         } else {
             let resolved = resolve(layout, count: visible.count)
-            let rects = panels(for: resolved, lanes: visible, main: main ?? visible[0], in: full)
+            let mainLane: Int = {
+                // Ventanita con "siempre la primera persona": el grande es la primera pista y la ventanita cambia
+                if resolved == .pip, !options.pipFollowSpeaker, let first = visible.first { return first }
+                return main ?? visible[0]
+            }()
+            let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
                 guard let frame = frames[lane] else { continue }
                 var panel = fill(frame, into: rect, cropX: cropX[lane] ?? 0.5)
@@ -109,6 +116,7 @@ final class RenderScene: @unchecked Sendable {
             }
             if showNames {
                 let multi = resolved == .sideBySide || resolved == .grid || resolved == .stack || resolved == .studio
+                    || (resolved == .solo && options.soloStudio)
                 for (lane, rect) in tags {
                     let isMainPanel = lane == main
                     let showThis = multi || (isMainPanel && (t - since < 3.5 || t < 4))
@@ -224,7 +232,7 @@ final class RenderScene: @unchecked Sendable {
     // MARK: Layout
 
     func resolve(_ l: LayoutTemplate, count: Int) -> LayoutTemplate {
-        if count <= 1 && l != .studio { return .solo }
+        if count <= 1 && l != .studio { return .solo }   // con 1 persona, "Quien habla" (y su marco de estudio si está activo)
         switch l {
         case .auto:
             switch format {
@@ -235,12 +243,24 @@ final class RenderScene: @unchecked Sendable {
         }
     }
 
-    private func panels(for layout: LayoutTemplate, lanes: [Int], main: Int, in full: CGRect)
+    /// `main` = quien va en grande; `speaking` = quien habla ahora (para elegir la ventanita cuando no coinciden).
+    private func panels(for layout: LayoutTemplate, lanes: [Int], main: Int, speaking: Int, in full: CGRect,
+                        frames: [Int: CIImage] = [:])
         -> [(lane: Int, rect: CGRect, border: Bool)] {
         let W = full.width, H = full.height
         let others = lanes.filter { $0 != main }
         switch layout {
         case .solo, .auto:
+            if options.soloStudio {
+                // Un solo recuadro con marco sobre el fondo del podcast: el video entra completo (sin recortar),
+                // así el fondo rellena lo que sobre arriba/abajo o a los lados.
+                let m = min(W, H) * 0.06
+                let area = CGRect(x: m, y: m, width: W - 2 * m, height: H - 2 * m)
+                let e = frames[main]?.extent ?? CGRect(x: 0, y: 0, width: 16, height: 9)
+                let s = min(area.width / max(1, e.width), area.height / max(1, e.height))
+                let w = e.width * s, h = e.height * s
+                return [(main, CGRect(x: area.midX - w / 2, y: area.midY - h / 2, width: w, height: h), true)]
+            }
             return [(main, full, false)]
         case .studio:
             let m = min(W, H) * 0.06
@@ -266,6 +286,21 @@ final class RenderScene: @unchecked Sendable {
             let h = H / CGFloat(lanes.count)
             return lanes.enumerated().map { (i, l) in (l, CGRect(x: 0, y: H - CGFloat(i + 1) * h, width: W, height: h), false) }
         case .grid:
+            if options.gridSpeakerBig, !others.isEmpty {
+                // Quien habla en grande arriba; los demás en una fila de cuadritos abajo
+                let gap = min(W, H) * 0.02
+                let rowH = H * 0.30
+                let bigH = H - rowH
+                var out = [(main, CGRect(x: 0, y: rowH, width: W, height: bigH).insetBy(dx: gap, dy: gap), true)]
+                let n = CGFloat(others.count)
+                let cellW = min((W - gap * (n + 1)) / n, (rowH - 2 * gap) * 16 / 9)
+                let totalW = cellW * n + gap * (n - 1)
+                let x0 = (W - totalW) / 2
+                for (i, l) in others.enumerated() {
+                    out.append((l, CGRect(x: x0 + CGFloat(i) * (cellW + gap), y: gap, width: cellW, height: rowH - 2 * gap), true))
+                }
+                return out
+            }
             let cols = 2
             let rows = Int(ceil(Double(lanes.count) / Double(cols)))
             let w = W / CGFloat(cols), h = H / CGFloat(rows)
@@ -294,7 +329,9 @@ final class RenderScene: @unchecked Sendable {
             return out
         case .pip:
             var out = [(main, full, false)]
-            if let other = others.first {
+            // Ventanita: el primero que NO está en grande; si hay varios, preferir al que habla (si no es el grande)
+            let pipLane = (speaking != main && others.contains(speaking)) ? speaking : others.first
+            if let other = pipLane {
                 let w = W * (format.isVertical ? 0.36 : 0.26)
                 let h = format.isVertical ? w * 1.25 : w * 9 / 16
                 let m = min(W, H) * 0.035
