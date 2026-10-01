@@ -161,7 +161,8 @@ enum CompositionBuilder {
                         .flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                         .map { (lane.id, $0) }
                 }),
-                options: project.layoutOptions)
+                options: project.layoutOptions,
+                mirror: project.laneMirror)
             if project.showCintillos {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }

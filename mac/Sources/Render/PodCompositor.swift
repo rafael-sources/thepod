@@ -17,6 +17,7 @@ final class RenderScene: @unchecked Sendable {
     let photos: [Int: CIImage]
     let showNames: Bool
     let cropX: [Int: Double]
+    let mirror: [Int: Bool]
     let logo: CIImage?
     let background: CIImage?
     let title: String
@@ -33,9 +34,11 @@ final class RenderScene: @unchecked Sendable {
          trackIDs: [Int: CMPersistentTrackID], captions: [CaptionLine], style: CaptionStyle,
          switches: [SpeakerSwitch], names: [Int: (name: String, handle: String?)], showNames: Bool,
          cropX: [Int: Double], logo: CIImage?, background: CIImage?, title: String,
-         sponsorCards: [SponsorCard] = [], photos: [Int: CIImage] = [:], options: LayoutOptions = LayoutOptions()) {
+         sponsorCards: [SponsorCard] = [], photos: [Int: CIImage] = [:], options: LayoutOptions = LayoutOptions(),
+         mirror: [Int: Bool] = [:]) {
         self.sponsorCards = sponsorCards
         self.options = options
+        self.mirror = mirror
         self.photos = photos
         self.renderSize = renderSize
         self.format = format
@@ -105,7 +108,12 @@ final class RenderScene: @unchecked Sendable {
             }()
             let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
-                guard let frame = frames[lane] else { continue }
+                guard var frame = frames[lane] else { continue }
+                if mirror[lane] == true {
+                    // Espejo horizontal, dejando el cuadro donde estaba
+                    let e = frame.extent
+                    frame = frame.transformed(by: CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -(e.minX * 2 + e.width), y: 0))
+                }
                 var panel = fill(frame, into: rect, cropX: cropX[lane] ?? 0.5)
                 if border {
                     let b = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect.insetBy(dx: -4, dy: -4))

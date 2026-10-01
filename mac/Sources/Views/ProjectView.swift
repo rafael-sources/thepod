@@ -145,6 +145,7 @@ struct PreviewPane: View {
                     }
                 }
             }
+            TransportBar(session: session)
             HStack {
                 Button {
                     session.markMoment()
@@ -170,6 +171,32 @@ struct PreviewPane: View {
                 .frame(maxWidth: 300)
             }
         }
+    }
+}
+
+/// Botones de reproducir siempre a la vista (los del video solo salen al pasar el ratón).
+struct TransportBar: View {
+    @ObservedObject var session: ProjectSession
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+            let playing = session.player.rate > 0
+            let t = session.player.currentTime().seconds
+            let d = session.built?.duration ?? 0
+            HStack(spacing: 10) {
+                Button { session.stopPlayback() } label: { Image(systemName: "backward.end.fill") }
+                    .help("Ir al inicio")
+                Button { session.togglePlay() } label: { Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 18) }
+                    .buttonStyle(.borderedProminent)
+                    .help(playing ? "Pausa" : "Reproducir")
+                Button { session.player.pause() } label: { Image(systemName: "stop.fill") }
+                    .help("Parar")
+                Text("\(EditEngine.clock(t.isFinite ? max(0, t) : 0)) / \(EditEngine.clock(d))")
+                    .font(.callout).monospacedDigit().foregroundStyle(Theme.secondary)
+                Spacer()
+            }
+            .disabled(session.built == nil)
+        }
+        .frame(maxWidth: 520)
     }
 }
 

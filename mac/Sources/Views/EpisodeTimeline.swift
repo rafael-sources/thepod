@@ -7,6 +7,8 @@ struct EpisodeTimeline: View {
     @ObservedObject var session: ProjectSession
     @State private var zoom: Double = 1
     @State private var collapsed = false
+    @State private var selection: (start: Double, end: Double)?   // trozo marcado con el ratón (tiempo del episodio)
+    @State private var dragAnchor: Double?
 
     static let palette: [Color] = [
         Color(red: 0.353, green: 0.545, blue: 1.0),    // azul prePod
@@ -34,6 +36,21 @@ struct EpisodeTimeline: View {
                 if !collapsed {
                     legend
                     Spacer()
+                    if let sel = selection, sel.end - sel.start > 0.05 {
+                        HStack(spacing: 8) {
+                            Text("\(EditEngine.clock(sel.start)) – \(EditEngine.clock(sel.end)) · \(String(format: "%.1f s", sel.end - sel.start))")
+                                .font(.caption).monospacedDigit()
+                            Button { session.seek(timeline: sel.start, play: true) } label: { Label("Oír", systemImage: "play.fill") }
+                                .controlSize(.small)
+                            Button(role: .destructive) { session.cutRange(sel.start, sel.end); selection = nil } label: { Label("Cortar este trozo", systemImage: "scissors") }
+                                .controlSize(.small).buttonStyle(.borderedProminent).tint(.red)
+                            Button { selection = nil } label: { Image(systemName: "xmark") }.controlSize(.small)
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panelStrong))
+                    } else {
+                        Text("Clic: ir ahí · arrastra: marcar un trozo para cortarlo").font(.caption2).foregroundStyle(Theme.secondary)
+                    }
                     Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
                     Slider(value: $zoom, in: 1...30).frame(width: 140)
                     Image(systemName: "plus.magnifyingglass").foregroundStyle(Theme.secondary)
@@ -64,13 +81,39 @@ struct EpisodeTimeline: View {
                                 TimelineCanvas(model: TimelineModel(project: p, energy: session.energy), pps: pps,
                                                rulerH: rulerH, marksH: marksH, laneH: laneH, fxH: fxH)
                                     .equatable()
+                                if let sel = selection {
+                                    Rectangle().fill(Color.white.opacity(0.18))
+                                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                                        .frame(width: max(1, CGFloat(sel.end - sel.start) * pps), height: rows)
+                                        .offset(x: CGFloat(sel.start) * pps)
+                                        .allowsHitTesting(false)
+                                }
                                 PlayheadLayer(session: session, pps: pps, height: rows)
                             }
                             .frame(width: width, height: rows)
                             .contentShape(Rectangle())
-                            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
-                                seek(to: Double(g.location.x / pps), duration: p.duration)
-                            })
+                            .gesture(DragGesture(minimumDistance: 0)
+                                .onChanged { g in
+                                    let t = min(max(0, Double(g.location.x / pps)), p.duration)
+                                    if dragAnchor == nil {
+                                        dragAnchor = min(max(0, Double(g.startLocation.x / pps)), p.duration)
+                                    }
+                                    let a = dragAnchor ?? t
+                                    if abs(g.translation.width) > 4 {
+                                        selection = (min(a, t), max(a, t))
+                                    }
+                                }
+                                .onEnded { g in
+                                    let t = min(max(0, Double(g.location.x / pps)), p.duration)
+                                    if abs(g.translation.width) <= 4 {
+                                        selection = nil
+                                        seek(to: t, duration: p.duration)
+                                    } else if let a = dragAnchor {
+                                        selection = (min(a, t), max(a, t))
+                                        session.seek(timeline: min(a, t), play: false)
+                                    }
+                                    dragAnchor = nil
+                                })
                         }
                     }
                     .frame(height: rows)

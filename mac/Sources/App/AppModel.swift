@@ -287,6 +287,26 @@ final class ProjectSession: ObservableObject {
         }
     }
 
+    /// Corta a mano un trozo marcado en la línea de tiempo (tiempo del episodio). Se puede deshacer en la lista de cortes.
+    func cutRange(_ start: Double, _ end: Double) {
+        let a = max(0, min(start, end)), b = min(project.duration, max(start, end))
+        guard b - a > 0.05 else { return }
+        player.pause()
+        project.cuts.append(Cut(start: a, end: b, kind: .manual, label: "Cortado a mano"))
+    }
+
+    /// Reproducir / pausar desde la barra de la vista previa.
+    func togglePlay() {
+        if player.rate > 0 { player.pause() } else {
+            if let d = built?.duration, player.currentTime().seconds >= d - 0.05 { player.seek(to: .zero) }
+            player.play()
+        }
+    }
+    func stopPlayback() {
+        player.pause()
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
     /// Seek preview to a TIMELINE time.
     func seek(timeline t: Double, play: Bool = true) {
         guard let b = built else { return }

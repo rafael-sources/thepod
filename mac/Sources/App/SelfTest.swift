@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -271,6 +271,40 @@ enum SelfTest {
         }
     }
 
+    /// Editor de postPod (Arreglar y Exportar) con un proyecto real, en una ventana fuera de la pantalla.
+    @MainActor
+    static func postSnapshot(slug: String, dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        Task { @MainActor in
+            do {
+                let app = AppModel()
+                let p = try ProjectStore.load(slug: slug)
+                let session = ProjectSession(project: p, app: app)
+                let host = NSHostingView(rootView: ProjectView(session: session)
+                    .environmentObject(app)
+                    .frame(width: 1440, height: 900)
+                    .preferredColorScheme(.dark))
+                host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+                let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                win.appearance = NSAppearance(named: .darkAqua)
+                win.contentView = host
+                win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+                win.orderFrontRegardless()
+                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export)] {
+                    session.step = step
+                    try? await Task.sleep(nanoseconds: 7_000_000_000)
+                    host.layoutSubtreeIfNeeded()
+                    if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                        host.cacheDisplay(in: host.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                        print("snapshot \(name)")
+                    }
+                }
+            } catch { print("ERROR \(error.localizedDescription)") }
+            fflush(stdout); exit(0)
+        }
+    }
+
     /// Cintillos con los logos y sponsors reales de un podcast (solo lectura, no entra a ninguna sala).
     @MainActor
     static func cintilloSnapshot(slug: String, dir: URL) {
@@ -424,6 +458,11 @@ enum SelfTest {
                 }
                 fflush(stdout); exit(0)
             }
+            return
+        }
+        if let i = args.firstIndex(of: "--post-snapshot"), args.count > i + 2 {
+            let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { postSnapshot(slug: slug, dir: dir) }
             return
         }
         if let i = args.firstIndex(of: "--ama-snapshot"), args.count > i + 1 {

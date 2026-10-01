@@ -34,6 +34,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showNames: Bool = true
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
+    var laneMirror: [Int: Bool] = [:]   // lane id -> voltear el video en espejo (horizontal)
 
     var episode = EpisodeInfo()         // from prePod (via postPod's proyecto.json)
     var sponsors: [Sponsor] = []
@@ -415,6 +416,7 @@ extension Project {
         showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
         laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]
+        laneMirror = try c.decodeIfPresent([Int: Bool].self, forKey: .laneMirror) ?? [:]
         moments = try c.decodeIfPresent([Moment].self, forKey: .moments) ?? []
         episode = try c.decodeIfPresent(EpisodeInfo.self, forKey: .episode) ?? EpisodeInfo()
         sponsors = try c.decodeIfPresent([Sponsor].self, forKey: .sponsors) ?? []

@@ -226,6 +226,8 @@ struct FixStep: View {
                             }
                         }
                     }
+                    Text("Para quitar un trozo a mano: arrástralo en la línea de tiempo de abajo y pulsa “Cortar este trozo”. Lo ves en la lista de cortes y puedes desactivarlo.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
                     if !session.project.cuts.isEmpty {
                         DisclosureGroup("Ver los \(session.project.cuts.count) cortes (\(EditEngine.clock(session.project.enabledCuts.reduce(0) { $0 + $1.length })) en total)",
                                         isExpanded: $showCuts) {
@@ -638,6 +640,13 @@ struct ExportStep: View {
                                 }
                             }
                             layoutOptionsView(onePerson: onePerson)
+                            Divider()
+                            Text("Espejo (voltear el video de izquierda a derecha)").font(.caption.bold())
+                            ForEach(session.project.lanes) { lane in
+                                Toggle(session.project.laneName(lane.id), isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
+                                                                                        set: { session.project.laneMirror[lane.id] = $0 }))
+                                    .font(.caption)
+                            }
                         }
                         Card {
                             Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
