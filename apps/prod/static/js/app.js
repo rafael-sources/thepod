@@ -5031,10 +5031,41 @@ var DirectorView = {
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     }
 
+    // --- Teléfono/tablet: paneles por pestaña (hoja inferior) y pantalla encendida ---
+    var dTab = ref(null);
+    var dChatSeen = ref(0);
+    var dChatUnread = computed(function () { return dTab.value === "chat" ? 0 : Math.max(0, directorChat.value.length - dChatSeen.value); });
+    function openDTab(t) {
+      dTab.value = dTab.value === t ? null : t;
+      if (dTab.value === "chat") {
+        dChatSeen.value = directorChat.value.length;
+        nextTick(function () { var el = document.getElementById("director-chat-scroll"); if (el) el.scrollTop = el.scrollHeight; });
+      }
+    }
+    watch(function () { return directorChat.value.length; }, function (n) { if (dTab.value === "chat") dChatSeen.value = n; });
+    var _dWake = null;
+    async function dKeepAwake() {
+      try { if ("wakeLock" in navigator && !_dWake) { _dWake = await navigator.wakeLock.request("screen"); _dWake.addEventListener("release", function () { _dWake = null; }); } } catch (_) {}
+    }
+    function dVisibility() { if (document.visibilityState === "visible" && connected.value) dKeepAwake(); }
+    document.addEventListener("visibilitychange", dVisibility);
+    watch(connected, function (v) { if (v) dKeepAwake(); else { try { if (_dWake) _dWake.release(); } catch (_) {} _dWake = null; } });
+    var readyCount = computed(function () {
+      return participants.value.filter(function (p) { return (p.role === "host" || p.role === "co-host") && readyMap["participant_" + p.id]; }).length;
+    });
+    var hostCount = computed(function () {
+      return participants.value.filter(function (p) { return p.role === "host" || p.role === "co-host"; }).length;
+    });
+
     onMounted(function () { loadParticipants(); loadStreams(); loadSounds(); loadDirectorChat(); loadBranding(); });
-    onBeforeUnmount(function () { disconnect(); });
+    onBeforeUnmount(function () {
+      disconnect();
+      document.removeEventListener("visibilitychange", dVisibility);
+      try { if (_dWake) _dWake.release(); } catch (_) {}
+    });
 
     return {
+      dTab: dTab, openDTab: openDTab, dChatUnread: dChatUnread, readyCount: readyCount, hostCount: hostCount,
       error: error, connected: connected, connect: connect, disconnect: disconnect,
       participants: participants, remoteMap: remoteMap,
       activeOverlays: activeOverlays, removeOverlay: removeOverlay,
@@ -5056,31 +5087,39 @@ var DirectorView = {
     };
   },
   template: '\
-    <div class="control-room">\
+    <div class="control-room" :class="[{ \'dtab-open\': !!dTab, \'is-connected\': connected, \'is-rec\': recording }, dTab ? \'dtab-\' + dTab : \'\']">\
       <div class="cr-top">\
-        <button class="ghost" @click="$props.onBack" style="flex-shrink:0;">← Sesiones</button>\
+        <button class="ghost cr-back" @click="$props.onBack" style="flex-shrink:0;"><span class="d-only">← Sesiones</span><span class="m-only">←</span></button>\
         <h3 style="margin:0;">{{ session.title }}</h3>\
-        <span class="badge-id">#{{ session.id }}</span>\
+        <span class="badge-id d-only">#{{ session.id }}</span>\
         <div class="spacer"></div>\
-        <div class="timecode">{{ formatTC(timecode) }}</div>\
-        <div v-for="st in streams" :key="st.id" class="stream-badge" :class="st.status === \'active\' ? \'live\' : \'off\'">\
+        <div class="timecode" :class="{ \'cr-idle\': !recording }">{{ formatTC(timecode) }}</div>\
+        <div v-for="st in streams" :key="st.id" class="stream-badge d-only" :class="st.status === \'active\' ? \'live\' : \'off\'">\
           {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
         </div>\
-        <button v-if="connected && !recording && countdown === null" class="primary" @click="startRecording" style="flex-shrink:0;"\
+        <button v-if="connected && !recording && countdown === null" class="primary cr-rec" @click="startRecording" style="flex-shrink:0;"\
                 :disabled="!allParticipantsReady"\
                 :style="allParticipantsReady ? \'background:var(--signal);\' : \'opacity:0.4;\'"\
                 :title="allParticipantsReady ? \'Iniciar grabación\' : \'Esperando que los hosts den PREPARADO\'">● GRABAR</button>\
-        <span v-else-if="countdown !== null" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
+        <span v-else-if="countdown !== null" class="cr-count" style="font-size:22px;font-weight:bold;color:var(--signal);font-family:var(--font-mono);">\
           {{ countdown === 0 ? "¡REC!" : countdown }}\
         </span>\
-        <button v-else-if="recording" class="ghost" @click="stopRecording"\
+        <button v-else-if="recording" class="ghost cr-rec" @click="stopRecording"\
                 style="flex-shrink:0;color:var(--signal);border-color:var(--signal);">■ DETENER</button>\
-        <button v-if="!connected" class="primary" @click="connect" style="flex-shrink:0;">🟢 Conectar</button>\
-        <button v-else class="ghost" @click="disconnect" style="flex-shrink:0;">Desconectar</button>\
+        <button v-if="!connected" class="primary d-only" @click="connect" style="flex-shrink:0;">🟢 Conectar</button>\
+        <button v-else class="ghost d-only" @click="disconnect" style="flex-shrink:0;">Desconectar</button>\
       </div>\
 \
       <div class="cr-left">\
+        <div class="cr-sheet-head">\
+          <button :class="{ on: dTab === \'personas\' }" @click="openDTab(\'personas\')">Personas</button>\
+          <button :class="{ on: dTab === \'chat\' }" @click="openDTab(\'chat\')">Chat</button>\
+          <div class="spacer"></div>\
+          <button class="cr-close" @click="dTab = null">Cerrar</button>\
+        </div>\
+        <div class="cr-sec cr-sec-personas">\
         <div class="eyebrow" style="padding:0 0 6px 2px;">PARTICIPANTES</div>\
+        <div v-if="!participants.filter(function(x){ return x.role !== \'director\'; }).length" class="muted" style="font-size:12px;">Todavía no entra nadie a la sala.</div>\
         <div v-for="p in participants.filter(function(x){ return x.role !== \'director\'; })" :key="p.id" class="cr-participant">\
           <div class="cr-p-head">\
             <div class="cr-p-thumb" :data-director-thumb="\'participant_\' + p.id"></div>\
@@ -5092,50 +5131,78 @@ var DirectorView = {
             </div>\
           </div>\
           <div class="cr-p-actions">\
-            <button class="ghost" @click="forceMute(p)" title="Mutear" style="font-size:12px;">🔇</button>\
-            <button class="ghost" @click="kickParticipant(p)" title="Expulsar" style="font-size:12px; color:var(--signal);">✕</button>\
+            <button class="ghost" @click="forceMute(p)" title="Mutear" style="font-size:12px;">🔇<span class="cr-m-txt"> Silenciar</span></button>\
+            <button class="ghost" @click="kickParticipant(p)" title="Expulsar" style="font-size:12px; color:var(--signal);">✕<span class="cr-m-txt"> Sacar</span></button>\
           </div>\
         </div>\
-\
-        <div class="eyebrow" style="padding:10px 0 6px 2px;">IFB AUDIO</div>\
-        <button class="ptt-btn ptt-btn-all" :class="{ active: ifbActive }"\
-                @mousedown="startIFB(\'all_hosts\')" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()">🎧 PTT TODOS</button>\
-        <div v-for="p in participants.filter(function(x){ return x.role === \'host\' || x.role === \'co-host\'; })" :key="\'ptt-\' + p.id" style="margin-bottom:4px;">\
-          <button class="ptt-btn" style="width:100%;"\
-                  @mousedown="startIFB([\'participant_\' + p.id])" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()">🎧 {{ p.display_name }}</button>\
         </div>\
 \
+        <div class="cr-sec cr-sec-ifb">\
+        <div class="eyebrow" style="padding:10px 0 6px 2px;">IFB AUDIO <span class="cr-m-txt" style="text-transform:none;letter-spacing:0;color:var(--paper-dim);">· mantén presionado para hablarles al oído</span></div>\
+        <button class="ptt-btn ptt-btn-all" :class="{ active: ifbActive }"\
+                @mousedown="startIFB(\'all_hosts\')" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()"\
+                @touchstart.prevent="startIFB(\'all_hosts\')" @touchend.prevent="stopIFB()" @touchcancel="stopIFB()" @contextmenu.prevent>🎧 PTT TODOS</button>\
+        <div v-for="p in participants.filter(function(x){ return x.role === \'host\' || x.role === \'co-host\'; })" :key="\'ptt-\' + p.id" style="margin-bottom:4px;">\
+          <button class="ptt-btn" style="width:100%;"\
+                  @mousedown="startIFB([\'participant_\' + p.id])" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()"\
+                  @touchstart.prevent="startIFB([\'participant_\' + p.id])" @touchend.prevent="stopIFB()" @touchcancel="stopIFB()" @contextmenu.prevent>🎧 {{ p.display_name }}</button>\
+        </div>\
+        </div>\
+\
+        <div class="cr-sec cr-sec-chat">\
         <div class="eyebrow" style="padding:10px 0 6px 2px;">DIRECTOR CHAT</div>\
-        <div style="max-height:160px;overflow-y:auto;margin-bottom:6px;" id="director-chat-scroll">\
-          <div v-for="m in directorChat" :key="m.id" style="font-size:11px;margin-bottom:4px;">\
+        <div class="cr-chat-scroll" style="max-height:160px;overflow-y:auto;margin-bottom:6px;" id="director-chat-scroll">\
+          <div v-for="m in directorChat" :key="m.id" class="cr-chat-msg" style="font-size:11px;margin-bottom:4px;">\
             <span style="font-weight:600;color:var(--signal-cyan);">{{ m.author }}:</span> {{ m.text }}\
           </div>\
           <div v-if="!directorChat.length" style="font-size:11px;color:var(--paper-dim);">Sin mensajes aún.</div>\
         </div>\
-        <div style="display:flex;gap:4px;">\
+        <div class="cr-chat-input" style="display:flex;gap:4px;">\
           <input v-model="directorChatInput" placeholder="Mensaje..." class="input" style="flex:1;font-size:11px;padding:5px 8px;"\
                  @keyup.enter="sendDirectorChat" />\
           <button class="ghost" style="font-size:11px;padding:5px 8px;" @click="sendDirectorChat">Enviar</button>\
         </div>\
+        </div>\
       </div>\
 \
       <div class="cr-center">\
-        <div v-if="!connected" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--paper-dim);font-family:var(--font-mono);font-size:13px;">\
-          Conecta al Control Room para ver los feeds\
+        <div v-if="!connected" class="cr-wait" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--paper-dim);font-family:var(--font-mono);font-size:13px;">\
+          <span class="d-only">Conecta al Control Room para ver los feeds</span>\
+          <div class="m-only cr-wait-m">\
+            <div class="cr-wait-ico">🎬</div>\
+            <div class="cr-wait-txt">Conéctate para ver a los participantes, dar grabar y mandar cintillos y cues.</div>\
+            <button class="primary cr-connect-m" @click="connect">🟢 Conectar</button>\
+          </div>\
         </div>\
-        <div v-else class="cr-multiview">\
+        <div v-else class="cr-multiview" :class="\'n\' + participants.filter(function(x){ return x.role !== \'director\'; }).length">\
           <div v-for="p in participants.filter(function(x){ return x.role !== \'director\'; })" :key="p.id"\
                class="cr-feed" :class="{ spotlight: remoteMap[\'participant_\' + p.id] && remoteMap[\'participant_\' + p.id].speaking }">\
             <div :data-director-feed="\'participant_\' + p.id" style="width:100%;height:100%;"></div>\
-            <div class="cr-feed-label">{{ p.display_name }}</div>\
+            <div class="cr-feed-label">{{ p.display_name }}<span v-if="readyMap[\'participant_\' + p.id]" class="cr-feed-ready"> · LISTO</span></div>\
           </div>\
+        </div>\
+        <div v-if="connected" class="cr-m-status m-only">\
+          <span v-if="recording" class="cr-m-rec">● GRABANDO</span>\
+          <span v-else-if="countdown !== null" class="cr-m-rec">Empieza en {{ countdown }}</span>\
+          <span v-else-if="hostCount === 0">Esperando a los anfitriones</span>\
+          <span v-else-if="allParticipantsReady" style="color:var(--signal);">Todos preparados · puedes grabar</span>\
+          <span v-else>Preparados {{ readyCount }} de {{ hostCount }}</span>\
+          <span v-for="ov in activeOverlays" :key="ov.event_id" class="active-overlay-pill" @click="removeOverlay(ov)">{{ ov.event_type }} ✕</span>\
         </div>\
       </div>\
 \
       <div class="cr-right">\
+        <div class="cr-sheet-head">\
+          <button :class="{ on: dTab === \'cintillos\' }" @click="openDTab(\'cintillos\')">Cintillos</button>\
+          <button :class="{ on: dTab === \'cues\' }" @click="openDTab(\'cues\')">Cues</button>\
+          <button :class="{ on: dTab === \'mas\' }" @click="openDTab(\'mas\')">Más</button>\
+          <div class="spacer"></div>\
+          <button class="cr-close" @click="dTab = null">Cerrar</button>\
+        </div>\
+        <div class="cr-sec cr-sec-cintillos">\
         <div class="eyebrow" style="padding:0 0 6px 2px;">CINTILLOS</div>\
 \
-        <div style="display:flex;gap:4px;margin-bottom:8px;">\
+        <div class="cr-tabs" style="display:flex;gap:4px;margin-bottom:8px;">\
           <button v-for="t in [[\'sponsor\',\'Sponsor\'],[\'podcast\',\'Podcast\'],[\'segment\',\'Segmento\'],[\'otros\',\'Otros\']]" :key="t[0]"\
                   class="ghost" style="flex:1;font-size:10px;padding:5px 2px;"\
                   :style="cin.tab === t[0] ? \'background:var(--accent);color:#1a1410;font-weight:700;\' : \'\'"\
@@ -5207,7 +5274,9 @@ var DirectorView = {
             {{ ov.event_type }} · {{ cintilloTitle(ov) || (ov.payload && (ov.payload.label || ov.payload.author)) || \'\' }} ✕\
           </div>\
         </div>\
+        </div>\
 \
+        <div class="cr-sec cr-sec-cues">\
         <div class="eyebrow" style="padding:10px 0 6px 2px;">CUES</div>\
         <div style="margin-bottom:6px;">\
           <select v-model="cueTarget" class="input" style="font-size:11px;padding:4px 6px;">\
@@ -5228,7 +5297,9 @@ var DirectorView = {
           <input type="checkbox" :checked="guestCuesVisible" @change="toggleGuestCues" style="margin:0;" />\
           Invitados ven cues\
         </label>\
+        </div>\
 \
+        <div class="cr-sec cr-sec-mas">\
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SUBIDAS</div>\
         <div v-if="Object.keys(participantUploads).length === 0" style="font-size:11px;color:var(--paper-dim);">Sin datos aún</div>\
         <div v-for="(u, id) in participantUploads" :key="id" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;">\
@@ -5245,18 +5316,26 @@ var DirectorView = {
         <div v-if="exportStatus" style="font-size:10px;margin-top:4px;color:var(--paper-dim);">{{ exportStatus }}</div>\
 \
         <div class="eyebrow" style="padding:10px 0 6px 2px;">SOUNDBOARD</div>\
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
+        <div class="cr-sounds" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
           <button v-for="s in sessionSounds" :key="s.id" class="ghost"\
                   :style="\'background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);\'"\
                   @click="triggerSound(s)">{{ s.name }}</button>\
         </div>\
         <div v-if="directorSounds.length" style="margin-top:6px;">\
           <div class="eyebrow" style="padding:0 0 4px 2px;font-size:9px;color:var(--signal-cyan);">DIRECTOR ONLY</div>\
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
+          <div class="cr-sounds" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">\
             <button v-for="s in directorSounds" :key="s.id" class="ghost"\
                     :style="\'border:1px solid var(--signal-cyan);background:\' + (playingPad[s.id] ? \'rgba(255,255,255,0.15)\' : (s.color || \'var(--ink-sunken)\')) + \';font-size:10px;padding:8px 4px;border-radius:var(--r-sm);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);\'"\
                     @click="triggerSound(s)">{{ s.name }}</button>\
           </div>\
+        </div>\
+        <div class="cr-m-only-block">\
+          <div class="eyebrow" style="padding:14px 0 6px 2px;">SALA</div>\
+          <div v-for="st in streams" :key="st.id" class="stream-badge" :class="st.status === \'active\' ? \'live\' : \'off\'" style="margin-bottom:6px;">\
+            {{ st.platform || "RTMP" }} {{ st.status === "active" ? "LIVE" : st.status }}\
+          </div>\
+          <button v-if="connected" class="ghost" style="width:100%;" @click="disconnect(); dTab = null;">Desconectar del Control Room</button>\
+        </div>\
         </div>\
       </div>\
 \
@@ -5270,6 +5349,18 @@ var DirectorView = {
         <div v-for="ov in activeOverlays" :key="ov.event_id" class="active-overlay-pill">\
           {{ ov.event_type }}\
         </div>\
+      </div>\
+\
+      <div class="cr-mbar">\
+        <button class="cr-mbtn cr-mbtn-ptt" :class="{ active: ifbActive }" :disabled="!connected"\
+                @mousedown="startIFB(\'all_hosts\')" @mouseup="stopIFB()" @mouseleave="ifbActive && stopIFB()"\
+                @touchstart.prevent="startIFB(\'all_hosts\')" @touchend.prevent="stopIFB()" @touchcancel="stopIFB()" @contextmenu.prevent>\
+          <span class="cr-mico">🎧</span><span class="cr-mtxt">{{ ifbActive ? "Hablando…" : "Hablar" }}</span></button>\
+        <button class="cr-mbtn" :class="{ on: dTab === \'cintillos\' }" @click="openDTab(\'cintillos\')"><span class="cr-mico">🏷️</span><span class="cr-mtxt">Cintillos</span><span v-if="activeOverlays.length" class="cr-mbadge">{{ activeOverlays.length }}</span></button>\
+        <button class="cr-mbtn" :class="{ on: dTab === \'cues\' }" @click="openDTab(\'cues\')"><span class="cr-mico">🚦</span><span class="cr-mtxt">Cues</span></button>\
+        <button class="cr-mbtn" :class="{ on: dTab === \'personas\' }" @click="openDTab(\'personas\')"><span class="cr-mico">👥</span><span class="cr-mtxt">Gente</span></button>\
+        <button class="cr-mbtn" :class="{ on: dTab === \'chat\' }" @click="openDTab(\'chat\')"><span class="cr-mico">💬</span><span class="cr-mtxt">Chat</span><span v-if="dChatUnread" class="cr-mbadge">{{ dChatUnread }}</span></button>\
+        <button class="cr-mbtn" :class="{ on: dTab === \'mas\' }" @click="openDTab(\'mas\')"><span class="cr-mico">⋯</span><span class="cr-mtxt">Más</span></button>\
       </div>\
     </div>\
   ',
