@@ -549,6 +549,57 @@ final class ProjectSession: ObservableObject {
             return urls
     }
 
+    // MARK: Sincronizar personas
+
+    /// Mueve el inicio de la grabación de una persona (desfase). Arrastra con ella sus palabras transcritas
+    /// y vuelve a calcular quién habla.
+    func setLaneOffset(_ laneId: Int, _ newOffset: Double) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+        let delta = max(0, newOffset) - project.lanes[i].offset
+        guard abs(delta) > 0.0005 else { return }
+        var p = project
+        p.lanes[i].offset = max(0, newOffset)
+        for w in p.words.indices where p.words[w].lane == laneId {
+            p.words[w].s = max(0, p.words[w].s + delta)
+            p.words[w].e = max(0, p.words[w].e + delta)
+        }
+        project = p
+        try? FileManager.default.removeItem(at: AudioAnalysis.energyURL(project.id))
+        energy = nil
+        if project.lanes.count > 1 {
+            run("Analizando quién habla") { [self] in
+                try await ensureEnergy()
+                schedulePreview(immediate: true)
+            }
+        }
+    }
+
+    // MARK: Música y efectos
+
+    /// Mueve un sonido/música de la línea de audio a otro punto del episodio.
+    func moveSound(_ clipId: Int, to timeline: Double) {
+        guard let i = project.audioLane.firstIndex(where: { $0.id == clipId }) else { return }
+        project.audioLane[i].tlStart = min(max(0, timeline), max(0, project.duration - 0.5))
+    }
+
+    /// El usuario elige archivos de música/efectos; se copian al proyecto y quedan en la biblioteca (y si se pide, puestos).
+    func importSounds(placeAt: Double? = nil) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
+        panel.allowsMultipleSelection = true
+        panel.message = "Elige música o efectos (mp3, wav, m4a)"
+        guard panel.runModal() == .OK else { return }
+        let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        for url in panel.urls {
+            let to = dest.appendingPathComponent(url.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: to.path) { try? FileManager.default.copyItem(at: url, to: to) }
+            let rel = "sfx/\(url.lastPathComponent)"
+            if !project.sfxLibrary.contains(rel) { project.sfxLibrary.insert(rel, at: 0) }
+            if let placeAt { Task { await addSound(rel, at: placeAt) } }
+        }
+    }
+
     // MARK: Sound effects
 
     func addSound(_ rel: String, at timeline: Double) async {

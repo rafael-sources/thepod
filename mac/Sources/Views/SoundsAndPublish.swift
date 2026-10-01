@@ -16,9 +16,14 @@ struct SoundsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 14) {
-                StepHeader(title: "Efectos de sonido",
-                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas y, si quieres, agregas más.")
-                Text("En tu episodio").font(.headline)
+                StepHeader(title: "Efectos y música",
+                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre y la mueves donde quieras.")
+                HStack {
+                    Text("En tu episodio").font(.headline)
+                    Spacer()
+                    Button { session.importSounds(placeAt: session.playheadTimeline) } label: { Label("Agregar música aquí…", systemImage: "music.note.list") }
+                        .help("Elige un mp3/wav/m4a: se pone donde está el video y luego lo mueves con los botones")
+                }
                 if session.project.audioLane.isEmpty {
                     Card {
                         Label("Este episodio no tiene efectos puestos en postPod", systemImage: "speaker.slash")
@@ -26,21 +31,36 @@ struct SoundsStep: View {
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
                 } else {
-                    Text("\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "efecto" : "efectos"). Toca la hora para oírlo en el video.")
+                    Text("\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "sonido" : "sonidos"). Toca la hora para oírlo en el video; con los botones lo mueves.")
                         .font(.caption).foregroundStyle(Theme.secondary)
                     ScrollView {
                         LazyVStack(spacing: 6) {
                             ForEach($session.project.audioLane) { $clip in
-                                HStack {
-                                    Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
-                                        .buttonStyle(.link).monospacedDigit()
-                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
-                                    Spacer()
-                                    Image(systemName: "speaker.wave.2").foregroundStyle(Theme.secondary)
-                                    Slider(value: $clip.volume, in: 0...1.5).frame(width: 110)
-                                    Button { session.project.audioLane.removeAll { $0.id == clip.id } } label: { Image(systemName: "trash") }
-                                        .buttonStyle(.borderless)
-                                        .help("Quitar este efecto")
+                                VStack(spacing: 2) {
+                                    HStack {
+                                        Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
+                                            .buttonStyle(.link).monospacedDigit()
+                                        Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
+                                        Spacer()
+                                        Image(systemName: "speaker.wave.2").foregroundStyle(Theme.secondary)
+                                        Slider(value: $clip.volume, in: 0...1.5).frame(width: 110)
+                                        Button { session.project.audioLane.removeAll { $0.id == clip.id } } label: { Image(systemName: "trash") }
+                                            .buttonStyle(.borderless)
+                                            .help("Quitar")
+                                    }
+                                    HStack(spacing: 6) {
+                                        Text("Mover:").font(.caption).foregroundStyle(Theme.secondary)
+                                        Button("Al inicio") { session.moveSound(clip.id, to: 0) }
+                                        Button("−1 s") { session.moveSound(clip.id, to: clip.tlStart - 1) }
+                                        Button("Aquí") { session.moveSound(clip.id, to: session.playheadTimeline) }
+                                            .help("Donde está el video ahora")
+                                        Button("+1 s") { session.moveSound(clip.id, to: clip.tlStart + 1) }
+                                        Button("Al final") { session.moveSound(clip.id, to: session.project.duration - max(0, clip.srcOut - clip.srcIn)) }
+                                            .help("Termina junto con el episodio (para un cierre)")
+                                        Spacer()
+                                        Text(String(format: "dura %.0f s", clip.srcOut - clip.srcIn)).font(.caption2).foregroundStyle(Theme.secondary)
+                                    }
+                                    .controlSize(.small)
                                 }
                                 .padding(8)
                                 .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))

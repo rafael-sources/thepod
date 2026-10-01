@@ -228,6 +228,28 @@ struct FixStep: View {
                     }
                     Text("Para quitar un trozo a mano: arrástralo en la línea de tiempo de abajo y pulsa “Cortar este trozo”. Lo ves en la lista de cortes y puedes desactivarlo.")
                         .font(.caption).foregroundStyle(Theme.secondary)
+                    if session.project.lanes.count > 1 {
+                        Card {
+                            Text("Sincronizar personas").font(.headline)
+                            Text("Si una persona va adelantada o atrasada, mueve el inicio de su grabación. Los cortes se aplican igual a todos.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                            ForEach(session.project.lanes) { lane in
+                                HStack(spacing: 6) {
+                                    Text(session.project.laneName(lane.id)).frame(width: 110, alignment: .leading).lineLimit(1)
+                                    Button("−0.5") { session.setLaneOffset(lane.id, lane.offset - 0.5) }
+                                    Button("−0.1") { session.setLaneOffset(lane.id, lane.offset - 0.1) }
+                                    Text(String(format: "%+.2f s", lane.offset)).monospacedDigit().frame(width: 72)
+                                    Button("+0.1") { session.setLaneOffset(lane.id, lane.offset + 0.1) }
+                                    Button("+0.5") { session.setLaneOffset(lane.id, lane.offset + 0.5) }
+                                    Button("Oír") { session.seek(timeline: max(0, session.playheadTimeline - 1), play: true) }
+                                        .help("Reproduce desde un segundo antes de donde está el video")
+                                }
+                                .controlSize(.small)
+                            }
+                            Text("El inicio no puede ser negativo: si alguien va adelantado, atrasa a los demás.")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
                     if !session.project.cuts.isEmpty {
                         DisclosureGroup("Ver los \(session.project.cuts.count) cortes (\(EditEngine.clock(session.project.enabledCuts.reduce(0) { $0 + $1.length })) en total)",
                                         isExpanded: $showCuts) {
