@@ -426,7 +426,7 @@ enum SelfTest {
                 let window: EditEngine.Span? = (s <= 0 && e >= p.duration) ? nil : (s, e)   // todo el episodio: sin ventana (con intro/cierre)
                 // "--render … vertical reel N": con el diseño del reel N (1 = el primero), como al exportar reels
                 if a.count > i + 6, a[i + 5] == "reel", let n = Int(a[i + 6]), n >= 1, n <= p.reels.count {
-                    p = p.applying(p.look(for: p.reels[n - 1]))
+                    p = p.applying(p.look(for: p.reels[n - 1]), reel: p.reels[n - 1])
                 }
                 let url = try await Exporter.export(project: p, format: fmt, window: window, baseName: "render-test",
                                                     energy: AudioAnalysis.loadEnergy(p.id)) { _ in }

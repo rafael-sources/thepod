@@ -225,6 +225,7 @@ final class ProjectSession: ObservableObject {
     @Published var previewWindow: EditEngine.Span?
     @Published var previewLayout: LayoutTemplate?
     @Published var previewLook: ReelLook?          // viendo un reel: su diseño y marca encima del episodio
+    @Published var previewReel: Reel?              // viendo un reel: sus cortes propios
     /// A quién le cambia la posición de los subtítulos al arrastrarlos sobre el video (nil = no se pueden arrastrar).
     enum CaptionTarget: Equatable { case episode, allReels, reel(UUID) }
     @Published var captionDragTarget: CaptionTarget?
@@ -341,13 +342,14 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil, look: ReelLook? = nil) {
-        let changed = format != previewFormat || layout != previewLayout || look != previewLook
+    func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil, look: ReelLook? = nil, reel: Reel? = nil) {
+        let changed = format != previewFormat || layout != previewLayout || look != previewLook || reel != previewReel
             || window?.start != previewWindow?.start || window?.end != previewWindow?.end
         previewFormat = format
         previewWindow = window
         previewLayout = layout
         previewLook = look
+        previewReel = reel
         if changed { schedulePreview(immediate: true) }
     }
 
@@ -356,7 +358,7 @@ final class ProjectSession: ObservableObject {
         let current = player.currentTime().seconds - (built?.introDuration ?? 0)
         let oldKeep = built?.keep
         do {
-            let shown = previewLook.map { project.applying($0) } ?? project
+            let shown = previewLook.map { project.applying($0, reel: previewReel) } ?? project
             let b = try await CompositionBuilder.build(project: shown, format: previewFormat == .audio ? .landscape : previewFormat,
                                                        window: previewWindow, energy: energy, layoutOverride: previewLayout, preview: true)
             guard !Task.isCancelled else { return }
@@ -594,7 +596,7 @@ final class ProjectSession: ObservableObject {
             for (i, reel) in reels.enumerated() {
                 let label = "Reel \(i + 1) de \(reels.count): \(reel.title)"
                 report("Exportando reels", label, 0)
-                let url = try await Exporter.export(project: project.applying(project.look(for: reel)), format: .vertical,
+                let url = try await Exporter.export(project: project.applying(project.look(for: reel), reel: reel), format: .vertical,
                                                     window: (reel.start, reel.end),
                                                     baseName: "reel-\(i + 1)-\(reel.title)", energy: energy) { [weak self] f in
                     self?.reportAsync("Exportando reels", label, f)
@@ -741,6 +743,25 @@ final class ProjectSession: ObservableObject {
         order.remove(at: i)
         order.insert(laneId, at: min(max(0, pos - 1), order.count))
         project.laneOrder = order
+    }
+
+    /// Orden en pantalla propio de un reel (o de todos los reels).
+    func setReelLanePosition(_ laneId: Int, _ pos: Int, reelId: UUID?) {
+        func moved(_ base: [Int]) -> [Int] {
+            var order = base
+            for l in project.lanes.map(\.id) where !order.contains(l) { order.append(l) }
+            guard let i = order.firstIndex(of: laneId) else { return order }
+            order.remove(at: i)
+            order.insert(laneId, at: min(max(0, pos - 1), order.count))
+            return order
+        }
+        if let reelId, let i = project.reels.firstIndex(where: { $0.id == reelId }) {
+            var l = project.reels[i].look ?? project.reelLook
+            l.laneOrder = moved(l.laneOrder ?? project.reelLook.laneOrder ?? project.lanesOnScreen.map(\.id))
+            project.reels[i].look = l
+        } else {
+            project.reelLook.laneOrder = moved(project.reelLook.laneOrder ?? project.lanesOnScreen.map(\.id))
+        }
     }
 
     // MARK: Sincronizar personas
@@ -1070,12 +1091,14 @@ final class ProjectSession: ObservableObject {
         var isCut: Bool
     }
 
-    func phrases() -> [Phrase] {
+    /// Frases del transcrito. Con `reel`: solo las que caen en ese reel, y "cortada" cuenta también sus cortes propios.
+    func phrases(reel: Reel? = nil) -> [Phrase] {
         let words = project.words
         guard !words.isEmpty else { return [] }
         var out: [Phrase] = []
         var startIdx = 0
-        let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts)
+        let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts + (reel?.cuts ?? []))
+
         func close(_ end: Int) {
             guard end > startIdx else { return }
             let slice = words[startIdx..<end]
@@ -1093,7 +1116,55 @@ final class ProjectSession: ObservableObject {
             }
         }
         close(words.count)
+        if let reel { out.removeAll { $0.end < reel.start || $0.start > reel.end } }
         return out
+    }
+
+    /// Quitar o devolver una frase solo en un reel (sus cortes propios; el episodio no cambia).
+    func togglePhraseCut(_ phrase: Phrase, reel: Reel) {
+        guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+        let cuts = project.reels[i].cuts
+        if cuts.contains(where: { $0.enabled && $0.start <= phrase.start + 0.1 && $0.end >= phrase.end - 0.1 }) {
+            project.reels[i].cuts.removeAll { $0.start <= phrase.start + 0.1 && $0.end >= phrase.end - 0.1 }
+        } else if phrase.isCut {
+            togglePhraseCut(phrase)   // estaba cortada en el episodio: devolverla ahí
+        } else {
+            project.reels[i].cuts.append(Cut(start: max(0, phrase.start - 0.05), end: phrase.end + 0.05, kind: .manual,
+                                             label: "“\(phrase.text.prefix(40))…”"))
+        }
+        if previewReel?.id == reel.id { previewReel = project.reels[i] }
+    }
+
+    /// Quita los silencios solo dentro de un reel (cortes propios del reel).
+    func removeSilences(in reel: Reel) {
+        run("Buscando silencios en el reel") { [self] in
+            try await ensureEnergy()
+            guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+            let st = project.fix
+            var found: [Cut] = []
+            if !project.words.isEmpty {
+                found = EditEngine.silenceCuts(words: project.words, duration: project.duration, minGap: st.minSilence, pad: st.keepPad)
+                if let energy { found = EditEngine.protectSpeech(found, energy: energy.combined, hop: EnergyMap.hop, pad: st.keepPad) }
+            } else if let energy {
+                found = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: st.minSilence, pad: st.keepPad)
+            }
+            // Solo lo que cae dentro del reel y no está ya cortado en el episodio
+            let inside = found.filter { $0.start >= reel.start - 0.01 && $0.end <= reel.end + 0.01 }
+                .filter { c in !project.cuts.contains { $0.enabled && $0.start <= c.start + 0.05 && $0.end >= c.end - 0.05 } }
+            project.reels[i].cuts.removeAll { $0.kind == .silence }
+            project.reels[i].cuts += inside
+            if previewReel?.id == reel.id { previewReel = project.reels[i] }
+            reelsNote = inside.isEmpty ? "No hay silencios largos en este reel." : "Quitamos \(inside.count) silencios solo en este reel (\(String(format: "%.1f", inside.reduce(0) { $0 + $1.length })) s)."
+        }
+    }
+
+    /// Solo el sonido de estudio (sin tocar cortes ni transcripción): para reels cuando el episodio no se limpió.
+    func enhanceAudioOnly() {
+        run("Limpiando el sonido") { [self] in
+            try await enhanceAudio()
+            project.enhanceAudio = true
+            schedulePreview(immediate: true)
+        }
     }
 
     func updatePhrase(_ phrase: Phrase, text: String) {

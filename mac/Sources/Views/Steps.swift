@@ -441,6 +441,7 @@ struct PhraseRow: View {
     let phrase: ProjectSession.Phrase
     @Binding var editing: Int?
     @Binding var draft: String
+    var reel: Reel? = nil               // dentro de un reel: cortar/devolver solo en ese reel
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -469,11 +470,11 @@ struct PhraseRow: View {
             if editing != phrase.id {
                 Button { draft = phrase.text; editing = phrase.id } label: { Image(systemName: "pencil") }
                     .buttonStyle(.borderless).help("Corregir texto")
-                Button { session.togglePhraseCut(phrase) } label: {
+                Button { if let reel { session.togglePhraseCut(phrase, reel: reel) } else { session.togglePhraseCut(phrase) } } label: {
                     Image(systemName: phrase.isCut ? "arrow.uturn.backward" : "scissors")
                 }
                 .buttonStyle(.borderless)
-                .help(phrase.isCut ? "Volver a poner esta frase" : "Quitar esta frase del video")
+                .help(phrase.isCut ? "Volver a poner esta frase" : (reel != nil ? "Quitar esta frase solo de este reel" : "Quitar esta frase del video"))
             }
         }
         .padding(8)
@@ -527,6 +528,10 @@ struct ReelsStep: View {
                             if previewing == reel.id { previewing = nil }
                         }
                     }
+                    if let reel = currentReel {
+                        ReelTextCard(session: session, reel: reel)
+                        ReelSoundCard(session: session, reel: reel)
+                    }
                     Card {
                         Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
                         Text("Mira el episodio y, cuando pase algo bueno, toca “Marcar momento” debajo del video. Se crea un reel de 60 segundos desde ahí; luego ajustas inicio y fin.")
@@ -565,18 +570,19 @@ struct ReelsStep: View {
         // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
         .onChange(of: session.project.reelLook) { _, _ in refresh() }
         .onChange(of: currentReel?.look) { _, _ in refresh() }
+        .onChange(of: currentReel?.cuts) { _, _ in refresh() }
     }
 
     private func show(_ reel: Reel) {
         previewing = reel.id
-        session.setPreview(format: .vertical, window: (reel.start, reel.end), look: session.project.look(for: reel))
+        session.setPreview(format: .vertical, window: (reel.start, reel.end), look: session.project.look(for: reel), reel: reel)
         session.captionDragTarget = reel.look?.captionStyle != nil ? .reel(reel.id) : .allReels
         session.player.seek(to: .zero)
         session.player.play()
     }
 
     private func refresh() {
-        session.setPreview(format: .vertical, window: session.previewWindow, look: session.project.look(for: currentReel))
+        session.setPreview(format: .vertical, window: session.previewWindow, look: session.project.look(for: currentReel), reel: currentReel)
         session.captionDragTarget = captionTarget
     }
 
@@ -650,6 +656,32 @@ struct ReelLookCard: View {
                 }
             }
             .font(.caption)
+            if !onePerson {
+                Divider()
+                HStack {
+                    Text("Orden en pantalla").font(.caption.bold())
+                    Spacer()
+                    Toggle("Propio", isOn: Binding(get: { l.laneOrder != nil },
+                                                   set: { on in look.wrappedValue.laneOrder = on ? (l.laneOrder ?? p.lanesOnScreen.map(\.id)) : nil }))
+                        .toggleStyle(.checkbox).controlSize(.mini).font(.caption)
+                }
+                let order: [Int] = l.laneOrder ?? p.lanesOnScreen.map(\.id)
+                let ids = order + p.lanes.map(\.id).filter { !order.contains($0) }
+                ForEach(Array(ids.enumerated()), id: \.element) { i, laneId in
+                    HStack(spacing: 8) {
+                        Text("\(i + 1)").font(.caption.bold()).frame(width: 18, height: 18).background(Circle().fill(Theme.panelStrong))
+                        Text(p.laneName(laneId)).font(.caption)
+                        Spacer()
+                        Button { session.setReelLanePosition(laneId, i, reelId: own ? reel?.id : nil) } label: { Image(systemName: "chevron.up") }
+                            .disabled(i == 0 || l.laneOrder == nil).help("Subir")
+                        Button { session.setReelLanePosition(laneId, i + 2, reelId: own ? reel?.id : nil) } label: { Image(systemName: "chevron.down") }
+                            .disabled(i == ids.count - 1 || l.laneOrder == nil).help("Bajar")
+                    }
+                    .controlSize(.small)
+                }
+                Text(l.laneOrder == nil ? "Usa el orden del episodio. Marca «Propio» para cambiarlo solo en los reels." : "1 = arriba (o izquierda). En Ventanita y Protagonista, el primero va en grande.")
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+            }
             Divider()
             Text("Marca").font(.caption.bold())
             Toggle("Fondo detrás del video", isOn: look.showBackground).font(.caption)
@@ -1250,5 +1282,82 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 540, height: 640)
+    }
+}
+
+
+/// Texto del reel: las frases que caen en él, para corregirlas o quitarlas solo en este reel.
+struct ReelTextCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+    @State private var editing: Int?
+    @State private var draft = ""
+
+    var body: some View {
+        Card {
+            Text("Texto de este reel").font(.headline)
+            if !session.project.isTranscribed {
+                Text("Este episodio no tiene transcripción. Hazla en Subtítulos y aquí aparecen las frases del reel.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            } else {
+                Text("Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                ForEach(session.phrases(reel: reel)) { ph in
+                    PhraseRow(session: session, phrase: ph, editing: $editing, draft: $draft, reel: reel)
+                }
+                if !reel.cuts.isEmpty {
+                    HStack {
+                        Text("\(reel.cuts.count) \(reel.cuts.count == 1 ? "corte propio" : "cortes propios") en este reel").font(.caption2).foregroundStyle(Theme.secondary)
+                        Spacer()
+                        Button("Deshacer todos") {
+                            if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i].cuts = [] }
+                        }
+                        .controlSize(.mini)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Sonido del reel: limpieza (si falta), silencios solo del reel y silenciar a quien no habla.
+struct ReelSoundCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    private var gate: Binding<Bool> {
+        Binding(get: { session.project.look(for: reel).gateOthers ?? session.project.fix.gateOthers },
+                set: { v in
+                    if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+                        session.project.reels[i].look?.gateOthers = v
+                    } else { session.project.reelLook.gateOthers = v }
+                })
+    }
+
+    var body: some View {
+        let cleaned = session.project.media.contains { $0.enhancedAudioFile != nil }
+        Card {
+            Text("Sonido de este reel").font(.headline)
+            HStack(spacing: 8) {
+                Image(systemName: cleaned ? "checkmark.circle.fill" : "circle").foregroundStyle(cleaned ? Theme.good : Theme.secondary)
+                Text(cleaned ? "Sonido de estudio aplicado (vale para el episodio y todos los reels)." : "El sonido todavía no está limpio.")
+                    .font(.caption)
+                Spacer()
+                if !cleaned {
+                    Button("Limpiar sonido") { session.enhanceAudioOnly() }.controlSize(.small).disabled(session.isBusy)
+                        .help("Lo mismo que en Limpiar sonido, pero sin tocar cortes ni transcripción")
+                }
+            }
+            HStack(spacing: 8) {
+                Button { session.removeSilences(in: reel) } label: { Label("Quitar silencios solo en este reel", systemImage: "scissors") }
+                    .controlSize(.small).disabled(session.isBusy)
+                Spacer()
+            }
+            if session.project.lanes.count > 1 {
+                Toggle("Silenciar a quien no habla", isOn: gate).font(.caption)
+            }
+            if let n = session.reelsNote { Text(n).font(.caption2).foregroundStyle(Theme.secondary) }
+            Text("Lo que corta aquí no cambia el episodio.").font(.caption2).foregroundStyle(Theme.secondary)
+        }
     }
 }

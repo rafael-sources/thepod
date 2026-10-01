@@ -326,6 +326,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var selected: Bool = true
     var exportedFile: String?
     var look: ReelLook?                 // diseño propio de este reel (nil = el de todos los reels)
+    var cuts: [Cut] = []                // cortes solo de este reel (frases quitadas, silencios), aparte de los del episodio
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -342,6 +343,7 @@ struct Reel: Codable, Identifiable, Equatable {
         selected = try c.decodeIfPresent(Bool.self, forKey: .selected) ?? true
         exportedFile = try c.decodeIfPresent(String.self, forKey: .exportedFile)
         look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
+        cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
     }
 }
 
@@ -381,12 +383,16 @@ struct ReelLook: Codable, Equatable {
     var music: Bool = true              // música y efectos del episodio en el reel
     var captions: Bool = true           // subtítulos en el reel
     var captionStyle: CaptionStyle?     // estilo y posición propios de los subtítulos en el reel (nil = los del episodio)
+    var laneOrder: [Int]?               // orden en pantalla propio (nil = el del episodio)
+    var gateOthers: Bool?               // silenciar a quien no habla, propio (nil = como en Limpiar sonido)
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         music = try c.decodeIfPresent(Bool.self, forKey: .music) ?? true
         captions = try c.decodeIfPresent(Bool.self, forKey: .captions) ?? true
         captionStyle = try c.decodeIfPresent(CaptionStyle.self, forKey: .captionStyle)
+        laneOrder = try c.decodeIfPresent([Int].self, forKey: .laneOrder)
+        gateOthers = try c.decodeIfPresent(Bool.self, forKey: .gateOthers)
         layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
         options = try c.decodeIfPresent(LayoutOptions.self, forKey: .options) ?? LayoutOptions()
         showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
@@ -402,8 +408,12 @@ extension Project {
     func look(for reel: Reel?) -> ReelLook { reel?.look ?? reelLook }
 
     /// Copia del proyecto con el aspecto de un reel puesto encima (para la vista previa y el export de ese reel).
-    func applying(_ look: ReelLook) -> Project {
+    /// Con `reel` también entran sus cortes propios.
+    func applying(_ look: ReelLook, reel: Reel? = nil) -> Project {
         var p = self
+        if let reel { p.cuts += reel.cuts }
+        if let o = look.laneOrder { p.laneOrder = o }
+        if let g = look.gateOthers { p.fix.gateOthers = g }
         p.layout = look.layout
         p.layoutOptions = look.options
         p.showBackground = look.showBackground

@@ -63,18 +63,46 @@ final class RenderScene: @unchecked Sendable {
     var fastSegmentation = false
 
     /// Máscara de la persona (blanco = persona) al tamaño del cuadro, o nil si Vision no pudo.
-    private func personMask(_ pb: CVPixelBuffer, extent: CGRect) -> CIImage? {
+    private var lastMask: [Int: CIImage] = [:]        // máscara del cuadro anterior por persona (para que no tiemble)
+    private var lastMaskTime: [Int: Double] = [:]
+    private static let maskContext = CIContext(options: [.cacheIntermediates: false])
+
+    /// Máscara de la persona (blanco = persona) al tamaño del cuadro, o nil si Vision no pudo.
+    /// Contra los artefactos: calidad alta al exportar, se tapan los huecos chicos, borde suave,
+    /// y se mezcla con la máscara del cuadro anterior para que el borde no tiemble entre cuadros.
+    private func personMask(_ pb: CVPixelBuffer, extent: CGRect, lane: Int, time: Double) -> CIImage? {
         let req = VNGeneratePersonSegmentationRequest()
-        req.qualityLevel = fastSegmentation ? .fast : .balanced
+        req.qualityLevel = fastSegmentation ? .fast : .balanced   // .accurate da menos confianza en cámaras oscuras (la persona se transparenta)
         req.outputPixelFormat = kCVPixelFormatType_OneComponent8
         let handler = VNImageRequestHandler(cvPixelBuffer: pb, options: [:])
         guard (try? handler.perform([req])) != nil, let mpb = req.results?.first?.pixelBuffer else { return nil }
         var mask = CIImage(cvPixelBuffer: mpb)
-        let sx = extent.width / max(1, mask.extent.width), sy = extent.height / max(1, mask.extent.height)
+        let native = mask.extent
+        let r: CGFloat = fastSegmentation ? 1.5 : 2.5
+        // 1) Tapar huecos chicos (audífonos, manos, pelo): cerrar = dilatar y luego erosionar
+        mask = mask.clampedToExtent()
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: r])
+            .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: r])
+            .cropped(to: native)
+        // 2) Mezcla con el cuadro anterior (si es el siguiente cuadro, no un salto): 65 % nuevo + 35 % anterior.
+        //    CIMix mezcla también el alfa; sumar las dos imágenes duplicaba el alfa y la máscara se iba a la mitad.
+        if let prev = lastMask[lane], let pt = lastMaskTime[lane], time - pt < 0.2, time > pt, prev.extent == native {
+            mask = mask.applyingFilter("CIMix", parameters: [kCIInputBackgroundImageKey: prev, "inputAmount": 0.65]).cropped(to: native)
+        }
+        // Guardar la máscara ya calculada como imagen plana de un canal, sin gestión de color
+        // (pasarla por CGImage sRGB la oscurecía cuadro a cuadro y la persona se iba transparentando).
+        var out: CVPixelBuffer?
+        CVPixelBufferCreate(nil, Int(native.width), Int(native.height), kCVPixelFormatType_OneComponent8, nil, &out)
+        if let out {
+            Self.maskContext.render(mask, to: out, bounds: native, colorSpace: nil)
+            lastMask[lane] = CIImage(cvPixelBuffer: out)
+            lastMaskTime[lane] = time
+        }
+        // 3) Al tamaño del cuadro, borde suave y decidido: lo dudoso (< 35 %) es fondo, lo seguro (> 70 %) es persona
+        let sx = extent.width / max(1, native.width), sy = extent.height / max(1, native.height)
         mask = mask.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
-        // Borde suave (la máscara viene en baja resolución) y decidida: lo dudoso (< 35 %) es fondo, lo seguro (> 70 %) es persona.
-        // Sin esto el fondo nuevo se transparenta sobre la persona cuando Vision no está segura (cámaras oscuras).
-        mask = mask.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: fastSegmentation ? 3.0 : 2.0])
+        let feather = max(1.5, min(extent.width, extent.height) * (fastSegmentation ? 0.006 : 0.004))
+        mask = mask.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: feather])
             .applyingFilter("CIColorMatrix", parameters: [
                 "inputRVector": CIVector(x: 2.9, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 2.9, y: 0, z: 0, w: 0),
                 "inputBVector": CIVector(x: 2.9, y: 0, z: 0, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
@@ -84,8 +112,8 @@ final class RenderScene: @unchecked Sendable {
     }
 
     /// Cambia el fondo real de una persona por el elegido.
-    func replacedBackground(_ frame: CIImage, buffer: CVPixelBuffer, lane: Int) -> CIImage {
-        guard let vb = virtualBG[lane], let mask = personMask(buffer, extent: frame.extent) else { return frame }
+    func replacedBackground(_ frame: CIImage, buffer: CVPixelBuffer, lane: Int, time: Double) -> CIImage {
+        guard let vb = virtualBG[lane], let mask = personMask(buffer, extent: frame.extent, lane: lane, time: time) else { return frame }
         let e = frame.extent
         let behind: CIImage
         switch vb.mode {
@@ -225,7 +253,7 @@ final class RenderScene: @unchecked Sendable {
             let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
                 guard var frame = frames[lane] else { continue }
-                if virtualBG[lane] != nil, let pb = buffers[lane] { frame = replacedBackground(frame, buffer: pb, lane: lane) }
+                if virtualBG[lane] != nil, let pb = buffers[lane] { frame = replacedBackground(frame, buffer: pb, lane: lane, time: time) }
                 if colorLook != "none" || laneGain[lane] != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
