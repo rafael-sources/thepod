@@ -226,6 +226,14 @@ final class ProjectSession: ObservableObject {
         schedulePreview(immediate: true)
         // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
         if project.backgroundFile == nil || project.logoFile == nil { fetchBranding() }
+        // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
+        // calcularlo al abrir si hay más de una persona.
+        if energy == nil, project.lanes.count > 1 {
+            run("Analizando quién habla") { [self] in
+                try await ensureEnergy()
+                schedulePreview(immediate: true)
+            }
+        }
     }
 
     /// Busca en prePod el fondo y el logo del podcast (si el proyecto no los tiene).
