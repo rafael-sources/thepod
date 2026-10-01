@@ -65,9 +65,11 @@ struct Project: Codable, Identifiable, Equatable {
     var postpodSlug: String?            // proyecto de postPod web del que se descargó
 
     var duration: Double {
+        // El episodio dura lo que duran las grabaciones de las personas. Una música más larga se corta al final
+        // (antes alargaba el episodio y la música seguía sola, sin video, antes del cierre).
         let laneEnd = lanes.map { $0.duration }.max() ?? 0
-        let audioEnd = audioLane.map { $0.tlStart + ($0.srcOut - $0.srcIn) }.max() ?? 0
-        return max(laneEnd, audioEnd)
+        if laneEnd > 0 { return laneEnd }
+        return audioLane.map { $0.tlStart + ($0.srcOut - $0.srcIn) }.max() ?? 0
     }
 
     func mediaItem(_ id: Int) -> SourceMedia? { media.first { $0.id == id } }
@@ -228,6 +230,7 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var fadeOut: Double = 0
     var duck: Bool?                     // bajar bajo la voz; nil = automático (sí si dura más de 8 s: música, no efectos)
     var duckDB: Double = 12
+    var loop: Bool = false              // repetir en bucle hasta el final del episodio
     var ducks: Bool { duck ?? ((srcOut - srcIn) > 8) }
     init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
         self.id = id; self.mediaId = mediaId; self.tlStart = tlStart; self.srcIn = srcIn; self.srcOut = srcOut
@@ -245,6 +248,7 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
         duck = try c.decodeIfPresent(Bool.self, forKey: .duck)
         duckDB = try c.decodeIfPresent(Double.self, forKey: .duckDB) ?? 12
+        loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? false
     }
 }
 

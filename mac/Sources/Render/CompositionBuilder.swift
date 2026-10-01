@@ -210,15 +210,30 @@ enum CompositionBuilder {
             // Cada música/efecto con su propia pista: así cada uno tiene su volumen y sus fades.
             // Si no cae dentro de lo que se exporta (p. ej. un trozo), la pista vacía se quita: AVFoundation falla con pistas sin nada.
             let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
-            let span = try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+            var span: (start: Double, end: Double)?
+            if clip.loop, len > 0.5 {
+                // En bucle: se repite pegada hasta el final del episodio (los cortes se aplican igual a cada vuelta)
+                var at = clip.tlStart
+                while at < project.duration - 0.05 {
+                    if let s = try place(track: track, source: src, sourceDuration: dur, tlStart: at, srcIn: clip.srcIn, length: len) {
+                        span = (span?.start ?? s.start, max(span?.end ?? 0, s.end))
+                    }
+                    at += len
+                }
+            } else {
+                span = try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+            }
             guard let span else { comp.removeTrack(track); continue }
             sfxTracks.append((track, clip.tlStart + len))
             let p = AVMutableAudioMixInputParameters(track: track)
             let duck = clip.ducks && !speech.isEmpty
             let low = pow(10, -clip.duckDB / 20)
+            // Si la música se corta al final del episodio (bucle o más larga que el video), que no termine de golpe
+            let cutAtEnd = clip.loop || clip.tlStart + len > project.duration + 0.05
+            let fadeOut = (cutAtEnd && clip.fadeOut == 0) ? 1.5 : clip.fadeOut
             applyEnvelope(p, base: clip.volume, span: span,
-                          points: fadePoints(span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut) + (duck ? duckPoints : [])) { t in
-                var f = fadeFactor(t, span: span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut)
+                          points: fadePoints(span, fadeIn: clip.fadeIn, fadeOut: fadeOut) + (duck ? duckPoints : [])) { t in
+                var f = fadeFactor(t, span: span, fadeIn: clip.fadeIn, fadeOut: fadeOut)
                 if duck, inSpeech(t) { f *= low }
                 return f
             }

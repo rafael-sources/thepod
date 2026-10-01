@@ -368,6 +368,8 @@ struct TrackInspector: View {
             }
             .font(.callout)
         }
+        Toggle("Repetir en bucle hasta el final del episodio", isOn: $session.project.audioLane[i].loop)
+            .font(.callout)
         fadeRow(label: "Fade entrada", value: $session.project.audioLane[i].fadeIn)
         fadeRow(label: "Fade salida", value: $session.project.audioLane[i].fadeOut)
         HStack(spacing: 6) {
@@ -382,7 +384,12 @@ struct TrackInspector: View {
                 .buttonStyle(.borderless).help("Quitar")
         }
         .font(.callout).controlSize(.small)
-        Text(String(format: "Dura %.0f s. Los cortes del episodio también se aplican a la música.", clip.srcOut - clip.srcIn))
+        let len = clip.srcOut - clip.srcIn
+        let over = clip.tlStart + len - session.project.duration
+        Text(String(format: "Dura %.0f s.", len)
+             + (clip.loop ? " Se repite hasta el final y hace fade al terminar." : (over > 0.5 ? String(format: " Se corta al final del episodio (sobran %.0f s).", over) : ""))
+             + " Los cortes del episodio también se aplican a la música."
+             + (session.project.intro != nil || session.project.outro != nil ? " Nunca suena dentro del intro ni del cierre: «Al inicio» es justo después del intro y «Al final» justo antes del cierre." : ""))
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }
