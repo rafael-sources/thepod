@@ -145,6 +145,7 @@ struct PreviewPane: View {
                     }
                 }
             }
+            TrackInspector(session: session)
             HStack {
                 Button {
                     session.markMoment()
@@ -170,6 +171,106 @@ struct PreviewPane: View {
                 .frame(maxWidth: 300)
             }
         }
+    }
+}
+
+/// Panel bajo el video con lo editable de la pista elegida en el timeline (persona o música/efecto).
+struct TrackInspector: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        if let sel = session.selectedTrack {
+            VStack(alignment: .leading, spacing: 8) {
+                switch sel {
+                case .lane(let id):
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == id }) { laneBody(i) }
+                case .sound(let id):
+                    if let i = session.project.audioLane.firstIndex(where: { $0.id == id }) { soundBody(i) }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: 520)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.stroke))
+        }
+    }
+
+    private func header(_ title: String, _ icon: String) -> some View {
+        HStack {
+            Label(title, systemImage: icon).font(.headline)
+            Spacer()
+            Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
+        }
+    }
+
+    private func fadeRow(label: String, value: Binding<Double>) -> some View {
+        HStack(spacing: 8) {
+            Text(label).frame(width: 72, alignment: .leading)
+            Slider(value: value, in: 0...8, step: 0.25)
+            Text(value.wrappedValue == 0 ? "no" : String(format: "%.2g s", value.wrappedValue)).monospacedDigit().frame(width: 44, alignment: .trailing)
+        }
+        .font(.callout)
+    }
+
+    private func volumeRow(value: Binding<Double>, max: Double) -> some View {
+        HStack(spacing: 8) {
+            Text("Volumen").frame(width: 72, alignment: .leading)
+            Button { value.wrappedValue = value.wrappedValue == 0 ? 1 : 0 } label: {
+                Image(systemName: value.wrappedValue == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            }
+            .buttonStyle(.borderless).help(value.wrappedValue == 0 ? "Activar" : "Silenciar")
+            Slider(value: value, in: 0...max)
+            Text("\(Int(value.wrappedValue * 100)) %").monospacedDigit().frame(width: 44, alignment: .trailing)
+        }
+        .font(.callout)
+    }
+
+    @ViewBuilder
+    private func laneBody(_ i: Int) -> some View {
+        let lane = session.project.lanes[i]
+        header(session.project.laneName(lane.id), "person.fill")
+        volumeRow(value: $session.project.lanes[i].volume, max: 2)
+        fadeRow(label: "Fade entrada", value: $session.project.lanes[i].fadeIn)
+        fadeRow(label: "Fade salida", value: $session.project.lanes[i].fadeOut)
+        HStack(spacing: 6) {
+            Text("Desfase").frame(width: 72, alignment: .leading)
+            Button("−0.5") { session.setLaneOffset(lane.id, lane.offset - 0.5) }
+            Button("−0.1") { session.setLaneOffset(lane.id, lane.offset - 0.1) }
+            Text(String(format: "%+.2f s", lane.offset)).monospacedDigit().frame(width: 70)
+            Button("+0.1") { session.setLaneOffset(lane.id, lane.offset + 0.1) }
+            Button("+0.5") { session.setLaneOffset(lane.id, lane.offset + 0.5) }
+            Spacer()
+            Toggle("Espejo", isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
+                                           set: { session.project.laneMirror[lane.id] = $0 }))
+                .toggleStyle(.checkbox)
+        }
+        .font(.callout).controlSize(.small)
+        Text("El desfase mueve el inicio de su grabación (no puede ser negativo: si va adelantada, atrasa a los demás). Los cortes se aplican igual a todas las pistas.")
+            .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+
+    @ViewBuilder
+    private func soundBody(_ i: Int) -> some View {
+        let clip = session.project.audioLane[i]
+        let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido"
+        header("\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
+        volumeRow(value: $session.project.audioLane[i].volume, max: 1.5)
+        fadeRow(label: "Fade entrada", value: $session.project.audioLane[i].fadeIn)
+        fadeRow(label: "Fade salida", value: $session.project.audioLane[i].fadeOut)
+        HStack(spacing: 6) {
+            Text("Mover").frame(width: 72, alignment: .leading)
+            Button("Al inicio") { session.moveSound(clip.id, to: 0) }
+            Button("−1 s") { session.moveSound(clip.id, to: clip.tlStart - 1) }
+            Button("Aquí") { session.moveSound(clip.id, to: session.playheadTimeline) }.help("Donde está el video ahora")
+            Button("+1 s") { session.moveSound(clip.id, to: clip.tlStart + 1) }
+            Button("Al final") { session.moveSound(clip.id, to: session.project.duration - max(0, clip.srcOut - clip.srcIn)) }
+            Spacer()
+            Button(role: .destructive) { session.project.audioLane.removeAll { $0.id == clip.id }; session.selectedTrack = nil } label: { Image(systemName: "trash") }
+                .buttonStyle(.borderless).help("Quitar")
+        }
+        .font(.callout).controlSize(.small)
+        Text(String(format: "Dura %.0f s. Los cortes del episodio también se aplican a la música.", clip.srcOut - clip.srcIn))
+            .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }
 

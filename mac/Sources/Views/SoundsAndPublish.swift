@@ -31,39 +31,27 @@ struct SoundsStep: View {
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
                 } else {
-                    Text("\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "sonido" : "sonidos"). Toca la hora para oírlo en el video; con los botones lo mueves.")
+                    Text("\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "sonido" : "sonidos"). Toca la hora para oírlo; “Editar” abre volumen, fades y posición bajo el video.")
                         .font(.caption).foregroundStyle(Theme.secondary)
                     ScrollView {
                         LazyVStack(spacing: 6) {
-                            ForEach($session.project.audioLane) { $clip in
-                                VStack(spacing: 2) {
-                                    HStack {
-                                        Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
-                                            .buttonStyle(.link).monospacedDigit()
-                                        Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
-                                        Spacer()
-                                        Image(systemName: "speaker.wave.2").foregroundStyle(Theme.secondary)
-                                        Slider(value: $clip.volume, in: 0...1.5).frame(width: 110)
-                                        Button { session.project.audioLane.removeAll { $0.id == clip.id } } label: { Image(systemName: "trash") }
-                                            .buttonStyle(.borderless)
-                                            .help("Quitar")
-                                    }
-                                    HStack(spacing: 6) {
-                                        Text("Mover:").font(.caption).foregroundStyle(Theme.secondary)
-                                        Button("Al inicio") { session.moveSound(clip.id, to: 0) }
-                                        Button("−1 s") { session.moveSound(clip.id, to: clip.tlStart - 1) }
-                                        Button("Aquí") { session.moveSound(clip.id, to: session.playheadTimeline) }
-                                            .help("Donde está el video ahora")
-                                        Button("+1 s") { session.moveSound(clip.id, to: clip.tlStart + 1) }
-                                        Button("Al final") { session.moveSound(clip.id, to: session.project.duration - max(0, clip.srcOut - clip.srcIn)) }
-                                            .help("Termina junto con el episodio (para un cierre)")
-                                        Spacer()
-                                        Text(String(format: "dura %.0f s", clip.srcOut - clip.srcIn)).font(.caption2).foregroundStyle(Theme.secondary)
-                                    }
-                                    .controlSize(.small)
+                            ForEach(session.project.audioLane) { clip in
+                                let sel = session.selectedTrack == .sound(clip.id)
+                                HStack {
+                                    Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
+                                        .buttonStyle(.link).monospacedDigit()
+                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
+                                    Spacer()
+                                    if clip.volume == 0 { Image(systemName: "speaker.slash.fill").foregroundStyle(Theme.secondary) }
+                                    Text("\(Int(clip.volume * 100)) %").font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                                    Button(sel ? "Editando…" : "Editar") { session.selectedTrack = sel ? nil : .sound(clip.id) }
+                                        .controlSize(.small)
+                                        .help("Volumen, fades y posición en el panel bajo el video")
                                 }
                                 .padding(8)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+                                .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                                .contentShape(Rectangle())
+                                .onTapGesture { session.selectedTrack = .sound(clip.id) }
                             }
                         }
                     }

@@ -421,7 +421,11 @@ enum SelfTest {
                 let url = try await Exporter.export(project: p, format: fmt, window: (s, e), baseName: "render-test",
                                                     energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
                 print("OK \(url.path)"); fflush(stdout); exit(0)
-            } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+            } catch {
+                let ns = error as NSError
+                print("ERROR \(error.localizedDescription) [\(ns.domain) \(ns.code)] \(ns.userInfo)")
+                exit(1)
+            }
         }
     }
 

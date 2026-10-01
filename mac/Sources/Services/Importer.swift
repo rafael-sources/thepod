@@ -437,7 +437,7 @@ enum Importer {
     /// prePod y le falta el fondo o el logo, los bajamos de la configuración del podcast en prePod.
     /// Devuelve true si cambió algo (el que llama guarda el proyecto). Nunca lanza error: si falla, queda como estaba.
     static func fetchBrandingFromPrepod(_ project: inout Project) async -> Bool {
-        guard project.backgroundFile == nil || project.logoFile == nil else { return false }
+        guard project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty else { return false }
         let api = PrePodClient.shared
         var slug = project.episode.prepodSlug ?? ""
         if slug.isEmpty {
@@ -467,7 +467,51 @@ enum Importer {
             if kind == "background" { project.backgroundFile = rel } else { project.logoFile = rel }
             changed = true
         }
+        // Sponsors del podcast (los activos), con su logo
+        if project.sponsors.isEmpty, let list = try? await api.sponsors(slug) {
+            var out: [Sponsor] = []
+            for sp in list where sp.isActive {
+                var logoRel: String?
+                if let url = sp.logoUrl, !url.isEmpty, let data = try? await api.media(url), data.count > 100 {
+                    var ext = (url.split(separator: "?").first.map(String.init) ?? url).split(separator: ".").last.map(String.init)?.lowercased() ?? "png"
+                    if !["jpg", "jpeg", "png", "webp", "gif"].contains(ext) { ext = "png" }
+                    let rel = "sponsors/\(sp.id).\(ext)"
+                    let dest = ProjectStore.url(rel, in: project.id)
+                    try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    if (try? data.write(to: dest, options: .atomic)) != nil { logoRel = rel }
+                }
+                out.append(Sponsor(id: sp.id, name: sp.name, copy: sp.copy.isEmpty ? nil : sp.copy, url: sp.url.isEmpty ? nil : sp.url, logoFile: logoRel))
+            }
+            if !out.isEmpty { project.sponsors = out; changed = true }
+        }
+        // Guion del episodio (bloques con su sponsor): hace falta para saber en qué momento va cada sponsor
+        if project.segments.isEmpty {
+            var epId = project.episode.prepodEpisodeId
+            if epId == nil, let eps = try? await api.preEpisodes(slug) {
+                let n = project.episode.number ?? episodeNumber(in: project.name)
+                if let n, let e = eps.first(where: { $0.episodeNumber == n }) { epId = e.id }
+                else if let t = project.episode.title, let e = eps.first(where: { $0.title.lowercased() == t.lowercased() }) { epId = e.id }
+                if epId != nil { project.episode.prepodEpisodeId = epId }
+            }
+            if let epId, let blocks = try? await api.blocks(slug, epId), !blocks.isEmpty {
+                var cursor = 0.0
+                project.segments = blocks.sorted { $0.position < $1.position }.map { b in
+                    defer { cursor += b.durationEstimate ?? 0 }
+                    return Segment(id: b.id, position: b.position, kind: b.kind, title: b.title, durationEstimate: b.durationEstimate,
+                                   sponsorId: b.sponsorId, notes: b.notes.isEmpty ? nil : b.notes, actualOffset: nil, plannedOffset: cursor)
+                }
+                changed = true
+            }
+        }
         return changed
+    }
+
+    /// "Ep 14" / "Episodio 14" / "ep14" dentro del nombre del proyecto.
+    static func episodeNumber(in name: String) -> Int? {
+        let lower = name.lowercased()
+        guard let r = lower.range(of: #"ep(isodio)?\s*\.?\s*(\d+)"#, options: .regularExpression) else { return nil }
+        let digits = lower[r].filter { $0.isNumber }
+        return Int(digits)
     }
 
     /// Fondo (o logo) elegido a mano por el usuario: se copia dentro del proyecto.

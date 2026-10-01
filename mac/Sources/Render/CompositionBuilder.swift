@@ -47,20 +47,39 @@ enum CompositionBuilder {
         func cm(_ s: Double) -> CMTime { CMTime(seconds: s, preferredTimescale: 90_000) }
 
         /// Places [tlStart, tlStart+len) of a source onto `track`, skipping whatever falls in cuts.
+        /// Devuelve el tramo [inicio, fin) en tiempo de salida que ocupó lo colocado (para los fades).
+        @discardableResult
         func place(track: AVMutableCompositionTrack, source: AVAssetTrack, sourceDuration: Double,
-                   tlStart: Double, srcIn: Double, length: Double) throws {
+                   tlStart: Double, srcIn: Double, length: Double) throws -> (start: Double, end: Double)? {
             var cursor = 0.0
+            var outStart: Double?, outEnd: Double?
             for k in keep {
                 let a = max(k.start, tlStart), b = min(k.end, tlStart + length)
                 if b - a > 0.01 {
                     let src = srcIn + (a - tlStart)
                     let len = min(b - a, max(0, sourceDuration - src))
                     if len > 0.01 {
-                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(len)), of: source,
-                                                  at: cm(cursor + (a - k.start)))
+                        let at = cursor + (a - k.start)
+                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(len)), of: source, at: cm(at))
+                        if outStart == nil { outStart = at }
+                        outEnd = at + len
                     }
                 }
                 cursor += k.end - k.start
+            }
+            guard let outStart, let outEnd else { return nil }
+            return (outStart, outEnd)
+        }
+        /// Entrada y salida suaves sobre un tramo de salida.
+        func fades(_ p: AVMutableAudioMixInputParameters, volume: Double, span: (start: Double, end: Double)?, fadeIn: Double, fadeOut: Double) {
+            guard let span else { return }
+            let v = Float(volume)
+            let fi = min(fadeIn, (span.end - span.start) / 2), fo = min(fadeOut, (span.end - span.start) / 2)
+            if fi > 0.01 {
+                p.setVolumeRamp(fromStartVolume: 0, toEndVolume: v, timeRange: CMTimeRange(start: cm(span.start), duration: cm(fi)))
+            }
+            if fo > 0.01 {
+                p.setVolumeRamp(fromStartVolume: v, toEndVolume: 0, timeRange: CMTimeRange(start: cm(span.end - fo), duration: cm(fo)))
             }
         }
 
@@ -84,11 +103,16 @@ enum CompositionBuilder {
                     if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
                         let aDur = try await audioAsset.load(.duration).seconds
                         if aTrack == nil { aTrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) }
-                        try place(track: aTrack!, source: src, sourceDuration: aDur,
-                                  tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
-                        let p = AVMutableAudioMixInputParameters(track: aTrack!)
-                        p.setVolume(Float(lane.volume * placed.clip.volume), at: .zero)
-                        if !mixParams.contains(where: { $0.trackID == aTrack!.trackID }) { mixParams.append(p) }
+                        let span = try place(track: aTrack!, source: src, sourceDuration: aDur,
+                                             tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
+                        if let p = mixParams.first(where: { $0.trackID == aTrack!.trackID }) {
+                            fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
+                        } else {
+                            let p = AVMutableAudioMixInputParameters(track: aTrack!)
+                            p.setVolume(Float(lane.volume * placed.clip.volume), at: .zero)
+                            fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
+                            mixParams.append(p)
+                        }
                     }
                 }
             }
@@ -103,19 +127,16 @@ enum CompositionBuilder {
             guard let src = try await a.loadTracks(withMediaType: .audio).first else { continue }
             let dur = try await a.load(.duration).seconds
             let len = clip.srcOut - clip.srcIn
-            let slot = sfxTracks.firstIndex { $0.busyUntil <= clip.tlStart }
-            let track: AVMutableCompositionTrack
-            if let slot {
-                track = sfxTracks[slot].track
-                sfxTracks[slot].busyUntil = clip.tlStart + len
-            } else {
-                track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
-                sfxTracks.append((track, clip.tlStart + len))
-                let p = AVMutableAudioMixInputParameters(track: track)
-                p.setVolume(Float(clip.volume), at: .zero)
-                mixParams.append(p)
-            }
-            try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+            // Cada música/efecto con su propia pista: así cada uno tiene su volumen y sus fades.
+            // Si no cae dentro de lo que se exporta (p. ej. un trozo), la pista vacía se quita: AVFoundation falla con pistas sin nada.
+            let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+            let span = try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+            guard let span else { comp.removeTrack(track); continue }
+            sfxTracks.append((track, clip.tlStart + len))
+            let p = AVMutableAudioMixInputParameters(track: track)
+            p.setVolume(Float(clip.volume), at: .zero)
+            fades(p, volume: clip.volume, span: span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut)
+            mixParams.append(p)
         }
 
         let mix = AVMutableAudioMix()

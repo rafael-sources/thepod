@@ -64,10 +64,22 @@ struct EpisodeTimeline: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Color.clear.frame(height: rulerH + marksH)
                         ForEach(Array(p.lanes.enumerated()), id: \.element.id) { i, lane in
-                            Text(p.laneName(lane.id))
-                                .font(.caption).lineLimit(1)
+                            let sel = session.selectedTrack == .lane(lane.id)
+                            Button {
+                                session.selectedTrack = sel ? nil : .lane(lane.id)
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Text(p.laneName(lane.id)).lineLimit(1)
+                                    if lane.volume == 0 { Image(systemName: "speaker.slash.fill").font(.system(size: 8)) }
+                                }
+                                .font(.caption)
                                 .foregroundStyle(Self.palette[i % Self.palette.count])
                                 .frame(width: labelWidth - 8, height: laneH, alignment: .leading)
+                                .padding(.horizontal, 3)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(sel ? Color.white.opacity(0.14) : .clear))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Toca para editar esta pista (volumen, fades, desfase)")
                         }
                         Text("Efectos").font(.caption2).foregroundStyle(Theme.secondary)
                             .frame(width: labelWidth - 8, height: fxH, alignment: .leading)

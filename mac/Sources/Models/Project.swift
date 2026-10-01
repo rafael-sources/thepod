@@ -118,6 +118,8 @@ extension Lane {
         clips = try c.decode([LaneClip].self, forKey: .clips)
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1
         offset = try c.decodeIfPresent(Double.self, forKey: .offset) ?? 0
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
     }
 }
 
@@ -128,6 +130,8 @@ struct Lane: Codable, Identifiable, Equatable {
     var clips: [LaneClip]               // played back-to-back starting at `offset`
     var volume: Double = 1.0
     var offset: Double = 0              // timeline time where this person's recording starts
+    var fadeIn: Double = 0              // segundos de entrada suave del audio de esta persona
+    var fadeOut: Double = 0             // segundos de salida suave
 
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
@@ -158,6 +162,23 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var srcIn: Double
     var srcOut: Double
     var volume: Double = 0.7
+    var fadeIn: Double = 0
+    var fadeOut: Double = 0
+    init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
+        self.id = id; self.mediaId = mediaId; self.tlStart = tlStart; self.srcIn = srcIn; self.srcOut = srcOut
+        self.volume = volume; self.fadeIn = fadeIn; self.fadeOut = fadeOut
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        mediaId = try c.decode(Int.self, forKey: .mediaId)
+        tlStart = try c.decode(Double.self, forKey: .tlStart)
+        srcIn = try c.decodeIfPresent(Double.self, forKey: .srcIn) ?? 0
+        srcOut = try c.decode(Double.self, forKey: .srcOut)
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0.7
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
+    }
 }
 
 struct Participant: Codable, Identifiable, Equatable {

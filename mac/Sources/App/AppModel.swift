@@ -199,6 +199,9 @@ enum Step: String, CaseIterable, Identifiable {
 @MainActor
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
+    /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
+    enum TrackSel: Equatable { case lane(Int), sound(Int) }
+    @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
     @Published var errorMessage: String?
@@ -225,7 +228,7 @@ final class ProjectSession: ObservableObject {
         refreshExports()
         schedulePreview(immediate: true)
         // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
-        if project.backgroundFile == nil || project.logoFile == nil { fetchBranding() }
+        if project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty { fetchBranding() }
         // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
         // calcularlo al abrir si hay más de una persona.
         if energy == nil, project.lanes.count > 1 {
@@ -238,7 +241,7 @@ final class ProjectSession: ObservableObject {
 
     /// Busca en prePod el fondo y el logo del podcast (si el proyecto no los tiene).
     func fetchBranding() {
-        brandingStatus = "Buscando el fondo del podcast en prePod…"
+        brandingStatus = "Buscando en prePod el fondo, el logo, los sponsors y el guion…"
         Task { [weak self] in
             guard let self else { return }
             var p = project
@@ -247,6 +250,9 @@ final class ProjectSession: ObservableObject {
                 project.backgroundFile = p.backgroundFile
                 project.logoFile = p.logoFile
                 project.episode.prepodSlug = p.episode.prepodSlug
+                project.episode.prepodEpisodeId = p.episode.prepodEpisodeId
+                if project.sponsors.isEmpty { project.sponsors = p.sponsors }
+                if project.segments.isEmpty { project.segments = p.segments }
                 if project.podcastName == nil { project.podcastName = p.podcastName }
                 brandingStatus = nil
             } else {
@@ -618,6 +624,7 @@ final class ProjectSession: ObservableObject {
         let id = (p.audioLane.map(\.id).max() ?? 0) + 1
         p.audioLane.append(AudioLaneClip(id: id, mediaId: mediaId, tlStart: max(0, timeline), srcIn: 0, srcOut: len, volume: 0.8))
         project = p
+        selectedTrack = .sound(id)
     }
 
     /// Current playhead in TIMELINE time.
