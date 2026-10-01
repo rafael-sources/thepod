@@ -437,9 +437,22 @@ enum Importer {
     /// prePod y le falta el fondo o el logo, los bajamos de la configuración del podcast en prePod.
     /// Devuelve true si cambió algo (el que llama guarda el proyecto). Nunca lanza error: si falla, queda como estaba.
     static func fetchBrandingFromPrepod(_ project: inout Project) async -> Bool {
-        guard project.backgroundFile == nil || project.logoFile == nil,
-              let slug = project.episode.prepodSlug, !slug.isEmpty else { return false }
+        guard project.backgroundFile == nil || project.logoFile == nil else { return false }
         let api = PrePodClient.shared
+        var slug = project.episode.prepodSlug ?? ""
+        if slug.isEmpty {
+            // Paquetes viejos de postPod sin datos de prePod: buscar el podcast cuyo slug encabeza el del proyecto
+            // (p. ej. "lee-la-letra-chica" dentro de "lee-la-letra-chica-ep-14-…") o cuyo nombre coincide.
+            guard let list = try? await api.podcasts(), !list.isEmpty else { return false }
+            let keys = [project.postpodSlug ?? "", project.id, project.name.lowercased()]
+            let match = list
+                .filter { pod in keys.contains { $0.hasPrefix(pod.slug) || $0.contains(pod.name.lowercased()) } }
+                .max { $0.slug.count < $1.slug.count }
+            guard let match else { return false }
+            slug = match.slug
+            project.episode.prepodSlug = slug
+            if project.podcastName == nil { project.podcastName = match.name }
+        }
         guard let cfg = try? await api.podcastConfig(slug) else { return false }
         let fm = FileManager.default
         var changed = false
@@ -455,6 +468,17 @@ enum Importer {
             changed = true
         }
         return changed
+    }
+
+    /// Fondo (o logo) elegido a mano por el usuario: se copia dentro del proyecto.
+    static func setBranding(_ project: inout Project, kind: String, from src: URL) throws {
+        let ext = src.pathExtension.isEmpty ? "png" : src.pathExtension.lowercased()
+        let rel = "branding/\(kind)-manual.\(ext)"
+        let dest = ProjectStore.url(rel, in: project.id)
+        try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: dest)
+        try FileManager.default.copyItem(at: src, to: dest)
+        if kind == "background" { project.backgroundFile = rel } else { project.logoFile = rel }
     }
 
     // MARK: - Media preparation

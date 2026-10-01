@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import AVFoundation
 
 struct JobState: Equatable {
@@ -224,14 +225,38 @@ final class ProjectSession: ObservableObject {
         refreshExports()
         schedulePreview(immediate: true)
         // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
-        if project.backgroundFile == nil || project.logoFile == nil, project.episode.prepodSlug != nil {
-            Task { [weak self] in
-                var p = project
-                guard await Importer.fetchBrandingFromPrepod(&p), let self else { return }
-                self.project.backgroundFile = p.backgroundFile
-                self.project.logoFile = p.logoFile
+        if project.backgroundFile == nil || project.logoFile == nil { fetchBranding() }
+    }
+
+    /// Busca en prePod el fondo y el logo del podcast (si el proyecto no los tiene).
+    func fetchBranding() {
+        brandingStatus = "Buscando el fondo del podcast en prePod…"
+        Task { [weak self] in
+            guard let self else { return }
+            var p = project
+            let ok = await Importer.fetchBrandingFromPrepod(&p)
+            if ok {
+                project.backgroundFile = p.backgroundFile
+                project.logoFile = p.logoFile
+                project.episode.prepodSlug = p.episode.prepodSlug
+                if project.podcastName == nil { project.podcastName = p.podcastName }
+                brandingStatus = nil
+            } else {
+                brandingStatus = project.backgroundFile == nil ? "No encontré el fondo en prePod. Puedes elegir una imagen aquí." : nil
             }
         }
+    }
+    @Published var brandingStatus: String?
+
+    /// El usuario elige a mano la imagen de fondo (o el logo).
+    func chooseBranding(kind: String) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
+        panel.allowsMultipleSelection = false
+        panel.message = kind == "background" ? "Elige la imagen de fondo para el video" : "Elige el logo del podcast"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try Importer.setBranding(&project, kind: kind, from: url); brandingStatus = nil }
+        catch { errorMessage = error.localizedDescription }
     }
 
     // MARK: Persistence & preview
@@ -293,18 +318,6 @@ final class ProjectSession: ObservableObject {
         guard b - a > 0.05 else { return }
         player.pause()
         project.cuts.append(Cut(start: a, end: b, kind: .manual, label: "Cortado a mano"))
-    }
-
-    /// Reproducir / pausar desde la barra de la vista previa.
-    func togglePlay() {
-        if player.rate > 0 { player.pause() } else {
-            if let d = built?.duration, player.currentTime().seconds >= d - 0.05 { player.seek(to: .zero) }
-            player.play()
-        }
-    }
-    func stopPlayback() {
-        player.pause()
-        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     /// Seek preview to a TIMELINE time.

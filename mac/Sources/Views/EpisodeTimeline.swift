@@ -92,7 +92,7 @@ struct EpisodeTimeline: View {
                             }
                             .frame(width: width, height: rows)
                             .contentShape(Rectangle())
-                            .gesture(DragGesture(minimumDistance: 0)
+                            .highPriorityGesture(DragGesture(minimumDistance: 0)
                                 .onChanged { g in
                                     let t = min(max(0, Double(g.location.x / pps)), p.duration)
                                     if dragAnchor == nil {

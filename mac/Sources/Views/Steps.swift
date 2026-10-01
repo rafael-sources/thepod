@@ -658,6 +658,17 @@ struct ExportStep: View {
                             if session.project.backgroundFile != nil {
                                 Toggle("Fondo del podcast (detrás del video)", isOn: $session.project.showBackground)
                             }
+                            HStack(spacing: 8) {
+                                Button(session.project.backgroundFile == nil ? "Elegir imagen de fondo…" : "Cambiar imagen de fondo…") { session.chooseBranding(kind: "background") }
+                                Button(session.project.logoFile == nil ? "Elegir logo…" : "Cambiar logo…") { session.chooseBranding(kind: "logo") }
+                                if session.project.backgroundFile == nil {
+                                    Button("Buscar en prePod") { session.fetchBranding() }
+                                }
+                            }
+                            .controlSize(.small)
+                            if let st = session.brandingStatus {
+                                Text(st).font(.caption).foregroundStyle(Theme.secondary)
+                            }
                             if !session.project.sponsors.isEmpty {
                                 Toggle("Sponsors en su momento del guion", isOn: $session.project.showSponsors)
                             }
