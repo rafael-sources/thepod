@@ -30,6 +30,7 @@
   --signal-amber:   #f4c770;
   --signal-cyan:    #6bb3c4;
   --signal-blue:    #5a8bff;
+  --accent:         #f4c770; /* usado por el panel del director; antes no existía y la pestaña activa quedaba invisible */
 
   --r-sm: 3px;
   --r-md: 6px;
@@ -2430,3 +2431,125 @@ a.mark:hover { opacity: 0.8; }
   .host-studio .hs-side { left: auto; top: 0; width: 400px; height: 100%; border-radius: 0; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
 }
 .host-studio .hs-leave { white-space: nowrap; }
+
+/* ==========================================================================
+   Director en teléfono/tablet (modo emergencia): videos al centro, lo demás
+   en hojas que suben desde abajo. En computador no cambia nada.
+   ========================================================================== */
+.control-room .cr-sheet-head, .control-room .cr-mbar, .control-room .cr-m-status,
+.control-room .cr-m-txt, .control-room .cr-m-only-block, .control-room .cr-wait-m { display: none; }
+.control-room .cr-feed-ready { color: var(--signal); font-weight: 700; }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .control-room {
+    display: flex; flex-direction: column;
+    height: calc(100vh - 54px); height: calc(100dvh - 54px);
+    position: relative; overflow: hidden;
+  }
+  .control-room .cr-top { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+  .control-room .cr-top h3 { flex: 1; min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .control-room .cr-top .spacer { display: none; }
+  .control-room .cr-top .cr-back { padding: 8px 10px; font-size: 16px; flex: none; }
+  .control-room .cr-top .timecode { font-size: 14px; min-width: 0; padding: 4px 8px; flex: none; }
+  .control-room .cr-top .timecode.cr-idle { display: none; }
+  .control-room .cr-top .cr-rec { flex: none; padding: 10px 14px; font-size: 14px; min-height: 42px; }
+  .control-room .cr-top .cr-count { flex: none; }
+
+  /* Centro: videos 16:9 uno debajo de otro (dos columnas con 2 o más) */
+  .control-room .cr-center { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; }
+  .control-room .cr-multiview { grid-template-columns: 1fr; gap: 10px; align-content: start; }
+  .control-room .cr-multiview.n2, .control-room .cr-multiview.n3, .control-room .cr-multiview.n4 { grid-template-columns: 1fr 1fr; }
+  .control-room .cr-feed { aspect-ratio: 16 / 9; }
+  .control-room .cr-feed .cr-feed-label { font-size: 12px; padding: 4px 8px; }
+  .control-room .cr-wait { flex: 1; }
+  .control-room .cr-wait-m { display: flex !important; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 20px; max-width: 360px; }
+  .control-room .cr-wait-ico { font-size: 54px; }
+  .control-room .cr-wait-txt { font-family: var(--font-body, inherit); font-size: 15px; line-height: 1.45; color: var(--paper-dim); }
+  .control-room .cr-connect-m { font-size: 17px; padding: 16px 32px; }
+  .control-room .cr-m-status {
+    display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--paper-dim); letter-spacing: .04em;
+  }
+  .control-room .cr-m-rec { color: var(--signal); font-weight: 700; }
+  .control-room .cr-m-status .active-overlay-pill { cursor: pointer; }
+
+  /* Paneles izquierdo y derecho: hojas que suben desde abajo, una sección a la vez */
+  .control-room .cr-left, .control-room .cr-right {
+    display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    height: 72vh; height: 72dvh; border-radius: 16px 16px 0 0; border: 1px solid var(--ink-line);
+    box-shadow: 0 -12px 40px rgba(0,0,0,.6); padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+    overflow-y: auto; gap: 0;
+  }
+  .control-room.dtab-personas .cr-left, .control-room.dtab-chat .cr-left,
+  .control-room.dtab-cintillos .cr-right, .control-room.dtab-cues .cr-right, .control-room.dtab-mas .cr-right { display: flex; }
+  .control-room .cr-sec { display: none; }
+  .control-room.dtab-personas .cr-sec-personas, .control-room.dtab-personas .cr-sec-ifb,
+  .control-room.dtab-chat .cr-sec-chat,
+  .control-room.dtab-cintillos .cr-sec-cintillos, .control-room.dtab-cues .cr-sec-cues, .control-room.dtab-mas .cr-sec-mas { display: block; }
+  .control-room.dtab-chat .cr-sec-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .control-room.dtab-chat .cr-chat-scroll { flex: 1; max-height: none !important; }
+  .control-room .cr-sheet-head { display: flex; align-items: center; gap: 6px; position: sticky; top: -12px; background: var(--ink-panel); padding: 4px 0 10px; z-index: 2; }
+  .control-room .cr-sheet-head button { padding: 8px 12px; font-size: 14px; border-radius: 999px; background: transparent; border: 1px solid var(--ink-line); color: var(--paper-dim); }
+  .control-room .cr-sheet-head button.on { background: var(--signal); border-color: var(--signal); color: #fff; }
+  .control-room .cr-sheet-head .cr-close { border: none; }
+  .control-room .cr-m-txt { display: inline; }
+  .control-room .cr-m-only-block { display: block; }
+  .control-room .cr-bottom { display: none; }
+
+  /* Dentro de las hojas: todo más grande para el dedo */
+  .control-room .cr-participant { padding: 10px 12px; }
+  .control-room .cr-participant .cr-p-thumb { width: 72px; height: 40px; }
+  .control-room .cr-participant .cr-p-name { font-size: 15px; }
+  .control-room .cr-participant .cr-p-role { font-size: 10px; }
+  .control-room .cr-participant .cr-p-actions { gap: 8px; }
+  .control-room .cr-participant .cr-p-actions button { padding: 10px 14px; font-size: 14px !important; min-height: 42px; }
+  .control-room .ptt-btn { min-height: 50px; font-size: 13px; }
+  .control-room .ptt-btn-all { min-height: 56px; font-size: 14px; }
+  .control-room .cr-chat-msg { font-size: 14px !important; margin-bottom: 8px !important; line-height: 1.4; }
+  .control-room .cr-chat-input input { font-size: 16px !important; padding: 12px !important; }
+  .control-room .cr-chat-input button { font-size: 14px !important; padding: 12px 16px !important; }
+  .control-room .cr-tabs button { font-size: 13px !important; padding: 10px 2px !important; min-height: 42px; }
+  .control-room .cr-section-body .input, .control-room .cr-sec select.input { font-size: 16px !important; padding: 11px 12px !important; }
+  .control-room .cr-inject-btn { min-height: 50px; font-size: 15px; }
+  .control-room .cintillo-preview { height: auto !important; }
+  .control-room .cintillo-preview .c-bars { max-width: 100% !important; }
+  .control-room .cr-cues { gap: 8px; }
+  .control-room .cr-cue-btn { min-height: 56px; font-size: 13px; }
+  .control-room .cr-sec-cues label { font-size: 14px !important; min-height: 40px; }
+  .control-room .cr-sec-cues label input { width: 20px; height: 20px; }
+  .control-room .cr-sounds { gap: 8px !important; }
+  .control-room .cr-sounds button { min-height: 48px; font-size: 13px !important; }
+  .control-room .cr-sec-mas > div[style*="font-size:11px"] { font-size: 14px !important; }
+  .control-room .active-overlay-pill { font-size: 13px; padding: 8px 12px; }
+
+  /* Barra de abajo con botones grandes */
+  .control-room .cr-mbar {
+    display: flex; gap: 4px; flex-wrap: nowrap;
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    background: var(--ink-panel); border-top: 1px solid var(--ink-line);
+  }
+  .control-room .cr-mbtn {
+    position: relative; flex: 1 1 0; min-width: 0; min-height: 52px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    padding: 6px 2px; font-size: 20px; border-radius: 12px; background: var(--ink-sunken); border: 1px solid var(--ink-line); color: var(--paper);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .control-room .cr-mbtn .cr-mtxt { font-size: 9px; letter-spacing: 0 !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); letter-spacing: .04em; }
+  .control-room .cr-mbtn.on { border-color: var(--signal); color: var(--signal); }
+  .control-room .cr-mbtn:disabled { opacity: .4; }
+  .control-room .cr-mbtn-ptt { border-color: var(--signal-cyan); color: var(--signal-cyan); }
+  .control-room .cr-mbtn-ptt.active { background: rgba(107,179,196,0.25); box-shadow: 0 0 14px rgba(107,179,196,0.5); color: #fff; }
+  .control-room .cr-mbadge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+    background: var(--signal); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+}
+/* Teléfono acostado */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .control-room .cr-multiview, .control-room .cr-multiview.n1 { grid-template-columns: 1fr 1fr; }
+  .control-room .cr-mbar { padding: 6px 10px; }
+  .control-room .cr-mbtn { min-height: 42px; }
+}
+/* Tablet acostada: las hojas como panel a la derecha */
+@media (pointer: coarse) and (min-width: 1000px) {
+  .control-room .cr-multiview, .control-room .cr-multiview.n1 { grid-template-columns: 1fr 1fr; }
+  .control-room .cr-multiview.n3, .control-room .cr-multiview.n4 { grid-template-columns: 1fr 1fr; }
+  .control-room .cr-left, .control-room .cr-right { left: auto; top: 0; width: 420px; height: 100%; border-radius: 0; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
+}
