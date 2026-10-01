@@ -29,7 +29,8 @@ struct Project: Codable, Identifiable, Equatable {
     var captionStyle = CaptionStyle()
     var layout: LayoutTemplate = .auto
     var layoutOptions = LayoutOptions()  // ajustes de cada diseño (marco de estudio, quien habla en grande…)
-    var reelLayout: LayoutTemplate = .auto
+    var reelLayout: LayoutTemplate = .auto   // (viejo) ahora vive en reelLook.layout
+    var reelLook = ReelLook()           // diseño y marca para todos los reels (cada reel puede tener el suyo)
     var showBackground: Bool = true     // usar la imagen de fondo del podcast detrás del video
     var intro: Bumper?                  // imagen (y música) antes del video
     var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
@@ -322,7 +323,65 @@ struct Reel: Codable, Identifiable, Equatable {
     var end: Double
     var selected: Bool = true
     var exportedFile: String?
+    var look: ReelLook?                 // diseño propio de este reel (nil = el de todos los reels)
     var length: Double { max(0, end - start) }
+
+    init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
+        self.id = id; self.title = title; self.reason = reason; self.start = start; self.end = end
+        self.selected = selected; self.exportedFile = exportedFile; self.look = look
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Reel"
+        reason = try c.decodeIfPresent(String.self, forKey: .reason) ?? ""
+        start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0
+        end = try c.decodeIfPresent(Double.self, forKey: .end) ?? start
+        selected = try c.decodeIfPresent(Bool.self, forKey: .selected) ?? true
+        exportedFile = try c.decodeIfPresent(String.self, forKey: .exportedFile)
+        look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
+    }
+}
+
+/// Cómo se ve un reel: diseño, sus opciones y la marca (fondo, logo, nombres), aparte del episodio.
+/// `logoFile` y `backgroundFile` son un logo y un fondo solo para reels; si están vacíos se usan los del podcast.
+struct ReelLook: Codable, Equatable {
+    var layout: LayoutTemplate = .auto
+    var options = LayoutOptions()
+    var showBackground: Bool = true
+    var showLogo: Bool = true
+    var showNames: Bool = true
+    var logoFile: String?
+    var backgroundFile: String?
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
+        options = try c.decodeIfPresent(LayoutOptions.self, forKey: .options) ?? LayoutOptions()
+        showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
+        showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
+        showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
+        logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
+        backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
+    }
+}
+
+extension Project {
+    /// El diseño que le toca a un reel: el suyo si tiene, si no el de todos los reels.
+    func look(for reel: Reel?) -> ReelLook { reel?.look ?? reelLook }
+
+    /// Copia del proyecto con el aspecto de un reel puesto encima (para la vista previa y el export de ese reel).
+    func applying(_ look: ReelLook) -> Project {
+        var p = self
+        p.layout = look.layout
+        p.layoutOptions = look.options
+        p.showBackground = look.showBackground
+        p.showLogo = look.showLogo
+        p.showNames = look.showNames
+        if let f = look.logoFile { p.logoFile = f }
+        if let f = look.backgroundFile { p.backgroundFile = f }
+        return p
+    }
 }
 
 /// Intro o cierre: una imagen fija unos segundos, con música opcional (relativa a la carpeta del proyecto).
@@ -597,6 +656,8 @@ extension Project {
         normalizeLoudness = try c.decodeIfPresent(Bool.self, forKey: .normalizeLoudness) ?? true
         outro = try c.decodeIfPresent(Bumper.self, forKey: .outro)
         reelLayout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .reelLayout) ?? .auto
+        if let rl = try c.decodeIfPresent(ReelLook.self, forKey: .reelLook) { reelLook = rl }
+        else { reelLook = ReelLook(); reelLook.layout = reelLayout }
         showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
         laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]

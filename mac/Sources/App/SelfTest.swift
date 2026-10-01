@@ -290,7 +290,7 @@ enum SelfTest {
                 win.contentView = host
                 win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
                 win.orderFrontRegardless()
-                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers)] {
+                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers), ("4-reels", .reels)] {
                     session.step = step
                     if step == .layers, let o = session.project.overlays.first {
                         session.selectedTrack = .overlay(o.id)
@@ -422,8 +422,12 @@ enum SelfTest {
         }
         Task { @MainActor in
             do {
-                let p = try ProjectStore.load(slug: a[i + 1])
+                var p = try ProjectStore.load(slug: a[i + 1])
                 let window: EditEngine.Span? = (s <= 0 && e >= p.duration) ? nil : (s, e)   // todo el episodio: sin ventana (con intro/cierre)
+                // "--render … vertical reel N": con el diseño del reel N (1 = el primero), como al exportar reels
+                if a.count > i + 6, a[i + 5] == "reel", let n = Int(a[i + 6]), n >= 1, n <= p.reels.count {
+                    p = p.applying(p.look(for: p.reels[n - 1]))
+                }
                 let url = try await Exporter.export(project: p, format: fmt, window: window, baseName: "render-test",
                                                     energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
                 print("OK \(url.path)"); fflush(stdout); exit(0)
@@ -597,7 +601,7 @@ enum SelfTest {
                 }
                 if !session.project.reels.isEmpty {
                     for idx in session.project.reels.indices { session.project.reels[idx].selected = idx == 0 }
-                    session.project.reelLayout = .auto
+                    session.project.reelLook.layout = .auto
                     outputs += try await session.performExportReels().map(\.path)
                     log("Reel listo")
                 }

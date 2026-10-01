@@ -224,6 +224,7 @@ final class ProjectSession: ObservableObject {
     @Published var previewFormat: ExportFormat = .landscape
     @Published var previewWindow: EditEngine.Span?
     @Published var previewLayout: LayoutTemplate?
+    @Published var previewLook: ReelLook?          // viendo un reel: su diseño y marca encima del episodio
     @Published var lastExports: [URL] = []
     @Published var fixSummary: String?
     @Published var reelsNote: String?
@@ -310,12 +311,13 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil) {
-        let changed = format != previewFormat || layout != previewLayout
+    func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil, look: ReelLook? = nil) {
+        let changed = format != previewFormat || layout != previewLayout || look != previewLook
             || window?.start != previewWindow?.start || window?.end != previewWindow?.end
         previewFormat = format
         previewWindow = window
         previewLayout = layout
+        previewLook = look
         if changed { schedulePreview(immediate: true) }
     }
 
@@ -324,7 +326,8 @@ final class ProjectSession: ObservableObject {
         let current = player.currentTime().seconds - (built?.introDuration ?? 0)
         let oldKeep = built?.keep
         do {
-            let b = try await CompositionBuilder.build(project: project, format: previewFormat == .audio ? .landscape : previewFormat,
+            let shown = previewLook.map { project.applying($0) } ?? project
+            let b = try await CompositionBuilder.build(project: shown, format: previewFormat == .audio ? .landscape : previewFormat,
                                                        window: previewWindow, energy: energy, layoutOverride: previewLayout)
             guard !Task.isCancelled else { return }
             built = b
@@ -561,9 +564,9 @@ final class ProjectSession: ObservableObject {
             for (i, reel) in reels.enumerated() {
                 let label = "Reel \(i + 1) de \(reels.count): \(reel.title)"
                 report("Exportando reels", label, 0)
-                let url = try await Exporter.export(project: project, format: .vertical, window: (reel.start, reel.end),
-                                                    baseName: "reel-\(i + 1)-\(reel.title)", energy: energy,
-                                                    layout: project.reelLayout) { [weak self] f in
+                let url = try await Exporter.export(project: project.applying(project.look(for: reel)), format: .vertical,
+                                                    window: (reel.start, reel.end),
+                                                    baseName: "reel-\(i + 1)-\(reel.title)", energy: energy) { [weak self] f in
                     self?.reportAsync("Exportando reels", label, f)
                 }
                 if let idx = project.reels.firstIndex(where: { $0.id == reel.id }) {
@@ -816,6 +819,33 @@ final class ProjectSession: ObservableObject {
             try FileManager.default.copyItem(at: url, to: dest)
         } catch { errorMessage = error.localizedDescription; return }
         addOverlay(kind: .image, imageFile: rel)
+    }
+
+    /// Logo o fondo solo para los reels (de todos, o del reel elegido).
+    func chooseReelImage(kind: String, reelId: UUID?) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
+        panel.allowsMultipleSelection = false
+        panel.message = kind == "logo" ? "Elige el logo para los reels (un PNG con fondo transparente queda mejor)" : "Elige el fondo para los reels (vertical, 1080×1920)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
+        let rel = "branding/reel-\(kind)-\(Int(Date().timeIntervalSince1970)).\(ext)"
+        let dest = ProjectStore.url(rel, in: project.id)
+        do {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { errorMessage = error.localizedDescription; return }
+        setReelImage(kind: kind, reelId: reelId, file: rel)
+    }
+
+    func setReelImage(kind: String, reelId: UUID?, file: String?) {
+        if let reelId, let i = project.reels.firstIndex(where: { $0.id == reelId }) {
+            var l = project.reels[i].look ?? project.reelLook
+            if kind == "logo" { l.logoFile = file } else { l.backgroundFile = file }
+            project.reels[i].look = l
+        } else {
+            if kind == "logo" { project.reelLook.logoFile = file } else { project.reelLook.backgroundFile = file }
+        }
     }
 
     func removeOverlay(_ id: Int) {

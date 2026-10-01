@@ -469,6 +469,9 @@ struct ReelsStep: View {
     @ObservedObject var session: ProjectSession
     @State private var previewing: UUID?
 
+    /// El reel que se está viendo (si sigue existiendo).
+    private var currentReel: Reel? { previewing.flatMap { id in session.project.reels.first { $0.id == id } } }
+
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             ScrollView {
@@ -495,12 +498,10 @@ struct ReelsStep: View {
                     }
                     ForEach($session.project.reels) { $reel in
                         ReelCard(reel: $reel, isPreviewing: previewing == reel.id, duration: session.project.duration) {
-                            previewing = reel.id
-                            session.setPreview(format: .vertical, window: (reel.start, reel.end), layout: session.project.reelLayout)
-                            session.player.seek(to: .zero)
-                            session.player.play()
+                            show(reel)
                         } remove: {
                             session.project.reels.removeAll { $0.id == reel.id }
+                            if previewing == reel.id { previewing = nil }
                         }
                     }
                     Card {
@@ -510,7 +511,7 @@ struct ReelsStep: View {
                         if session.previewWindow != nil {
                             Button("Ver el episodio completo") {
                                 previewing = nil
-                                session.setPreview(format: .vertical, window: nil, layout: session.project.reelLayout)
+                                session.setPreview(format: .vertical, window: nil, look: session.project.reelLook)
                             }
                         }
                     }
@@ -525,34 +526,145 @@ struct ReelsStep: View {
             .frame(minWidth: 460, maxWidth: 560)
             VStack(spacing: 12) {
                 PreviewPane(session: session, allowedFormats: [.vertical])
-                if session.project.lanes.count > 1 {
-                    Card {
-                        Picker("Diseño", selection: Binding(get: { session.project.reelLayout },
-                                                            set: { session.project.reelLayout = $0
-                                                                   session.setPreview(format: .vertical, window: session.previewWindow, layout: $0) })) {
-                            Text("Quien habla").tag(LayoutTemplate.auto)
-                            Text("Arriba y abajo").tag(LayoutTemplate.stack)
-                        }
-                        .pickerStyle(.segmented)
-                        Text("Encuadre de cada persona").font(.caption.bold())
-                        ForEach(session.project.lanes) { lane in
-                            HStack {
-                                Text(session.project.laneName(lane.id)).font(.caption).frame(width: 90, alignment: .leading)
-                                Slider(value: Binding(get: { session.project.laneCrop[lane.id] ?? 0.5 },
-                                                      set: { session.project.laneCrop[lane.id] = $0 }), in: 0...1)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: 420)
+                    .frame(minHeight: 380)
+                ScrollView {
+                    ReelLookCard(session: session, reel: currentReel)
+                        .frame(maxWidth: 420)
                 }
             }
             .padding(.vertical, 28).padding(.trailing, 28)
         }
         .onAppear {
-            session.setPreview(format: .vertical, window: session.project.reels.first.map { ($0.start, $0.end) },
-                               layout: session.project.reelLayout)
+            if let r = session.project.reels.first { show(r) }
+            else { session.setPreview(format: .vertical, window: nil, look: session.project.reelLook) }
         }
         .onDisappear { session.setPreview(format: .landscape) }
+        // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
+        .onChange(of: session.project.reelLook) { _, _ in refresh() }
+        .onChange(of: currentReel?.look) { _, _ in refresh() }
+    }
+
+    private func show(_ reel: Reel) {
+        previewing = reel.id
+        session.setPreview(format: .vertical, window: (reel.start, reel.end), look: session.project.look(for: reel))
+        session.player.seek(to: .zero)
+        session.player.play()
+    }
+
+    private func refresh() {
+        session.setPreview(format: .vertical, window: session.previewWindow, look: session.project.look(for: currentReel))
+    }
+}
+
+/// Diseño y marca de los reels: para todos, o solo para el reel que se está viendo.
+struct ReelLookCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel?
+
+    private var own: Bool { reel?.look != nil }
+    /// Lo que se edita: el diseño propio del reel o el de todos.
+    private var look: Binding<ReelLook> {
+        if let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+            return Binding(get: { session.project.reels[i].look ?? session.project.reelLook },
+                           set: { session.project.reels[i].look = $0 })
+        }
+        return $session.project.reelLook
+    }
+
+    var body: some View {
+        let p = session.project
+        let onePerson = p.lanes.count <= 1
+        let choices: [LayoutTemplate] = onePerson ? [.solo, .studio] : [.auto, .solo, .stack, .pip, .spotlight, .grid, .sideBySide, .studio]
+        let l = look.wrappedValue
+        let chosen: LayoutTemplate = (onePerson && l.layout == .auto) ? .solo : l.layout
+        Card {
+            HStack {
+                Text(own ? "Diseño de este reel" : "Diseño de todos los reels").font(.headline)
+                Spacer()
+                if reel != nil {
+                    Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
+                        guard let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+                        session.project.reels[i].look = on ? session.project.reelLook : nil
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini).font(.caption)
+                }
+            }
+            Text(own ? "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con el diseño de todos."
+                     : "Aparte del episodio: lo que cambies aquí no toca el video completo.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92))], spacing: 6) {
+                ForEach(choices) { t in
+                    Button { look.wrappedValue.layout = t } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: t.symbol).font(.title3)
+                            Text(t == .auto ? "Quien habla" : t.title).font(.caption2)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(chosen == t ? Theme.panelStrong : .clear))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(chosen == t ? Theme.accent : Theme.stroke))
+                    }
+                    .buttonStyle(.plain)
+                    .help(t == .auto ? "Pantalla completa para quien está hablando" : t.help)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                if l.layout == .auto || l.layout == .solo {
+                    Toggle("Con marco de estudio (el fondo detrás)", isOn: look.options.soloStudio)
+                }
+                if l.layout == .grid && !onePerson {
+                    Toggle("Quien habla en grande, los demás en cuadritos", isOn: look.options.gridSpeakerBig)
+                }
+                if l.layout == .pip && !onePerson {
+                    Toggle("En grande quien habla", isOn: look.options.pipFollowSpeaker)
+                }
+            }
+            .font(.caption)
+            Divider()
+            Text("Marca").font(.caption.bold())
+            Toggle("Fondo detrás del video", isOn: look.showBackground).font(.caption)
+            brandRow(kind: "background", label: "Fondo solo para reels", file: l.backgroundFile, fallback: p.backgroundFile)
+            Toggle("Logo arriba a la derecha", isOn: look.showLogo).font(.caption)
+            brandRow(kind: "logo", label: "Logo solo para reels", file: l.logoFile, fallback: p.logoFile)
+            Toggle("Nombres de las personas", isOn: look.showNames).font(.caption)
+            if !onePerson {
+                Divider()
+                Text("Encuadre de cada persona").font(.caption.bold())
+                ForEach(p.lanes) { lane in
+                    HStack {
+                        Text(p.laneName(lane.id)).font(.caption).frame(width: 90, alignment: .leading)
+                        Slider(value: Binding(get: { session.project.laneCrop[lane.id] ?? 0.5 },
+                                              set: { session.project.laneCrop[lane.id] = $0 }), in: 0...1)
+                    }
+                }
+                Text("El encuadre vale para todos los reels.").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+        }
+    }
+
+    private func brandRow(kind: String, label: String, file: String?, fallback: String?) -> some View {
+        HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong)
+                if let f = file ?? fallback, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).padding(3)
+                } else {
+                    Image(systemName: kind == "logo" ? "seal" : "photo").foregroundStyle(Theme.secondary)
+                }
+            }
+            .frame(width: 40, height: 30)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.caption)
+                Text(file != nil ? "Propio de los reels" : (fallback != nil ? "Se usa el del podcast" : "No hay; elige uno"))
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            Button(file == nil ? "Elegir…" : "Cambiar…") { session.chooseReelImage(kind: kind, reelId: own ? reel?.id : nil) }
+                .controlSize(.mini)
+            if file != nil {
+                Button { session.setReelImage(kind: kind, reelId: own ? reel?.id : nil, file: nil) } label: { Image(systemName: "xmark.circle") }
+                    .buttonStyle(.borderless).controlSize(.mini).help("Volver al del podcast")
+            }
+        }
     }
 }
 
