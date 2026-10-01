@@ -240,9 +240,24 @@ struct FixSettings: Codable, Equatable {
     var removeFillers = true
     var removeWordFillers = false       // "este", "o sea", "pues"... off by default
     var enhanceAudio = true
+    var strongNoise = false             // reducción de ruido con red neuronal (perro, teclas) en vez de la suave
+    var gateOthers = true               // bajar la pista de quien no está hablando (teclas y ruidos del otro)
     var minSilence: Double = 0.8        // seconds of silence before we cut
     var keepPad: Double = 0.18          // breathing room kept around speech
     var lastRun: Date?
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        removeSilences = try c.decodeIfPresent(Bool.self, forKey: .removeSilences) ?? true
+        removeFillers = try c.decodeIfPresent(Bool.self, forKey: .removeFillers) ?? true
+        removeWordFillers = try c.decodeIfPresent(Bool.self, forKey: .removeWordFillers) ?? false
+        enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? true
+        strongNoise = try c.decodeIfPresent(Bool.self, forKey: .strongNoise) ?? false
+        gateOthers = try c.decodeIfPresent(Bool.self, forKey: .gateOthers) ?? true
+        minSilence = try c.decodeIfPresent(Double.self, forKey: .minSilence) ?? 0.8
+        keepPad = try c.decodeIfPresent(Double.self, forKey: .keepPad) ?? 0.18
+        lastRun = try c.decodeIfPresent(Date.self, forKey: .lastRun)
+    }
 }
 
 struct Reel: Codable, Identifiable, Equatable {

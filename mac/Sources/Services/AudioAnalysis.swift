@@ -160,15 +160,18 @@ enum AudioAnalysis {
     // MARK: ffmpeg-based jobs
 
     /// "Studio in a box" chain from postPod web, written once per media file.
-    static func enhance(media: SourceMedia, slug: String, progress: @escaping (Double) -> Void) async throws -> String {
-        let rel = "media/enhanced_\(media.id).m4a"
+    static func enhancedRel(mediaId: Int, strong: Bool) -> String { strong ? "media/enhanced_\(mediaId)_nn.m4a" : "media/enhanced_\(mediaId).m4a" }
+
+    static func enhance(media: SourceMedia, slug: String, strong: Bool = false, progress: @escaping (Double) -> Void) async throws -> String {
+        let rel = enhancedRel(mediaId: media.id, strong: strong)
         let dest = ProjectStore.url(rel, in: slug)
         if FileManager.default.fileExists(atPath: dest.path) { return rel }
+        let chain = (strong ? FFmpeg.strongSpeechChain : nil) ?? FFmpeg.speechChain
         // Unique temp name: two windows/processes working on the same project must never clobber each other.
         let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("enhancing_\(media.id)_\(UUID().uuidString).m4a")
         defer { try? FileManager.default.removeItem(at: tmp) }
         try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn",
-                              "-af", FFmpeg.speechChain, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
+                              "-af", chain, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
                              duration: media.duration, progress: progress)
         if !FileManager.default.fileExists(atPath: dest.path) {
             try FileManager.default.moveItem(at: tmp, to: dest)

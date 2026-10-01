@@ -36,6 +36,18 @@ enum FFmpeg {
     /// Speech chain identical to postPod web (exporter.py §3.13).
     static let speechChain = "highpass=f=80,afftdn=nr=12,equalizer=f=4000:t=q:w=1:g=3,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11"
 
+    /// Modelo RNNoise que viene con la app (reducción de ruido con red neuronal: perro, teclas, calle).
+    static var rnnoiseModel: URL? {
+        Bundle.main.url(forResource: "sh", withExtension: "rnnn", subdirectory: "Models")
+            ?? Bundle.main.url(forResource: "sh", withExtension: "rnnn")
+    }
+    /// Cadena "fuerte": la red neuronal separa la voz del ruido antes del resto del procesado.
+    static var strongSpeechChain: String? {
+        guard let m = rnnoiseModel else { return nil }
+        let path = m.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: "'", with: "\\'")
+        return "aresample=48000,highpass=f=80,arnndn=m='\(path)':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11"
+    }
+
     /// Runs ffmpeg. `duration` (seconds of input) enables progress 0...1.
     @discardableResult
     static func run(_ args: [String], duration: Double? = nil, allowFailure: Bool = false,

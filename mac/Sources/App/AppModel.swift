@@ -459,12 +459,14 @@ final class ProjectSession: ObservableObject {
                 project.media[i].enhancedAudioFile = nil
             }
         }
-        let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile == nil }
+        let strong = project.fix.strongNoise
+        // Si se cambió entre suave y fuerte, el archivo esperado es otro: se vuelve a procesar
+        let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile != AudioAnalysis.enhancedRel(mediaId: $0.id, strong: strong) }
         for (i, m) in items.enumerated() {
             let who = project.lanes.first { $0.clips.contains { $0.mediaId == m.id } }.map { project.laneName($0.id) } ?? m.originalName
-            report("Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", 0)
-            let rel = try await AudioAnalysis.enhance(media: m, slug: project.id) { [weak self] f in
-                self?.reportAsync("Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", f)
+            report(strong ? "Separando la voz del ruido" : "Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", 0)
+            let rel = try await AudioAnalysis.enhance(media: m, slug: project.id, strong: strong) { [weak self] f in
+                self?.reportAsync(strong ? "Separando la voz del ruido" : "Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", f)
             }
             if let idx = project.media.firstIndex(where: { $0.id == m.id }) { project.media[idx].enhancedAudioFile = rel }
         }
@@ -568,6 +570,21 @@ final class ProjectSession: ObservableObject {
             }
             refreshExports()
             return urls
+    }
+
+    // MARK: Subtítulos a archivo
+
+    /// Guarda los subtítulos (.srt) o la transcripción (.txt) donde el usuario elija.
+    func saveSubtitles(asText: Bool) {
+        guard project.isTranscribed else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = asText ? [.plainText] : [UTType(filenameExtension: "srt") ?? .plainText]
+        panel.nameFieldStringValue = ProjectStore.slugify(project.name) + (asText ? "-transcripcion.txt" : ".srt")
+        panel.message = asText ? "Transcripción en texto, con quién habla" : "Subtítulos SRT (YouTube, Spotify, editores de video)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let text = asText ? Exporter.transcriptText(project: project) : Exporter.srt(project: project)
+        do { try text.write(to: url, atomically: true, encoding: .utf8) }
+        catch { errorMessage = error.localizedDescription }
     }
 
     // MARK: Intro y cierre

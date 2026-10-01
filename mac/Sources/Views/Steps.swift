@@ -180,6 +180,24 @@ struct FixStep: View {
                                 Text("Quita ruido de fondo, iguala volúmenes y le da presencia a la voz").font(.caption).foregroundStyle(Theme.secondary)
                             }
                         }
+                        if session.project.fix.enhanceAudio {
+                            Picker("Ruido de fondo", selection: $session.project.fix.strongNoise) {
+                                Text("Suave (ventilador, siseo)").tag(false)
+                                Text("Fuerte, con red neuronal (perro, teclas, calle)").tag(true)
+                            }
+                            .pickerStyle(.radioGroup).font(.caption)
+                            if session.project.fix.strongNoise && FFmpeg.strongSpeechChain == nil {
+                                Text("Falta el modelo de ruido en esta instalación; se usará el modo suave.").font(.caption).foregroundStyle(.orange)
+                            }
+                        }
+                        Divider()
+                        Toggle(isOn: $session.project.fix.gateOthers) {
+                            VStack(alignment: .leading) {
+                                Text("Silenciar a quien no habla").font(.headline)
+                                Text("Baja 18 dB la pista de quien no está hablando: teclas, perro o ruidos del otro desaparecen. Se aplica en la vista previa y al exportar.").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        .disabled(session.project.lanes.count < 2)
                         Divider()
                         Toggle(isOn: $session.project.fix.removeSilences) {
                             VStack(alignment: .leading) {
@@ -290,6 +308,13 @@ struct CaptionsStep: View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 16) {
                 StepHeader(title: "Subtítulos", subtitle: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla.")
+                    HStack(spacing: 8) {
+                        Button { session.saveSubtitles(asText: false) } label: { Label("Guardar subtítulos (.srt)", systemImage: "square.and.arrow.down") }
+                        Button { session.saveSubtitles(asText: true) } label: { Label("Guardar transcripción (.txt)", systemImage: "doc.text") }
+                        Spacer()
+                    }
+                    .disabled(!session.project.isTranscribed)
+                    .controlSize(.small)
                 if !session.project.isTranscribed {
                     Card {
                         Text("Todavía no hay transcripción.").font(.headline)
@@ -873,8 +898,12 @@ struct ExportStep: View {
                     if format != .audio {
                         Card {
                             Text("Qué incluir").font(.headline)
-                            Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
-                                .disabled(!session.project.isTranscribed)
+                            HStack {
+                                Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
+                                    .disabled(!session.project.isTranscribed)
+                                Spacer()
+                                Button("Guardar .srt") { session.saveSubtitles(asText: false) }.controlSize(.small).disabled(!session.project.isTranscribed)
+                            }
                             if !session.project.sponsors.isEmpty {
                                 Toggle("Sponsors en su momento del guion (\(session.project.sponsorAppearances().count))", isOn: $session.project.showSponsors)
                             }

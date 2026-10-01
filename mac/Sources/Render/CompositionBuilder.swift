@@ -92,6 +92,24 @@ enum CompositionBuilder {
             }
         }
 
+        // Quién habla (en tiempo de salida): lo usa el diseño y la puerta por persona
+        let switches = AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep)
+        let gate = project.fix.gateOthers && project.lanes.count > 1 && energy != nil && switches.count > 1
+        /// Baja la pista de `laneId` (a −18 dB) cuando habla otra persona, con transiciones de 0,15 s.
+        func applyGate(_ p: AVMutableAudioMixInputParameters, laneId: Int, volume: Double) {
+            guard gate else { return }
+            let low = Float(volume) * 0.125, high = Float(volume)
+            var current: Float = (switches.first?.lane == laneId) ? high : low
+            p.setVolume(current, at: .zero)
+            for sw in switches.dropFirst() {
+                let target: Float = sw.lane == laneId ? high : low
+                guard target != current else { continue }
+                let t = introDur + sw.time
+                p.setVolumeRamp(fromStartVolume: current, toEndVolume: target, timeRange: CMTimeRange(start: cm(max(0, t - 0.05)), duration: cm(0.15)))
+                current = target
+            }
+        }
+
         let wantVideo = format != .audio
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
@@ -119,7 +137,10 @@ enum CompositionBuilder {
                         } else {
                             let p = AVMutableAudioMixInputParameters(track: aTrack!)
                             p.setVolume(Float(lane.volume * placed.clip.volume), at: .zero)
-                            fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
+                            applyGate(p, laneId: lane.id, volume: lane.volume * placed.clip.volume)
+                            if lane.fadeIn > 0 || lane.fadeOut > 0 {
+                                fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
+                            }
                             mixParams.append(p)
                         }
                     }
@@ -198,7 +219,7 @@ enum CompositionBuilder {
                 layout: layoutOverride ?? project.layout,
                 laneOrder: project.lanesOnScreen.map(\.id), trackIDs: videoTrackIDs,
                 captions: captions, style: style,
-                switches: AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep),
+                switches: switches,
                 names: names, showNames: project.showNames,
                 cropX: project.laneCrop,
                 logo: project.showLogo ? project.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) } : nil,
