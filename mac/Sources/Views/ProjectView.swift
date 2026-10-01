@@ -306,8 +306,40 @@ struct TrackInspector: View {
             }
             .font(.callout).controlSize(.small)
         }
+        Divider()
+        HStack(spacing: 6) {
+            Text("Voz").frame(width: 72, alignment: .leading)
+            Button("Cálida") { setEQ(i, VoiceEQ.preset("warm")) }
+            Button("Clara") { setEQ(i, VoiceEQ.preset("clear")) }
+            Button("Quitar retumbe") { setEQ(i, VoiceEQ.preset("rumble")) }
+            Button("Original") { setEQ(i, VoiceEQ()) }
+        }
+        .font(.callout).controlSize(.small)
+        eqRow("Graves", $session.project.lanes[i].eq.low)
+        eqRow("Medios", $session.project.lanes[i].eq.mid)
+        eqRow("Agudos", $session.project.lanes[i].eq.high)
+        if !session.eqApplied(laneId: lane.id) {
+            HStack {
+                Text("Cambios sin aplicar: el ecualizador procesa el audio de esta persona (unos segundos por minuto).")
+                    .font(.caption2).foregroundStyle(.orange)
+                Spacer()
+                Button("Aplicar") { session.applyEQ(laneId: lane.id) }.controlSize(.small).buttonStyle(.borderedProminent)
+                    .disabled(session.isBusy)
+            }
+        }
         Text("El desfase mueve el inicio de su grabación (no puede ser negativo: si va adelantada, atrasa a los demás). Los cortes se aplican igual a todas las pistas.")
             .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+
+    private func setEQ(_ i: Int, _ eq: VoiceEQ) { session.project.lanes[i].eq = eq }
+
+    private func eqRow(_ label: String, _ value: Binding<Double>) -> some View {
+        HStack(spacing: 8) {
+            Text(label).frame(width: 72, alignment: .leading)
+            Slider(value: value, in: -8...8, step: 0.5)
+            Text(String(format: "%+.1f dB", value.wrappedValue)).monospacedDigit().frame(width: 60, alignment: .trailing)
+        }
+        .font(.callout)
     }
 
     @ViewBuilder
@@ -316,6 +348,17 @@ struct TrackInspector: View {
         let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido"
         header("\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
         volumeRow(value: $session.project.audioLane[i].volume, max: 1.5)
+        Toggle("Bajar sola cuando alguien habla", isOn: Binding(get: { session.project.audioLane[i].ducks },
+                                                                 set: { session.project.audioLane[i].duck = $0 }))
+            .font(.callout)
+        if session.project.audioLane[i].ducks {
+            HStack(spacing: 8) {
+                Text("Cuánto baja").frame(width: 72, alignment: .leading)
+                Slider(value: $session.project.audioLane[i].duckDB, in: 6...24, step: 1)
+                Text(String(format: "−%.0f dB", session.project.audioLane[i].duckDB)).monospacedDigit().frame(width: 52, alignment: .trailing)
+            }
+            .font(.callout)
+        }
         fadeRow(label: "Fade entrada", value: $session.project.audioLane[i].fadeIn)
         fadeRow(label: "Fade salida", value: $session.project.audioLane[i].fadeOut)
         HStack(spacing: 6) {

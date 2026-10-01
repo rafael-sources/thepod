@@ -32,6 +32,11 @@ struct Project: Codable, Identifiable, Equatable {
     var reelLayout: LayoutTemplate = .auto
     var showBackground: Bool = true     // usar la imagen de fondo del podcast detrás del video
     var intro: Bumper?                  // imagen (y música) antes del video
+    var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
+    var matchColors = false             // igualar el color de las cámaras
+    var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (calculado al activar matchColors)
+    var exportHEVC = false              // archivo más liviano (HEVC) en vez de compatible (H.264)
+    var normalizeLoudness = true        // ajustar el volumen final a −16 LUFS
     var outro: Bumper?                  // imagen (y música) al final
     var showNames: Bool = true
     var showLogo: Bool = true
@@ -101,6 +106,7 @@ struct SourceMedia: Codable, Identifiable, Equatable {
     var hasVideo: Bool = true
     var enhancedAudioFile: String?      // relative, produced by "Mejorar audio"
     var transcriptionAudioFile: String? // 16 kHz mono wav for Whisper
+    var eqAudioFile: String?            // audio con el ecualizador de la persona aplicado
     var startOffset: Double = 0         // recording started this late vs. the others (lost head chunk)
 }
 
@@ -116,6 +122,7 @@ extension SourceMedia {
         hasVideo = try c.decodeIfPresent(Bool.self, forKey: .hasVideo) ?? true
         enhancedAudioFile = try c.decodeIfPresent(String.self, forKey: .enhancedAudioFile)
         transcriptionAudioFile = try c.decodeIfPresent(String.self, forKey: .transcriptionAudioFile)
+        eqAudioFile = try c.decodeIfPresent(String.self, forKey: .eqAudioFile)
         startOffset = try c.decodeIfPresent(Double.self, forKey: .startOffset) ?? 0
     }
 }
@@ -131,6 +138,45 @@ extension Lane {
         offset = try c.decodeIfPresent(Double.self, forKey: .offset) ?? 0
         fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
+        eq = try c.decodeIfPresent(VoiceEQ.self, forKey: .eq) ?? VoiceEQ()
+    }
+}
+
+/// Ecualizador sencillo de voz. Todo en 0 = sin cambios.
+struct VoiceEQ: Codable, Equatable {
+    var low: Double = 0                 // graves (dB, ~120 Hz)
+    var mid: Double = 0                 // medios (dB, ~1 kHz)
+    var high: Double = 0                // agudos (dB, ~6 kHz)
+    var rumbleCut = false               // quitar retumbe (corte bajo 120 Hz + menos 250 Hz)
+    var isFlat: Bool { abs(low) < 0.1 && abs(mid) < 0.1 && abs(high) < 0.1 && !rumbleCut }
+    static func preset(_ id: String) -> VoiceEQ {
+        var e = VoiceEQ()
+        switch id {
+        case "warm": e.low = 2; e.mid = 0; e.high = -1
+        case "clear": e.low = -2; e.mid = 1; e.high = 3
+        case "rumble": e.rumbleCut = true; e.high = 1
+        default: break
+        }
+        return e
+    }
+    /// Firma corta para nombrar el archivo procesado.
+    var key: String { String(format: "l%+.1fm%+.1fh%+.1f%@", low, mid, high, rumbleCut ? "r" : "") }
+    var ffmpegFilter: String {
+        var f: [String] = []
+        if rumbleCut { f += ["highpass=f=120", "equalizer=f=250:t=q:w=1:g=-3"] }
+        if abs(low) >= 0.1 { f.append(String(format: "equalizer=f=120:t=q:w=0.8:g=%.1f", low)) }
+        if abs(mid) >= 0.1 { f.append(String(format: "equalizer=f=1000:t=q:w=1:g=%.1f", mid)) }
+        if abs(high) >= 0.1 { f.append(String(format: "equalizer=f=6000:t=q:w=0.8:g=%.1f", high)) }
+        f.append("alimiter=limit=0.95:level=0")
+        return f.joined(separator: ",")
+    }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        low = try c.decodeIfPresent(Double.self, forKey: .low) ?? 0
+        mid = try c.decodeIfPresent(Double.self, forKey: .mid) ?? 0
+        high = try c.decodeIfPresent(Double.self, forKey: .high) ?? 0
+        rumbleCut = try c.decodeIfPresent(Bool.self, forKey: .rumbleCut) ?? false
     }
 }
 
@@ -143,6 +189,7 @@ struct Lane: Codable, Identifiable, Equatable {
     var offset: Double = 0              // timeline time where this person's recording starts
     var fadeIn: Double = 0              // segundos de entrada suave del audio de esta persona
     var fadeOut: Double = 0             // segundos de salida suave
+    var eq = VoiceEQ()                  // ecualizador de 3 bandas (se aplica procesando el audio)
 
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
@@ -175,6 +222,9 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var volume: Double = 0.7
     var fadeIn: Double = 0
     var fadeOut: Double = 0
+    var duck: Bool?                     // bajar bajo la voz; nil = automático (sí si dura más de 8 s: música, no efectos)
+    var duckDB: Double = 12
+    var ducks: Bool { duck ?? ((srcOut - srcIn) > 8) }
     init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
         self.id = id; self.mediaId = mediaId; self.tlStart = tlStart; self.srcIn = srcIn; self.srcOut = srcOut
         self.volume = volume; self.fadeIn = fadeIn; self.fadeOut = fadeOut
@@ -189,8 +239,11 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0.7
         fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
+        duck = try c.decodeIfPresent(Bool.self, forKey: .duck)
+        duckDB = try c.decodeIfPresent(Double.self, forKey: .duckDB) ?? 12
     }
 }
+
 
 struct Participant: Codable, Identifiable, Equatable {
     var id: Int
@@ -478,6 +531,11 @@ extension Project {
         layoutOptions = try c.decodeIfPresent(LayoutOptions.self, forKey: .layoutOptions) ?? LayoutOptions()
         showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
         intro = try c.decodeIfPresent(Bumper.self, forKey: .intro)
+        colorLook = try c.decodeIfPresent(String.self, forKey: .colorLook) ?? "none"
+        matchColors = try c.decodeIfPresent(Bool.self, forKey: .matchColors) ?? false
+        laneColorGain = try c.decodeIfPresent([Int: [Double]].self, forKey: .laneColorGain) ?? [:]
+        exportHEVC = try c.decodeIfPresent(Bool.self, forKey: .exportHEVC) ?? false
+        normalizeLoudness = try c.decodeIfPresent(Bool.self, forKey: .normalizeLoudness) ?? true
         outro = try c.decodeIfPresent(Bumper.self, forKey: .outro)
         reelLayout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .reelLayout) ?? .auto
         showNames = try c.decodeIfPresent(Bool.self, forKey: .showNames) ?? true

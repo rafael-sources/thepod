@@ -21,18 +21,38 @@ enum Exporter {
                           audioMix: built.audioMix, to: m4a, type: .m4a) { progress($0 * (FFmpeg.isAvailable ? 0.8 : 1)) }
             guard FFmpeg.isAvailable else { return m4a }
             let mp3 = folder.appendingPathComponent(name + ".mp3")
-            try await FFmpeg.run(["-i", m4a.path, "-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
+            // Volumen final para Spotify/Apple (−16 LUFS): se mide y se corrige en la misma conversión a MP3
+            var af: [String] = []
+            if project.normalizeLoudness, let lufs = await AudioAnalysis.loudness(m4a), abs(lufs + 16) > 0.7 {
+                af = ["-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs)]
+            }
+            try await FFmpeg.run(["-i", m4a.path] + af + ["-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
                                   "-metadata", "title=\(episodeTitle(project))", "-metadata", "artist=\(project.podcastName ?? "")", mp3.path],
                                  duration: built.duration) { progress(0.8 + 0.2 * $0) }
             try? FileManager.default.removeItem(at: m4a)
             return mp3
         }
 
-        let url = folder.appendingPathComponent(name + ".mp4")
+        var url = folder.appendingPathComponent(name + ".mp4")
         let meta = metadata(project: project)
-        let preset = AVAssetExportPresetHighestQuality   // H.264: plays everywhere (WhatsApp, TikTok, YouTube)
+        // H.264 se ve en todas partes (WhatsApp, TikTok, YouTube); HEVC es más rápido de exportar y pesa la mitad.
+        let preset = project.exportHEVC ? AVAssetExportPresetHEVCHighestQuality : AVAssetExportPresetHighestQuality
+        let fix = project.normalizeLoudness && FFmpeg.isAvailable
         try await run(asset: built.asset, preset: preset, videoComposition: built.videoComposition,
-                      audioMix: built.audioMix, to: url, type: .mp4, metadata: meta, progress: progress)
+                      audioMix: built.audioMix, to: url, type: .mp4, metadata: meta) { progress($0 * (fix ? 0.95 : 1)) }
+        // Volumen final: medir y, si hace falta, corregir solo el audio (el video se copia tal cual, es rápido)
+        if fix, let lufs = await AudioAnalysis.loudness(url), abs(lufs + 16) > 0.7 {
+            let fixed = folder.appendingPathComponent(name + "_vol.mp4")
+            do {
+                try await FFmpeg.run(["-i", url.path, "-map", "0", "-c:v", "copy",
+                                      "-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs),
+                                      "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", fixed.path])
+                try FileManager.default.removeItem(at: url)
+                try FileManager.default.moveItem(at: fixed, to: url)
+            } catch { try? FileManager.default.removeItem(at: fixed) }
+        }
+        progress(1)
+        url = url.standardizedFileURL
         if window == nil {
             try? notes(project: project, keep: built.keep).write(to: url.deletingPathExtension().appendingPathExtension("txt"),
                                                                  atomically: true, encoding: .utf8)

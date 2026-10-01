@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import AVFoundation
+import CoreImage
 
 struct JobState: Equatable {
     var title: String
@@ -622,6 +623,78 @@ final class ProjectSession: ObservableObject {
         if !FileManager.default.fileExists(atPath: to.path) { try? FileManager.default.copyItem(at: url, to: to) }
         b.musicFile = "sfx/\(url.lastPathComponent)"
         setBumper(isIntro: isIntro, b)
+    }
+
+    // MARK: Ecualizador por persona
+
+    /// Procesa el audio de la persona con su ecualizador (ffmpeg) y lo deja listo para la vista previa y el export.
+    func applyEQ(laneId: Int) {
+        guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return }
+        let eq = lane.eq
+        let who = project.laneName(laneId)
+        run("Ecualizando la voz de \(who)") { [self] in
+            for clip in lane.clips {
+                guard let i = project.media.firstIndex(where: { $0.id == clip.mediaId }) else { continue }
+                let m = project.media[i]
+                guard m.hasAudio else { continue }
+                if eq.isFlat { project.media[i].eqAudioFile = nil; continue }
+                var base = (project.enhanceAudio ? m.enhancedAudioFile : nil) ?? m.file
+                if !FileManager.default.fileExists(atPath: ProjectStore.url(base, in: project.id).path) { base = m.file }
+                let rel = try await AudioAnalysis.applyEQ(media: m, base: base, eq: eq, slug: project.id) { [weak self] f in
+                    self?.reportAsync("Ecualizando la voz de \(who)", "", f)
+                }
+                if let j = project.media.firstIndex(where: { $0.id == m.id }) { project.media[j].eqAudioFile = rel }
+            }
+            schedulePreview(immediate: true)
+        }
+    }
+
+    /// ¿El ecualizador de esta persona ya está aplicado tal como está configurado?
+    func eqApplied(laneId: Int) -> Bool {
+        guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return true }
+        if lane.eq.isFlat { return true }
+        return lane.clips.allSatisfy { c in
+            guard let m = project.mediaItem(c.mediaId), m.hasAudio else { return true }
+            var base = (project.enhanceAudio ? m.enhancedAudioFile : nil) ?? m.file
+            if !FileManager.default.fileExists(atPath: ProjectStore.url(base, in: project.id).path) { base = m.file }
+            return m.eqAudioFile == AudioAnalysis.eqRel(mediaId: m.id, base: base, eq: lane.eq)
+        }
+    }
+
+    // MARK: Igualar color de las cámaras
+
+    func matchCameraColors() {
+        run("Igualando el color de las cámaras") { [self] in
+            let ctx = CIContext()
+            var avg: [Int: [Double]] = [:]
+            for lane in project.lanes {
+                guard let clip = lane.clips.first, let m = project.mediaItem(clip.mediaId), m.hasVideo else { continue }
+                let asset = AVURLAsset(url: ProjectStore.url(m.file, in: project.id))
+                let gen = AVAssetImageGenerator(asset: asset)
+                gen.appliesPreferredTrackTransform = true
+                gen.maximumSize = CGSize(width: 320, height: 320)
+                var sum = [0.0, 0.0, 0.0], n = 0.0
+                for k in 1...6 {
+                    let t = CMTime(seconds: m.duration * Double(k) / 7, preferredTimescale: 600)
+                    guard let cg = try? await gen.image(at: t).image else { continue }
+                    let img = CIImage(cgImage: cg)
+                    let e = img.extent
+                    let center = e.insetBy(dx: e.width * 0.2, dy: e.height * 0.2)
+                    let a = img.applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: center)])
+                    var px = [UInt8](repeating: 0, count: 4)
+                    ctx.render(a, toBitmap: &px, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+                    sum[0] += Double(px[0]); sum[1] += Double(px[1]); sum[2] += Double(px[2]); n += 1
+                }
+                if n > 0 { avg[lane.id] = sum.map { max(1, $0 / n) } }
+            }
+            guard let refId = project.lanesOnScreen.map(\.id).first(where: { avg[$0] != nil }), let ref = avg[refId] else { return }
+            var gains: [Int: [Double]] = [:]
+            for (id, a) in avg where id != refId {
+                gains[id] = (0..<3).map { min(1.25, max(0.8, ref[$0] / a[$0])) }
+            }
+            project.laneColorGain = gains
+            project.matchColors = true
+        }
     }
 
     // MARK: Orden en pantalla

@@ -31,6 +31,34 @@ final class RenderScene: @unchecked Sendable {
     var contentEnd: Double = .infinity
     var introImage: CIImage?
     var outroImage: CIImage?
+    /// Color: filtro general y corrección por persona (igualar cámaras)
+    var colorLook = "none"
+    var laneGain: [Int: [Double]] = [:]
+
+    func colored(_ img: CIImage, lane: Int) -> CIImage {
+        var out = img
+        if let g = laneGain[lane], g.count == 3 {
+            out = out.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: g[0], y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: g[1], z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: g[2], w: 0)])
+        }
+        func matrix(_ r: Double, _ g: Double, _ b: Double) -> [String: Any] {
+            ["inputRVector": CIVector(x: r, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: g, z: 0, w: 0),
+             "inputBVector": CIVector(x: 0, y: 0, z: b, w: 0)]
+        }
+        switch colorLook {
+        case "warm": out = out.applyingFilter("CIColorMatrix", parameters: matrix(1.06, 1.0, 0.90))
+        case "cool": out = out.applyingFilter("CIColorMatrix", parameters: matrix(0.94, 1.0, 1.08))
+        case "cine":
+            out = out.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0.82, kCIInputContrastKey: 1.10])
+                .applyingFilter("CIColorMatrix", parameters: matrix(1.02, 0.99, 1.04))
+        case "bw": out = out.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0.0, kCIInputContrastKey: 1.08])
+        case "vivid": out = out.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 1.25, kCIInputContrastKey: 1.05])
+        default: break
+        }
+        return out.cropped(to: img.extent)
+    }
 
     private var cache: [String: CIImage] = [:]
     private let lock = NSLock()
@@ -127,6 +155,7 @@ final class RenderScene: @unchecked Sendable {
             let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
                 guard var frame = frames[lane] else { continue }
+                if colorLook != "none" || laneGain[lane] != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
                     let e = frame.extent
@@ -452,6 +481,12 @@ final class PodCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                     return
                 }
                 let scene = instruction.scene
+                // Modo tranquilo: si la Mac está caliente, ir más despacio en vez de forzar los ventiladores
+                switch ProcessInfo.processInfo.thermalState {
+                case .serious: usleep(12_000)
+                case .critical: usleep(35_000)
+                default: break
+                }
                 var frames: [Int: CIImage] = [:]
                 for (lane, tid) in scene.trackIDs {
                     if let pb = request.sourceFrame(byTrackID: tid) {

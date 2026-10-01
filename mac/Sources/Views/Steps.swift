@@ -764,6 +764,36 @@ struct LookStep: View {
                         }
                     }
                     Card {
+                        Text("Color").font(.headline)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
+                            ForEach([("none", "Original"), ("warm", "Cálido"), ("cool", "Frío"), ("cine", "Cine"), ("bw", "B/N"), ("vivid", "Vivo")], id: \.0) { look in
+                                Button { session.project.colorLook = look.0 } label: {
+                                    Text(look.1).font(.caption)
+                                        .frame(maxWidth: .infinity, minHeight: 32)
+                                        .background(RoundedRectangle(cornerRadius: 8).fill(session.project.colorLook == look.0 ? Theme.panelStrong : .clear))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(session.project.colorLook == look.0 ? Theme.accent : Theme.stroke))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        if session.project.lanes.count > 1 {
+                            HStack {
+                                Toggle("Igualar el color de las cámaras", isOn: Binding(
+                                    get: { session.project.matchColors },
+                                    set: { on in
+                                        if on && session.project.laneColorGain.isEmpty { session.matchCameraColors() }
+                                        else { session.project.matchColors = on }
+                                    }))
+                                Spacer()
+                                if session.project.matchColors {
+                                    Button("Volver a medir") { session.matchCameraColors() }.controlSize(.small).disabled(session.isBusy)
+                                }
+                            }
+                            Text("Toma como referencia a quien está primero en el orden en pantalla (\(session.project.lanesOnScreen.first.map { session.project.laneName($0.id) } ?? "")).")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
                         Text("Marca del podcast").font(.headline)
                         if session.project.backgroundFile != nil {
                             Toggle("Fondo del podcast detrás del video", isOn: $session.project.showBackground)
@@ -920,6 +950,17 @@ struct ExportStep: View {
                             }
                         }
                     }
+                    if format != .audio {
+                        Card {
+                            Picker("Archivo", selection: $session.project.exportHEVC) {
+                                Text("Compatible (H.264): se ve en todas partes").tag(false)
+                                Text("Liviano (HEVC): la mitad de peso, más rápido").tag(true)
+                            }
+                            .pickerStyle(.radioGroup).font(.caption)
+                        }
+                    }
+                    Toggle("Ajustar el volumen final para Spotify y YouTube (−16 LUFS)", isOn: $session.project.normalizeLoudness)
+                        .font(.caption)
                     BigButton(title: "Exportar \(format.title)", symbol: "square.and.arrow.up", disabled: session.isBusy) {
                         session.export(format: format)
                     }

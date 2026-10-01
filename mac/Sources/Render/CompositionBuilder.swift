@@ -79,41 +79,82 @@ enum CompositionBuilder {
             guard let outStart, let outEnd else { return nil }
             return (outStart, outEnd)
         }
-        /// Entrada y salida suaves sobre un tramo de salida.
-        func fades(_ p: AVMutableAudioMixInputParameters, volume: Double, span: (start: Double, end: Double)?, fadeIn: Double, fadeOut: Double) {
-            guard let span else { return }
-            let v = Float(volume)
-            let fi = min(fadeIn, (span.end - span.start) / 2), fo = min(fadeOut, (span.end - span.start) / 2)
-            if fi > 0.01 {
-                p.setVolumeRamp(fromStartVolume: 0, toEndVolume: v, timeRange: CMTimeRange(start: cm(span.start), duration: cm(fi)))
+        /// Curva de volumen de una pista: el producto de varios factores (fades, auto-silencio, bajar bajo la voz)
+        /// convertido en rampas consecutivas que no se pisan (AVFoundation ignora rampas superpuestas).
+        func applyEnvelope(_ p: AVMutableAudioMixInputParameters, base: Double, span: (start: Double, end: Double),
+                           points: [Double], factor: (Double) -> Double) {
+            var pts = ([span.start, span.end] + points.filter { $0 > span.start && $0 < span.end }).sorted()
+            pts = pts.reduce(into: [Double]()) { acc, t in if let l = acc.last, t - l < 0.004 { return }; acc.append(t) }
+            func v(_ t: Double) -> Float { Float(max(0, base * factor(t))) }
+            p.setVolume(v(span.start), at: .zero)
+            for k in 0..<(pts.count - 1) {
+                let a = pts[k], b = pts[k + 1]
+                let va = v(a), vb = v(b)
+                if abs(va - vb) < 0.0005 { continue }
+                p.setVolumeRamp(fromStartVolume: va, toEndVolume: vb, timeRange: CMTimeRange(start: cm(a), duration: cm(b - a)))
             }
-            if fo > 0.01 {
-                p.setVolumeRamp(fromStartVolume: v, toEndVolume: 0, timeRange: CMTimeRange(start: cm(span.end - fo), duration: cm(fo)))
-            }
+        }
+        func fadeFactor(_ t: Double, span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double) -> Double {
+            let len = span.end - span.start
+            let fi = min(fadeIn, len / 2), fo = min(fadeOut, len / 2)
+            var f = 1.0
+            if fi > 0.01 { f *= min(1, max(0, (t - span.start) / fi)) }
+            if fo > 0.01 { f *= min(1, max(0, (span.end - t) / fo)) }
+            return f
+        }
+        func fadePoints(_ span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double) -> [Double] {
+            [span.start + min(fadeIn, (span.end - span.start) / 2), span.end - min(fadeOut, (span.end - span.start) / 2)]
         }
 
         // Quién habla (en tiempo de salida): lo usa el diseño y la puerta por persona
         let switches = AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep)
         let gate = project.fix.gateOthers && project.lanes.count > 1 && energy != nil && switches.count > 1
-        /// Baja la pista de `laneId` (a −18 dB) cuando habla otra persona, con transiciones de 0,15 s.
-        func applyGate(_ p: AVMutableAudioMixInputParameters, laneId: Int, volume: Double) {
-            guard gate else { return }
-            let low = Float(volume) * 0.125, high = Float(volume)
-            var current: Float = (switches.first?.lane == laneId) ? high : low
-            p.setVolume(current, at: .zero)
-            for sw in switches.dropFirst() {
-                let target: Float = sw.lane == laneId ? high : low
-                guard target != current else { continue }
-                let t = introDur + sw.time
-                p.setVolumeRamp(fromStartVolume: current, toEndVolume: target, timeRange: CMTimeRange(start: cm(max(0, t - 0.05)), duration: cm(0.15)))
-                current = target
-            }
+        /// Quién habla en el instante `t` del video final (con intro incluido).
+        func speaker(at t: Double) -> Int? {
+            var cur = switches.first?.lane
+            for sw in switches { if introDur + sw.time <= t { cur = sw.lane } else { break } }
+            return cur
         }
+        let gatePoints: [Double] = switches.dropFirst().flatMap { [introDur + $0.time - 0.05, introDur + $0.time + 0.10] }
+
+        /// Tramos (tiempo del video final) en que alguien habla: para bajar la música bajo la voz.
+        let speech: [(start: Double, end: Double)] = {
+            guard let energy else { return [] }
+            let comb = energy.combined
+            guard !comb.isEmpty else { return [] }
+            var segs: [(start: Double, end: Double)] = []
+            var cursor = 0.0
+            for r in keep {
+                var t = r.start
+                while t < r.end {
+                    let i = Int(t / EnergyMap.hop)
+                    if i >= 0, i < comb.count, comb[i] > -40 {
+                        let o = introDur + cursor + (t - r.start)
+                        if let last = segs.last, o - last.end < 1.0 { segs[segs.count - 1].end = o + EnergyMap.hop }
+                        else { segs.append((o, o + EnergyMap.hop)) }
+                    }
+                    t += EnergyMap.hop
+                }
+                cursor += r.end - r.start
+            }
+            return segs.filter { $0.end - $0.start >= 0.3 }
+        }()
+        func inSpeech(_ t: Double) -> Bool {
+            var lo = 0, hi = speech.count - 1
+            while lo <= hi {
+                let m = (lo + hi) / 2
+                if t < speech[m].start { hi = m - 1 } else if t > speech[m].end { lo = m + 1 } else { return true }
+            }
+            return false
+        }
+        let duckPoints: [Double] = speech.flatMap { [$0.start - 0.3, $0.start, $0.end, $0.end + 0.8] }
 
         let wantVideo = format != .audio
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
             var aTrack: AVMutableCompositionTrack?
+            var laneSpan: (start: Double, end: Double)?
+            var laneBase = lane.volume
             for placed in lane.placed {
                 guard let media = project.mediaItem(placed.clip.mediaId) else { continue }
                 let videoAsset = asset(media.file)
@@ -126,25 +167,34 @@ enum CompositionBuilder {
                 if media.hasAudio {
                     var audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
                     if !FileManager.default.fileExists(atPath: ProjectStore.url(audioRel, in: project.id).path) { audioRel = media.file }
+                    // Ecualizador de la persona: archivo ya procesado con la misma configuración y la misma base
+                    if !lane.eq.isFlat, let eqRel = media.eqAudioFile,
+                       eqRel == AudioAnalysis.eqRel(mediaId: media.id, base: audioRel, eq: lane.eq),
+                       FileManager.default.fileExists(atPath: ProjectStore.url(eqRel, in: project.id).path) {
+                        audioRel = eqRel
+                    }
                     let audioAsset = asset(audioRel)
                     if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
                         let aDur = try await audioAsset.load(.duration).seconds
                         if aTrack == nil { aTrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) }
-                        let span = try place(track: aTrack!, source: src, sourceDuration: aDur,
-                                             tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length)
-                        if let p = mixParams.first(where: { $0.trackID == aTrack!.trackID }) {
-                            fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
-                        } else {
-                            let p = AVMutableAudioMixInputParameters(track: aTrack!)
-                            p.setVolume(Float(lane.volume * placed.clip.volume), at: .zero)
-                            applyGate(p, laneId: lane.id, volume: lane.volume * placed.clip.volume)
-                            if lane.fadeIn > 0 || lane.fadeOut > 0 {
-                                fades(p, volume: lane.volume * placed.clip.volume, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
-                            }
-                            mixParams.append(p)
+                        if let span = try place(track: aTrack!, source: src, sourceDuration: aDur,
+                                                tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length) {
+                            laneSpan = laneSpan.map { (min($0.start, span.start), max($0.end, span.end)) } ?? span
+                            laneBase = lane.volume * placed.clip.volume
                         }
                     }
                 }
+            }
+            if let aTrack, let span = laneSpan {
+                let p = AVMutableAudioMixInputParameters(track: aTrack)
+                let id = lane.id
+                applyEnvelope(p, base: laneBase, span: span,
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : [])) { t in
+                    var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
+                    if gate, let who = speaker(at: t), who != id { f *= 0.125 }
+                    return f
+                }
+                mixParams.append(p)
             }
             if let vTrack { videoTrackIDs[lane.id] = vTrack.trackID }
         }
@@ -164,8 +214,14 @@ enum CompositionBuilder {
             guard let span else { comp.removeTrack(track); continue }
             sfxTracks.append((track, clip.tlStart + len))
             let p = AVMutableAudioMixInputParameters(track: track)
-            p.setVolume(Float(clip.volume), at: .zero)
-            fades(p, volume: clip.volume, span: span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut)
+            let duck = clip.ducks && !speech.isEmpty
+            let low = pow(10, -clip.duckDB / 20)
+            applyEnvelope(p, base: clip.volume, span: span,
+                          points: fadePoints(span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut) + (duck ? duckPoints : [])) { t in
+                var f = fadeFactor(t, span: span, fadeIn: clip.fadeIn, fadeOut: clip.fadeOut)
+                if duck, inSpeech(t) { f *= low }
+                return f
+            }
             mixParams.append(p)
         }
 
@@ -180,8 +236,11 @@ enum CompositionBuilder {
             let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
             try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: src, at: cm(start))
             let p = AVMutableAudioMixInputParameters(track: track)
-            p.setVolume(Float(b.musicVolume), at: .zero)
-            fades(p, volume: b.musicVolume, span: (start, start + len), fadeIn: 0.3, fadeOut: min(1.5, len / 3))
+            let sp = (start: start, end: start + len)
+            let fo = min(1.5, len / 3)
+            applyEnvelope(p, base: b.musicVolume, span: sp, points: fadePoints(sp, fadeIn: 0.3, fadeOut: fo)) { t in
+                fadeFactor(t, span: sp, fadeIn: 0.3, fadeOut: fo)
+            }
             mixParams.append(p)
         }
         try await bumperMusic(intro, at: 0, length: introDur)
@@ -246,6 +305,8 @@ enum CompositionBuilder {
             if project.showCintillos {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }
+            s.colorLook = project.colorLook
+            if project.matchColors { s.laneGain = project.laneColorGain }
             s.contentStart = introDur
             s.contentEnd = contentEnd
             s.introImage = intro.flatMap { CIImage(contentsOf: ProjectStore.url($0.imageFile, in: project.id)) }

@@ -179,6 +179,36 @@ enum AudioAnalysis {
         return rel
     }
 
+    /// Archivo del audio de una persona con su ecualizador, a partir de `base` (el limpio o el original).
+    static func eqRel(mediaId: Int, base: String, eq: VoiceEQ) -> String {
+        let b = (base as NSString).lastPathComponent.replacingOccurrences(of: ".", with: "_")
+        let key = eq.key.replacingOccurrences(of: "+", with: "p").replacingOccurrences(of: "-", with: "m").replacingOccurrences(of: ".", with: "")
+        return "media/eq_\(mediaId)_\(b)_\(key).m4a"
+    }
+
+    static func applyEQ(media: SourceMedia, base: String, eq: VoiceEQ, slug: String, progress: @escaping (Double) -> Void) async throws -> String {
+        let rel = eqRel(mediaId: media.id, base: base, eq: eq)
+        let dest = ProjectStore.url(rel, in: slug)
+        if FileManager.default.fileExists(atPath: dest.path) { return rel }
+        let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("eq_\(media.id)_\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try await FFmpeg.run(["-i", ProjectStore.url(base, in: slug).path, "-vn", "-af", eq.ffmpegFilter,
+                              "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
+                             duration: media.duration, progress: progress)
+        if !FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.moveItem(at: tmp, to: dest) }
+        return rel
+    }
+
+    /// Volumen integrado (LUFS) de un archivo, medido con ffmpeg (EBU R128).
+    static func loudness(_ url: URL) async -> Double? {
+        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=framelog=quiet", "-f", "null", "-"], allowFailure: true)
+        else { return nil }
+        // En el resumen final: "I:         -16.3 LUFS"
+        guard let r = out.range(of: #"I:\s+(-?[0-9.]+) LUFS"#, options: [.regularExpression, .backwards]) else { return nil }
+        let num = out[r].replacingOccurrences(of: "I:", with: "").replacingOccurrences(of: "LUFS", with: "").trimmingCharacters(in: .whitespaces)
+        return Double(num)
+    }
+
     /// 16 kHz mono WAV for Whisper.
     static func whisperAudio(media: SourceMedia, slug: String, progress: @escaping (Double) -> Void) async throws -> URL {
         let dest = ProjectStore.cacheFolder(for: slug).appendingPathComponent("whisper_\(media.id).wav")
