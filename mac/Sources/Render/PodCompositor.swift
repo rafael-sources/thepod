@@ -26,6 +26,27 @@ final class RenderScene: @unchecked Sendable {
     /// Cintillos del director ya dibujados (se colocan abajo a la izquierda y entran deslizándose).
     struct CintilloCard { let start: Double; let end: Double; let image: CIImage }
     var cintillos: [CintilloCard] = []
+    /// Capas (textos, imágenes, stickers) ya dibujadas a su tamaño; centro en fracción del cuadro (y desde arriba).
+    struct OverlayCard { let id: Int; let start: Double; let end: Double; let image: CIImage; let cx: Double; let cy: Double; let animate: Bool }
+    var overlays: [OverlayCard] = []
+    /// Recuadro de cada capa en fracciones del cuadro (x, y desde arriba, ancho, alto), para poder moverla sobre la vista previa.
+    func overlayBox(_ id: Int) -> CGRect? {
+        guard let c = overlays.first(where: { $0.id == id }) else { return nil }
+        let r = overlayRect(c)
+        let W = renderSize.width, H = renderSize.height
+        return CGRect(x: r.minX / W, y: 1 - r.maxY / H, width: r.width / W, height: r.height / H)
+    }
+    /// Dónde va la capa (coordenadas de Core Image, y hacia arriba), sin salirse del cuadro.
+    func overlayRect(_ c: OverlayCard) -> CGRect {
+        let W = renderSize.width, H = renderSize.height
+        let w = c.image.extent.width, h = c.image.extent.height
+        // Un margen chico para que nada quede pegado al borde (si cabe)
+        let m = min(W, H) * 0.03
+        let mx = w + 2 * m <= W ? m : 0, my = h + 2 * m <= H ? m : 0
+        let x = min(max(mx, CGFloat(c.cx) * W - w / 2), max(0, W - w - mx))
+        let y = min(max(my, (1 - CGFloat(c.cy)) * H - h / 2), max(0, H - h - my))
+        return CGRect(x: x, y: y, width: w, height: h)
+    }
     /// Intro y cierre: imagen fija antes de `contentStart` y después de `contentEnd` (tiempos del video final).
     var contentStart: Double = 0
     var contentEnd: Double = .infinity
@@ -220,6 +241,22 @@ final class RenderScene: @unchecked Sendable {
             let y = max(format.isVertical ? H * 0.30 : m, cintilloTop > 0 ? cintilloTop + m * 0.4 : 0)
             out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
             cintilloTop = max(cintilloTop, y + img.extent.height)
+        }
+
+        // Capas del usuario: encima del video y de los cintillos, debajo de los subtítulos
+        for c in overlays where t >= c.start && t < c.end {
+            let r = overlayRect(c)
+            var img = c.image.transformed(by: .init(translationX: -c.image.extent.minX, y: -c.image.extent.minY))
+            if c.animate {
+                let k = min(1, (t - c.start) / 0.3, (c.end - t) / 0.3)
+                if k < 1 {
+                    let s = CGFloat(0.85 + 0.15 * (1 - pow(1 - k, 3)))
+                    img = img.transformed(by: CGAffineTransform(translationX: -r.width / 2, y: -r.height / 2)
+                        .concatenating(.init(scaleX: s, y: s)).concatenating(.init(translationX: r.width / 2, y: r.height / 2)))
+                        .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(k))])
+                }
+            }
+            out = img.transformed(by: .init(translationX: r.minX, y: r.minY)).composited(over: out)
         }
 
         if style.enabled, let (idx, line) = caption(at: t) {

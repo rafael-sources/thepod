@@ -305,6 +305,7 @@ enum CompositionBuilder {
             if project.showCintillos {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }
+            s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
             s.colorLook = project.colorLook
             if project.matchColors { s.laneGain = project.laneColorGain }
             s.contentStart = introDur
@@ -336,6 +337,42 @@ enum CompositionBuilder {
             _ = try await FFmpeg.run(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(Int(need)), "-c:a", "aac", "-b:a", "32k", url.path])
         } catch { return nil }
         return FileManager.default.fileExists(atPath: url.path) ? AVURLAsset(url: url) : nil
+    }
+
+    private static let overlayContext = CIContext()
+
+    /// Dibuja cada capa una vez, al tamaño del video, y la ubica en el tiempo del video editado.
+    static func overlayCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize) -> [RenderScene.OverlayCard] {
+        let W = renderSize.width, H = renderSize.height
+        let base = min(W, H)
+        return project.overlays.compactMap { o in
+            let start = EditEngine.toOutput(o.start, keep: keep)
+                ?? keep.firstIndex { $0.start >= o.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+            guard let start, o.duration > 0 else { return nil }
+            let k = CGFloat(max(0.2, min(4, o.scale)))
+            let img: CIImage?
+            switch o.kind {
+            case .text:
+                img = TextRenderer.overlayText(o.text, style: o.style, color: o.color, fontSize: base * 0.07 * k, maxWidth: W * 0.9)
+            case .sticker:
+                img = TextRenderer.sticker(o.text, fontSize: base * 0.16 * k)
+            case .image:
+                img = o.imageFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id), options: [.applyOrientationProperty: true]) }
+                    .flatMap { pic -> CIImage? in
+                        // Cabe en un cuadrado de un tercio del lado corto (× tamaño), sin salirse del cuadro.
+                        // Se dibuja una sola vez a su tamaño final para no decodificar la foto en cada cuadro.
+                        let e = pic.extent
+                        guard e.width > 0, e.height > 0 else { return nil }
+                        let sc = min(base * 0.34 * k / max(e.width, e.height), W * 0.95 / e.width, H * 0.95 / e.height)
+                        let scaled = pic.transformed(by: CGAffineTransform(scaleX: sc, y: sc))
+                        guard let cg = overlayContext.createCGImage(scaled, from: scaled.extent.integral) else { return nil }
+                        return CIImage(cgImage: cg)
+                    }
+            }
+            guard let img else { return nil }
+            return RenderScene.OverlayCard(id: o.id, start: start, end: start + o.duration, image: img,
+                                           cx: o.x, cy: o.y, animate: o.animate)
+        }
     }
 
     /// Dibuja cada cintillo una vez, al tamaño del video, y lo ubica en el tiempo del video editado.

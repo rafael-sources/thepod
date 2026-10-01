@@ -170,7 +170,7 @@ final class AppModel: ObservableObject {
 }
 
 enum Step: String, CaseIterable, Identifiable {
-    case overview, fix, captions, look, sounds, brands, reels, export, publish
+    case overview, fix, captions, look, layers, sounds, brands, reels, export, publish
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -178,6 +178,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .fix: return "Limpiar sonido"
         case .captions: return "Subtítulos"
         case .look: return "Aspecto"
+        case .layers: return "Textos y stickers"
         case .sounds: return "Música y efectos"
         case .brands: return "Patrocinios y marcas"
         case .reels: return "Reels"
@@ -191,6 +192,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .fix: return "wand.and.stars"
         case .captions: return "captions.bubble"
         case .look: return "rectangle.3.group"
+        case .layers: return "textformat"
         case .sounds: return "music.note"
         case .brands: return "tag"
         case .reels: return "iphone.gen3"
@@ -203,7 +205,7 @@ enum Step: String, CaseIterable, Identifiable {
     var group: Group {
         switch self {
         case .overview, .fix, .captions: return .prepare
-        case .look, .sounds, .brands: return .build
+        case .look, .layers, .sounds, .brands: return .build
         case .reels, .export, .publish: return .deliver
         }
     }
@@ -214,7 +216,7 @@ enum Step: String, CaseIterable, Identifiable {
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
-    enum TrackSel: Equatable { case lane(Int), sound(Int) }
+    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
@@ -778,6 +780,55 @@ final class ProjectSession: ObservableObject {
         p.audioLane.append(AudioLaneClip(id: id, mediaId: mediaId, tlStart: max(0, timeline), srcIn: 0, srcOut: len, volume: 0.8))
         project = p
         selectedTrack = .sound(id)
+    }
+
+    // MARK: Capas (textos, imágenes, stickers)
+
+    /// Agrega una capa donde está el video ahora y la deja elegida para editarla bajo el video.
+    @discardableResult
+    func addOverlay(kind: VideoLayer.Kind, text: String = "", imageFile: String? = nil) -> Int {
+        let id = (project.overlays.map(\.id).max() ?? 0) + 1
+        let t = min(playheadTimeline, max(0, project.duration - 1))
+        var o = VideoLayer(id: id, kind: kind, start: t, duration: kind == .sticker ? 3 : 5, text: text, imageFile: imageFile)
+        switch kind {
+        case .text: (o.x, o.y) = VideoLayer.anchor(row: 0, col: 1)
+        case .sticker: (o.x, o.y) = VideoLayer.anchor(row: 0, col: 2)
+        case .image: (o.x, o.y) = VideoLayer.anchor(row: 1, col: 1)
+        }
+        project.overlays.append(o)
+        selectedTrack = .overlay(id)
+        return id
+    }
+
+    /// Elige una imagen (PNG con transparencia, JPG, HEIC, GIF) y la agrega como capa.
+    func chooseOverlayImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif, .tiff]
+        panel.allowsMultipleSelection = false
+        panel.message = "Elige una imagen para poner encima del video (un PNG con fondo transparente queda mejor)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
+        let rel = "capas/\(Int(Date().timeIntervalSince1970))_\(ProjectStore.slugify(url.deletingPathExtension().lastPathComponent)).\(ext)"
+        let dest = ProjectStore.url(rel, in: project.id)
+        do {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { errorMessage = error.localizedDescription; return }
+        addOverlay(kind: .image, imageFile: rel)
+    }
+
+    func removeOverlay(_ id: Int) {
+        project.overlays.removeAll { $0.id == id }
+        if selectedTrack == .overlay(id) { selectedTrack = nil }
+    }
+
+    func duplicateOverlay(_ id: Int) {
+        guard var o = project.overlays.first(where: { $0.id == id }) else { return }
+        o.id = (project.overlays.map(\.id).max() ?? 0) + 1
+        o.start = min(playheadTimeline, max(0, project.duration - 1))
+        project.overlays.append(o)
+        selectedTrack = .overlay(o.id)
     }
 
     /// Current playhead in TIMELINE time.

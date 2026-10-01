@@ -18,6 +18,7 @@ struct ProjectView: View {
                     case .fix: FixStep(session: session)
                     case .captions: CaptionsStep(session: session)
                     case .look: LookStep(session: session)
+                    case .layers: LayersStep(session: session)
                     case .sounds: SoundsStep(session: session)
                     case .brands: BrandsStep(session: session)
                     case .reels: ReelsStep(session: session)
@@ -112,6 +113,7 @@ struct ProjectView: View {
         case .fix: return p.fix.lastRun != nil
         case .captions: return p.isTranscribed
         case .look: return p.backgroundFile != nil || p.layout != .auto || p.intro != nil
+        case .layers: return !p.overlays.isEmpty
         case .sounds: return !p.audioLane.isEmpty
         case .brands: return !p.sponsors.isEmpty || !p.cintillos.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
@@ -126,6 +128,7 @@ struct ProjectView: View {
         switch step {
         case .captions: return p.isTranscribed ? nil : "sin transcribir"
         case .sounds: return p.audioLane.isEmpty ? nil : "\(p.audioLane.count)"
+        case .layers: return p.overlays.isEmpty ? nil : "\(p.overlays.count)"
         case .brands: return p.sponsors.isEmpty ? nil : "\(p.sponsors.count)"
         default: return nil
         }
@@ -186,6 +189,7 @@ struct PreviewPane: View {
                 RoundedRectangle(cornerRadius: 14).fill(Color.black)
                 PlayerView(player: session.player)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
+                OverlayHandles(session: session)
                 if session.built == nil {
                     VStack(spacing: 8) {
                         ProgressView()
@@ -234,6 +238,8 @@ struct TrackInspector: View {
                     if let i = session.project.lanes.firstIndex(where: { $0.id == id }) { laneBody(i) }
                 case .sound(let id):
                     if let i = session.project.audioLane.firstIndex(where: { $0.id == id }) { soundBody(i) }
+                case .overlay(let id):
+                    if let i = session.project.overlays.firstIndex(where: { $0.id == id }) { OverlayEditor(session: session, index: i) }
                 }
             }
             .padding(12)

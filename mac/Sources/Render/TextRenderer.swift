@@ -205,6 +205,83 @@ enum TextRenderer {
         }
     }
 
+    /// Texto de una capa: título con contorno, texto en caja oscura o etiqueta de color.
+    static func overlayText(_ text: String, style: VideoLayer.Style, color hex: String, fontSize: CGFloat, maxWidth: CGFloat) -> CIImage? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        para.lineBreakMode = .byWordWrapping
+        para.lineHeightMultiple = 0.95
+        let chosen = color(hex) ?? .white
+        let bg: NSColor? = {
+            switch style {
+            case .title: return nil
+            case .box: return NSColor.black.withAlphaComponent(0.72)
+            case .label: return chosen
+            }
+        }()
+        let fg: NSColor = {
+            guard style == .label else { return chosen }
+            // Sobre el color de la etiqueta: texto negro o blanco, el que se lea mejor
+            let c = chosen.usingColorSpace(.sRGB) ?? chosen
+            let lum = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
+            return lum > 0.6 ? .black : .white
+        }()
+        let weight: NSFont.Weight = style == .title ? .black : .bold
+        let font = NSFont.systemFont(ofSize: fontSize, weight: weight)
+        func build(stroke: Bool) -> NSAttributedString {
+            var a: [NSAttributedString.Key: Any] = [.font: font, .paragraphStyle: para]
+            if stroke { a[.strokeColor] = NSColor.black; a[.strokeWidth] = 14.0; a[.foregroundColor] = NSColor.clear }
+            else { a[.foregroundColor] = fg }
+            return NSAttributedString(string: trimmed, attributes: a)
+        }
+        let fill = build(stroke: false)
+        let fsetter = CTFramesetterCreateWithAttributedString(fill)
+        let fit = CTFramesetterSuggestFrameSizeWithConstraints(fsetter, CFRange(location: 0, length: 0), nil,
+                                                               CGSize(width: maxWidth, height: .greatestFiniteMagnitude), nil)
+        let padX = bg != nil ? fontSize * 0.55 : fontSize * 0.3
+        let padY = bg != nil ? fontSize * 0.3 : fontSize * 0.3
+        let size = CGSize(width: ceil(fit.width + padX * 2), height: ceil(fit.height + padY * 2))
+        return draw(size: size) { ctx in
+            if let bg {
+                ctx.setFillColor(bg.cgColor)
+                let r = style == .label ? fontSize * 0.22 : fontSize * 0.35
+                ctx.addPath(CGPath(roundedRect: CGRect(origin: .zero, size: size), cornerWidth: r, cornerHeight: r, transform: nil))
+                ctx.fillPath()
+            }
+            let path = CGPath(rect: CGRect(x: padX, y: padY, width: ceil(fit.width) + 1, height: ceil(fit.height) + 1), transform: nil)
+            if style == .title {
+                ctx.saveGState()
+                ctx.setLineJoin(.round)
+                ctx.setShadow(offset: CGSize(width: 0, height: -fontSize * 0.06), blur: fontSize * 0.25,
+                              color: NSColor.black.withAlphaComponent(0.6).cgColor)
+                CTFrameDraw(CTFramesetterCreateFrame(CTFramesetterCreateWithAttributedString(build(stroke: true)),
+                                                     CFRange(location: 0, length: 0), path, nil), ctx)
+                ctx.restoreGState()
+            }
+            CTFrameDraw(CTFramesetterCreateFrame(fsetter, CFRange(location: 0, length: 0), path, nil), ctx)
+        }
+    }
+
+    /// Sticker: un emoji grande con sombra suave.
+    static func sticker(_ emoji: String, fontSize: CGFloat) -> CIImage? {
+        let e = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !e.isEmpty else { return nil }
+        let a = NSAttributedString(string: e, attributes: [.font: NSFont.systemFont(ofSize: fontSize)])
+        let line = CTLineCreateWithAttributedString(a)
+        let b = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        guard b.width > 0, b.height > 0 else { return nil }
+        let pad = fontSize * 0.12
+        let size = CGSize(width: ceil(b.width + pad * 2), height: ceil(b.height + pad * 2))
+        return draw(size: size) { ctx in
+            ctx.setShadow(offset: CGSize(width: 0, height: -fontSize * 0.03), blur: fontSize * 0.08,
+                          color: NSColor.black.withAlphaComponent(0.45).cgColor)
+            ctx.textPosition = CGPoint(x: pad - b.minX, y: pad - b.minY)
+            CTLineDraw(line, ctx)
+        }
+    }
+
     /// Title card text (audio-only video, empty frames).
     static func title(_ text: String, fontSize: CGFloat, maxWidth: CGFloat) -> CIImage? {
         let para = NSMutableParagraphStyle()

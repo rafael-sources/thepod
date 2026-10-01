@@ -50,6 +50,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showSponsors: Bool = true
     var cintillos: [DirectorCintillo] = []   // cintillos que el director puso en vivo (prodPod)
     var showCintillos: Bool = true
+    var overlays: [VideoLayer] = []        // textos, imágenes y stickers encima del video
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
@@ -468,6 +469,64 @@ struct ScriptItem: Codable, Equatable, Identifiable {
     var text: String
 }
 
+/// Capa encima del video: un texto, una imagen o un sticker (emoji), en un momento del episodio.
+/// `start` es tiempo del episodio (como los cintillos): si se corta ese trozo, sale en lo siguiente que quede.
+struct VideoLayer: Codable, Identifiable, Equatable {
+    enum Kind: String, Codable { case text, image, sticker }
+    /// Estilos de texto: título grande con contorno, texto en caja oscura, etiqueta de color.
+    enum Style: String, Codable, CaseIterable { case title, box, label
+        var name: String { switch self { case .title: return "Título"; case .box: return "Caja"; case .label: return "Etiqueta" } }
+    }
+    var id: Int
+    var kind: Kind
+    var start: Double
+    var duration: Double = 5
+    var text: String = ""
+    var style: Style = .title
+    var color: String = "#FFFFFF"       // título/caja: color del texto · etiqueta: color de fondo
+    var imageFile: String?              // relativo a la carpeta del proyecto
+    var x: Double = 0.5                 // centro, 0 = izquierda … 1 = derecha
+    var y: Double = 0.5                 // centro, 0 = arriba … 1 = abajo
+    var scale: Double = 1               // tamaño (1 = normal)
+    var animate: Bool = true            // entra y sale con fundido y un pequeño salto
+
+    var end: Double { start + duration }
+    var title: String {
+        switch kind {
+        case .text: return text.isEmpty ? "Texto" : text
+        case .sticker: return text.isEmpty ? "Sticker" : text
+        case .image: return imageFile.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension } ?? "Imagen"
+        }
+    }
+
+    /// Las 9 posiciones rápidas (fila 0…2, columna 0…2) → centro de la capa.
+    static func anchor(row: Int, col: Int) -> (x: Double, y: Double) {
+        ([0.17, 0.5, 0.83][col], [0.14, 0.5, 0.84][row])
+    }
+
+    init(id: Int, kind: Kind, start: Double, duration: Double = 5, text: String = "", style: Style = .title,
+         color: String = "#FFFFFF", imageFile: String? = nil, x: Double = 0.5, y: Double = 0.5, scale: Double = 1) {
+        self.id = id; self.kind = kind; self.start = start; self.duration = duration; self.text = text
+        self.style = style; self.color = color; self.imageFile = imageFile; self.x = x; self.y = y; self.scale = scale
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .text
+        start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 5
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        style = try c.decodeIfPresent(Style.self, forKey: .style) ?? .title
+        color = try c.decodeIfPresent(String.self, forKey: .color) ?? "#FFFFFF"
+        imageFile = try c.decodeIfPresent(String.self, forKey: .imageFile)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1
+        animate = try c.decodeIfPresent(Bool.self, forKey: .animate) ?? true
+    }
+}
+
 /// Cintillo tipo noticiero que el director lanzó durante la grabación.
 struct DirectorCintillo: Codable, Equatable, Identifiable {
     var id: Int
@@ -550,6 +609,7 @@ extension Project {
         showSponsors = try c.decodeIfPresent(Bool.self, forKey: .showSponsors) ?? true
         cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
         showCintillos = try c.decodeIfPresent(Bool.self, forKey: .showCintillos) ?? true
+        overlays = try c.decodeIfPresent([VideoLayer].self, forKey: .overlays) ?? []
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []

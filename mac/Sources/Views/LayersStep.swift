@@ -1,0 +1,260 @@
+import SwiftUI
+import AVFoundation
+
+// MARK: - Textos y stickers (capas encima del video)
+
+struct LayersStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: "Textos y stickers",
+                               subtitle: "Pon un título, una imagen o un emoji encima del video. Se agrega donde está el video ahora; después lo mueves con el ratón.")
+                    Card {
+                        Text("Agregar").font(.headline)
+                        HStack(spacing: 10) {
+                            addButton("Texto", "textformat") { _ = session.addOverlay(kind: .text, text: "Escribe aquí") }
+                            addButton("Imagen", "photo") { session.chooseOverlayImage() }
+                            addButton("Sticker", "face.smiling") { _ = session.addOverlay(kind: .sticker, text: "🔥") }
+                        }
+                        Button {
+                            let id = session.addOverlay(kind: .text, text: session.project.name)
+                            if let i = session.project.overlays.firstIndex(where: { $0.id == id }) {
+                                session.project.overlays[i].style = .box
+                                session.project.overlays[i].start = 0
+                                (session.project.overlays[i].x, session.project.overlays[i].y) = VideoLayer.anchor(row: 0, col: 0)
+                            }
+                        } label: { Label("Título del episodio al inicio", systemImage: "text.badge.star") }
+                        .controlSize(.small)
+                    }
+                    Card {
+                        Text(session.project.overlays.isEmpty ? "Todavía no hay capas" : "En este episodio").font(.headline)
+                        if session.project.overlays.isEmpty {
+                            Text("Cada capa aparece unos segundos y se va sola. Al tocarla se edita debajo del video: texto, estilo, color, posición, tamaño y cuánto dura.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                        ForEach(session.project.overlays.sorted { $0.start < $1.start }) { o in
+                            row(o)
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+    }
+
+    private func addButton(_ title: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(title).font(.callout.bold())
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panelStrong))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func row(_ o: VideoLayer) -> some View {
+        let sel = session.selectedTrack == .overlay(o.id)
+        return Button {
+            session.selectedTrack = .overlay(o.id)
+            session.seek(timeline: o.start + min(1, o.duration / 2), play: false)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: o.kind == .text ? "textformat" : o.kind == .image ? "photo" : "face.smiling")
+                    .frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                Text(o.title).lineLimit(1)
+                Spacer()
+                Text("\(EditEngine.clock(o.start)) · \(String(format: "%.0f s", o.duration))")
+                    .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Panel bajo el video para la capa elegida.
+struct OverlayEditor: View {
+    @ObservedObject var session: ProjectSession
+    let index: Int
+
+    static let colors = ["#FFFFFF", "#FFD60A", "#FF453A", "#4CC9F0", "#32D74B", "#BF5AF2", "#000000"]
+    static let emojis = ["🔥", "😂", "❤️", "👏", "🎉", "😮", "👀", "💯", "🤯", "🙌", "⭐️", "✅", "🎙️", "🤔"]
+
+    private var o: Binding<VideoLayer> { $session.project.overlays[index] }
+
+    var body: some View {
+        let ov = session.project.overlays[index]
+        HStack {
+            Label(ov.kind == .text ? "Texto" : ov.kind == .image ? "Imagen" : "Sticker",
+                  systemImage: ov.kind == .text ? "textformat" : ov.kind == .image ? "photo" : "face.smiling").font(.headline)
+            Spacer()
+            Button { session.duplicateOverlay(ov.id) } label: { Image(systemName: "plus.square.on.square") }
+                .buttonStyle(.borderless).help("Duplicar donde está el video ahora")
+            Button(role: .destructive) { session.removeOverlay(ov.id) } label: { Image(systemName: "trash") }
+                .buttonStyle(.borderless).help("Quitar")
+            Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
+        }
+        switch ov.kind {
+        case .text:
+            TextField("Escribe el texto", text: o.text, axis: .vertical)
+                .lineLimit(1...3).textFieldStyle(.roundedBorder)
+            HStack(spacing: 8) {
+                Text("Estilo").frame(width: 72, alignment: .leading)
+                Picker("", selection: o.style) {
+                    ForEach(VideoLayer.Style.allCases, id: \.self) { Text($0.name).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 260)
+            }
+            .font(.callout)
+            HStack(spacing: 8) {
+                Text(ov.style == .label ? "Fondo" : "Color").frame(width: 72, alignment: .leading)
+                ForEach(Self.colors, id: \.self) { c in
+                    Button { o.wrappedValue.color = c } label: {
+                        Circle().fill(Color(hex: c)).frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(ov.color == c ? Theme.accent : Color.white.opacity(0.3), lineWidth: ov.color == c ? 2.5 : 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .font(.callout)
+        case .sticker:
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 4), count: 7), spacing: 4) {
+                ForEach(Self.emojis, id: \.self) { e in
+                    Button { o.wrappedValue.text = e } label: {
+                        Text(e).font(.system(size: 20)).frame(width: 30, height: 28)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(ov.text == e ? Theme.panelStrong : .clear))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            HStack(spacing: 8) {
+                Text("Otro").frame(width: 72, alignment: .leading)
+                TextField("Pega cualquier emoji", text: o.text).textFieldStyle(.roundedBorder).frame(maxWidth: 160)
+                Text("⌃⌘Espacio abre los emojis").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            .font(.callout)
+        case .image:
+            Text(ov.title).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
+        }
+        Divider()
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Posición").font(.callout)
+                Grid(horizontalSpacing: 3, verticalSpacing: 3) {
+                    ForEach(0..<3, id: \.self) { r in
+                        GridRow {
+                            ForEach(0..<3, id: \.self) { c in
+                                let a = VideoLayer.anchor(row: r, col: c)
+                                let on = abs(ov.x - a.x) < 0.02 && abs(ov.y - a.y) < 0.02
+                                Button { (o.wrappedValue.x, o.wrappedValue.y) = a } label: {
+                                    RoundedRectangle(cornerRadius: 3).fill(on ? Theme.accent : Color.white.opacity(0.18))
+                                        .frame(width: 22, height: 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Tamaño").frame(width: 60, alignment: .leading)
+                    Slider(value: o.scale, in: 0.4...3, step: 0.05)
+                    Text("\(Int(ov.scale * 100)) %").monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+                HStack(spacing: 6) {
+                    Text("Empieza").frame(width: 60, alignment: .leading)
+                    Button("−1 s") { o.wrappedValue.start = max(0, ov.start - 1) }
+                    Text(EditEngine.clock(ov.start)).monospacedDigit().frame(width: 56)
+                    Button("+1 s") { o.wrappedValue.start = min(session.project.duration, ov.start + 1) }
+                    Button("Aquí") { o.wrappedValue.start = session.playheadTimeline }.help("Donde está el video ahora")
+                }
+                .controlSize(.small)
+                HStack(spacing: 8) {
+                    Text("Dura").frame(width: 60, alignment: .leading)
+                    Slider(value: o.duration, in: 1...30, step: 0.5)
+                    Text(String(format: "%.1f s", ov.duration)).monospacedDigit().frame(width: 44, alignment: .trailing)
+                }
+            }
+            .font(.callout)
+        }
+        HStack {
+            Toggle("Entra y sale con animación", isOn: o.animate).toggleStyle(.checkbox).font(.callout)
+            Spacer()
+            Button { session.seek(timeline: max(0, ov.start - 0.5), play: true) } label: { Label("Ver", systemImage: "play.fill") }
+                .controlSize(.small)
+        }
+        Text("Arrastra el recuadro sobre el video para moverla; la esquina de abajo a la derecha cambia el tamaño. Va encima del video y debajo de los subtítulos.")
+            .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+}
+
+/// Recuadro de la capa elegida sobre la vista previa: se arrastra para moverla y desde la esquina para el tamaño.
+/// El video se vuelve a dibujar al soltar (no en cada movimiento, para que no se trabe).
+struct OverlayHandles: View {
+    @ObservedObject var session: ProjectSession
+    @State private var drag: CGSize = .zero
+    @State private var grow: CGFloat = 1
+
+    var body: some View {
+        GeometryReader { geo in
+            if case .overlay(let id) = session.selectedTrack,
+               let scene = session.built?.scene,
+               let box = scene.overlayBox(id),
+               let i = session.project.overlays.firstIndex(where: { $0.id == id }) {
+                let video = fitRect(scene.renderSize, in: geo.size)
+                let w = box.width * video.width * grow, h = box.height * video.height * grow
+                let cx = video.minX + box.midX * video.width + drag.width
+                let cy = video.minY + box.midY * video.height + drag.height
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                        .background(Color.white.opacity(0.001))
+                        .gesture(DragGesture(minimumDistance: 1)
+                            .onChanged { g in drag = g.translation }
+                            .onEnded { g in
+                                let nx = box.midX + g.translation.width / max(1, video.width)
+                                let ny = box.midY + g.translation.height / max(1, video.height)
+                                session.project.overlays[i].x = min(1, max(0, Double(nx)))
+                                session.project.overlays[i].y = min(1, max(0, Double(ny)))
+                                drag = .zero
+                            })
+                    Circle().fill(Theme.accent).frame(width: 14, height: 14)
+                        .overlay(Circle().strokeBorder(Color.black.opacity(0.4)))
+                        .offset(x: 7, y: 7)
+                        .gesture(DragGesture(minimumDistance: 1)
+                            .onChanged { g in
+                                let base = max(20, box.width * video.width)
+                                grow = max(0.25, min(4, (base + g.translation.width * 2) / base))
+                            }
+                            .onEnded { _ in
+                                let s = session.project.overlays[i].scale * Double(grow)
+                                session.project.overlays[i].scale = min(3, max(0.4, s))
+                                grow = 1
+                            })
+                        .help("Arrastra para cambiar el tamaño")
+                }
+                .frame(width: max(16, w), height: max(16, h))
+                .position(x: cx, y: cy)
+            }
+        }
+    }
+
+    private func fitRect(_ content: CGSize, in container: CGSize) -> CGRect {
+        guard content.width > 0, content.height > 0 else { return .zero }
+        let s = min(container.width / content.width, container.height / content.height)
+        let w = content.width * s, h = content.height * s
+        return CGRect(x: (container.width - w) / 2, y: (container.height - h) / 2, width: w, height: h)
+    }
+}

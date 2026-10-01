@@ -290,8 +290,13 @@ enum SelfTest {
                 win.contentView = host
                 win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
                 win.orderFrontRegardless()
-                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export)] {
+                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers)] {
                     session.step = step
+                    if step == .layers, let o = session.project.overlays.first {
+                        session.selectedTrack = .overlay(o.id)
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        session.seek(timeline: o.start + 3, play: false)
+                    }
                     try? await Task.sleep(nanoseconds: 7_000_000_000)
                     host.layoutSubtreeIfNeeded()
                     if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
