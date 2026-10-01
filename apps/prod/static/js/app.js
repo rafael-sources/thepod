@@ -874,6 +874,7 @@ var StudioView = {
 
     var room = null;
     var localVideoEl = ref(null);
+    var _rawMicTrack = null;      // micrófono sin procesar (para grabar)
     var localStream = null;
 
     // ---- Pre-join state: device picker + camera/mic preview ----
@@ -2250,6 +2251,7 @@ var StudioView = {
         // re-negotiation. Skip for ≈0 dB to avoid the extra graph.
         var savedMicGainDb = _readMicGainFor(deviceSelection.micId);
         var rawMicTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        _rawMicTrack = rawMicTrack;   // la grabación usa este (sin puerta ni ganancia); la sala recibe el procesado
         if (rawMicTrack) {
           try {
             micGainCtx = _micChain(rawMicTrack, savedMicGainDb, gateOn.value);
@@ -2373,6 +2375,8 @@ var StudioView = {
       var next = !localMuted.value;
       await room.localParticipant.setMicrophoneEnabled(!next);
       localMuted.value = next;
+      // La grabación usa el micrófono crudo: silenciarlo también ahí (si no, se grabaría la tos que quisiste tapar)
+      if (_hostRecStream) _hostRecStream.getAudioTracks().forEach(function (t) { t.enabled = !next; });
     }
     async function toggleCam() {
       if (!room) return;
@@ -2484,7 +2488,10 @@ var StudioView = {
         var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
           ? _fullResCamTrack
           : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
-        var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        // Micrófono crudo: tras replaceTrack, micPub.track.mediaStreamTrack es el de la sala (con auto-silencio).
+        var micTrack = (_rawMicTrack && _rawMicTrack.readyState === "live")
+          ? _rawMicTrack
+          : (micPub && micPub.track ? micPub.track.mediaStreamTrack : null);
         var tracks = [];
         if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
         if (micTrack && micTrack.readyState === "live") tracks.push(micTrack.clone());
@@ -3899,6 +3906,7 @@ var GuestStudioView = {
     }
 
     var _recStream = null;
+    var _rawMicTrack = null;       // micrófono sin auto-silencio — para grabar
     var _fullResCamTrack = null;   // captura completa (hasta 1080p) — para grabar
     var _roomCamTrack = null;      // clon reducido ≤720p — lo que ve la sala
 
@@ -3910,7 +3918,9 @@ var GuestStudioView = {
       var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
         ? _fullResCamTrack
         : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
-      var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+      var micTrack = (_rawMicTrack && _rawMicTrack.readyState === "live")
+        ? _rawMicTrack
+        : (micPub && micPub.track ? micPub.track.mediaStreamTrack : null);
       if (camTrack && camTrack.readyState === "live") tracks.push(camTrack.clone());
       if (micTrack && micTrack.readyState === "live") tracks.push(micTrack.clone());
       if (tracks.length === 0) return null;
@@ -4168,6 +4178,7 @@ var GuestStudioView = {
 
         var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        _rawMicTrack = micTrack;
         // A la sala va el micrófono con la puerta (si está activa); la grabación local queda sin tocar.
         if (micTrack) {
           try {
@@ -4235,6 +4246,8 @@ var GuestStudioView = {
       var next = !localMuted.value;
       await room.localParticipant.setMicrophoneEnabled(!next);
       localMuted.value = next;
+      // La grabación usa el micrófono crudo: silenciarlo también ahí
+      if (_recStream) _recStream.getAudioTracks().forEach(function (t) { t.enabled = !next; });
     }
     async function toggleCam() {
       if (!room) return;
