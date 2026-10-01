@@ -341,53 +341,12 @@ struct CaptionsStep: View {
                 Spacer()
                 Toggle("Resaltar palabra", isOn: $session.project.captionStyle.karaoke).font(.caption)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(CaptionStyle.presets, id: \.id) { preset in
-                        Button {
-                            var s = preset.style
-                            s.enabled = true
-                            session.project.captionStyle = s
-                        } label: {
-                            VStack(spacing: 6) {
-                                Text(preset.style.uppercase ? "HOLA" : "Hola")
-                                    .font(.custom(preset.style.fontName, size: 22))
-                                    .foregroundStyle(Color(hex: preset.style.textColor))
-                                    + Text(preset.style.uppercase ? " MUNDO" : " mundo")
-                                    .font(.custom(preset.style.fontName, size: 22))
-                                    .foregroundStyle(Color(hex: preset.style.highlightColor))
-                                Text(preset.title).font(.caption)
-                            }
-                            .frame(width: 110, height: 70)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(preset.style.backgroundColor != nil ? Color.black : Theme.panelStrong))
-                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(session.project.captionStyle.preset == preset.id ? Theme.accent : Theme.stroke, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            HStack(spacing: 14) {
-                ColorPicker("Texto", selection: colorBinding(\.textColor))
-                ColorPicker("Resaltado", selection: colorBinding(\.highlightColor))
-                ColorPicker("Borde", selection: colorBinding(\.outlineColor))
-                Toggle("MAYÚSCULAS", isOn: $session.project.captionStyle.uppercase)
-            }
-            .font(.caption)
-            HStack {
-                Picker("Tamaño", selection: $session.project.captionStyle.size) {
-                    Text("Chico").tag(CaptionStyle.Size.small)
-                    Text("Mediano").tag(CaptionStyle.Size.medium)
-                    Text("Grande").tag(CaptionStyle.Size.large)
-                }
-                Picker("Posición", selection: $session.project.captionStyle.position) {
-                    Text("Arriba").tag(CaptionStyle.Position.top)
-                    Text("Centro").tag(CaptionStyle.Position.center)
-                    Text("Abajo").tag(CaptionStyle.Position.bottom)
-                }
-            }
-            .pickerStyle(.segmented)
-            .font(.caption)
+            CaptionStyleEditor(style: $session.project.captionStyle)
+            Text("También puedes arrastrar los subtítulos sobre el video para ponerlos donde quieras.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
         }
+        .onAppear { session.captionDragTarget = .episode }
+        .onDisappear { if session.captionDragTarget == .episode { session.captionDragTarget = nil } }
     }
 
     private var phraseList: some View {
@@ -407,9 +366,73 @@ struct CaptionsStep: View {
         }
     }
 
+}
+
+/// Estilo de subtítulos: presets, colores, tamaño y posición. Sirve para el episodio y para los reels.
+struct CaptionStyleEditor: View {
+    @Binding var style: CaptionStyle
+    var compact = false
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(CaptionStyle.presets, id: \.id) { preset in
+                    Button {
+                        var s = preset.style
+                        s.enabled = style.enabled
+                        s.freeX = style.freeX; s.freeY = style.freeY
+                        style = s
+                    } label: {
+                        VStack(spacing: 6) {
+                            Text(preset.style.uppercase ? "HOLA" : "Hola")
+                                .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
+                                .foregroundStyle(Color(hex: preset.style.textColor))
+                                + Text(preset.style.uppercase ? " MUNDO" : " mundo")
+                                .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
+                                .foregroundStyle(Color(hex: preset.style.highlightColor))
+                            Text(preset.title).font(.caption)
+                        }
+                        .frame(width: compact ? 88 : 110, height: compact ? 58 : 70)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(preset.style.backgroundColor != nil ? Color.black : Theme.panelStrong))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style.preset == preset.id ? Theme.accent : Theme.stroke, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        HStack(spacing: 14) {
+            ColorPicker("Texto", selection: colorBinding(\.textColor))
+            ColorPicker("Resaltado", selection: colorBinding(\.highlightColor))
+            ColorPicker("Borde", selection: colorBinding(\.outlineColor))
+            Toggle("MAYÚSCULAS", isOn: $style.uppercase)
+        }
+        .font(.caption)
+        HStack {
+            Picker("Tamaño", selection: $style.size) {
+                Text("Chico").tag(CaptionStyle.Size.small)
+                Text("Mediano").tag(CaptionStyle.Size.medium)
+                Text("Grande").tag(CaptionStyle.Size.large)
+            }
+            Picker("Posición", selection: Binding(get: { style.freeX == nil ? style.position : nil },
+                                                 set: { if let p = $0 { style.position = p; style.freeX = nil; style.freeY = nil } })) {
+                Text("Arriba").tag(Optional(CaptionStyle.Position.top))
+                Text("Centro").tag(Optional(CaptionStyle.Position.center))
+                Text("Abajo").tag(Optional(CaptionStyle.Position.bottom))
+            }
+        }
+        .pickerStyle(.segmented)
+        .font(.caption)
+        if style.freeX != nil {
+            HStack {
+                Text("Posición libre (arrastrada sobre el video).").font(.caption2).foregroundStyle(Theme.secondary)
+                Button("Volver a abajo") { style.freeX = nil; style.freeY = nil; style.position = .bottom }.controlSize(.mini)
+            }
+        }
+    }
+
     private func colorBinding(_ kp: WritableKeyPath<CaptionStyle, String>) -> Binding<Color> {
-        Binding(get: { Color(hex: session.project.captionStyle[keyPath: kp]) },
-                set: { session.project.captionStyle[keyPath: kp] = $0.hex; session.project.captionStyle.preset = "custom" })
+        Binding(get: { Color(hex: style[keyPath: kp]) },
+                set: { style[keyPath: kp] = $0.hex; style.preset = "custom" })
     }
 }
 
@@ -536,9 +559,9 @@ struct ReelsStep: View {
         }
         .onAppear {
             if let r = session.project.reels.first { show(r) }
-            else { session.setPreview(format: .vertical, window: nil, look: session.project.reelLook) }
+            else { session.setPreview(format: .vertical, window: nil, look: session.project.reelLook); session.captionDragTarget = .allReels }
         }
-        .onDisappear { session.setPreview(format: .landscape) }
+        .onDisappear { session.setPreview(format: .landscape); session.captionDragTarget = nil }
         // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
         .onChange(of: session.project.reelLook) { _, _ in refresh() }
         .onChange(of: currentReel?.look) { _, _ in refresh() }
@@ -547,12 +570,20 @@ struct ReelsStep: View {
     private func show(_ reel: Reel) {
         previewing = reel.id
         session.setPreview(format: .vertical, window: (reel.start, reel.end), look: session.project.look(for: reel))
+        session.captionDragTarget = reel.look?.captionStyle != nil ? .reel(reel.id) : .allReels
         session.player.seek(to: .zero)
         session.player.play()
     }
 
     private func refresh() {
         session.setPreview(format: .vertical, window: session.previewWindow, look: session.project.look(for: currentReel))
+        session.captionDragTarget = captionTarget
+    }
+
+    /// Arrastrar los subtítulos cambia el estilo propio del reel si lo tiene; si no, el de todos los reels.
+    private var captionTarget: ProjectSession.CaptionTarget {
+        if let r = currentReel, r.look?.captionStyle != nil { return .reel(r.id) }
+        return .allReels
     }
 }
 
@@ -630,6 +661,18 @@ struct ReelLookCard: View {
             Text("Sonido y subtítulos").font(.caption.bold())
             Toggle("Música y efectos del episodio", isOn: look.music).font(.caption)
             Toggle("Subtítulos", isOn: look.captions).font(.caption)
+            if l.captions {
+                Toggle("Subtítulos con estilo propio en el reel", isOn: Binding(
+                    get: { l.captionStyle != nil },
+                    set: { on in look.wrappedValue.captionStyle = on ? (l.captionStyle ?? p.captionStyle) : nil }))
+                    .font(.caption)
+                if l.captionStyle != nil {
+                    CaptionStyleEditor(style: Binding(get: { look.wrappedValue.captionStyle ?? p.captionStyle },
+                                                      set: { look.wrappedValue.captionStyle = $0 }), compact: true)
+                    Text("Arrastra el recuadro de los subtítulos sobre el video para ponerlos donde quieras en el reel.")
+                        .font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
             if !l.music {
                 Text("Sin música: ideal cuando la plataforma pone la suya o para evitar reclamos de derechos.").font(.caption2).foregroundStyle(Theme.secondary)
             }

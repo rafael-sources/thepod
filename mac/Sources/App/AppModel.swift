@@ -225,6 +225,36 @@ final class ProjectSession: ObservableObject {
     @Published var previewWindow: EditEngine.Span?
     @Published var previewLayout: LayoutTemplate?
     @Published var previewLook: ReelLook?          // viendo un reel: su diseño y marca encima del episodio
+    /// A quién le cambia la posición de los subtítulos al arrastrarlos sobre el video (nil = no se pueden arrastrar).
+    enum CaptionTarget: Equatable { case episode, allReels, reel(UUID) }
+    @Published var captionDragTarget: CaptionTarget?
+
+    /// El estilo de subtítulos que se está viendo (según el blanco del arrastre).
+    func captionStyle(for target: CaptionTarget) -> CaptionStyle {
+        switch target {
+        case .episode: return project.captionStyle
+        case .allReels: return project.reelLook.captionStyle ?? project.captionStyle
+        case .reel(let id): return project.reels.first { $0.id == id }?.look?.captionStyle ?? project.reelLook.captionStyle ?? project.captionStyle
+        }
+    }
+    func setCaptionPosition(_ target: CaptionTarget, x: Double, y: Double) {
+        let cx = min(1, max(0, x)), cy = min(1, max(0, y))
+        switch target {
+        case .episode:
+            project.captionStyle.freeX = cx; project.captionStyle.freeY = cy
+        case .allReels:
+            var cs = project.reelLook.captionStyle ?? project.captionStyle
+            cs.freeX = cx; cs.freeY = cy
+            project.reelLook.captionStyle = cs
+        case .reel(let id):
+            guard let i = project.reels.firstIndex(where: { $0.id == id }) else { return }
+            var l = project.reels[i].look ?? project.reelLook
+            var cs = l.captionStyle ?? project.reelLook.captionStyle ?? project.captionStyle
+            cs.freeX = cx; cs.freeY = cy
+            l.captionStyle = cs
+            project.reels[i].look = l
+        }
+    }
     @Published var lastExports: [URL] = []
     @Published var fixSummary: String?
     @Published var reelsNote: String?

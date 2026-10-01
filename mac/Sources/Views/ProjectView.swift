@@ -190,6 +190,7 @@ struct PreviewPane: View {
                 PlayerView(player: session.player)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 OverlayHandles(session: session)
+                CaptionHandles(session: session)
                 if session.built == nil {
                     VStack(spacing: 8) {
                         ProgressView()

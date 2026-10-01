@@ -332,12 +332,17 @@ final class RenderScene: @unchecked Sendable {
             let fs = base * factor
             let key = "cap-\(idx)-\(active ?? -1)-\(Int(fs))"
             if let img = cached(key, { TextRenderer.caption(line, activeWord: active, style: style, fontSize: fs, maxWidth: W * 0.86) }) {
-                let x = (W - img.extent.width) / 2
-                let y: CGFloat
+                var x = (W - img.extent.width) / 2
+                var y: CGFloat
                 switch style.position {
                 case .bottom: y = max(format.isVertical ? H * 0.20 : H * 0.07, cintilloTop > 0 && !format.isVertical ? cintilloTop + H * 0.03 : 0)
                 case .center: y = (H - img.extent.height) / 2 - (format.isVertical ? H * 0.05 : 0)
                 case .top: y = H - img.extent.height - H * (format.isVertical ? 0.14 : 0.07)
+                }
+                if let fx = style.freeX, let fy = style.freeY {
+                    // Posición libre (arrastrada sobre la vista previa): centro en fracciones del cuadro, sin salirse
+                    x = min(max(0, CGFloat(fx) * W - img.extent.width / 2), max(0, W - img.extent.width))
+                    y = min(max(0, (1 - CGFloat(fy)) * H - img.extent.height / 2), max(0, H - img.extent.height))
                 }
                 out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
             }

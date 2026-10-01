@@ -338,3 +338,66 @@ struct OverlayHandles: View {
         return CGRect(x: (container.width - w) / 2, y: (container.height - h) / 2, width: w, height: h)
     }
 }
+
+
+/// Recuadro de los subtítulos sobre la vista previa: se arrastra para ponerlos donde se quiera.
+/// Solo aparece cuando hay un blanco (Subtítulos del episodio, o Reels) y los subtítulos están activos.
+struct CaptionHandles: View {
+    @ObservedObject var session: ProjectSession
+    @State private var drag: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geo in
+            if let target = session.captionDragTarget, let scene = session.built?.scene, scene.style.enabled, !scene.captions.isEmpty {
+                let st = session.captionStyle(for: target)
+                let W = scene.renderSize.width, H = scene.renderSize.height
+                let video = fitRect(scene.renderSize, in: geo.size)
+                let vertical = scene.format.isVertical
+                let factor: CGFloat = {
+                    switch st.size {
+                    case .small: return vertical ? 0.058 : 0.045
+                    case .medium: return vertical ? 0.075 : 0.057
+                    case .large: return vertical ? 0.095 : 0.072
+                    }
+                }()
+                let fs = min(W, H) * factor
+                let boxW = W * 0.86, boxH = fs * 2.6
+                let cx: CGFloat = CGFloat(st.freeX ?? 0.5)
+                let cy: CGFloat = {
+                    if let fy = st.freeY { return CGFloat(fy) }
+                    switch st.position {
+                    case .top: return (H * (vertical ? 0.14 : 0.07) + boxH / 2) / H
+                    case .center: return 0.5 + (vertical ? 0.05 : 0)
+                    case .bottom: return (H - H * (vertical ? 0.20 : 0.07) - boxH / 2) / H
+                    }
+                }()
+                let w = boxW / W * video.width, h = boxH / H * video.height
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.yellow.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                        .background(Color.white.opacity(0.001))
+                    Text("Subtítulos").font(.system(size: 9, weight: .bold)).foregroundStyle(.black)
+                        .padding(.horizontal, 4).padding(.vertical, 1).background(Color.yellow.opacity(0.9)).clipShape(RoundedRectangle(cornerRadius: 3))
+                        .offset(x: 2, y: -12)
+                }
+                .frame(width: max(24, w), height: max(16, h))
+                .position(x: video.minX + cx * video.width + drag.width, y: video.minY + cy * video.height + drag.height)
+                .gesture(DragGesture(minimumDistance: 2)
+                    .onChanged { g in drag = g.translation }
+                    .onEnded { g in
+                        let nx = Double(cx + g.translation.width / max(1, video.width))
+                        let ny = Double(cy + g.translation.height / max(1, video.height))
+                        session.setCaptionPosition(target, x: nx, y: ny)
+                        drag = .zero
+                    })
+            }
+        }
+    }
+
+    private func fitRect(_ content: CGSize, in container: CGSize) -> CGRect {
+        guard content.width > 0, content.height > 0 else { return .zero }
+        let s = min(container.width / content.width, container.height / content.height)
+        let w = content.width * s, h = content.height * s
+        return CGRect(x: (container.width - w) / 2, y: (container.height - h) / 2, width: w, height: h)
+    }
+}

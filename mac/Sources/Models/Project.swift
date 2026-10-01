@@ -380,11 +380,13 @@ struct ReelLook: Codable, Equatable {
     var backgroundFile: String?
     var music: Bool = true              // música y efectos del episodio en el reel
     var captions: Bool = true           // subtítulos en el reel
+    var captionStyle: CaptionStyle?     // estilo y posición propios de los subtítulos en el reel (nil = los del episodio)
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         music = try c.decodeIfPresent(Bool.self, forKey: .music) ?? true
         captions = try c.decodeIfPresent(Bool.self, forKey: .captions) ?? true
+        captionStyle = try c.decodeIfPresent(CaptionStyle.self, forKey: .captionStyle)
         layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
         options = try c.decodeIfPresent(LayoutOptions.self, forKey: .options) ?? LayoutOptions()
         showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
@@ -410,6 +412,7 @@ extension Project {
         if let f = look.logoFile { p.logoFile = f }
         if let f = look.backgroundFile { p.backgroundFile = f }
         if !look.music { p.audioLane = [] }
+        if let cs = look.captionStyle { p.captionStyle = cs }
         if !look.captions { p.captionStyle.enabled = false }
         return p
     }
@@ -797,6 +800,8 @@ struct CaptionStyle: Codable, Equatable {
     var backgroundColor: String?        // nil = no box
     var highlightColor: String = "#FFD700"
     var position: Position = .bottom
+    var freeX: Double?                  // posición libre (centro, 0…1 desde la izquierda); nil = usar `position`
+    var freeY: Double?                  // posición libre (centro, 0…1 desde arriba)
     var uppercase = false
     var karaoke = true                  // highlight the word being said
 
