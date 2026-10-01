@@ -43,6 +43,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
     var laneMirror: [Int: Bool] = [:]   // lane id -> voltear el video en espejo (horizontal)
+    var laneBackground: [Int: VirtualBackground] = [:]   // lane id -> fondo virtual (quitar el fondo real de esa persona)
     var laneOrder: [Int] = []           // orden en pantalla (ids de pista); vacío = el orden de las pistas
 
     var episode = EpisodeInfo()         // from prePod (via postPod's proyecto.json)
@@ -340,6 +341,29 @@ struct Reel: Codable, Identifiable, Equatable {
         selected = try c.decodeIfPresent(Bool.self, forKey: .selected) ?? true
         exportedFile = try c.decodeIfPresent(String.self, forKey: .exportedFile)
         look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
+    }
+}
+
+/// Fondo virtual de una persona: se separa a la persona de su fondo real (Apple Vision, en la Mac, sin internet)
+/// y detrás se pone lo que se elija.
+struct VirtualBackground: Codable, Equatable {
+    enum Mode: String, Codable, CaseIterable {
+        case blur, podcast, color, image
+        var name: String {
+            switch self { case .blur: return "Difuminado"; case .podcast: return "Fondo del podcast"; case .color: return "Color"; case .image: return "Imagen" }
+        }
+    }
+    var mode: Mode = .blur
+    var blur: Double = 18               // difuminado: cuánto (6 suave … 40 muy borroso)
+    var color: String = "#14141A"
+    var imageFile: String?              // relativo a la carpeta del proyecto
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try c.decodeIfPresent(Mode.self, forKey: .mode) ?? .blur
+        blur = try c.decodeIfPresent(Double.self, forKey: .blur) ?? 18
+        color = try c.decodeIfPresent(String.self, forKey: .color) ?? "#14141A"
+        imageFile = try c.decodeIfPresent(String.self, forKey: .imageFile)
     }
 }
 
@@ -662,6 +686,7 @@ extension Project {
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
         laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]
         laneMirror = try c.decodeIfPresent([Int: Bool].self, forKey: .laneMirror) ?? [:]
+        laneBackground = try c.decodeIfPresent([Int: VirtualBackground].self, forKey: .laneBackground) ?? [:]
         laneOrder = try c.decodeIfPresent([Int].self, forKey: .laneOrder) ?? []
         moments = try c.decodeIfPresent([Moment].self, forKey: .moments) ?? []
         episode = try c.decodeIfPresent(EpisodeInfo.self, forKey: .episode) ?? EpisodeInfo()

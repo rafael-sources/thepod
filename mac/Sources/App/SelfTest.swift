@@ -290,7 +290,7 @@ enum SelfTest {
                 win.contentView = host
                 win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
                 win.orderFrontRegardless()
-                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers), ("4-reels", .reels)] {
+                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers), ("4-reels", .reels), ("5-aspecto", .look)] {
                     session.step = step
                     if step == .layers, let o = session.project.overlays.first {
                         session.selectedTrack = .overlay(o.id)

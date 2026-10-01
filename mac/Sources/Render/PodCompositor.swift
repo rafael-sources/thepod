@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreImage
 import Metal
+import Vision
 
 /// Everything the compositor needs to draw a frame. Immutable once built.
 final class RenderScene: @unchecked Sendable {
@@ -52,6 +53,50 @@ final class RenderScene: @unchecked Sendable {
     var contentEnd: Double = .infinity
     var introImage: CIImage?
     var outroImage: CIImage?
+    /// Fondo virtual por persona (lo que va detrás, ya preparado) y calidad de la separación (rápida en la vista previa)
+    struct VirtualBG { let mode: VirtualBackground.Mode; let blur: Double; let color: CIColor; let image: CIImage? }
+    var virtualBG: [Int: VirtualBG] = [:]
+    var fastSegmentation = false
+
+    /// Máscara de la persona (blanco = persona) al tamaño del cuadro, o nil si Vision no pudo.
+    private func personMask(_ pb: CVPixelBuffer, extent: CGRect) -> CIImage? {
+        let req = VNGeneratePersonSegmentationRequest()
+        req.qualityLevel = fastSegmentation ? .fast : .balanced
+        req.outputPixelFormat = kCVPixelFormatType_OneComponent8
+        let handler = VNImageRequestHandler(cvPixelBuffer: pb, options: [:])
+        guard (try? handler.perform([req])) != nil, let mpb = req.results?.first?.pixelBuffer else { return nil }
+        var mask = CIImage(cvPixelBuffer: mpb)
+        let sx = extent.width / max(1, mask.extent.width), sy = extent.height / max(1, mask.extent.height)
+        mask = mask.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+        // Borde suave (la máscara viene en baja resolución) y decidida: lo dudoso (< 35 %) es fondo, lo seguro (> 70 %) es persona.
+        // Sin esto el fondo nuevo se transparenta sobre la persona cuando Vision no está segura (cámaras oscuras).
+        mask = mask.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: fastSegmentation ? 3.0 : 2.0])
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 2.9, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 2.9, y: 0, z: 0, w: 0),
+                "inputBVector": CIVector(x: 2.9, y: 0, z: 0, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                "inputBiasVector": CIVector(x: -1.0, y: -1.0, z: -1.0, w: 0)])
+            .applyingFilter("CIColorClamp")
+        return mask.cropped(to: extent)
+    }
+
+    /// Cambia el fondo real de una persona por el elegido.
+    func replacedBackground(_ frame: CIImage, buffer: CVPixelBuffer, lane: Int) -> CIImage {
+        guard let vb = virtualBG[lane], let mask = personMask(buffer, extent: frame.extent) else { return frame }
+        let e = frame.extent
+        let behind: CIImage
+        switch vb.mode {
+        case .blur:
+            behind = frame.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: vb.blur]).cropped(to: e)
+        case .podcast:
+            behind = background.map { fill($0, into: e, cropX: 0.5) } ?? CIImage(color: vb.color).cropped(to: e)
+        case .image:
+            behind = vb.image.map { fill($0, into: e, cropX: 0.5) } ?? CIImage(color: vb.color).cropped(to: e)
+        case .color:
+            behind = CIImage(color: vb.color).cropped(to: e)
+        }
+        return frame.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: behind, kCIInputMaskImageKey: mask]).cropped(to: e)
+    }
+
     /// Color: filtro general y corrección por persona (igualar cámaras)
     var colorLook = "none"
     var laneGain: [Int: [Double]] = [:]
@@ -132,7 +177,7 @@ final class RenderScene: @unchecked Sendable {
 
     // MARK: Frame
 
-    func render(frames: [Int: CIImage], time time: Double) -> CIImage {
+    func render(frames: [Int: CIImage], buffers: [Int: CVPixelBuffer] = [:], time time: Double) -> CIImage {
         let W = renderSize.width, H = renderSize.height
         let full = CGRect(x: 0, y: 0, width: W, height: H)
         let dark = CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: full)
@@ -176,6 +221,7 @@ final class RenderScene: @unchecked Sendable {
             let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
                 guard var frame = frames[lane] else { continue }
+                if virtualBG[lane] != nil, let pb = buffers[lane] { frame = replacedBackground(frame, buffer: pb, lane: lane) }
                 if colorLook != "none" || laneGain[lane] != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
@@ -525,12 +571,14 @@ final class PodCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                 default: break
                 }
                 var frames: [Int: CIImage] = [:]
+                var buffers: [Int: CVPixelBuffer] = [:]
                 for (lane, tid) in scene.trackIDs {
                     if let pb = request.sourceFrame(byTrackID: tid) {
                         frames[lane] = CIImage(cvPixelBuffer: pb)
+                        buffers[lane] = pb
                     }
                 }
-                let image = scene.render(frames: frames, time: request.compositionTime.seconds)
+                let image = scene.render(frames: frames, buffers: buffers, time: request.compositionTime.seconds)
                 Self.ciContext.render(image, to: out, bounds: CGRect(origin: .zero, size: scene.renderSize), colorSpace: self.colorSpace)
                 request.finish(withComposedVideoFrame: out)
             }

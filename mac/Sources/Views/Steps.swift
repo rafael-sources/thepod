@@ -876,6 +876,14 @@ struct LookStep: View {
                         }
                     }
                     Card {
+                        Text("Fondo virtual").font(.headline)
+                        Text("Quita el fondo real de cada persona (se separa en la Mac, sin internet) y pone otro detrás. Tarda más al exportar y la vista previa usa una separación rápida, menos fina.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        ForEach(session.project.lanes) { lane in
+                            virtualBackgroundRow(lane)
+                        }
+                    }
+                    Card {
                         Text("Color").font(.headline)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
                             ForEach([("none", "Original"), ("warm", "Cálido"), ("cool", "Frío"), ("cine", "Cine"), ("bw", "B/N"), ("vivid", "Vivo")], id: \.0) { look in
@@ -987,6 +995,54 @@ struct LookStep: View {
             }
         }
     }
+    @ViewBuilder
+    private func virtualBackgroundRow(_ lane: Lane) -> some View {
+        let vb = session.project.laneBackground[lane.id]
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(session.project.laneName(lane.id)).font(.callout.bold()).frame(width: 90, alignment: .leading)
+                Picker("", selection: Binding<String>(
+                    get: { vb?.mode.rawValue ?? "none" },
+                    set: { v in
+                        if v == "none" { session.project.laneBackground[lane.id] = nil }
+                        else { var b = vb ?? VirtualBackground(); b.mode = VirtualBackground.Mode(rawValue: v) ?? .blur; session.project.laneBackground[lane.id] = b }
+                    })) {
+                    Text("Su fondo real").tag("none")
+                    ForEach(VirtualBackground.Mode.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+                }
+                .labelsHidden().frame(maxWidth: 200)
+            }
+            if let vb {
+                HStack(spacing: 8) {
+                    Color.clear.frame(width: 90)
+                    switch vb.mode {
+                    case .blur:
+                        Text("Cuánto").font(.caption)
+                        Slider(value: Binding(get: { vb.blur }, set: { session.project.laneBackground[lane.id]?.blur = $0 }), in: 6...40, step: 1)
+                            .frame(maxWidth: 180)
+                    case .color:
+                        ForEach(["#14141A", "#FFFFFF", "#1E3A5F", "#2E7D5B", "#7C2D3D", "#FFD60A"], id: \.self) { c in
+                            Button { session.project.laneBackground[lane.id]?.color = c } label: {
+                                Circle().fill(Color(hex: c)).frame(width: 18, height: 18)
+                                    .overlay(Circle().strokeBorder(vb.color == c ? Theme.accent : Color.white.opacity(0.3), lineWidth: vb.color == c ? 2.5 : 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    case .image:
+                        if let f = vb.imageFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill).frame(width: 48, height: 28).clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        Button(vb.imageFile == nil ? "Elegir imagen…" : "Cambiar…") { session.chooseVirtualBackgroundImage(laneId: lane.id) }.controlSize(.small)
+                        if vb.imageFile == nil { Text("Sin imagen se usa el color").font(.caption2).foregroundStyle(Theme.secondary) }
+                    case .podcast:
+                        Text(session.project.backgroundFile == nil ? "Este proyecto no tiene fondo del podcast; se verá el color." : "El mismo fondo del podcast, detrás de la persona.")
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
+                }
+            }
+        }
+    }
+
     /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
     @ViewBuilder
     private func layoutOptionsView(onePerson: Bool) -> some View {

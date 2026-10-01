@@ -31,7 +31,7 @@ enum CompositionBuilder {
 
     static func build(project: Project, format: ExportFormat, window: EditEngine.Span? = nil,
                       energy: EnergyMap?, layoutOverride: LayoutTemplate? = nil,
-                      captionsOverride: Bool? = nil) async throws -> BuiltComposition {
+                      captionsOverride: Bool? = nil, preview: Bool = false) async throws -> BuiltComposition {
         let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts, window: window)
         let outDuration = EditEngine.outputDuration(keep)
         guard outDuration > 0.1 else { throw Failure.empty }
@@ -306,6 +306,12 @@ enum CompositionBuilder {
                 s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
             }
             s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
+            s.fastSegmentation = preview
+            for (lane, vb) in project.laneBackground {
+                s.virtualBG[lane] = RenderScene.VirtualBG(
+                    mode: vb.mode, blur: vb.blur, color: TextRenderer.color(vb.color).map { CIColor(color: $0) ?? .black } ?? .black,
+                    image: vb.mode == .image ? vb.imageFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id), options: [.applyOrientationProperty: true]) } : nil)
+            }
             s.colorLook = project.colorLook
             if project.matchColors { s.laneGain = project.laneColorGain }
             s.contentStart = introDur

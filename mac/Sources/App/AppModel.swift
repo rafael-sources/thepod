@@ -328,7 +328,7 @@ final class ProjectSession: ObservableObject {
         do {
             let shown = previewLook.map { project.applying($0) } ?? project
             let b = try await CompositionBuilder.build(project: shown, format: previewFormat == .audio ? .landscape : previewFormat,
-                                                       window: previewWindow, energy: energy, layoutOverride: previewLayout)
+                                                       window: previewWindow, energy: energy, layoutOverride: previewLayout, preview: true)
             guard !Task.isCancelled else { return }
             built = b
             player.replaceCurrentItem(with: b.playerItem())
@@ -846,6 +846,26 @@ final class ProjectSession: ObservableObject {
         } else {
             if kind == "logo" { project.reelLook.logoFile = file } else { project.reelLook.backgroundFile = file }
         }
+    }
+
+    /// Imagen para el fondo virtual de una persona.
+    func chooseVirtualBackgroundImage(laneId: Int) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
+        panel.allowsMultipleSelection = false
+        panel.message = "Elige la imagen que va detrás de \(project.laneName(laneId))"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
+        let rel = "branding/fondo-\(laneId)-\(Int(Date().timeIntervalSince1970)).\(ext)"
+        let dest = ProjectStore.url(rel, in: project.id)
+        do {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { errorMessage = error.localizedDescription; return }
+        var vb = project.laneBackground[laneId] ?? VirtualBackground()
+        vb.mode = .image
+        vb.imageFile = rel
+        project.laneBackground[laneId] = vb
     }
 
     func removeOverlay(_ id: Int) {
