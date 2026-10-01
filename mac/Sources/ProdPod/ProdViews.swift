@@ -437,6 +437,19 @@ struct StudioView: View {
                     Spacer().frame(width: 10)
                     RoundButton(on: studio.micOn, onSymbol: "mic.fill", offSymbol: "mic.slash.fill", big: true) { studio.toggleMic() }
                         .help(studio.micOn ? "Silenciar micrófono" : "Activar micrófono")
+                    Button { studio.gateOn.toggle() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: studio.gateOn ? "waveform.badge.minus" : "waveform")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text(studio.gateOn ? "Auto-silencio" : "Sin auto-sil.").font(.system(size: 9, weight: .medium))
+                        }
+                        .frame(width: 64, height: 52)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 1, opacity: studio.gateOn ? 0.16 : 0.06)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .help(studio.gateOn ? "Cuando no hablas, la sala no oye tus ruidos (teclas, perro). Tu grabación no se toca. Toca para apagar."
+                                        : "Apagado: la sala te oye siempre. Toca para encender.")
                     RoundButton(on: studio.camOn, onSymbol: "video.fill", offSymbol: "video.slash.fill", big: true) { studio.toggleCam() }
                         .help(studio.camOn ? "Apagar cámara" : "Encender cámara")
                     Menu {

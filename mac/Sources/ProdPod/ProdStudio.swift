@@ -70,6 +70,10 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var people: [RoomPerson] = []
     @Published var participants: [ProdPodClient.Person] = []
     @Published var micOn = true
+    /// Auto-silencio en vivo (lo que oye la sala); la grabación no se toca.
+    @Published var gateOn = UserDefaults.standard.object(forKey: "prodpod.gate") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(gateOn, forKey: "prodpod.gate"); LiveGate.shared.on = gateOn }
+    }
     @Published var camOn = true
     @Published var elapsed = 0
     @Published var error: String?
@@ -229,9 +233,12 @@ final class ProdStudio: NSObject, ObservableObject {
                 videoTrack = track
                 if !camOn { try? await track.mute() }
 
+                // La puerta va en el procesado de LiveKit; la grabación recibe la copia cruda a través de ella.
+                LiveGate.shared.on = gateOn
+                LiveGate.shared.tap = voiceFeed
+                AudioManager.shared.capturePostProcessingDelegate = LiveGate.shared
                 let pub = try await room.localParticipant.setMicrophone(enabled: true)
                 audioTrack = pub?.track as? LocalAudioTrack
-                audioTrack?.add(audioRenderer: voiceFeed)
                 if !micOn { try? await audioTrack?.mute() }
                 await afterJoin()
 
@@ -288,7 +295,8 @@ final class ProdStudio: NSObject, ObservableObject {
     }
 
     func disconnect() async {
-        if let a = audioTrack { a.remove(audioRenderer: voiceFeed) }
+        LiveGate.shared.tap = nil
+        AudioManager.shared.capturePostProcessingDelegate = nil
         pipe.sink = nil
         await room?.disconnect()
         room = nil
