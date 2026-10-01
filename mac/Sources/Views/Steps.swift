@@ -710,6 +710,26 @@ struct LookStep: View {
                             }
                         }
                         layoutOptionsView(onePerson: onePerson)
+                        if !onePerson {
+                            Divider()
+                            Text("Orden en pantalla (1 = izquierda o arriba)").font(.caption.bold())
+                            let onScreen = session.project.lanesOnScreen
+                            ForEach(Array(onScreen.enumerated()), id: \.element.id) { i, lane in
+                                HStack(spacing: 8) {
+                                    Text("\(i + 1)").font(.caption.bold()).frame(width: 18, height: 18)
+                                        .background(Circle().fill(Theme.panelStrong))
+                                    Text(session.project.laneName(lane.id)).font(.caption)
+                                    Spacer()
+                                    Button { session.setLanePosition(lane.id, i) } label: { Image(systemName: "chevron.up") }
+                                        .disabled(i == 0).help("Subir")
+                                    Button { session.setLanePosition(lane.id, i + 2) } label: { Image(systemName: "chevron.down") }
+                                        .disabled(i == onScreen.count - 1).help("Bajar")
+                                }
+                                .controlSize(.small)
+                            }
+                            Text("En Ventanita y Protagonista, el primero es el que va en grande cuando no sigues a quien habla.")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
                         Divider()
                         Text("Espejo (voltear el video de izquierda a derecha)").font(.caption.bold())
                         ForEach(session.project.lanes) { lane in

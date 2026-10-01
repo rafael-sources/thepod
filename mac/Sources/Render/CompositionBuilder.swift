@@ -196,7 +196,7 @@ enum CompositionBuilder {
             let s = RenderScene(
                 renderSize: format.renderSize, format: format,
                 layout: layoutOverride ?? project.layout,
-                laneOrder: project.lanes.map(\.id), trackIDs: videoTrackIDs,
+                laneOrder: project.lanesOnScreen.map(\.id), trackIDs: videoTrackIDs,
                 captions: captions, style: style,
                 switches: AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep),
                 names: names, showNames: project.showNames,

@@ -37,6 +37,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
     var laneMirror: [Int: Bool] = [:]   // lane id -> voltear el video en espejo (horizontal)
+    var laneOrder: [Int] = []           // orden en pantalla (ids de pista); vacío = el orden de las pistas
 
     var episode = EpisodeInfo()         // from prePod (via postPod's proyecto.json)
     var sponsors: [Sponsor] = []
@@ -61,6 +62,14 @@ struct Project: Codable, Identifiable, Equatable {
     }
 
     func mediaItem(_ id: Int) -> SourceMedia? { media.first { $0.id == id } }
+
+    /// Pistas en el orden en que van en pantalla (izquierda→derecha / arriba→abajo). Las que no estén en `laneOrder` van al final.
+    var lanesOnScreen: [Lane] {
+        let byId = Dictionary(uniqueKeysWithValues: lanes.map { ($0.id, $0) })
+        var out = laneOrder.compactMap { byId[$0] }
+        for l in lanes where !out.contains(where: { $0.id == l.id }) { out.append(l) }
+        return out
+    }
 
     func laneName(_ laneId: Int) -> String {
         if let lane = lanes.first(where: { $0.id == laneId }) {
@@ -460,6 +469,7 @@ extension Project {
         showLogo = try c.decodeIfPresent(Bool.self, forKey: .showLogo) ?? true
         laneCrop = try c.decodeIfPresent([Int: Double].self, forKey: .laneCrop) ?? [:]
         laneMirror = try c.decodeIfPresent([Int: Bool].self, forKey: .laneMirror) ?? [:]
+        laneOrder = try c.decodeIfPresent([Int].self, forKey: .laneOrder) ?? []
         moments = try c.decodeIfPresent([Moment].self, forKey: .moments) ?? []
         episode = try c.decodeIfPresent(EpisodeInfo.self, forKey: .episode) ?? EpisodeInfo()
         sponsors = try c.decodeIfPresent([Sponsor].self, forKey: .sponsors) ?? []

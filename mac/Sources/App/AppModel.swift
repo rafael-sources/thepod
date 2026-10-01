@@ -360,12 +360,14 @@ final class ProjectSession: ObservableObject {
     func refreshExports() {
         let folder = ProjectStore.exportsFolder(for: project.id)
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        lastExports = files.filter { ["mp4", "mp3", "m4a", "mov"].contains($0.pathExtension.lowercased()) }
+        let fresh = files.filter { ["mp4", "mp3", "m4a", "mov"].contains($0.pathExtension.lowercased()) }
             .sorted {
                 let a = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 return a > b
             }
+        // Solo avisar si cambió: si se publica en cada redibujo, las vistas que lo leen se redibujan en bucle y la app se cuelga.
+        if fresh != lastExports { lastExports = fresh }
     }
 
     // MARK: Jobs
@@ -605,6 +607,17 @@ final class ProjectSession: ObservableObject {
         setBumper(isIntro: isIntro, b)
     }
 
+    // MARK: Orden en pantalla
+
+    /// Pone a una persona en la posición `pos` (1 = primera). El resto corre.
+    func setLanePosition(_ laneId: Int, _ pos: Int) {
+        var order = project.lanesOnScreen.map(\.id)
+        guard let i = order.firstIndex(of: laneId) else { return }
+        order.remove(at: i)
+        order.insert(laneId, at: min(max(0, pos - 1), order.count))
+        project.laneOrder = order
+    }
+
     // MARK: Sincronizar personas
 
     /// Mueve el inicio de la grabación de una persona (desfase). Arrastra con ella sus palabras transcritas
@@ -701,9 +714,9 @@ final class ProjectSession: ObservableObject {
     @Published var publishStatus: PrePodClient.PublishStatus?
     @Published var publishNote: String?
 
+    /// Solo lee la lista ya cargada (se llama desde el dibujo de las vistas: no debe cambiar estado).
     func latestExport(suffix: String, ext: String) -> URL? {
-        refreshExports()
-        return lastExports.first { $0.pathExtension == ext && $0.lastPathComponent.contains("_\(suffix)_") }
+        lastExports.first { $0.pathExtension == ext && $0.lastPathComponent.contains("_\(suffix)_") }
     }
 
     func loadPublishStatus() {

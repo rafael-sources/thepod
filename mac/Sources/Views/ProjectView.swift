@@ -293,6 +293,19 @@ struct TrackInspector: View {
                 .toggleStyle(.checkbox)
         }
         .font(.callout).controlSize(.small)
+        if session.project.lanes.count > 1 {
+            let onScreen = session.project.lanesOnScreen.map(\.id)
+            HStack(spacing: 6) {
+                Text("Posición").frame(width: 72, alignment: .leading)
+                Picker("", selection: Binding(get: { (onScreen.firstIndex(of: lane.id) ?? 0) + 1 },
+                                              set: { session.setLanePosition(lane.id, $0) })) {
+                    ForEach(1...onScreen.count, id: \.self) { n in Text("\(n)").tag(n) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 220)
+                Text("1 = izquierda o arriba").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            .font(.callout).controlSize(.small)
+        }
         Text("El desfase mueve el inicio de su grabación (no puede ser negativo: si va adelantada, atrasa a los demás). Los cortes se aplican igual a todas las pistas.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }

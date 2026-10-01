@@ -173,6 +173,7 @@ struct PublishStep: View {
             .frame(maxWidth: 760, alignment: .leading)
         }
         .onAppear {
+            session.refreshExports()
             session.loadPublishStatus()
             if ytTitle.isEmpty { ytTitle = Exporter.episodeTitle(session.project) }
             if ytDescription.isEmpty {
