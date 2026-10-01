@@ -3,6 +3,7 @@ import AVFoundation
 
 /// Entrada de thePod al abrir la app: el sonido oficial ("cambur pintón" en cuatro) y los cuatro
 /// íconos que se encienden con su nota y al final se unen en el disco de thePod.
+/// Con cada nota salen dos de las ocho estrellas (como las de la bandera de Venezuela), en arco sobre el disco.
 /// Tiempos tomados de ThePodSound.timing('cambur') del handoff de diseño.
 struct IntroView: View {
     let onFinish: () -> Void
@@ -14,6 +15,8 @@ struct IntroView: View {
     private static let total = bloom + 1.5
 
     @State private var lit: Set<Pod> = []
+    @State private var stars = 0            // cuántas estrellas ya salieron (0…8), dos por nota
+    @State private var twinkle = false      // al final: un brillo corto en las ocho
     @State private var allOn = false
     @State private var showName = false
     @State private var player: AVAudioPlayer?
@@ -23,10 +26,14 @@ struct IntroView: View {
         ZStack {
             Color(red: 0.102, green: 0.082, blue: 0.063).ignoresSafeArea()      // #1A1510
             VStack(spacing: 28) {
-                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                    GridRow { tile(.pre); tile(.prod) }
-                    GridRow { tile(.post); tile(.ama) }
+                ZStack {
+                    Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                        GridRow { tile(.pre); tile(.prod) }
+                        GridRow { tile(.post); tile(.ama) }
+                    }
+                    starsArc
                 }
+                .frame(width: 300, height: 260)
                 Text("thePod")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(Color(red: 0.937, green: 0.890, blue: 0.816))   // #EFE3D0
@@ -36,6 +43,30 @@ struct IntroView: View {
         .contentShape(Rectangle())
         .onTapGesture { finish() }
         .onAppear(perform: start)
+    }
+
+    /// Ocho estrellas en arco sobre el disco, como en la bandera. Salen de afuera hacia adentro, de a dos por nota.
+    private var starsArc: some View {
+        // Orden de aparición: pares simétricos desde las puntas del arco hacia el centro
+        let order = [0, 7, 1, 6, 2, 5, 3, 4]
+        let radius: CGFloat = 132
+        return ZStack {
+            ForEach(0..<8, id: \.self) { i in
+                let angle = Angle.degrees(162 - Double(i) * (144.0 / 7))   // de 162° a 18°, por arriba
+                let x = cos(angle.radians) * radius
+                let y = -sin(angle.radians) * radius + 26                   // el arco centrado un poco arriba del disco
+                let on = (order.firstIndex(of: i) ?? 8) < stars
+                Image(systemName: "star.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .white.opacity(twinkle ? 0.9 : 0.45), radius: twinkle ? 9 : 4)
+                    .scaleEffect(on ? (twinkle ? 1.18 : 1) : 0.2)
+                    .opacity(on ? 1 : 0)
+                    .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.32, dampingFraction: 0.55), value: on)
+                    .animation(.easeInOut(duration: 0.25), value: twinkle)
+                    .offset(x: x, y: y)
+            }
+        }
     }
 
     private func tile(_ pod: Pod) -> some View {
@@ -59,9 +90,10 @@ struct IntroView: View {
         func at(_ t: Double, _ action: @escaping () -> Void) {
             DispatchQueue.main.asyncAfter(deadline: .now() + max(0, t - Date().timeIntervalSince(t0)), execute: action)
         }
-        for (pod, t) in Self.noteTimes { at(t) { lit.insert(pod) } }
+        for (pod, t) in Self.noteTimes { at(t) { lit.insert(pod); stars = min(8, stars + 2) } }
         at(Self.bloom - 0.04) { lit = [] }
-        at(Self.bloom + 0.05) { allOn = true; withAnimation(.easeIn(duration: 0.4)) { showName = true } }
+        at(Self.bloom + 0.05) { allOn = true; stars = 8; twinkle = true; withAnimation(.easeIn(duration: 0.4)) { showName = true } }
+        at(Self.bloom + 0.5) { twinkle = false }
         at(Self.total) { finish() }
     }
 

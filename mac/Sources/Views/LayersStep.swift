@@ -10,8 +10,8 @@ struct LayersStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Textos y stickers",
-                               subtitle: "Pon un título, una imagen o un emoji encima del video. Se agrega donde está el video ahora; después lo mueves con el ratón.")
+                    StepHeader(title: "Textos, stickers y b-roll",
+                               subtitle: "Pon un título, una imagen o un emoji encima del video, o un b-roll que tape la pantalla un rato. Se agrega donde está el video ahora.")
                     Card {
                         Text("Agregar").font(.headline)
                         HStack(spacing: 10) {
@@ -37,6 +37,34 @@ struct LayersStep: View {
                         }
                         ForEach(session.project.overlays.sorted { $0.start < $1.start }) { o in
                             row(o)
+                        }
+                    }
+                    Card {
+                        HStack {
+                            Text("B-roll").font(.headline)
+                            Spacer()
+                            Button { session.chooseBRoll() } label: { Label("Agregar video o imagen…", systemImage: "film") }.controlSize(.small)
+                        }
+                        Text("Un video o una foto que tapa la pantalla unos segundos mientras la voz sigue (por ejemplo, mientras cuentan una anécdota). Entra y sale con un fundido corto.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        ForEach(session.project.brolls.sorted { $0.start < $1.start }) { b in
+                            let sel = session.selectedTrack == .broll(b.id)
+                            Button {
+                                session.selectedTrack = .broll(b.id)
+                                session.seek(timeline: b.start + min(1, b.duration / 2), play: false)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: b.isVideo ? "film" : "photo").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                                    Text(b.title).lineLimit(1)
+                                    Spacer()
+                                    Text("\(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                                        .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -196,6 +224,58 @@ struct OverlayEditor: View {
                 .controlSize(.small)
         }
         Text("Arrastra el recuadro sobre el video para moverla; la esquina de abajo a la derecha cambia el tamaño. Va encima del video y debajo de los subtítulos.")
+            .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+}
+
+/// Panel bajo el video para el b-roll elegido.
+struct BRollEditor: View {
+    @ObservedObject var session: ProjectSession
+    let index: Int
+    private var b: Binding<BRollClip> { $session.project.brolls[index] }
+
+    var body: some View {
+        let clip = session.project.brolls[index]
+        HStack {
+            Label("B-roll · \(clip.title)", systemImage: clip.isVideo ? "film" : "photo").font(.headline).lineLimit(1)
+            Spacer()
+            Button(role: .destructive) { session.removeBRoll(clip.id) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
+            Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
+        }
+        HStack(spacing: 6) {
+            Text("Empieza").frame(width: 72, alignment: .leading)
+            Button("−1 s") { b.wrappedValue.start = max(0, clip.start - 1) }
+            Text(EditEngine.clock(clip.start)).monospacedDigit().frame(width: 56)
+            Button("+1 s") { b.wrappedValue.start = min(session.project.duration, clip.start + 1) }
+            Button("Aquí") { b.wrappedValue.start = session.playheadTimeline }.help("Donde está el video ahora")
+        }
+        .font(.callout).controlSize(.small)
+        HStack(spacing: 8) {
+            Text("Dura").frame(width: 72, alignment: .leading)
+            Slider(value: b.duration, in: 1...60, step: 0.5)
+            Text(String(format: "%.1f s", clip.duration)).monospacedDigit().frame(width: 48, alignment: .trailing)
+        }
+        .font(.callout)
+        if clip.isVideo {
+            HStack(spacing: 8) {
+                Text("Desde").frame(width: 72, alignment: .leading)
+                Slider(value: b.srcIn, in: 0...max(1, clip.srcIn + 60), step: 0.5)
+                Text(String(format: "%.1f s", clip.srcIn)).monospacedDigit().frame(width: 48, alignment: .trailing)
+            }
+            .font(.callout)
+            HStack(spacing: 8) {
+                Text("Su sonido").frame(width: 72, alignment: .leading)
+                Slider(value: b.volume, in: 0...1)
+                Text(clip.volume == 0 ? "mudo" : "\(Int(clip.volume * 100)) %").monospacedDigit().frame(width: 48, alignment: .trailing)
+            }
+            .font(.callout)
+        }
+        Picker("", selection: b.fill) {
+            Text("Llenar la pantalla").tag(true)
+            Text("Entero, con bordes").tag(false)
+        }
+        .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 300)
+        Text("Tapa a las personas; el logo, los textos y los subtítulos siguen encima. La voz no se toca.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }

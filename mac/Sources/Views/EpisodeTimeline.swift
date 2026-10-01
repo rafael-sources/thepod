@@ -84,8 +84,8 @@ struct EpisodeTimeline: View {
                         }
                         Text("Efectos").font(.caption2).foregroundStyle(Theme.secondary)
                             .frame(width: labelWidth - 8, height: fxH, alignment: .leading)
-                        if !p.overlays.isEmpty {
-                            Text("Textos").font(.caption2).foregroundStyle(Theme.secondary)
+                        if !p.overlays.isEmpty || !p.brolls.isEmpty {
+                            Text(p.brolls.isEmpty ? "Textos" : "Textos · b-roll").font(.caption2).foregroundStyle(Theme.secondary)
                                 .frame(width: labelWidth - 8, height: ovH, alignment: .leading)
                         }
                     }
@@ -95,7 +95,7 @@ struct EpisodeTimeline: View {
                         let pps = width / p.duration
                         ScrollView(.horizontal, showsIndicators: zoom > 1.01) {
                             ZStack(alignment: .topLeading) {
-                                TimelineCanvas(model: TimelineModel(project: p, energy: session.energy, selectedOverlay: selectedOverlay), pps: pps,
+                                TimelineCanvas(model: TimelineModel(project: p, energy: session.energy, selectedOverlay: selectedOverlay, selectedBRoll: selectedBRoll), pps: pps,
                                                rulerH: rulerH, marksH: marksH, laneH: laneH, fxH: fxH, ovH: ovH)
                                     .equatable()
                                 if let sel = selection {
@@ -126,10 +126,14 @@ struct EpisodeTimeline: View {
                                         selection = nil
                                         // Clic en la fila de textos: elegir esa capa para editarla
                                         let oy = rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH
-                                        if !p.overlays.isEmpty, g.location.y >= oy, g.location.y <= oy + ovH,
-                                           let o = p.overlays.filter({ t >= $0.start - 0.3 && t <= $0.end + 0.3 }).max(by: { $0.start < $1.start }) {
-                                            session.selectedTrack = .overlay(o.id)
-                                            if session.step != .layers { session.step = .layers }
+                                        if (!p.overlays.isEmpty || !p.brolls.isEmpty), g.location.y >= oy, g.location.y <= oy + ovH {
+                                            if let o = p.overlays.filter({ t >= $0.start - 0.3 && t <= $0.end + 0.3 }).max(by: { $0.start < $1.start }) {
+                                                session.selectedTrack = .overlay(o.id)
+                                                if session.step != .layers { session.step = .layers }
+                                            } else if let b = p.brolls.filter({ t >= $0.start - 0.3 && t <= $0.end + 0.3 }).max(by: { $0.start < $1.start }) {
+                                                session.selectedTrack = .broll(b.id)
+                                                if session.step != .layers { session.step = .layers }
+                                            }
                                         }
                                         seek(to: t, duration: p.duration)
                                     } else if let a = dragAnchor {
@@ -165,11 +169,15 @@ struct EpisodeTimeline: View {
     }
 
     private func rowLayout(_ p: Project) -> CGFloat {
-        rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH + (p.overlays.isEmpty ? 0 : ovH) + 4
+        rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH + ((p.overlays.isEmpty && p.brolls.isEmpty) ? 0 : ovH) + 4
     }
 
     private var selectedOverlay: Int? {
         if case .overlay(let id) = session.selectedTrack { return id }
+        return nil
+    }
+    private var selectedBRoll: Int? {
+        if case .broll(let id) = session.selectedTrack { return id }
         return nil
     }
 
@@ -190,11 +198,14 @@ struct TimelineModel: Equatable {
     var sponsors: [ClosedRange<Double>]
     var effects: [ClosedRange<Double>]
     var overlays: [ClosedRange<Double>]
+    var brolls: [ClosedRange<Double>]
     var selectedOverlay: ClosedRange<Double>?
 
-    init(project p: Project, energy: EnergyMap?, selectedOverlay: Int? = nil) {
+    init(project p: Project, energy: EnergyMap?, selectedOverlay: Int? = nil, selectedBRoll: Int? = nil) {
         overlays = p.overlays.map { $0.start...$0.end }
+        brolls = p.brolls.map { $0.start...$0.end }
         self.selectedOverlay = p.overlays.first { $0.id == selectedOverlay }.map { $0.start...$0.end }
+            ?? p.brolls.first { $0.id == selectedBRoll }.map { $0.start...$0.end }
         duration = p.duration
         cuts = p.cuts.filter(\.enabled).map { $0.start...max($0.start, $0.end) }
         moments = p.moments.map(\.time)
@@ -280,6 +291,7 @@ private struct TimelineCanvas: View, Equatable {
 
             // Textos, imágenes y stickers
             let oy = fy + fxH
+            for b in model.brolls { band(b, y: oy + 2, h: ovH - 4, Color.cyan.opacity(0.7), radius: 3) }
             for o in model.overlays { band(o, y: oy + 2, h: ovH - 4, Color.yellow.opacity(0.75), radius: 3) }
             if let s = model.selectedOverlay {
                 let r = CGRect(x: x(s.lowerBound), y: oy + 1, width: max(2, x(s.upperBound) - x(s.lowerBound)), height: ovH - 2)

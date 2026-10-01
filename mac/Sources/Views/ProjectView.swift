@@ -113,7 +113,7 @@ struct ProjectView: View {
         case .fix: return p.fix.lastRun != nil
         case .captions: return p.isTranscribed
         case .look: return p.backgroundFile != nil || p.layout != .auto || p.intro != nil
-        case .layers: return !p.overlays.isEmpty
+        case .layers: return !p.overlays.isEmpty || !p.brolls.isEmpty
         case .sounds: return !p.audioLane.isEmpty
         case .brands: return !p.sponsors.isEmpty || !p.cintillos.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
@@ -240,6 +240,8 @@ struct TrackInspector: View {
                     if let i = session.project.audioLane.firstIndex(where: { $0.id == id }) { soundBody(i) }
                 case .overlay(let id):
                     if let i = session.project.overlays.firstIndex(where: { $0.id == id }) { OverlayEditor(session: session, index: i) }
+                case .broll(let id):
+                    if let i = session.project.brolls.firstIndex(where: { $0.id == id }) { BRollEditor(session: session, index: i) }
                 }
             }
             .padding(12)

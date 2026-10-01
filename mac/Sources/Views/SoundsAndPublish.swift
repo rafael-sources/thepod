@@ -17,10 +17,13 @@ struct SoundsStep: View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 14) {
                 StepHeader(title: "Efectos y música",
-                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre y la mueves donde quieras.")
+                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras.")
+                    .sheet(isPresented: $session.voiceSheet) { VoiceSheet(session: session) }
                 HStack {
                     Text("En tu episodio").font(.headline)
                     Spacer()
+                    Button { session.voiceSheet = true } label: { Label("Agregar voz…", systemImage: "waveform.and.mic") }
+                        .help("Escribe un texto y la Mac lo lee con una voz; se pone donde está el video")
                     Button { session.importSounds(placeAt: session.playheadTimeline) } label: { Label("Agregar música aquí…", systemImage: "music.note.list") }
                         .help("Elige un mp3/wav/m4a: se pone donde está el video y luego lo mueves con los botones")
                 }
@@ -363,6 +366,71 @@ struct PrePodSettingsSection: View {
                 if let result { Text(result).font(.caption).foregroundStyle(ok ? Theme.good : .orange) }
             }
             Text("La contraseña queda guardada en esta Mac, solo para tu usuario.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+
+/// Texto a voz: escribe algo y la Mac lo lee con una de sus voces; queda como un sonido más del episodio.
+struct VoiceSheet: View {
+    @ObservedObject var session: ProjectSession
+    @State private var text = ""
+    @State private var voices: [Speech.Voice] = []
+    @State private var voice: Speech.Voice?
+    @State private var rate: Float = 0.5
+    @State private var testing = false
+    private let tester = AVSpeechSynthesizer()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Agregar una voz").font(.title2.bold())
+            Text("La Mac lee el texto con una de sus voces, sin internet. Sirve para una intro, un aviso o corregir una palabra. Se pone donde está el video ahora.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            TextEditor(text: $text)
+                .font(.body).frame(minHeight: 90, maxHeight: 160)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.stroke))
+            HStack(spacing: 10) {
+                Text("Voz").frame(width: 60, alignment: .leading)
+                Picker("", selection: Binding(get: { voice?.id ?? "" }, set: { id in voice = voices.first { $0.id == id } })) {
+                    ForEach(voices) { v in
+                        Text("\(v.name) · \(v.language)\(v.quality.isEmpty ? "" : " · " + v.quality)").tag(v.id)
+                    }
+                }
+                .labelsHidden().frame(maxWidth: 320)
+                Button {
+                    tester.stopSpeaking(at: .immediate)
+                    let u = AVSpeechUtterance(string: text.isEmpty ? "Hola, soy la voz de thePod." : String(text.prefix(120)))
+                    if let voice { u.voice = AVSpeechSynthesisVoice(identifier: voice.id) }
+                    u.rate = rate
+                    tester.speak(u)
+                } label: { Label("Probar", systemImage: "play.fill") }
+                .controlSize(.small)
+            }
+            .font(.callout)
+            HStack(spacing: 10) {
+                Text("Velocidad").frame(width: 60, alignment: .leading)
+                Slider(value: $rate, in: 0.35...0.65)
+                Text(rate < 0.45 ? "lenta" : rate > 0.55 ? "rápida" : "normal").frame(width: 50)
+            }
+            .font(.callout)
+            Text("Las voces mejoradas y premium (suenan mucho mejor) se bajan en Ajustes del Sistema → Accesibilidad → Contenido hablado → Voces del sistema.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
+            HStack {
+                Spacer()
+                Button("Cancelar") { tester.stopSpeaking(at: .immediate); session.voiceSheet = false }
+                Button("Agregar al episodio") {
+                    tester.stopSpeaking(at: .immediate)
+                    session.addVoice(text: text, voice: voice, rate: rate)
+                    session.voiceSheet = false
+                }
+                .buttonStyle(.borderedProminent).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 520)
+        .onAppear {
+            voices = Speech.voices()
+            voice = Speech.defaultVoice()
         }
     }
 }

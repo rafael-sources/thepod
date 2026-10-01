@@ -53,6 +53,7 @@ struct Project: Codable, Identifiable, Equatable {
     var cintillos: [DirectorCintillo] = []   // cintillos que el director puso en vivo (prodPod)
     var showCintillos: Bool = true
     var overlays: [VideoLayer] = []        // textos, imágenes y stickers encima del video
+    var brolls: [BRollClip] = []           // b-roll: un video o imagen que tapa la pantalla un rato (la voz sigue)
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
@@ -377,9 +378,13 @@ struct ReelLook: Codable, Equatable {
     var showNames: Bool = true
     var logoFile: String?
     var backgroundFile: String?
+    var music: Bool = true              // música y efectos del episodio en el reel
+    var captions: Bool = true           // subtítulos en el reel
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        music = try c.decodeIfPresent(Bool.self, forKey: .music) ?? true
+        captions = try c.decodeIfPresent(Bool.self, forKey: .captions) ?? true
         layout = try c.decodeIfPresent(LayoutTemplate.self, forKey: .layout) ?? .auto
         options = try c.decodeIfPresent(LayoutOptions.self, forKey: .options) ?? LayoutOptions()
         showBackground = try c.decodeIfPresent(Bool.self, forKey: .showBackground) ?? true
@@ -404,6 +409,8 @@ extension Project {
         p.showNames = look.showNames
         if let f = look.logoFile { p.logoFile = f }
         if let f = look.backgroundFile { p.backgroundFile = f }
+        if !look.music { p.audioLane = [] }
+        if !look.captions { p.captionStyle.enabled = false }
         return p
     }
 }
@@ -610,6 +617,36 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     }
 }
 
+/// B-roll: un video o una imagen que tapa la pantalla desde `start` (tiempo del episodio) durante `duration` segundos;
+/// la voz del podcast sigue debajo. El video del b-roll va sin su propio sonido salvo que se suba `volume`.
+struct BRollClip: Codable, Identifiable, Equatable {
+    var id: Int
+    var file: String                    // relativo a la carpeta del proyecto (broll/…)
+    var isVideo: Bool
+    var start: Double
+    var duration: Double = 6
+    var srcIn: Double = 0               // desde qué segundo del video de b-roll
+    var fill: Bool = true               // llenar la pantalla (recorta) o entrar completo con bordes
+    var volume: Double = 0              // sonido del b-roll (0 = mudo)
+    var end: Double { start + duration }
+    var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
+
+    init(id: Int, file: String, isVideo: Bool, start: Double, duration: Double = 6) {
+        self.id = id; self.file = file; self.isVideo = isVideo; self.start = start; self.duration = duration
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        file = try c.decode(String.self, forKey: .file)
+        isVideo = try c.decodeIfPresent(Bool.self, forKey: .isVideo) ?? true
+        start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 6
+        srcIn = try c.decodeIfPresent(Double.self, forKey: .srcIn) ?? 0
+        fill = try c.decodeIfPresent(Bool.self, forKey: .fill) ?? true
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0
+    }
+}
+
 /// Cintillo tipo noticiero que el director lanzó durante la grabación.
 struct DirectorCintillo: Codable, Equatable, Identifiable {
     var id: Int
@@ -696,6 +733,7 @@ extension Project {
         cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
         showCintillos = try c.decodeIfPresent(Bool.self, forKey: .showCintillos) ?? true
         overlays = try c.decodeIfPresent([VideoLayer].self, forKey: .overlays) ?? []
+        brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []

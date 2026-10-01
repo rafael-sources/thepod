@@ -626,6 +626,13 @@ struct ReelLookCard: View {
             Toggle("Logo arriba a la derecha", isOn: look.showLogo).font(.caption)
             brandRow(kind: "logo", label: "Logo solo para reels", file: l.logoFile, fallback: p.logoFile)
             Toggle("Nombres de las personas", isOn: look.showNames).font(.caption)
+            Divider()
+            Text("Sonido y subtítulos").font(.caption.bold())
+            Toggle("Música y efectos del episodio", isOn: look.music).font(.caption)
+            Toggle("Subtítulos", isOn: look.captions).font(.caption)
+            if !l.music {
+                Text("Sin música: ideal cuando la plataforma pone la suya o para evitar reclamos de derechos.").font(.caption2).foregroundStyle(Theme.secondary)
+            }
             if !onePerson {
                 Divider()
                 Text("Encuadre de cada persona").font(.caption.bold())

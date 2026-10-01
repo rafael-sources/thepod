@@ -225,6 +225,39 @@ enum CompositionBuilder {
             mixParams.append(p)
         }
 
+        // B-roll: cada video en su pista (se ve entero aunque cruce un corte; la voz sigue debajo)
+        var brollScene: [RenderScene.BRoll] = []
+        for b in project.brolls where b.duration > 0.1 {
+            let o = EditEngine.toOutput(b.start, keep: keep)
+                ?? keep.firstIndex { $0.start >= b.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+            guard let o, o < outDuration else { continue }
+            let start = introDur + o
+            let end = min(introDur + outDuration, start + b.duration)
+            guard end - start > 0.1 else { continue }
+            if b.isVideo {
+                let a = asset(b.file)
+                guard let v = try? await a.loadTracks(withMediaType: .video).first else { continue }
+                let dur = (try? await a.load(.duration).seconds) ?? 0
+                let srcIn = min(max(0, b.srcIn), max(0, dur - 0.1))
+                let len = min(end - start, max(0, dur - srcIn))
+                guard len > 0.1 else { continue }
+                let track = comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                do { try track.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(len)), of: v, at: cm(start)) }
+                catch { comp.removeTrack(track); continue }
+                if b.volume > 0.01, let at = try? await a.loadTracks(withMediaType: .audio).first {
+                    let atrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                    try? atrack.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(len)), of: at, at: cm(start))
+                    let p = AVMutableAudioMixInputParameters(track: atrack)
+                    p.setVolume(Float(b.volume), at: .zero)
+                    mixParams.append(p)
+                }
+                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill))
+            } else {
+                guard let img = CIImage(contentsOf: ProjectStore.url(b.file, in: project.id), options: [.applyOrientationProperty: true]) else { continue }
+                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill))
+            }
+        }
+
         // Música del intro/cierre y relleno para que el video dure hasta el final del cierre
         func bumperMusic(_ b: Bumper?, at start: Double, length: Double) async throws {
             guard let b, let rel = b.musicFile else { return }
@@ -307,6 +340,7 @@ enum CompositionBuilder {
             }
             s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
             s.fastSegmentation = preview
+            s.brolls = brollScene
             for (lane, vb) in project.laneBackground {
                 s.virtualBG[lane] = RenderScene.VirtualBG(
                     mode: vb.mode, blur: vb.blur, color: TextRenderer.color(vb.color).map { CIColor(color: $0) ?? .black } ?? .black,

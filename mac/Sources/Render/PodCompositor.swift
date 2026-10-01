@@ -53,6 +53,10 @@ final class RenderScene: @unchecked Sendable {
     var contentEnd: Double = .infinity
     var introImage: CIImage?
     var outroImage: CIImage?
+    /// B-roll: pista de video (o imagen fija) que tapa la pantalla entre `start` y `end` (tiempos del video final).
+    struct BRoll { let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool }
+    var brolls: [BRoll] = []
+
     /// Fondo virtual por persona (lo que va detrás, ya preparado) y calidad de la separación (rápida en la vista previa)
     struct VirtualBG { let mode: VirtualBackground.Mode; let blur: Double; let color: CIColor; let image: CIImage? }
     var virtualBG: [Int: VirtualBG] = [:]
@@ -177,7 +181,7 @@ final class RenderScene: @unchecked Sendable {
 
     // MARK: Frame
 
-    func render(frames: [Int: CIImage], buffers: [Int: CVPixelBuffer] = [:], time time: Double) -> CIImage {
+    func render(frames: [Int: CIImage], buffers: [Int: CVPixelBuffer] = [:], brollFrames: [CMPersistentTrackID: CIImage] = [:], time time: Double) -> CIImage {
         let W = renderSize.width, H = renderSize.height
         let full = CGRect(x: 0, y: 0, width: W, height: H)
         let dark = CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: full)
@@ -251,6 +255,17 @@ final class RenderScene: @unchecked Sendable {
                     out = tag.transformed(by: .init(translationX: rect.minX + margin, y: y)).composited(over: out)
                 }
             }
+        }
+
+        // B-roll: tapa a las personas (el logo, sponsors, capas y subtítulos van encima)
+        for b in brolls where t >= b.start && t < b.end {
+            var pic: CIImage? = b.image
+            if let tid = b.trackID { pic = brollFrames[tid] }
+            guard let pic else { continue }
+            let k = CGFloat(min(1, (t - b.start) / 0.35, (b.end - t) / 0.35))   // fundido corto al entrar y salir
+            var img = b.fill ? fill(pic, into: full, cropX: 0.5) : fit(pic, into: full).composited(over: dark)
+            if k < 1 { img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)]) }
+            out = img.composited(over: out)
         }
 
         if let logo {
@@ -530,6 +545,7 @@ final class PodInstruction: NSObject, AVVideoCompositionInstructionProtocol, @un
         self.timeRange = timeRange
         self.scene = scene
         self.requiredSourceTrackIDs = scene.trackIDs.values.map { NSNumber(value: $0) }
+            + scene.brolls.compactMap { $0.trackID }.map { NSNumber(value: $0) }
     }
 }
 
@@ -578,7 +594,11 @@ final class PodCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
                         buffers[lane] = pb
                     }
                 }
-                let image = scene.render(frames: frames, buffers: buffers, time: request.compositionTime.seconds)
+                var brollFrames: [CMPersistentTrackID: CIImage] = [:]
+                for b in scene.brolls {
+                    if let tid = b.trackID, let pb = request.sourceFrame(byTrackID: tid) { brollFrames[tid] = CIImage(cvPixelBuffer: pb) }
+                }
+                let image = scene.render(frames: frames, buffers: buffers, brollFrames: brollFrames, time: request.compositionTime.seconds)
                 Self.ciContext.render(image, to: out, bounds: CGRect(origin: .zero, size: scene.renderSize), colorSpace: self.colorSpace)
                 request.finish(withComposedVideoFrame: out)
             }

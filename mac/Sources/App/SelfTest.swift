@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -447,6 +447,46 @@ enum SelfTest {
         }
         let args = CommandLine.arguments
         if args.contains("--render") { render(); return }
+        if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
+            // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
+            let dir = URL(fileURLWithPath: args[i + 1])
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            Task { @MainActor in
+                let host = NSHostingView(rootView: IntroView(onFinish: {}).frame(width: 640, height: 480).preferredColorScheme(.dark))
+                host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+                let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                win.appearance = NSAppearance(named: .darkAqua)
+                win.contentView = host
+                win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+                win.orderFrontRegardless()
+                let t0 = Date()
+                for (name, t) in [("1-nota1", 0.35), ("2-nota3", 0.8), ("3-final", 1.6)] {
+                    let wait = t - Date().timeIntervalSince(t0)
+                    if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1e9)) }
+                    host.layoutSubtreeIfNeeded()
+                    if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                        host.cacheDisplay(in: host.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                        print("snapshot \(name)")
+                    }
+                }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--tts"), args.count > i + 2 {
+            // --tts "<texto>" <salida.caf>: prueba de la voz artificial
+            Task { @MainActor in
+                do {
+                    let v = Speech.defaultVoice()
+                    try await Speech.synthesize(args[i + 1], voice: v, rate: 0.5, to: URL(fileURLWithPath: args[i + 2]))
+                    print("OK voz=\(v?.name ?? "-") \(v?.language ?? "") \(v?.quality ?? "") → \(args[i + 2])")
+                    print("voces es: " + Speech.voices().filter { $0.language.hasPrefix("es") }.map { "\($0.name)(\($0.language)\($0.quality.isEmpty ? "" : ",\($0.quality)"))" }.joined(separator: ", "))
+                } catch { print("ERROR \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
         if args.contains("--prepod-test") { prepodTest(); return }
         if args.contains("--postpod-test") { postpodTest(); return }
         if let i = args.firstIndex(of: "--pre-snapshot"), args.count > i + 1 {

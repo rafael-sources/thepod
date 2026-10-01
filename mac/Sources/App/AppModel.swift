@@ -216,7 +216,7 @@ enum Step: String, CaseIterable, Identifiable {
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
-    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int) }
+    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
@@ -783,6 +783,71 @@ final class ProjectSession: ObservableObject {
         p.audioLane.append(AudioLaneClip(id: id, mediaId: mediaId, tlStart: max(0, timeline), srcIn: 0, srcOut: len, volume: 0.8))
         project = p
         selectedTrack = .sound(id)
+    }
+
+    // MARK: Voz artificial
+
+    @Published var voiceSheet = false
+
+    /// Genera el texto con una voz de la Mac y lo pone donde está el video (o donde se pida).
+    func addVoice(text: String, voice: Speech.Voice?, rate: Float, at timeline: Double? = nil) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let stem = "voz-" + ProjectStore.slugify(String(t.prefix(28)))
+        var name = stem + ".caf", n = 2
+        while FileManager.default.fileExists(atPath: dest.appendingPathComponent(name).path) { name = "\(stem)-\(n).caf"; n += 1 }
+        let rel = "sfx/\(name)"
+        let at = timeline ?? playheadTimeline
+        run("Generando la voz") { [self] in
+            try await Speech.synthesize(t, voice: voice, rate: rate, to: dest.appendingPathComponent(name))
+            if !project.sfxLibrary.contains(rel) { project.sfxLibrary.insert(rel, at: 0) }
+            project.sfxNames[rel] = "Voz: " + String(t.prefix(40))
+            await addSound(rel, at: at)
+            if let i = project.audioLane.firstIndex(where: { project.mediaItem($0.mediaId)?.file == rel }) {
+                project.audioLane[i].volume = 1
+                project.audioLane[i].duck = false
+            }
+        }
+    }
+
+    // MARK: B-roll
+
+    /// Elige un video o una imagen y lo pone como b-roll donde está el video.
+    func chooseBRoll() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video, .png, .jpeg, .heic, .webP, .gif]
+        panel.allowsMultipleSelection = false
+        panel.message = "Elige un video o una imagen para poner encima un rato (b-roll)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let dir = ProjectStore.folder(for: project.id).appendingPathComponent("broll", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let to = dir.appendingPathComponent(url.lastPathComponent)
+        if !FileManager.default.fileExists(atPath: to.path) {
+            do { try FileManager.default.copyItem(at: url, to: to) } catch { errorMessage = error.localizedDescription; return }
+        }
+        let rel = "broll/\(url.lastPathComponent)"
+        let isVideo = !["png", "jpg", "jpeg", "heic", "webp", "gif", "tif", "tiff"].contains(url.pathExtension.lowercased())
+        let id = (project.brolls.map(\.id).max() ?? 0) + 1
+        let start = min(playheadTimeline, max(0, project.duration - 1))
+        var clip = BRollClip(id: id, file: rel, isVideo: isVideo, start: start, duration: 6)
+        if isVideo {
+            Task { [self] in
+                let d = (try? await AVURLAsset(url: to).load(.duration).seconds) ?? 6
+                if d.isFinite, d > 0 { clip.duration = min(d, 20) }
+                project.brolls.append(clip)
+                selectedTrack = .broll(id)
+            }
+        } else {
+            project.brolls.append(clip)
+            selectedTrack = .broll(id)
+        }
+    }
+
+    func removeBRoll(_ id: Int) {
+        project.brolls.removeAll { $0.id == id }
+        if selectedTrack == .broll(id) { selectedTrack = nil }
     }
 
     // MARK: Capas (textos, imágenes, stickers)
