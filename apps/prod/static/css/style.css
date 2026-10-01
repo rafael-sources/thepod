@@ -2553,3 +2553,6 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-multiview.n3, .control-room .cr-multiview.n4 { grid-template-columns: 1fr 1fr; }
   .control-room .cr-left, .control-room .cr-right { left: auto; top: 0; width: 420px; height: 100%; border-radius: 0; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
 }
+
+/* Auto-silencio (puerta de ruido en vivo): botón encendido */
+.guest-studio .gc-btn.on, .host-studio .hs-btn.on { border-color: var(--signal-cool); color: var(--signal-cool); }

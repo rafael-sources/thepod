@@ -286,6 +286,45 @@ function _mountRemoteVideo(identity, track) {
   return el;
 }
 
+// Puerta de ruido en vivo: cuando no hablas, lo que oyen los demás (y el stream) baja −18 dB,
+// así no se cuelan teclas, el perro o la calle. Tu grabación local sigue siendo el micrófono sin tocar.
+// También aplica la ganancia guardada de la prueba de micrófono. Devuelve el track procesado y controles.
+function _micChain(rawTrack, gainDb, gateOn) {
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var ctx = new AC();
+  var src = ctx.createMediaStreamSource(new MediaStream([rawTrack]));
+  var gain = ctx.createGain();
+  gain.gain.value = Math.pow(10, (gainDb || 0) / 20);
+  var gate = ctx.createGain();
+  gate.gain.value = 1;
+  var an = ctx.createAnalyser();
+  an.fftSize = 512;
+  var dest = ctx.createMediaStreamDestination();
+  src.connect(gain); gain.connect(an); gain.connect(gate); gate.connect(dest);
+  var data = new Float32Array(an.fftSize);
+  var state = { on: !!gateOn, open: true, below: 0, timer: null, speaking: false };
+  var OPEN_DB = -42, CLOSE_DB = -48, HOLD_MS = 350, LOW = 0.125;
+  function tick() {
+    if (!state.on) { if (!state.open) { gate.gain.setTargetAtTime(1, ctx.currentTime, 0.02); state.open = true; } return; }
+    an.getFloatTimeDomainData(data);
+    var sum = 0; for (var i = 0; i < data.length; i++) sum += data[i] * data[i];
+    var db = 20 * Math.log10(Math.sqrt(sum / data.length) + 1e-9);
+    var now = performance.now();
+    if (db > OPEN_DB) { state.below = now; if (!state.open) { gate.gain.setTargetAtTime(1, ctx.currentTime, 0.015); state.open = true; } }
+    else if (db < CLOSE_DB && state.open && now - state.below > HOLD_MS) { gate.gain.setTargetAtTime(LOW, ctx.currentTime, 0.06); state.open = false; }
+    state.speaking = state.open;
+  }
+  state.timer = setInterval(tick, 40);
+  return {
+    track: dest.stream.getAudioTracks()[0],
+    setGate: function (on) { state.on = !!on; },
+    isOpen: function () { return state.open; },
+    close: function () { clearInterval(state.timer); try { ctx.close(); } catch (_) {} },
+  };
+}
+function _gatePref() { var v = localStorage.getItem("prodpod.gate"); return v === null ? true : v === "1"; }
+function _setGatePref(on) { localStorage.setItem("prodpod.gate", on ? "1" : "0"); }
+
 function _attachMeter(track, onLevel) {
   try {
     var stream = new MediaStream([track.mediaStreamTrack || track]);
@@ -1076,6 +1115,8 @@ var StudioView = {
       if (prejoinStream) startPrejoinPreview();
     });
     var localMuted = ref(false);
+    var gateOn = ref(_gatePref());
+    function toggleGate() { gateOn.value = !gateOn.value; _setGatePref(gateOn.value); if (micGainCtx && micGainCtx.setGate) micGainCtx.setGate(gateOn.value); }
     var localCamOff = ref(false);
     var connected = ref(false);
     var localMeter = ref(0);
@@ -2208,18 +2249,11 @@ var StudioView = {
         // LocalAudioTrack so peers see the same publication ID — no
         // re-negotiation. Skip for ≈0 dB to avoid the extra graph.
         var savedMicGainDb = _readMicGainFor(deviceSelection.micId);
-        if (micPub && micPub.track && Math.abs(savedMicGainDb) > 0.5) {
+        var rawMicTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        if (rawMicTrack) {
           try {
-            var rawTrack = micPub.track.mediaStreamTrack;
-            var ACg = window.AudioContext || window.webkitAudioContext;
-            micGainCtx = new ACg();
-            var gSrc = micGainCtx.createMediaStreamSource(new MediaStream([rawTrack]));
-            var gNode = micGainCtx.createGain();
-            gNode.gain.value = Math.pow(10, savedMicGainDb / 20);
-            var gDest = micGainCtx.createMediaStreamDestination();
-            gSrc.connect(gNode).connect(gDest);
-            var processed = gDest.stream.getAudioTracks()[0];
-            await micPub.track.replaceTrack(processed);
+            micGainCtx = _micChain(rawMicTrack, savedMicGainDb, gateOn.value);
+            await micPub.track.replaceTrack(micGainCtx.track);
           } catch (_) {
             // Fall through silently — peers still hear the unprocessed mic.
             try { if (micGainCtx) micGainCtx.close(); } catch (__) {}
@@ -2228,9 +2262,9 @@ var StudioView = {
         }
 
         // Para la grabación usamos el track de captura COMPLETO (no el clon
-        // reducido que ve la sala).
+        // reducido que ve la sala) y el micrófono SIN la puerta (postPod la aplica mejor después).
         var camTrack = _fullResCamTrack;
-        var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        var micTrack = rawMicTrack;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack)        localStream = new MediaStream([camTrack]);
         else if (micTrack)        localStream = new MediaStream([micTrack]);
@@ -2760,7 +2794,7 @@ var StudioView = {
       connected: connected, connect: connect, disconnect: disconnect, safeBack: safeBack,
       localVideoEl: localVideoEl, localMuted: localMuted, localCamOff: localCamOff, localMeter: localMeter,
       localSpeaking: localSpeaking,
-      toggleMute: toggleMute, toggleCam: toggleCam,
+      toggleMute: toggleMute, toggleCam: toggleCam, gateOn: gateOn, toggleGate: toggleGate,
       toggleReady: toggleReady, stopRecording: stopRecording,
       ownReady: ownReady, readyMap: readyMap, countdown: countdown, myIdentity: myIdentity,
       showInvite: showInvite, inviteForm: inviteForm, inviteLinks: inviteLinks,
@@ -3360,6 +3394,7 @@ var StudioView = {
       <div class="controls-bar hs-controls">
         <button v-if="connected" class="hs-btn" :class="{ muted: localMuted }" @click="toggleMute"><span class="hs-ico">{{ localMuted ? "🔇" : "🎤" }}</span><span class="hs-txt">Micrófono</span></button>
         <button v-if="connected" class="hs-btn" :class="{ 'cam-off': localCamOff }" @click="toggleCam"><span class="hs-ico">{{ localCamOff ? "📷" : "🎥" }}</span><span class="hs-txt">Cámara</span></button>
+        <button v-if="connected" class="hs-btn" :class="{ on: gateOn }" @click="toggleGate" :title="gateOn ? 'Cuando no hablas, los demás no oyen tus ruidos (teclas, perro). Toca para apagar.' : 'Apagado: los demás te oyen siempre. Toca para encender.'"><span class="hs-ico">{{ gateOn ? "🚪" : "🚪" }}</span><span class="hs-txt">{{ gateOn ? "Auto-silencio" : "Sin auto-sil." }}</span></button>
         <button v-if="connected && recording" class="hs-btn m-only" @click="markChapter"><span class="hs-ico">📍</span><span class="hs-txt">Momento</span></button>
         <button v-if="connected" class="hs-btn m-only" :class="{ on: sideTab === 'chat' }" @click="openSide('chat')">
           <span class="hs-ico">💬</span><span class="hs-txt">Chat</span><span v-if="chatUnreadH" class="gc-badge">{{ chatUnreadH }}</span>
@@ -3637,6 +3672,9 @@ var GuestStudioView = {
     var connectStep = ref("");
     var connected = ref(false);
     var localMuted = ref(false);
+    var gateOn = ref(_gatePref());
+    function toggleGate() { gateOn.value = !gateOn.value; _setGatePref(gateOn.value); if (micGainCtx && micGainCtx.setGate) micGainCtx.setGate(gateOn.value); }
+    var micGainCtx = null;  // cadena de micrófono (ganancia + puerta) publicada a la sala
     var localCamOff = ref(false);
     var remoteMap = reactive({});
     var localMeter = ref(0);
@@ -4130,6 +4168,13 @@ var GuestStudioView = {
 
         var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
+        // A la sala va el micrófono con la puerta (si está activa); la grabación local queda sin tocar.
+        if (micTrack) {
+          try {
+            micGainCtx = _micChain(micTrack, 0, gateOn.value);
+            await micPub.track.replaceTrack(micGainCtx.track);
+          } catch (_) { try { if (micGainCtx) micGainCtx.close(); } catch (__) {} micGainCtx = null; }
+        }
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
         else if (camTrack) localStream = new MediaStream([camTrack]);
         else if (micTrack) localStream = new MediaStream([micTrack]);
@@ -4198,6 +4243,7 @@ var GuestStudioView = {
       localCamOff.value = next;
     }
     async function leave() {
+      if (micGainCtx) { try { micGainCtx.close(); } catch (_) {} micGainCtx = null; }
       if (recorder) { try { recorder.stop(); } catch (_) {} recorder = null; }
       if (countdownHandle) { clearTimeout(countdownHandle); countdownHandle = null; }
       if (localMeterStop) { localMeterStop(); localMeterStop = null; }
@@ -4251,7 +4297,7 @@ var GuestStudioView = {
              localMeter: localMeter, recording: recording, timecode: timecode, formatTC: formatTC,
              sounds: sounds, playingPad: playingPad, triggerSound: triggerSound,
              chat: chat, chatInput: chatInput, sendChat: sendChat,
-             connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, leave: leave, initials: initials,
+             connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, gateOn: gateOn, toggleGate: toggleGate, leave: leave, initials: initials,
              countdown: countdown, myIdentity: myIdentity, practiceMode: practiceMode,
              preflightVideoEl: preflightVideoEl, recPreflight: recPreflight,
              recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB,
@@ -4446,6 +4492,7 @@ var GuestStudioView = {
           <button class="gc-btn" :class="{ muted: localMuted }" @click="toggleMute">
             <span class="gc-ico">{{ localMuted ? "🔇" : "🎤" }}</span><span class="gc-txt">{{ localMuted ? "Activar" : "Micrófono" }}</span>
           </button>
+          <button class="gc-btn" :class="{ on: gateOn }" @click="toggleGate" :title="gateOn ? 'Cuando no hablas, los demás no oyen tus ruidos. Toca para apagar.' : 'Apagado: te oyen siempre. Toca para encender.'"><span>🚪</span><span class="gc-txt">{{ gateOn ? "Auto-silencio" : "Sin auto-sil." }}</span></button>
           <button class="gc-btn" :class="{ 'cam-off': localCamOff }" @click="toggleCam">
             <span class="gc-ico">{{ localCamOff ? "📷" : "🎥" }}</span><span class="gc-txt">{{ localCamOff ? "Activar" : "Cámara" }}</span>
           </button>
