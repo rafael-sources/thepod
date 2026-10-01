@@ -284,6 +284,18 @@ final class RenderScene: @unchecked Sendable {
             return lanes.enumerated().map { (i, l) in (l, CGRect(x: CGFloat(i) * w, y: 0, width: w, height: H), false) }
         case .stack:
             let h = H / CGFloat(lanes.count)
+            if !format.isVertical {
+                // En horizontal una franja a todo el ancho recortaría cada cara a una tira: cada video conserva
+                // su forma, centrado en su franja, con marco, y el fondo del podcast ocupa los lados.
+                let gap = min(W, H) * 0.02
+                return lanes.enumerated().map { (i, l) in
+                    let band = CGRect(x: 0, y: H - CGFloat(i + 1) * h, width: W, height: h).insetBy(dx: gap, dy: gap)
+                    let e = frames[l]?.extent ?? CGRect(x: 0, y: 0, width: 16, height: 9)
+                    let sc = min(band.width / max(1, e.width), band.height / max(1, e.height))
+                    let w = e.width * sc, hh = e.height * sc
+                    return (l, CGRect(x: band.midX - w / 2, y: band.midY - hh / 2, width: w, height: hh), true)
+                }
+            }
             return lanes.enumerated().map { (i, l) in (l, CGRect(x: 0, y: H - CGFloat(i + 1) * h, width: W, height: h), false) }
         case .grid:
             if options.gridSpeakerBig, !others.isEmpty {
