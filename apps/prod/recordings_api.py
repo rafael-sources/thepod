@@ -818,6 +818,23 @@ def export_recordings_to_postpod(sid):
             finally:
                 db.close()
 
+    # Dueño y co-hosts: van en cada push para que, si postPod crea el
+    # proyecto antes de recibir pistas, nazca visible para ellos (y no solo
+    # para los admins).
+    db = get_db()
+    try:
+        _co_rows = db.execute(
+            "SELECT username FROM participants WHERE session_id=? "
+            "AND role IN ('host','co-host') AND username IS NOT NULL AND username != ?",
+            (sid, sess["created_by"]),
+        ).fetchall()
+    finally:
+        db.close()
+    owner_fields = {
+        "owner_username": sess["created_by"],
+        "extra_hosts": ",".join(sorted({r["username"] for r in _co_rows})),
+    }
+
     # Ship chapter markers as postPod moments
     chapters_sent = 0
     chapters_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-chapters"
@@ -847,6 +864,7 @@ def export_recordings_to_postpod(sid):
                 "source_episode_id": sess["source_episode_id"],
                 "project_name": sess["title"],
                 "chapters": chapters,
+                **owner_fields,
             }
             resp = requests.post(chapters_endpoint, headers=headers, json=payload, timeout=60)
             if resp.status_code in (200, 201):
@@ -879,6 +897,7 @@ def export_recordings_to_postpod(sid):
                 "shared_project_id": spid,
                 "source_episode_id": sess["source_episode_id"],
                 "project_name": sess["title"],
+                **owner_fields,
                 "triggers": [
                     {"filename": r["sound_filename"],
                      "tl_offset_seconds": r["tl_offset_seconds"],
@@ -928,6 +947,7 @@ def export_recordings_to_postpod(sid):
                     "source_episode_id": sess["source_episode_id"],
                     "project_name": sess["title"],
                     "events": events_payload,
+                    **owner_fields,
                 },
                 timeout=30,
             )
