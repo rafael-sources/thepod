@@ -588,6 +588,38 @@ def _compose_hstack_side_by_side(slug: str) -> dict | None:
         db.close()
 
 
+def _auto_create_from_prodpod(data, spid, src_ep_id, created_by):
+    """Crea el proyecto cuando un push de prodPod (capítulos, sonidos,
+    eventos del director) llega antes que las pistas. Propaga el dueño y
+    los co-hosts del payload para que ELLOS vean el proyecto — sin esto el
+    proyecto nacía sin owner y solo lo veían los admins."""
+    project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
+    src_info = {"app": "prodpod",
+                "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "auto_created_by": created_by}
+    if src_ep_id is not None:
+        src_info["episode"] = {"id": src_ep_id}
+    owner = (data.get("owner_username") or "").strip().lower() or None
+    meta = _create_project_internal(
+        name=project_name, shared_project_id=spid,
+        source_info=src_info, owner_username=owner,
+    )
+    extra_raw = data.get("extra_hosts")
+    if isinstance(extra_raw, str):
+        extra = [h.strip().lower() for h in extra_raw.split(",") if h.strip()]
+    elif isinstance(extra_raw, list):
+        extra = [str(h).strip().lower() for h in extra_raw if str(h).strip()]
+    else:
+        extra = []
+    if extra:
+        from projects import _write_meta
+        m2 = _read_meta(meta["slug"]) or dict(meta)
+        m2["extra_hosts"] = extra
+        _write_meta(meta["slug"], m2)
+        meta = m2
+    return meta
+
+
 @bp.post("/api/integrations/prodpod/import-chapters")
 def import_chapters_from_prodpod():
     """
@@ -609,16 +641,7 @@ def import_chapters_from_prodpod():
 
     meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
-        project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
-        src_info = {"app": "prodpod",
-                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "auto_created_by": "prodpod_chapters"}
-        if src_ep_id is not None:
-            src_info["episode"] = {"id": src_ep_id}
-        meta = _create_project_internal(
-            name=project_name, shared_project_id=spid,
-            source_info=src_info,
-        )
+        meta = _auto_create_from_prodpod(data, spid, src_ep_id, "prodpod_chapters")
     slug = meta["slug"]
 
     db = get_db(slug)
@@ -704,16 +727,7 @@ def import_sound_triggers_from_prodpod():
 
     meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
-        project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
-        src_info = {"app": "prodpod",
-                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "auto_created_by": "prodpod_sound_triggers"}
-        if src_ep_id is not None:
-            src_info["episode"] = {"id": src_ep_id}
-        meta = _create_project_internal(
-            name=project_name, shared_project_id=spid,
-            source_info=src_info,
-        )
+        meta = _auto_create_from_prodpod(data, spid, src_ep_id, "prodpod_sound_triggers")
     slug = meta["slug"]
 
     # Resolve filename → local media_file_id, importing from global library if
@@ -1130,16 +1144,7 @@ def import_director_events():
 
     meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
-        project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
-        src_info = {"app": "prodpod",
-                    "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                    "auto_created_by": "prodpod_director_events"}
-        if src_ep_id is not None:
-            src_info["episode"] = {"id": src_ep_id}
-        meta = _create_project_internal(
-            name=project_name, shared_project_id=spid,
-            source_info=src_info,
-        )
+        meta = _auto_create_from_prodpod(data, spid, src_ep_id, "prodpod_director_events")
     slug = meta["slug"]
 
     db = get_db(slug)

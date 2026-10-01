@@ -90,7 +90,9 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     app.config["SECRET_KEY"] = SECRET_KEY
-    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2 GB upload cap
+    # 12 GB: una grabación 1080p de ~50 min pesa ~2.7 GB y el tope anterior
+    # de 2 GB hacía que prodPod recibiera 413 al enviar pistas a postPod.
+    app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024 * 1024
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_NAME"] = "podpod_session"
     if SESSION_COOKIE_DOMAIN:
