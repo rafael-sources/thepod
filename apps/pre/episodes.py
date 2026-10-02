@@ -79,7 +79,19 @@ def _serialize_section(row):
         "estimated_duration": row["estimated_duration"],
         "notes": row["notes"] or "",
         "created_at": row["created_at"],
+        # Teleprompter (solo las secciones que lo usan; quién lo lee = speaker)
+        "tp_enabled": bool(_rowget(row, "tp_enabled", 0)),
+        "tp_offset_seconds": _rowget(row, "tp_offset_seconds", None),
+        "tp_speed": _rowget(row, "tp_speed", "normal") or "normal",
+        "tp_size": _rowget(row, "tp_size", "half") or "half",
     }
+
+
+def _rowget(row, key, default):
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
 
 
 def _current_user():
@@ -645,9 +657,15 @@ def update_script_section(slug, sec_id):
                 _normalize_script_positions(db, ep_id)
 
         other_updates = {}
-        for k in ("speaker", "content", "estimated_duration", "notes"):
+        for k in ("speaker", "content", "estimated_duration", "notes", "tp_offset_seconds"):
             if k in data:
                 other_updates[k] = data[k]
+        if "tp_enabled" in data:
+            other_updates["tp_enabled"] = 1 if data["tp_enabled"] else 0
+        if data.get("tp_speed") in ("slow", "normal", "fast"):
+            other_updates["tp_speed"] = data["tp_speed"]
+        if data.get("tp_size") in ("quarter", "half", "full"):
+            other_updates["tp_size"] = data["tp_size"]
         if other_updates:
             cols = ", ".join(f"{k}=?" for k in other_updates)
             params = list(other_updates.values()) + [sec_id]

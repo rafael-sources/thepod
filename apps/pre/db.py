@@ -234,6 +234,11 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "episodes", "production_meta", "production_meta TEXT")
     _ensure_column(conn, "episodes", "production_updated_at", "production_updated_at TEXT")
     _ensure_column(conn, "episodes", "scheduled_at", "scheduled_at TEXT")
+    # Teleprompter por sección del guion (thePod 0.11): quién lo lee ya está en `speaker`
+    _ensure_column(conn, "script_sections", "tp_enabled", "tp_enabled INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "script_sections", "tp_offset_seconds", "tp_offset_seconds REAL")
+    _ensure_column(conn, "script_sections", "tp_speed", "tp_speed TEXT NOT NULL DEFAULT 'normal'")   # slow | normal | fast
+    _ensure_column(conn, "script_sections", "tp_size", "tp_size TEXT NOT NULL DEFAULT 'half'")       # quarter | half | full
     _ensure_column(conn, "podcast_meta", "owner_username", "owner_username TEXT")
     _ensure_column(conn, "podcast_meta", "extra_hosts", "extra_hosts TEXT")  # JSON array of usernames
     _ensure_column(conn, "podcast_meta", "host_invitations", "host_invitations TEXT")  # JSON {username: {status, invited_by, invited_at, email_sent}}

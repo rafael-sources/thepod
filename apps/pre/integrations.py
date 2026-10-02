@@ -402,6 +402,60 @@ def episode_integration_status(slug, ep_id):
 
 
 # ---------------------------------------------------------------------------
+# Inbound: teleprompter del guion (prodPod lo pide al abrir la sala, con el secreto compartido)
+# ---------------------------------------------------------------------------
+
+@bp.get("/api/integrations/teleprompter")
+def teleprompter_for_episode():
+    """Secciones del guion marcadas para teleprompter + sponsors activos, para prodPod.
+    GET ?slug=<podcast>&episode_id=<id>  (X-PodPod-Secret)"""
+    err = _require_shared_secret_inbound()
+    if err:
+        return err
+    slug = (request.args.get("slug") or "").strip()
+    try:
+        ep_id = int(request.args.get("episode_id") or 0)
+    except ValueError:
+        ep_id = 0
+    if not slug or not ep_id:
+        return jsonify({"error": "slug y episode_id requeridos"}), 400
+    try:
+        _ensure_podcast(slug)
+    except Exception:
+        return jsonify({"error": "podcast no encontrado"}), 404
+    db = get_db(slug)
+    try:
+        rows = db.execute(
+            "SELECT * FROM script_sections WHERE episode_id=? ORDER BY position, id", (ep_id,)
+        ).fetchall()
+        cols = {r[1] for r in db.execute("PRAGMA table_info(script_sections)").fetchall()}
+        sections = []
+        for r in rows:
+            d = dict(r)
+            if not cols or "tp_enabled" not in cols or not d.get("tp_enabled"):
+                continue
+            sections.append({
+                "id": d["id"],
+                "position": d["position"],
+                "speaker": d.get("speaker") or "",
+                "content": d.get("content") or "",
+                "offset_seconds": d.get("tp_offset_seconds"),
+                "speed": d.get("tp_speed") or "normal",
+                "size": d.get("tp_size") or "half",
+            })
+        sp_rows = db.execute(
+            "SELECT id, name, copy, url, logo_filename FROM sponsors WHERE is_active=1 ORDER BY position, id"
+        ).fetchall()
+        sponsors = [{
+            "id": r["id"], "name": r["name"], "copy": r["copy"] or "", "url": r["url"],
+            "logo_url": (f"{request.host_url.rstrip('/')}/media/podcasts/{slug}/sponsors/{r['logo_filename']}" if r["logo_filename"] else None),
+        } for r in sp_rows]
+        return jsonify({"sections": sections, "sponsors": sponsors})
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # Inbound: prodPod lifecycle events (recording started/stopped, exports)
 # ---------------------------------------------------------------------------
 

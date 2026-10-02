@@ -1360,6 +1360,10 @@ var ScriptEditor = {
                 content: sec.content,
                 estimated_duration: sec.estimated_duration,
                 notes: sec.notes,
+                tp_enabled: !!sec.tp_enabled,
+                tp_offset_seconds: sec.tp_offset_seconds,
+                tp_speed: sec.tp_speed || "normal",
+                tp_size: sec.tp_size || "half",
               },
             });
           } catch (e) { error.value = e.message; }
@@ -1374,8 +1378,41 @@ var ScriptEditor = {
     );
     watch(totalSeconds, (v) => emit("total-seconds-changed", v));
 
+    /* Teleprompter: minuto de aparición como "mm:ss" en el campo; se guarda en segundos. */
+    function tpOffsetText(sec) {
+      const s = sec.tp_offset_seconds;
+      if (s == null || s === "") return "";
+      const m = Math.floor(s / 60), r = Math.floor(s % 60);
+      return m + ":" + String(r).padStart(2, "0");
+    }
+    function setTpOffset(sec, text) {
+      const t = (text || "").trim();
+      if (!t) { sec.tp_offset_seconds = null; saveSection(sec); return; }
+      const parts = t.split(":").map(Number);
+      let secs = null;
+      if (parts.length === 2 && parts.every(n => !isNaN(n))) secs = parts[0] * 60 + parts[1];
+      else if (parts.length === 1 && !isNaN(parts[0])) secs = parts[0];
+      if (secs != null) { sec.tp_offset_seconds = secs; saveSection(sec); }
+    }
+    /* Sugerencia: el minuto donde empieza la sección sumando las anteriores. */
+    function tpSuggest(sec) {
+      let acc = 0;
+      for (const s of sections.value) { if (s.id === sec.id) break; acc += s.estimated_duration || 0; }
+      sec.tp_offset_seconds = acc; saveSection(sec);
+    }
+    function toggleTp(sec) {
+      sec.tp_enabled = !sec.tp_enabled;
+      if (sec.tp_enabled && (sec.tp_offset_seconds == null)) {
+        let acc = 0;
+        for (const s of sections.value) { if (s.id === sec.id) break; acc += s.estimated_duration || 0; }
+        sec.tp_offset_seconds = acc;
+      }
+      saveSection(sec);
+    }
+
     watch(() => props.episodeId, load, { immediate: true });
-    return { sections, error, addSection, removeSection, move, saveSection, totalSeconds, fmtTotalSeconds };
+    return { sections, error, addSection, removeSection, move, saveSection, totalSeconds, fmtTotalSeconds,
+             tpOffsetText, setTpOffset, tpSuggest, toggleTp };
   },
   template: `
     <div>
@@ -1406,6 +1443,36 @@ var ScriptEditor = {
           <div class="notes-row">
             <input type="text" v-model="sec.notes" @input="saveSection(sec)" placeholder="Notas internas (timings, direcciones)...">
             <input type="number" class="dur-input" v-model.number="sec.estimated_duration" @input="saveSection(sec)" min="0" step="1" placeholder="seg">
+          </div>
+          <div class="tp-row" :class="{ on: sec.tp_enabled }">
+            <label class="tp-toggle" :title="sec.tp_enabled ? 'Quitar del teleprompter' : 'Mostrar esta sección como teleprompter en prodPod'">
+              <input type="checkbox" :checked="!!sec.tp_enabled" @change="toggleTp(sec)">
+              <span>🎬 Teleprompter</span>
+            </label>
+            <template v-if="sec.tp_enabled">
+              <span class="tp-who">lo lee <b>{{ sec.speaker || '(sin speaker)' }}</b></span>
+              <span class="tp-field">
+                <span class="tiny">aparece en</span>
+                <input type="text" class="mono tp-offset" :value="tpOffsetText(sec)" @change="setTpOffset(sec, $event.target.value)" placeholder="mm:ss">
+                <button class="ghost tiny" @click="tpSuggest(sec)" title="Sumar lo que duran las secciones anteriores">sugerir</button>
+              </span>
+              <span class="tp-field">
+                <span class="tiny">velocidad</span>
+                <select v-model="sec.tp_speed" @change="saveSection(sec)">
+                  <option value="slow">lenta</option>
+                  <option value="normal">normal</option>
+                  <option value="fast">rápida</option>
+                </select>
+              </span>
+              <span class="tp-field">
+                <span class="tiny">ocupa</span>
+                <select v-model="sec.tp_size" @change="saveSection(sec)">
+                  <option value="quarter">un cuarto</option>
+                  <option value="half">media pantalla</option>
+                  <option value="full">toda la pantalla</option>
+                </select>
+              </span>
+            </template>
           </div>
         </div>
       </div>
