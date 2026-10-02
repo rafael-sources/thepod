@@ -333,6 +333,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var cuts: [Cut] = []                // cortes solo de este reel (frases quitadas, silencios), aparte de los del episodio
     var brolls: [BRollClip] = []        // b-roll solo de este reel
     var music: [AudioLaneClip] = []     // música propia del reel (se usa cuando el reel no lleva la del episodio)
+    var cintillos: [DirectorCintillo] = []   // cintillos solo de este reel
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -352,6 +353,7 @@ struct Reel: Codable, Identifiable, Equatable {
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
         music = try c.decodeIfPresent([AudioLaneClip].self, forKey: .music) ?? []
+        cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
     }
 }
 
@@ -419,7 +421,11 @@ extension Project {
     /// Con `reel` también entran sus cortes propios.
     func applying(_ look: ReelLook, reel: Reel? = nil) -> Project {
         var p = self
-        if let reel { p.cuts += reel.cuts; p.brolls += reel.brolls }
+        if let reel {
+            p.cuts += reel.cuts
+            p.brolls += reel.brolls
+            if !reel.cintillos.isEmpty { p.cintillos += reel.cintillos; p.showCintillos = true }
+        }
         if let o = look.laneOrder { p.laneOrder = o }
         if let g = look.gateOthers { p.fix.gateOthers = g }
         p.layout = look.layout

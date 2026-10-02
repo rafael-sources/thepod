@@ -132,29 +132,32 @@ struct CintillosStep: View {
 /// Panel bajo el video para el cintillo elegido.
 struct CintilloEditor: View {
     @ObservedObject var session: ProjectSession
-    let id: Int
+    let sel: ProjectSession.TrackSel
 
     static let colors = ["#D64545", "#6B8FE6", "#E8B85A", "#2E9E6B", "#7C2D3D", "#111111"]
     static let tags = ["AHORA", "SEGMENTO", "PATROCINA", "EN VIVO", "DATO", ""]
 
-    private var current: DirectorCintillo? { session.project.cintillos.first { $0.id == id } }
+    private var reel: Reel? { if case .reelCintillo(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }
     private var c: Binding<DirectorCintillo> {
-        Binding(get: { current ?? DirectorCintillo(id: id, kind: "banner", title: "", text: "", start: 0, duration: 6) },
-                set: { v in if let i = session.project.cintillos.firstIndex(where: { $0.id == id }) { session.project.cintillos[i] = v } })
+        session.cintilloBinding(sel) ?? .constant(DirectorCintillo(id: 0, kind: "banner", title: "", text: "", start: 0, duration: 6))
     }
 
     var body: some View {
-        if let cin = current { editor(cin) }
+        if let b = session.cintilloBinding(sel) { editor(b.wrappedValue) }
     }
 
     @ViewBuilder
     private func editor(_ cin: DirectorCintillo) -> some View {
+        let lo = reel?.start ?? 0
+        let hi = reel?.end ?? session.project.duration
         HStack {
-            Label("Cintillo · " + (cin.style == "clean" ? "Limpio" : cin.style == "sponsor" ? "Sponsor" : "Noticiero"), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
+            Label((reel != nil ? "Cintillo del reel · " : "Cintillo · ") + (cin.style == "clean" ? "Limpio" : cin.style == "sponsor" ? "Sponsor" : "Noticiero"), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
             if cin.fromDirector { Text("del director").font(.caption).foregroundStyle(Theme.secondary) }
             Spacer()
-            Button { session.duplicateCintillo(cin.id) } label: { Image(systemName: "plus.square.on.square") }.buttonStyle(.borderless).help("Duplicar donde está el video")
-            Button(role: .destructive) { session.removeCintillo(cin.id) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
+            if reel == nil {
+                Button { session.duplicateCintillo(cin.id) } label: { Image(systemName: "plus.square.on.square") }.buttonStyle(.borderless).help("Duplicar donde está el video")
+            }
+            Button(role: .destructive) { session.removeCintillo(sel) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
             Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
         }
         HStack(spacing: 8) {
@@ -220,7 +223,7 @@ struct CintilloEditor: View {
                 if let pl = session.project.logoFile {
                     Button("Del podcast") { c.wrappedValue.logoFile = pl }.controlSize(.small)
                 }
-                Button("Elegir…") { session.chooseCintilloLogo(cin.id) }.controlSize(.small)
+                Button("Elegir…") { session.chooseCintilloLogo(sel) }.controlSize(.small)
                 Button("Sin logo") { c.wrappedValue.logoFile = nil }.controlSize(.small)
                 Text(cin.logoFile == nil ? "Sin logo sale la inicial del título." : "").font(.caption2).foregroundStyle(Theme.secondary)
             }
@@ -228,10 +231,10 @@ struct CintilloEditor: View {
         }
         HStack(spacing: 6) {
             Text("Empieza").frame(width: 72, alignment: .leading)
-            Button("−1 s") { c.wrappedValue.start = max(0, cin.start - 1) }
+            Button("−1 s") { c.wrappedValue.start = max(lo, cin.start - 1) }
             Text(EditEngine.clock(cin.start)).monospacedDigit().frame(width: 56)
-            Button("+1 s") { c.wrappedValue.start = min(session.project.duration, cin.start + 1) }
-            Button("Aquí") { c.wrappedValue.start = session.playheadTimeline }.help("Donde está el video ahora")
+            Button("+1 s") { c.wrappedValue.start = min(max(lo, hi - 2), cin.start + 1) }
+            Button("Aquí") { c.wrappedValue.start = min(max(lo, session.playheadTimeline), max(lo, hi - 2)) }.help("Donde está el video ahora")
             Spacer().frame(width: 10)
             Text("Dura").frame(width: 36)
             Slider(value: c.duration, in: 2...20, step: 0.5).frame(maxWidth: 160)
@@ -243,7 +246,7 @@ struct CintilloEditor: View {
             Spacer()
             Button { session.seek(timeline: max(0, cin.start - 0.5), play: true) } label: { Label("Ver", systemImage: "play.fill") }.controlSize(.small)
         }
-        Text("Abajo a la izquierda, encima del video y debajo de los subtítulos. Entra con el logo, se despliegan las barras y aparece el texto; sale a la izquierda. Si hay dos a la vez, el segundo sube.")
+        Text((reel != nil ? "Solo en este reel. " : "") + "Abajo a la izquierda, encima del video y debajo de los subtítulos. Entra con el logo, se despliegan las barras y aparece el texto; sale a la izquierda. Si hay dos a la vez, el segundo sube.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }

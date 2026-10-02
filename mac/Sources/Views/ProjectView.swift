@@ -252,8 +252,8 @@ struct TrackInspector: View {
                     BRollEditor(session: session, id: id, reelId: nil)
                 case .reelBRoll(let reelId, let id):
                     BRollEditor(session: session, id: id, reelId: reelId)
-                case .cintillo(let id):
-                    CintilloEditor(session: session, id: id)
+                case .cintillo, .reelCintillo:
+                    CintilloEditor(session: session, sel: sel)
                 }
             }
             .padding(12)

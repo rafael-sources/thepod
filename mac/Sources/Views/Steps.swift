@@ -532,6 +532,7 @@ struct ReelsStep: View {
                         ReelTextCard(session: session, reel: reel)
                         ReelSoundCard(session: session, reel: reel)
                         ReelBRollCard(session: session, reel: reel)
+                        ReelCintilloCard(session: session, reel: reel)
                     }
                     Card {
                         Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
@@ -574,6 +575,7 @@ struct ReelsStep: View {
         .onChange(of: currentReel?.cuts) { _, _ in refresh() }
         .onChange(of: currentReel?.brolls) { _, _ in refresh() }
         .onChange(of: currentReel?.music) { _, _ in refresh() }
+        .onChange(of: currentReel?.cintillos) { _, _ in refresh() }
     }
 
     private func reelBinding(_ reel: Reel) -> Binding<Reel> {
@@ -1448,6 +1450,53 @@ struct ReelBRollCard: View {
                         Text(b.title).lineLimit(1)
                         Spacer()
                         Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? "ventanita izq." : "ventanita der.") + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                            .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+
+/// Cintillos solo de este reel (además de los del episodio que caigan en su tramo).
+struct ReelCintilloCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    var body: some View {
+        let inherited = session.project.cintillos.filter { $0.end > reel.start && $0.start < reel.end }.count
+        Card {
+            Text("Cintillos de este reel").font(.headline)
+            HStack(spacing: 8) {
+                Button("Noticiero") { _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: "AHORA", reelId: reel.id) }
+                Button("Limpio") { _ = session.addCintillo(style: "clean", kind: "comment", reelId: reel.id) }
+                Button("Sponsor") { _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: "PATROCINA", reelId: reel.id) }
+                ForEach(session.project.sponsors) { sp in
+                    Button("De \(sp.name)") { session.addSponsorCintillo(sp, reelId: reel.id) }
+                }
+            }
+            .controlSize(.small)
+            if reel.cintillos.isEmpty {
+                Text(inherited > 0 ? "El reel ya muestra \(inherited) del episodio que caen en su tramo. Los que agregues aquí salen solo en este reel."
+                                   : "Los que agregues aquí salen solo en este reel, donde está el video.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ForEach(reel.cintillos.sorted { $0.start < $1.start }) { c in
+                let sel = session.selectedTrack == .reelCintillo(reel.id, c.id)
+                Button {
+                    session.selectedTrack = .reelCintillo(reel.id, c.id)
+                    session.seek(timeline: max(reel.start, c.start - 0.5), play: false)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "rectangle.bottomthird.inset.filled").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                        Text(c.title.isEmpty ? c.text : c.title).lineLimit(1)
+                        Spacer()
+                        Text("\(c.style == "clean" ? "Limpio" : c.style == "sponsor" ? "Sponsor" : "Noticiero") · \(EditEngine.clock(c.start)) · \(String(format: "%.0f s", c.duration))")
                             .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
                     }
                     .padding(8)

@@ -218,7 +218,7 @@ enum Step: String, CaseIterable, Identifiable {
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
-    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int) }
+    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int), reelCintillo(UUID, Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
@@ -923,13 +923,22 @@ final class ProjectSession: ObservableObject {
 
     /// Crea un cintillo donde está el video (estilo news | clean | sponsor) y lo deja elegido.
     @discardableResult
-    func addCintillo(style: String, kind: String = "banner", title: String = "", text: String = "", logoFile: String? = nil, tag: String? = nil) -> Int {
-        let id = (project.cintillos.map(\.id).max() ?? 0) + 1
-        let t = min(playheadTimeline, max(0, project.duration - 1))
+    func addCintillo(style: String, kind: String = "banner", title: String = "", text: String = "", logoFile: String? = nil, tag: String? = nil, reelId: UUID? = nil) -> Int {
+        let reel = reelId.flatMap { rid in project.reels.first { $0.id == rid } }
+        let id = ((reel?.cintillos ?? project.cintillos).map(\.id).max() ?? 0) + 1
+        var t = min(playheadTimeline, max(0, project.duration - 1))
+        if let reel { t = min(max(reel.start, t), max(reel.start, reel.end - 2)) }
         var c = DirectorCintillo(id: id, kind: kind, title: title.isEmpty ? (style == "sponsor" ? "Nombre del sponsor" : "Título") : title,
                                  text: text.isEmpty ? (style == "sponsor" ? "Una frase corta sobre el sponsor" : "Un texto corto debajo del título") : text,
                                  start: t, duration: 7, logoFile: logoFile, style: style, tag: tag)
         if style == "clean" { c.tag = "" }
+        if let reelId, let r = project.reels.firstIndex(where: { $0.id == reelId }) {
+            if let reel { c.duration = min(c.duration, max(2, reel.end - c.start)) }
+            project.reels[r].cintillos.append(c)
+            if previewReel?.id == reelId { previewReel = project.reels[r] }
+            selectedTrack = .reelCintillo(reelId, id)
+            return id
+        }
         project.cintillos.append(c)
         selectedTrack = .cintillo(id)
         if !project.showCintillos { project.showCintillos = true }
@@ -937,13 +946,41 @@ final class ProjectSession: ObservableObject {
     }
 
     /// Cintillo de sponsor a partir de un sponsor de prePod (logo y frase ya puestos).
-    func addSponsorCintillo(_ sp: Sponsor) {
-        _ = addCintillo(style: "sponsor", kind: "sponsor", title: sp.name, text: sp.copy ?? "", logoFile: sp.logoFile, tag: "PATROCINA")
+    func addSponsorCintillo(_ sp: Sponsor, reelId: UUID? = nil) {
+        _ = addCintillo(style: "sponsor", kind: "sponsor", title: sp.name, text: sp.copy ?? "", logoFile: sp.logoFile, tag: "PATROCINA", reelId: reelId)
     }
 
-    func removeCintillo(_ id: Int) {
-        project.cintillos.removeAll { $0.id == id }
-        if selectedTrack == .cintillo(id) { selectedTrack = nil }
+    /// Acceso a un cintillo por dónde vive (episodio o reel), para el panel bajo el video.
+    func cintilloBinding(_ sel: TrackSel) -> Binding<DirectorCintillo>? {
+        switch sel {
+        case .cintillo(let id):
+            guard let c = project.cintillos.first(where: { $0.id == id }) else { return nil }
+            return Binding(get: { self.project.cintillos.first { $0.id == id } ?? c },
+                           set: { v in if let i = self.project.cintillos.firstIndex(where: { $0.id == id }) { self.project.cintillos[i] = v } })
+        case .reelCintillo(let rid, let id):
+            guard let r = project.reels.firstIndex(where: { $0.id == rid }), let c = project.reels[r].cintillos.first(where: { $0.id == id }) else { return nil }
+            return Binding(get: { self.project.reels.first { $0.id == rid }?.cintillos.first { $0.id == id } ?? c },
+                           set: { v in
+                               guard let r = self.project.reels.firstIndex(where: { $0.id == rid }),
+                                     let i = self.project.reels[r].cintillos.firstIndex(where: { $0.id == id }) else { return }
+                               self.project.reels[r].cintillos[i] = v
+                               if self.previewReel?.id == rid { self.previewReel = self.project.reels[r] }
+                           })
+        default: return nil
+        }
+    }
+
+    func removeCintillo(_ sel: TrackSel) {
+        switch sel {
+        case .cintillo(let id): project.cintillos.removeAll { $0.id == id }
+        case .reelCintillo(let rid, let id):
+            if let r = project.reels.firstIndex(where: { $0.id == rid }) {
+                project.reels[r].cintillos.removeAll { $0.id == id }
+                if previewReel?.id == rid { previewReel = project.reels[r] }
+            }
+        default: break
+        }
+        selectedTrack = nil
     }
 
     func duplicateCintillo(_ id: Int) {
@@ -969,6 +1006,23 @@ final class ProjectSession: ObservableObject {
             try FileManager.default.copyItem(at: url, to: dest)
         } catch { errorMessage = error.localizedDescription; return }
         if let i = project.cintillos.firstIndex(where: { $0.id == id }) { project.cintillos[i].logoFile = rel }
+    }
+
+    func chooseCintilloLogo(_ sel: TrackSel) {
+        guard let b = cintilloBinding(sel) else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
+        panel.allowsMultipleSelection = false
+        panel.message = "Elige el logo del cintillo (un PNG con fondo transparente queda mejor)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
+        let rel = "cintillos/logo-\(Int(Date().timeIntervalSince1970)).\(ext)"
+        let dest = ProjectStore.url(rel, in: project.id)
+        do {
+            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch { errorMessage = error.localizedDescription; return }
+        b.wrappedValue.logoFile = rel
     }
 
     // MARK: B-roll
