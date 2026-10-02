@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -482,6 +482,44 @@ enum SelfTest {
                         print("snapshot \(name)")
                     }
                 }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--extras-test"), args.count > i + 1 {
+            // Deshacer/rehacer, I/O y plantillas, sin ventanas
+            Task { @MainActor in
+                let app = AppModel()
+                guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
+                let session = ProjectSession(project: p, app: app)
+                let before = session.project
+                session.project.cuts.append(Cut(start: 10, end: 12, kind: .manual, label: "prueba"))
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                session.project.cuts.append(Cut(start: 20, end: 22, kind: .manual, label: "prueba 2"))
+                guard session.project.cuts.count == before.cuts.count + 2 else { print("FAIL cuts"); exit(1) }
+                session.undoChange()
+                guard session.project.cuts.count == before.cuts.count + 1 else { print("FAIL undo 1: \(session.project.cuts.count)"); exit(1) }
+                session.undoChange()
+                guard session.project == before else { print("FAIL undo 2"); exit(1) }
+                session.redoChange()
+                guard session.project.cuts.count == before.cuts.count + 1 else { print("FAIL redo"); exit(1) }
+                // I / O
+                session.inPoint = 30
+                let n = session.project.reels.count
+                session.markOut()           // playhead en 0 → reel 0…30
+                guard session.project.reels.count == n + 1, let r = session.project.reels.last, r.start == 0, r.end == 30 else { print("FAIL markOut"); exit(1) }
+                session.undoChange()
+                guard session.project.reels.count == n else { print("FAIL undo reel"); exit(1) }
+                // plantillas
+                var look = ReelLook(); look.layout = .stack; look.showNames = false; look.logoFile = "x.png"
+                let t = ReelTemplate(name: "prueba", look: look)
+                var cur = ReelLook(); cur.logoFile = "mio.png"
+                let ap = t.applied(over: cur)
+                guard ap.layout == .stack, ap.showNames == false, ap.logoFile == "mio.png" else { print("FAIL template"); exit(1) }
+                var list = ReelTemplate.load(); list.removeAll { $0.name == "prueba" }; list.append(t); ReelTemplate.save(list)
+                guard ReelTemplate.load().contains(where: { $0.name == "prueba" }) else { print("FAIL template save"); exit(1) }
+                list.removeAll { $0.name == "prueba" }; ReelTemplate.save(list)
+                print("OK extras: deshacer/rehacer, I/O, plantillas")
                 fflush(stdout); exit(0)
             }
             return

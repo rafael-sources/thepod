@@ -11,7 +11,7 @@ struct LayersStep: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     StepHeader(title: "Textos, stickers y b-roll",
-                               subtitle: "Pon un título, una imagen o un emoji encima del video, o un b-roll que tape la pantalla un rato. Se agrega donde está el video ahora.")
+                               subtitle: "Pon un título, una imagen o un emoji encima del video, o un b-roll que tape la pantalla un rato. Se agrega donde está el video ahora.", step: .layers)
                     Card {
                         Text("Agregar").font(.headline)
                         HStack(spacing: 10) {

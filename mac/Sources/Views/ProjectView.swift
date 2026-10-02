@@ -35,6 +35,17 @@ struct ProjectView: View {
                 }
             }
         }
+        .modifier(KeyShortcuts(session: session))
+        .overlay(alignment: .bottom) {
+            if let n = session.note {
+                Text(n).font(.callout.weight(.semibold)).foregroundStyle(.black)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Capsule().fill(Theme.accent))
+                    .padding(.bottom, 170)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: session.note)
         .alert("Algo salió mal", isPresented: Binding(get: { session.errorMessage != nil },
                                                       set: { if !$0 { session.errorMessage = nil } })) {
             Button("Entendido", role: .cancel) {}
@@ -437,9 +448,13 @@ struct JobBar: View {
 struct StepHeader: View {
     let title: String
     let subtitle: String
+    var step: Step? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 28, weight: .bold, design: .rounded))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title).font(.system(size: 28, weight: .bold, design: .rounded))
+                if let step { HelpButton(step: step) }
+            }
             Text(subtitle).foregroundStyle(Theme.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

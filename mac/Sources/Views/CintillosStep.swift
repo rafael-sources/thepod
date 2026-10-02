@@ -10,7 +10,7 @@ struct CintillosStep: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     StepHeader(title: "Cintillos",
-                               subtitle: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar.")
+                               subtitle: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar.", step: .cintillos)
                     Card {
                         Text("Agregar donde está el video").font(.headline)
                         HStack(spacing: 10) {

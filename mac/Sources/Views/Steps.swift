@@ -9,7 +9,7 @@ struct OverviewStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    StepHeader(title: "Tu grabación", subtitle: "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video.")
+                    StepHeader(title: "Tu grabación", subtitle: "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video.", step: .overview)
                     Card {
                         TextField("Nombre del episodio", text: $session.project.name)
                             .textFieldStyle(.roundedBorder)
@@ -172,7 +172,7 @@ struct FixStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Arreglar todo", subtitle: "Un botón: sonido de estudio, sin silencios largos y sin “eeeh”. Nada se borra de verdad: puedes deshacer cuando quieras.")
+                    StepHeader(title: "Arreglar todo", subtitle: "Un botón: sonido de estudio, sin silencios largos y sin “eeeh”. Nada se borra de verdad: puedes deshacer cuando quieras.", step: .fix)
                     Card {
                         Toggle(isOn: $session.project.fix.enhanceAudio) {
                             VStack(alignment: .leading) {
@@ -307,7 +307,7 @@ struct CaptionsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 16) {
-                StepHeader(title: "Subtítulos", subtitle: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla.")
+                StepHeader(title: "Subtítulos", subtitle: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla.", step: .captions)
                     HStack(spacing: 8) {
                         Button { session.saveSubtitles(asText: false) } label: { Label("Guardar subtítulos (.srt)", systemImage: "square.and.arrow.down") }
                         Button { session.saveSubtitles(asText: true) } label: { Label("Guardar transcripción (.txt)", systemImage: "doc.text") }
@@ -500,7 +500,7 @@ struct ReelsStep: View {
         HStack(alignment: .top, spacing: 20) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    StepHeader(title: "Reels, TikTok y Shorts", subtitle: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos.")
+                    StepHeader(title: "Reels, TikTok y Shorts", subtitle: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos.", step: .reels)
                     if session.project.moments.isEmpty && session.project.reels.isEmpty {
                         Card {
                             Label("Este episodio no tiene momentos marcados", systemImage: "bookmark.slash").font(.headline)
@@ -639,6 +639,7 @@ struct ReelLookCard: View {
             HStack {
                 Text(own ? "Diseño de este reel" : "Diseño de todos los reels").font(.headline)
                 Spacer()
+                ReelTemplateMenu(look: look)
                 if reel != nil {
                     Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
                         guard let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
@@ -875,7 +876,7 @@ struct BrandsStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Patrocinios y marcas", subtitle: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo.")
+                    StepHeader(title: "Patrocinios y marcas", subtitle: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo.", step: .brands)
                     Card {
                         HStack {
                             Text("Sponsors").font(.headline)
@@ -962,7 +963,7 @@ struct LookStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Aspecto", subtitle: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo.")
+                    StepHeader(title: "Aspecto", subtitle: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo.", step: .look)
                     let onePerson = session.project.lanes.count <= 1
                     let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
                     let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
@@ -1214,7 +1215,7 @@ struct ExportStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Exportar", subtitle: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto.")
+                    StepHeader(title: "Exportar", subtitle: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto.", step: .export)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(ExportFormat.allCases) { f in
                             Button { select(f) } label: {

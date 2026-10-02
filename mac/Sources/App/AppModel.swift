@@ -216,7 +216,11 @@ enum Step: String, CaseIterable, Identifiable {
 
 @MainActor
 final class ProjectSession: ObservableObject {
-    @Published var project: Project { didSet { if project != oldValue { dirty() } } }
+    @Published var project: Project { didSet { if project != oldValue { history.record(before: oldValue); dirty() } } }
+    let history = ProjectHistory()
+    @Published var note: String?          // aviso corto (atajos, deshacer)
+    var noteId = UUID()
+    var inPoint: Double?                  // tecla I: inicio de un reel pendiente
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
     enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int), reelCintillo(UUID, Int) }
     @Published var selectedTrack: TrackSel?

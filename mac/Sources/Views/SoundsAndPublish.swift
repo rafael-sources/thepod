@@ -17,7 +17,7 @@ struct SoundsStep: View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 14) {
                 StepHeader(title: "Efectos y música",
-                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras.")
+                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras.", step: .sounds)
                     .sheet(isPresented: $session.voiceSheet) { VoiceSheet(session: session) }
                 HStack {
                     Text("En tu episodio").font(.headline)
@@ -153,7 +153,7 @@ struct PublishStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                StepHeader(title: "Publicar", subtitle: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube.")
+                StepHeader(title: "Publicar", subtitle: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube.", step: .publish)
                 if !PrePodClient.isConfigured {
                     Card {
                         Label("Conecta la app con prePod", systemImage: "person.badge.key").font(.headline)
