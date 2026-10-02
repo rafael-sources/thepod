@@ -54,3 +54,18 @@ def test_tp_speaker_roundtrip_and_endpoint(client):
     s = r.get_json()["sections"]
     assert len(s) == 1
     assert s[0]["speaker"] == "Patricio" and s[0]["speaker_key"] == "patricio" and s[0]["offset_seconds"] == 5
+
+
+def test_chained_offsets(client):
+    r = client.post("/api/podcasts", json={"name": "Cadena"})
+    slug = r.get_json()["slug"]
+    ep = client.post(f"/api/podcasts/{slug}/episodes", json={"title": "Ep"}).get_json()["id"]
+    a = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Patricio", "content": " ".join(["palabra"] * 27)}).get_json()
+    b = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Karelia", "content": "corto"}).get_json()
+    client.put(f"/api/podcasts/{slug}/script-sections/{a['id']}", json={"tp_enabled": True, "tp_offset_seconds": 5, "tp_speaker": "patricio"})
+    client.put(f"/api/podcasts/{slug}/script-sections/{b['id']}", json={"tp_enabled": True, "tp_after_prev": True, "tp_gap_seconds": 0.5, "tp_speaker": "Karelia"})
+    s = client.get(f"/api/integrations/teleprompter?slug={slug}&episode_id={ep}",
+                   headers={"X-PodPod-Secret": config.INTEGRATION_SECRET}).get_json()["sections"]
+    # 27 palabras a 135 wpm = 12 s + 2,5 = 14,5 s → termina en 19,5; el siguiente a 0,5 s → 20,0
+    assert s[0]["offset_seconds"] == 5 and s[0]["ends_seconds"] == 19.5
+    assert s[1]["after_prev"] is True and s[1]["offset_seconds"] == 20.0

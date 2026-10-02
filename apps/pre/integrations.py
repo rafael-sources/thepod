@@ -405,6 +405,15 @@ def episode_integration_status(slug, ep_id):
 # Inbound: teleprompter del guion (prodPod lo pide al abrir la sala, con el secreto compartido)
 # ---------------------------------------------------------------------------
 
+_TP_WPM = {"slow": 95, "normal": 135, "fast": 180}
+
+
+def _tp_run_seconds(text: str, speed: str) -> float:
+    """Cuánto tarda en correr un teleprompter (misma fórmula que prodPod y la app): palabras / velocidad + 2,5 s."""
+    words = max(8, len((text or "").split()))
+    return words / _TP_WPM.get(speed, 135) * 60 + 2.5
+
+
 @bp.get("/api/integrations/teleprompter")
 def teleprompter_for_episode():
     """Secciones del guion marcadas para teleprompter + sponsors activos, para prodPod.
@@ -430,18 +439,32 @@ def teleprompter_for_episode():
         ).fetchall()
         cols = {r[1] for r in db.execute("PRAGMA table_info(script_sections)").fetchall()}
         sections = []
+        prev_end = None          # cuándo termina de correr el teleprompter anterior (para los encadenados)
         for r in rows:
             d = dict(r)
             if not cols or "tp_enabled" not in cols or not d.get("tp_enabled"):
                 continue
+            speed = d.get("tp_speed") or "normal"
+            content = d.get("content") or ""
+            offset = d.get("tp_offset_seconds")
+            after_prev = bool(d.get("tp_after_prev"))
+            if after_prev and prev_end is not None:
+                gap = d.get("tp_gap_seconds")
+                offset = round(prev_end + (0.5 if gap is None else float(gap)), 1)
+            if offset is None:
+                continue
+            run = _tp_run_seconds(content, speed)
+            prev_end = float(offset) + run
             sections.append({
                 "id": d["id"],
                 "position": d["position"],
                 "speaker": d.get("speaker") or "",
                 "speaker_key": d.get("tp_speaker") or d.get("speaker") or "",   # usuario del conductor o nombre del invitado
-                "content": d.get("content") or "",
-                "offset_seconds": d.get("tp_offset_seconds"),
-                "speed": d.get("tp_speed") or "normal",
+                "content": content,
+                "offset_seconds": offset,
+                "ends_seconds": round(prev_end, 1),
+                "after_prev": after_prev,
+                "speed": speed,
                 "size": d.get("tp_size") or "half",
             })
         sp_rows = db.execute(

@@ -1365,6 +1365,8 @@ var ScriptEditor = {
                 tp_speed: sec.tp_speed || "normal",
                 tp_size: sec.tp_size || "half",
                 tp_speaker: sec.tp_speaker || "",
+                tp_after_prev: !!sec.tp_after_prev,
+                tp_gap_seconds: sec.tp_gap_seconds == null ? 0.5 : sec.tp_gap_seconds,
               },
             });
           } catch (e) { error.value = e.message; }
@@ -1386,6 +1388,34 @@ var ScriptEditor = {
       mins = Math.max(0, parseInt(mins, 10) || 0); secs = Math.max(0, Math.min(59, parseInt(secs, 10) || 0));
       sec.tp_offset_seconds = mins * 60 + secs; saveSection(sec);
     }
+    /* Encadenar: cuándo termina de correr el teleprompter anterior (misma fórmula que prodPod) + separación. */
+    const TP_WPM_PRE = { slow: 95, normal: 135, fast: 180 };
+    function tpRunSeconds(sec) {
+      const words = Math.max(8, (sec.content || "").trim().split(/\s+/).filter(Boolean).length);
+      return words / (TP_WPM_PRE[sec.tp_speed || "normal"] || 135) * 60 + 2.5;
+    }
+    /* Inicio real de cada teleprompter (resuelve los encadenados en orden). */
+    function tpStart(sec) {
+      let prevEnd = null;
+      for (const s of sections.value) {
+        if (!s.tp_enabled) continue;
+        let off = s.tp_offset_seconds;
+        if (s.tp_after_prev && prevEnd != null) off = prevEnd + (s.tp_gap_seconds == null ? 0.5 : +s.tp_gap_seconds);
+        if (s.id === sec.id) return off;
+        if (off != null) prevEnd = off + tpRunSeconds(s);
+      }
+      return sec.tp_offset_seconds;
+    }
+    function tpHasPrev(sec) {
+      for (const s of sections.value) { if (s.id === sec.id) return false; if (s.tp_enabled) return true; }
+      return false;
+    }
+    function fmtTp(secs) {
+      if (secs == null) return "—";
+      const m = Math.floor(secs / 60), r = Math.round(secs % 60);
+      return m + ":" + String(r).padStart(2, "0");
+    }
+    function setTpGap(sec, v) { sec.tp_gap_seconds = Math.max(0, parseFloat(v) || 0); saveSection(sec); }
     /* Sugerencia: el minuto donde empieza la sección sumando las anteriores. */
     function tpSuggest(sec) {
       let acc = 0;
@@ -1434,7 +1464,7 @@ var ScriptEditor = {
 
     watch(() => props.episodeId, () => { load(); loadTpPeople(); }, { immediate: true });
     return { sections, error, addSection, removeSection, move, saveSection, totalSeconds, fmtTotalSeconds,
-             tpMin, tpSec, setTpMinSec, tpSuggest, toggleTp, tpPeople };
+             tpMin, tpSec, setTpMinSec, tpSuggest, toggleTp, tpPeople, tpStart, tpHasPrev, fmtTp, setTpGap, tpRunSeconds };
   },
   template: `
     <div>
@@ -1464,7 +1494,7 @@ var ScriptEditor = {
           <textarea v-model="sec.content" @input="saveSection(sec)" placeholder="Texto a leer / decir en esta sección..."></textarea>
           <div class="notes-row">
             <input type="text" v-model="sec.notes" @input="saveSection(sec)" placeholder="Notas internas (timings, direcciones)...">
-            <input type="number" class="dur-input" v-model.number="sec.estimated_duration" @input="saveSection(sec)" min="0" step="1" placeholder="seg">
+            <input type="number" class="dur-input" v-model.number="sec.estimated_duration" @input="saveSection(sec)" min="0" step="1" placeholder="dura (seg)" title="Cuánto dura esta sección, en segundos (no es el teleprompter)">
           </div>
           <div class="tp-row" :class="{ on: sec.tp_enabled }">
             <label class="tp-toggle" :title="sec.tp_enabled ? 'Quitar del teleprompter' : 'Mostrar esta sección como teleprompter en prodPod'">
@@ -1484,7 +1514,15 @@ var ScriptEditor = {
                   </optgroup>
                 </select>
               </span>
-              <span class="tp-field">
+              <span class="tp-field" v-if="tpHasPrev(sec)">
+                <label class="tp-toggle tiny"><input type="checkbox" v-model="sec.tp_after_prev" @change="saveSection(sec)"> después del anterior</label>
+              </span>
+              <span class="tp-field" v-if="sec.tp_after_prev && tpHasPrev(sec)">
+                <span class="tiny">separación</span>
+                <input type="number" class="mono tp-offset" min="0" step="0.5" :value="sec.tp_gap_seconds == null ? 0.5 : sec.tp_gap_seconds" @change="setTpGap(sec, $event.target.value)" title="segundos después de que termine el anterior">
+                <span class="tiny">seg → empieza en {{ fmtTp(tpStart(sec)) }}</span>
+              </span>
+              <span class="tp-field" v-else>
                 <span class="tiny">aparece a los</span>
                 <input type="number" class="mono tp-offset" min="0" step="1" :value="tpMin(sec)" @change="setTpMinSec(sec, $event.target.value, tpSec(sec))" title="minutos">
                 <span class="tiny">min</span>
@@ -1492,6 +1530,7 @@ var ScriptEditor = {
                 <span class="tiny">seg</span>
                 <button class="ghost tiny" @click="tpSuggest(sec)" title="Sumar lo que duran las secciones anteriores">sugerir</button>
               </span>
+              <span class="tp-field"><span class="tiny">corre ~{{ Math.round(tpRunSeconds(sec)) }} s</span></span>
               <span class="tp-field">
                 <span class="tiny">velocidad</span>
                 <select v-model="sec.tp_speed" @change="saveSection(sec)">
@@ -3917,7 +3956,7 @@ var TemplatesPanel = {
             <textarea v-model="sec.content" @input="saveSection(sec)" placeholder="Texto base..."></textarea>
             <div class="notes-row">
               <input type="text" v-model="sec.notes" @input="saveSection(sec)" placeholder="Notas (timings, direcciones)...">
-              <input type="number" class="dur-input" v-model.number="sec.estimated_duration" @input="saveSection(sec)" min="0" step="1" placeholder="seg">
+              <input type="number" class="dur-input" v-model.number="sec.estimated_duration" @input="saveSection(sec)" min="0" step="1" placeholder="dura (seg)" title="Cuánto dura esta sección, en segundos (no es el teleprompter)">
             </div>
           </div>
         </div>

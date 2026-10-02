@@ -85,6 +85,8 @@ def _serialize_section(row):
         "tp_speed": _rowget(row, "tp_speed", "normal") or "normal",
         "tp_size": _rowget(row, "tp_size", "half") or "half",
         "tp_speaker": _rowget(row, "tp_speaker", None) or "",
+        "tp_after_prev": bool(_rowget(row, "tp_after_prev", 0)),
+        "tp_gap_seconds": _rowget(row, "tp_gap_seconds", 0.5),
     }
 
 
@@ -658,9 +660,11 @@ def update_script_section(slug, sec_id):
                 _normalize_script_positions(db, ep_id)
 
         other_updates = {}
-        for k in ("speaker", "content", "estimated_duration", "notes", "tp_offset_seconds", "tp_speaker"):
+        for k in ("speaker", "content", "estimated_duration", "notes", "tp_offset_seconds", "tp_speaker", "tp_gap_seconds"):
             if k in data:
                 other_updates[k] = data[k]
+        if "tp_after_prev" in data:
+            other_updates["tp_after_prev"] = 1 if data["tp_after_prev"] else 0
         if "tp_enabled" in data:
             other_updates["tp_enabled"] = 1 if data["tp_enabled"] else 0
         if data.get("tp_speed") in ("slow", "normal", "fast"):
