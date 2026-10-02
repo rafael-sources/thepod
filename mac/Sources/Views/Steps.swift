@@ -521,12 +521,12 @@ struct ReelsStep: View {
                         .font(.callout)
                     }
                     ForEach($session.project.reels) { $reel in
-                        ReelCard(reel: $reel, isPreviewing: previewing == reel.id, duration: session.project.duration) {
+                        ReelCard(reel: $reel, isPreviewing: previewing == reel.id, duration: session.project.duration, preview: {
                             show(reel)
-                        } remove: {
+                        }, remove: {
                             session.project.reels.removeAll { $0.id == reel.id }
                             if previewing == reel.id { previewing = nil }
-                        }
+                        }, export: { session.exportReel(reel) }, busy: session.isBusy)
                     }
                     if let reel = currentReel {
                         ReelTextCard(session: session, reel: reel)
@@ -758,6 +758,8 @@ struct ReelCard: View {
     let duration: Double
     let preview: () -> Void
     let remove: () -> Void
+    var export: (() -> Void)? = nil
+    var busy = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -786,9 +788,13 @@ struct ReelCard: View {
                 }
             }
             Spacer()
-            VStack {
+            VStack(spacing: 8) {
                 Button(action: preview) { Image(systemName: isPreviewing ? "play.circle.fill" : "play.circle").font(.title2) }
                     .buttonStyle(.borderless).help("Ver este reel")
+                if let export {
+                    Button(action: export) { Image(systemName: "square.and.arrow.down").font(.title3) }
+                        .buttonStyle(.borderless).disabled(busy).help("Exportar solo este reel")
+                }
                 Button(action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless).foregroundStyle(Theme.secondary)
             }
         }

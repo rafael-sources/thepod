@@ -306,6 +306,13 @@ enum CompositionBuilder {
             }
         }
 
+        // Cintillos: se dibujan ahora (también sirven para poner sus sonidos en la mezcla)
+        let cintilloCardsBuilt = (wantVideo && project.showCintillos)
+            ? Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical) : []
+        if !cintilloCardsBuilt.isEmpty {
+            await Self.cintilloSounds(cards: cintilloCardsBuilt, shift: introDur, comp: comp, mixParams: &mixParams)
+        }
+
         let mix = AVMutableAudioMix()
         mix.inputParameters = mixParams
 
@@ -330,7 +337,7 @@ enum CompositionBuilder {
                 switches: switches,
                 names: names, showNames: project.showNames,
                 cropX: project.laneCrop,
-                logo: project.showLogo ? project.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) } : nil,
+                logo: project.showLogo ? project.logoFile.flatMap { ImageFile.ciImage(ProjectStore.url($0, in: project.id)) } : nil,
                 background: (project.showBackground ? project.backgroundFile : nil).flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) }
                     .map { img in
                         img.applyingFilter("CIColorControls", parameters: [kCIInputBrightnessKey: -0.08])
@@ -342,7 +349,7 @@ enum CompositionBuilder {
                         ?? keep.firstIndex { $0.start >= a.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
                     guard let o else { return nil }
                     return RenderScene.SponsorCard(start: o, end: o + (a.end - a.start), name: a.sponsor.name, copy: a.sponsor.copy,
-                                                   logo: a.sponsor.logoFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id)) })
+                                                   logo: a.sponsor.logoFile.flatMap { ImageFile.ciImage(ProjectStore.url($0, in: project.id)) })
                 } : [],
                 photos: Dictionary(uniqueKeysWithValues: project.lanes.compactMap { lane in
                     project.participant(forLane: lane.id)?.photoFile
@@ -351,9 +358,7 @@ enum CompositionBuilder {
                 }),
                 options: project.layoutOptions,
                 mirror: project.laneMirror)
-            if project.showCintillos {
-                s.cintillos = Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical)
-            }
+            if project.showCintillos { s.cintillos = cintilloCardsBuilt }
             s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
             s.fastSegmentation = preview
             s.brolls = brollScene
@@ -401,7 +406,7 @@ enum CompositionBuilder {
     static func overlayCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize) -> [RenderScene.OverlayCard] {
         let W = renderSize.width, H = renderSize.height
         let base = min(W, H)
-        return project.overlays.compactMap { o in
+        return project.overlays.compactMap { o -> RenderScene.OverlayCard? in
             let start = EditEngine.toOutput(o.start, keep: keep)
                 ?? keep.firstIndex { $0.start >= o.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
             guard let start, o.duration > 0 else { return nil }
@@ -436,23 +441,80 @@ enum CompositionBuilder {
         let W = renderSize.width, H = renderSize.height
         let width = vertical ? W * 0.92 : min(W * 0.6, H * 1.25)
         let height = vertical ? H * 0.075 : H * 0.12
-        return project.cintillos.compactMap { c in
+        // Color del podcast: el que más se repite en el logo (si hay); si no, el de cada tipo
+        let podcastColor = project.logoFile.flatMap { ImageFile.nsImage(ProjectStore.url($0, in: project.id)) }.flatMap { dominantColor($0) }
+        return project.cintillos.compactMap { c -> RenderScene.CintilloCard? in
             let o = EditEngine.toOutput(c.start, keep: keep)
                 ?? keep.firstIndex { $0.start >= c.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
             guard let o else { return nil }
-            let logo = c.logoFile.flatMap { NSImage(contentsOf: ProjectStore.url($0, in: project.id)) }?
-                .cgImage(forProposedRect: nil, context: nil, hints: nil)
-            let (tag, accent): (String, NSColor) = {
+            let logoImage = c.logoFile.flatMap { ImageFile.nsImage(ProjectStore.url($0, in: project.id)) }
+            let logo = logoImage.flatMap { ImageFile.cgImage($0) }
+            let kindColor: NSColor = {
                 switch c.kind {
-                case "sponsor": return ("PATROCINA", NSColor(srgbRed: 0.70, green: 0.45, blue: 1.0, alpha: 1))
-                case "banner": return ("AHORA", NSColor(srgbRed: 1.0, green: 0.30, blue: 0.30, alpha: 1))
-                case "segment": return ("SEGMENTO", NSColor(srgbRed: 0.40, green: 0.62, blue: 1.0, alpha: 1))
-                default: return ("COMENTARIO", NSColor(srgbRed: 0.35, green: 0.85, blue: 0.55, alpha: 1))
+                case "sponsor": return NSColor(srgbRed: 0.70, green: 0.45, blue: 1.0, alpha: 1)
+                case "banner": return NSColor(srgbRed: 0.84, green: 0.27, blue: 0.27, alpha: 1)
+                case "segment": return NSColor(srgbRed: 0.40, green: 0.56, blue: 0.90, alpha: 1)
+                default: return NSColor(srgbRed: 0.35, green: 0.85, blue: 0.55, alpha: 1)
                 }
             }()
-            guard let img = TextRenderer.cintillo(title: c.title, text: c.text, tag: tag, accent: accent, logo: logo,
-                                                  width: width, height: height) else { return nil }
-            return RenderScene.CintilloCard(start: o, end: o + c.duration, image: img)
+            // Color: el elegido; si no, el del logo del sponsor (estilo sponsor), el del podcast, o el del tipo
+            let sponsorColor = (c.style == "sponsor") ? logoImage.flatMap { dominantColor($0) } : nil
+            let accent = c.color.flatMap { TextRenderer.color($0) } ?? sponsorColor ?? (c.fromDirector ? kindColor : (podcastColor ?? kindColor))
+            let art: TextRenderer.CintilloArt?
+            switch c.style {
+            case "clean": art = TextRenderer.cintilloClean(title: c.title, text: c.text, accent: accent, width: width, height: height * 1.15)
+            case "sponsor": art = TextRenderer.cintilloSponsor(title: c.title, text: c.text, tag: c.tagText, accent: accent, logo: logo, width: width * 0.95, height: height * 1.3)
+            default: art = TextRenderer.cintilloNews(title: c.title, text: c.text, tag: c.tagText, accent: accent, logo: logo, width: width, height: height)
+            }
+            if art == nil { NSLog("cintillo \(c.id) estilo \(c.style): no se pudo dibujar") }
+            guard let art else { return nil }
+            if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("cintillo \(c.id) \(c.style) o=\(o) dur=\(c.duration) size=\(art.full.extent)") }
+            return RenderScene.CintilloCard(start: o, end: o + c.duration, image: art.full, base: art.base, logoW: art.logoW, style: c.style, sound: c.sound)
+        }
+    }
+
+    /// El color que domina en una imagen (saturado; evita blancos, negros y grises).
+    static func dominantColor(_ img: NSImage) -> NSColor? {
+        guard let cg = ImageFile.cgImage(img) else { return nil }
+        let w = 24, h = 24
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var buckets: [Int: (n: Int, r: Double, g: Double, b: Double)] = [:]
+        for i in stride(from: 0, to: data.count, by: 4) {
+            let a = Double(data[i + 3]) / 255; guard a > 0.5 else { continue }
+            let r = Double(data[i]) / 255 / a, g = Double(data[i + 1]) / 255 / a, b = Double(data[i + 2]) / 255 / a
+            let mx = max(r, g, b), mn = min(r, g, b)
+            let sat = mx == 0 ? 0 : (mx - mn) / mx
+            guard sat > 0.35, mx > 0.25, mx < 0.97 else { continue }
+            let key = Int(r * 4) * 25 + Int(g * 4) * 5 + Int(b * 4)
+            var e = buckets[key] ?? (0, 0, 0, 0)
+            e.n += 1; e.r += r; e.g += g; e.b += b
+            buckets[key] = e
+        }
+        guard let best = buckets.values.max(by: { $0.n < $1.n }), best.n >= 6 else { return nil }
+        return NSColor(srgbRed: best.r / Double(best.n), green: best.g / Double(best.n), blue: best.b / Double(best.n), alpha: 1)
+    }
+
+    /// Sonidos de los cintillos (whoosh bajo al entrar y un toque al salir), como pistas de audio.
+    static func cintilloSounds(cards: [RenderScene.CintilloCard], shift: Double, comp: AVMutableComposition, mixParams: inout [AVMutableAudioMixInputParameters]) async {
+        guard let inURL = Bundle.main.url(forResource: "cintillo-in", withExtension: "wav", subdirectory: "Sounds") ?? Bundle.main.url(forResource: "cintillo-in", withExtension: "wav"),
+              let outURL = Bundle.main.url(forResource: "cintillo-out", withExtension: "wav", subdirectory: "Sounds") ?? Bundle.main.url(forResource: "cintillo-out", withExtension: "wav"),
+              let inTrack = try? await AVURLAsset(url: inURL).loadTracks(withMediaType: .audio).first,
+              let outTrack = try? await AVURLAsset(url: outURL).loadTracks(withMediaType: .audio).first else { return }
+        func cm(_ s: Double) -> CMTime { CMTime(seconds: s, preferredTimescale: 90_000) }
+        let level: Float = 0.063   // −24 dB
+        for card in cards where card.sound {
+            let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+            do {
+                try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(0.6)), of: inTrack, at: cm(shift + card.start))
+                if card.end - card.start > 1.2 { try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(0.35)), of: outTrack, at: cm(shift + card.end - 0.3)) }
+            } catch { comp.removeTrack(track); continue }
+            let p = AVMutableAudioMixInputParameters(track: track)
+            p.setVolume(level, at: .zero)
+            mixParams.append(p)
         }
     }
 }

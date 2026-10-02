@@ -380,7 +380,7 @@ enum Importer {
                         logoRel = rel
                     }
                 }
-                return DirectorCintillo(id: id, kind: kind, title: title, text: text, start: t0, duration: max(1, dur), logoFile: logoRel)
+                return DirectorCintillo(id: id, kind: kind, title: title, text: text, start: t0, duration: max(1, dur), logoFile: logoRel, fromDirector: true)
             }
         }
 

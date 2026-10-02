@@ -678,6 +678,45 @@ struct DirectorCintillo: Codable, Equatable, Identifiable {
     var start: Double           // segundos desde que empezó la grabación
     var duration: Double
     var logoFile: String?       // relativo a la carpeta del proyecto
+    // Desde 0.10: cintillos creados en la app, con estilo
+    var style: String = "news"  // news (dos barras) | clean (línea y texto) | sponsor (tarjeta con logo)
+    var tag: String?            // etiqueta de la barra ("AHORA", "PATROCINA"…); nil = según `kind`; "" = sin etiqueta
+    var color: String?          // hex; nil = el color del podcast (o el de `kind`)
+    var sound: Bool = true      // whoosh bajo al entrar y salir
+    var fromDirector: Bool = false   // vino de prodPod (el director lo lanzó en vivo)
+
+    var end: Double { start + duration }
+    var tagText: String {
+        if let tag { return tag }
+        switch kind {
+        case "sponsor": return "PATROCINA"
+        case "banner": return "AHORA"
+        case "segment": return "SEGMENTO"
+        default: return ""
+        }
+    }
+
+    init(id: Int, kind: String, title: String, text: String, start: Double, duration: Double, logoFile: String? = nil,
+         style: String = "news", tag: String? = nil, color: String? = nil, sound: Bool = true, fromDirector: Bool = false) {
+        self.id = id; self.kind = kind; self.title = title; self.text = text; self.start = start; self.duration = duration
+        self.logoFile = logoFile; self.style = style; self.tag = tag; self.color = color; self.sound = sound; self.fromDirector = fromDirector
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? "banner"
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 6
+        logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
+        style = try c.decodeIfPresent(String.self, forKey: .style) ?? "news"
+        tag = try c.decodeIfPresent(String.self, forKey: .tag)
+        color = try c.decodeIfPresent(String.self, forKey: .color)
+        sound = try c.decodeIfPresent(Bool.self, forKey: .sound) ?? true
+        // Los guardados antes de 0.10 eran todos del director
+        fromDirector = try c.decodeIfPresent(Bool.self, forKey: .fromDirector) ?? true
+    }
 }
 
 struct Sponsor: Codable, Equatable, Identifiable {

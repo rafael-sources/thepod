@@ -147,62 +147,137 @@ enum TextRenderer {
         }
     }
 
-    /// Cintillo tipo noticiero: logo a la izquierda, arriba el título sobre el color, abajo el texto sobre blanco.
-    static func cintillo(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CIImage? {
-        let showLogo = logo != nil || tag != "SEGMENTO"
+    /// Letras de los cintillos (vienen con la app; si faltaran, las condensadas del sistema).
+    static func condensed(_ size: CGFloat, heavy: Bool = true) -> NSFont {
+        NSFont(name: heavy ? "BarlowCondensed-ExtraBold" : "BarlowCondensed-SemiBold", size: size)
+            ?? NSFont(name: heavy ? "AvenirNextCondensed-Heavy" : "AvenirNextCondensed-DemiBold", size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: heavy ? .black : .semibold)
+    }
+    static func body(_ size: CGFloat, medium: Bool = false) -> NSFont {
+        NSFont(name: medium ? "Barlow-Medium" : "Barlow-SemiBold", size: size) ?? NSFont.systemFont(ofSize: size, weight: medium ? .medium : .semibold)
+    }
+
+    /// Un cintillo dibujado en dos capas: `base` (logo y barras, sin texto) y `full` (con texto),
+    /// para que al entrar se desplieguen las barras y después aparezca el texto. `logoW` = ancho de la cajita del logo.
+    struct CintilloArt { let base: CIImage; let full: CIImage; let logoW: CGFloat }
+
+    /// Noticiero: cajita del logo, barra de color con etiqueta y título, barra blanca con el texto.
+    static func cintilloNews(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CintilloArt? {
+        let showLogo = logo != nil || !tag.isEmpty || !title.isEmpty
         let logoW = showLogo ? height : 0
         let topH = height * 0.44, botH = height - topH
-        return draw(size: CGSize(width: width, height: height)) { ctx in
-            // Barra de color (arriba) y barra blanca (abajo); en Core Graphics y=0 es abajo
-            ctx.setFillColor(NSColor.white.withAlphaComponent(0.95).cgColor)
-            ctx.fill(CGRect(x: logoW, y: 0, width: width - logoW, height: botH))
-            ctx.setFillColor(accent.cgColor)
-            ctx.fill(CGRect(x: logoW, y: botH, width: width - logoW, height: topH))
-            if showLogo {
-                ctx.setFillColor(NSColor.white.cgColor)
-                ctx.fill(CGRect(x: 0, y: 0, width: logoW, height: height))
-                if let logo {
-                    let pad = height * 0.08
-                    let box = CGRect(x: pad, y: pad, width: logoW - 2 * pad, height: height - 2 * pad)
-                    let s = min(box.width / CGFloat(logo.width), box.height / CGFloat(logo.height))
-                    let w = CGFloat(logo.width) * s, h = CGFloat(logo.height) * s
-                    ctx.interpolationQuality = .high
-                    ctx.draw(logo, in: CGRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h))
-                } else {
-                    let ini = NSAttributedString(string: String(title.prefix(1)).uppercased(), attributes: [
-                        .font: NSFont.systemFont(ofSize: height * 0.45, weight: .black), .foregroundColor: accent])
-                    let l = CTLineCreateWithAttributedString(ini)
-                    let b = CTLineGetBoundsWithOptions(l, .useGlyphPathBounds)
-                    ctx.textPosition = CGPoint(x: (logoW - b.width) / 2 - b.minX, y: (height - b.height) / 2 - b.minY)
-                    CTLineDraw(l, ctx)
+        func paint(withText: Bool) -> CIImage? {
+            draw(size: CGSize(width: width, height: height)) { ctx in
+                ctx.setFillColor(NSColor.white.withAlphaComponent(0.95).cgColor)
+                ctx.fill(CGRect(x: logoW, y: 0, width: width - logoW, height: botH))
+                ctx.setFillColor(accent.cgColor)
+                ctx.fill(CGRect(x: logoW, y: botH, width: width - logoW, height: topH))
+                if showLogo {
+                    ctx.setFillColor(NSColor.white.cgColor)
+                    ctx.fill(CGRect(x: 0, y: 0, width: logoW, height: height))
+                    drawLogoOrInitial(ctx, logo: logo, initial: title, accent: accent, box: CGRect(x: 0, y: 0, width: logoW, height: height))
                 }
+                guard withText else { return }
+                let pad = height * 0.14
+                var x = logoW + pad
+                if !tag.isEmpty {
+                    let f = condensed(topH * 0.40)
+                    let tw = (tag as NSString).size(withAttributes: [.font: f, .kern: 1.5]).width
+                    ctx.setFillColor(NSColor.black.withAlphaComponent(0.25).cgColor)
+                    ctx.fill(CGRect(x: x, y: botH + topH * 0.18, width: tw + pad * 0.9, height: topH * 0.64))
+                    _ = line(ctx, tag, font: f, color: .white, x: x + pad * 0.45, maxW: tw + 6, midY: botH + topH / 2, kern: 1.5)
+                    x += tw + pad * 1.5
+                }
+                _ = line(ctx, title.uppercased(), font: condensed(topH * 0.62), color: .white, x: x, maxW: width - x - pad, midY: botH + topH / 2, kern: 0.5)
+                _ = line(ctx, text, font: body(botH * 0.46), color: .black, x: logoW + pad, maxW: width - logoW - 2 * pad, midY: botH / 2)
             }
-            func line(_ str: String, font: NSFont, color: NSColor, x: CGFloat, maxW: CGFloat, midY: CGFloat) -> CGFloat {
-                let a = NSAttributedString(string: str, attributes: [.font: font, .foregroundColor: color])
-                var l = CTLineCreateWithAttributedString(a)
-                let dots = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: [.font: font, .foregroundColor: color]))
-                if let t = CTLineCreateTruncatedLine(l, Double(maxW), .end, dots) { l = t }
-                var asc: CGFloat = 0, desc: CGFloat = 0
-                let w = CGFloat(CTLineGetTypographicBounds(l, &asc, &desc, nil))
-                ctx.textPosition = CGPoint(x: x, y: midY - (asc - desc) / 2)
-                CTLineDraw(l, ctx)
-                return w
-            }
-            let pad = height * 0.14
-            var x = logoW + pad
-            if !tag.isEmpty {
-                let f = NSFont.systemFont(ofSize: topH * 0.36, weight: .heavy)
-                let tw = (tag as NSString).size(withAttributes: [.font: f]).width
-                ctx.setFillColor(NSColor.black.withAlphaComponent(0.25).cgColor)
-                ctx.fill(CGRect(x: x, y: botH + topH * 0.2, width: tw + pad * 0.8, height: topH * 0.6))
-                _ = line(tag, font: f, color: .white, x: x + pad * 0.4, maxW: tw + 4, midY: botH + topH / 2)
-                x += tw + pad * 1.4
-            }
-            _ = line(title.uppercased(), font: NSFont.systemFont(ofSize: topH * 0.52, weight: .heavy), color: .white,
-                     x: x, maxW: width - x - pad, midY: botH + topH / 2)
-            _ = line(text, font: NSFont.systemFont(ofSize: botH * 0.42, weight: .semibold), color: .black,
-                     x: logoW + pad, maxW: width - logoW - 2 * pad, midY: botH / 2)
         }
+        guard let base = paint(withText: false), let full = paint(withText: true) else { return nil }
+        return CintilloArt(base: base, full: full, logoW: logoW)
+    }
+
+    /// Limpio: una línea de color, título grande condensado y texto chico, con sombra; sin cajas.
+    static func cintilloClean(title: String, text: String, accent: NSColor, width: CGFloat, height: CGFloat) -> CintilloArt? {
+        let lineH = height * 0.07, titleH = height * 0.52, gap = height * 0.06
+        func paint(withText: Bool) -> CIImage? {
+            draw(size: CGSize(width: width, height: height)) { ctx in
+                ctx.setFillColor(accent.cgColor)
+                ctx.addPath(CGPath(roundedRect: CGRect(x: 0, y: height - lineH, width: height * 0.9, height: lineH), cornerWidth: lineH / 2, cornerHeight: lineH / 2, transform: nil))
+                ctx.fillPath()
+                guard withText else { return }
+                ctx.setShadow(offset: CGSize(width: 0, height: -2), blur: height * 0.12, color: NSColor.black.withAlphaComponent(0.65).cgColor)
+                let ty = height - lineH - gap - titleH / 2
+                _ = line(ctx, title.uppercased(), font: condensed(titleH * 0.95), color: .white, x: 0, maxW: width, midY: ty, kern: 0.3)
+                let rest = ty - titleH / 2
+                _ = line(ctx, text, font: body(rest * 0.78, medium: true), color: NSColor(srgbRed: 0.93, green: 0.90, blue: 0.85, alpha: 1), x: 2, maxW: width, midY: rest / 2)
+            }
+        }
+        guard let base = paint(withText: false), let full = paint(withText: true) else { return nil }
+        return CintilloArt(base: base, full: full, logoW: 0)
+    }
+
+    /// Sponsor: tarjeta oscura con borde de color, logo grande a la izquierda, PATROCINA, nombre y frase.
+    static func cintilloSponsor(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CintilloArt? {
+        let edge = height * 0.07, pad = height * 0.12
+        let logoBoxW = height * 1.25
+        func paint(withText: Bool) -> CIImage? {
+            draw(size: CGSize(width: width, height: height)) { ctx in
+                ctx.setFillColor(NSColor(srgbRed: 0.05, green: 0.04, blue: 0.035, alpha: 0.80).cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+                ctx.setFillColor(accent.cgColor)
+                ctx.fill(CGRect(x: 0, y: 0, width: edge, height: height))
+                let box = CGRect(x: edge + pad, y: pad, width: logoBoxW, height: height - 2 * pad)
+                ctx.setFillColor(NSColor(srgbRed: 0.95, green: 0.93, blue: 0.90, alpha: 1).cgColor)
+                ctx.addPath(CGPath(roundedRect: box, cornerWidth: height * 0.07, cornerHeight: height * 0.07, transform: nil))
+                ctx.fillPath()
+                drawLogoOrInitial(ctx, logo: logo, initial: title, accent: accent, box: box.insetBy(dx: pad * 0.4, dy: pad * 0.4))
+                guard withText else { return }
+                let x = box.maxX + pad
+                let maxW = width - x - pad
+                let kickH = height * 0.16, nameH = height * 0.34, textH = height * 0.26
+                let top = height - pad
+                if !tag.isEmpty { _ = line(ctx, tag, font: condensed(kickH * 0.9), color: accent, x: x, maxW: maxW, midY: top - kickH / 2, kern: 2) }
+                _ = line(ctx, title, font: condensed(nameH * 0.92), color: .white, x: x, maxW: maxW, midY: top - kickH - nameH / 2)
+                _ = line(ctx, text, font: body(textH * 0.72, medium: true), color: NSColor(srgbRed: 0.91, green: 0.89, blue: 0.84, alpha: 1), x: x, maxW: maxW, midY: top - kickH - nameH - textH / 2)
+            }
+        }
+        guard let base = paint(withText: false), let full = paint(withText: true) else { return nil }
+        return CintilloArt(base: base, full: full, logoW: edge + pad + logoBoxW + pad)
+    }
+
+    private static func drawLogoOrInitial(_ ctx: CGContext, logo: CGImage?, initial: String, accent: NSColor, box: CGRect) {
+        if let logo {
+            let pad = box.height * 0.08
+            let b = box.insetBy(dx: pad, dy: pad)
+            let s = min(b.width / CGFloat(logo.width), b.height / CGFloat(logo.height))
+            let w = CGFloat(logo.width) * s, h = CGFloat(logo.height) * s
+            ctx.interpolationQuality = .high
+            ctx.draw(logo, in: CGRect(x: b.midX - w / 2, y: b.midY - h / 2, width: w, height: h))
+        } else {
+            let ini = NSAttributedString(string: String(initial.prefix(1)).uppercased(), attributes: [.font: condensed(box.height * 0.6), .foregroundColor: accent])
+            let l = CTLineCreateWithAttributedString(ini)
+            let b = CTLineGetBoundsWithOptions(l, .useGlyphPathBounds)
+            ctx.textPosition = CGPoint(x: box.midX - b.width / 2 - b.minX, y: box.midY - b.height / 2 - b.minY)
+            CTLineDraw(l, ctx)
+        }
+    }
+
+    @discardableResult
+    private static func line(_ ctx: CGContext, _ str: String, font: NSFont, color: NSColor, x: CGFloat, maxW: CGFloat, midY: CGFloat, kern: CGFloat = 0) -> CGFloat {
+        let a = NSAttributedString(string: str, attributes: [.font: font, .foregroundColor: color, .kern: kern])
+        var l = CTLineCreateWithAttributedString(a)
+        let dots = CTLineCreateWithAttributedString(NSAttributedString(string: "…", attributes: [.font: font, .foregroundColor: color]))
+        if let t = CTLineCreateTruncatedLine(l, Double(maxW), .end, dots) { l = t }
+        var asc: CGFloat = 0, desc: CGFloat = 0
+        let w = CGFloat(CTLineGetTypographicBounds(l, &asc, &desc, nil))
+        ctx.textPosition = CGPoint(x: x, y: midY - (asc - desc) / 2)
+        CTLineDraw(l, ctx)
+        return w
+    }
+
+    /// Compatibilidad: el cintillo viejo (noticiero) como una sola imagen.
+    static func cintillo(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CIImage? {
+        cintilloNews(title: title, text: text, tag: tag, accent: accent, logo: logo, width: width, height: height)?.full
     }
 
     /// Texto de una capa: título con contorno, texto en caja oscura o etiqueta de color.

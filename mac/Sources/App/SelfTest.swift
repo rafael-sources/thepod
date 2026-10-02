@@ -290,8 +290,13 @@ enum SelfTest {
                 win.contentView = host
                 win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
                 win.orderFrontRegardless()
-                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers), ("4-reels", .reels), ("5-aspecto", .look)] {
+                for (name, step) in [("1-arreglar", Step.fix), ("2-exportar", .export), ("3-capas", .layers), ("4-reels", .reels), ("5-aspecto", .look), ("6-cintillos", .cintillos)] {
                     session.step = step
+                    if step == .cintillos, let c = session.project.cintillos.first {
+                        session.selectedTrack = .cintillo(c.id)
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        session.seek(timeline: c.start + 2, play: false)
+                    }
                     if step == .layers, let o = session.project.overlays.first {
                         session.selectedTrack = .overlay(o.id)
                         try? await Task.sleep(nanoseconds: 3_000_000_000)

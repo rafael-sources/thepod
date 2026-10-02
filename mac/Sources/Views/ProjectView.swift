@@ -19,6 +19,7 @@ struct ProjectView: View {
                     case .captions: CaptionsStep(session: session)
                     case .look: LookStep(session: session)
                     case .layers: LayersStep(session: session)
+                    case .cintillos: CintillosStep(session: session)
                     case .sounds: SoundsStep(session: session)
                     case .brands: BrandsStep(session: session)
                     case .reels: ReelsStep(session: session)
@@ -114,6 +115,7 @@ struct ProjectView: View {
         case .captions: return p.isTranscribed
         case .look: return p.backgroundFile != nil || p.layout != .auto || p.intro != nil
         case .layers: return !p.overlays.isEmpty || !p.brolls.isEmpty
+        case .cintillos: return !p.cintillos.isEmpty
         case .sounds: return !p.audioLane.isEmpty
         case .brands: return !p.sponsors.isEmpty || !p.cintillos.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
@@ -129,6 +131,7 @@ struct ProjectView: View {
         case .captions: return p.isTranscribed ? nil : "sin transcribir"
         case .sounds: return p.audioLane.isEmpty ? nil : "\(p.audioLane.count)"
         case .layers: return p.overlays.isEmpty ? nil : "\(p.overlays.count)"
+        case .cintillos: return p.cintillos.isEmpty ? nil : "\(p.cintillos.count)"
         case .brands: return p.sponsors.isEmpty ? nil : "\(p.sponsors.count)"
         default: return nil
         }
@@ -198,7 +201,11 @@ struct PreviewPane: View {
                     }
                 }
             }
-            TrackInspector(session: session)
+            .frame(minHeight: 260)
+            // El panel de la pista puede ser alto (cintillos, capas): se desplaza y el video no se achica
+            ScrollView { TrackInspector(session: session) }
+                .frame(maxHeight: 340)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button {
                     session.markMoment()
@@ -245,6 +252,8 @@ struct TrackInspector: View {
                     BRollEditor(session: session, id: id, reelId: nil)
                 case .reelBRoll(let reelId, let id):
                     BRollEditor(session: session, id: id, reelId: reelId)
+                case .cintillo(let id):
+                    CintilloEditor(session: session, id: id)
                 }
             }
             .padding(12)

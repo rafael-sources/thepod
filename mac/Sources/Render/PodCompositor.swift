@@ -25,7 +25,13 @@ final class RenderScene: @unchecked Sendable {
     struct SponsorCard { let start: Double; let end: Double; let name: String; let copy: String?; let logo: CIImage? }
     let sponsorCards: [SponsorCard]
     /// Cintillos del director ya dibujados (se colocan abajo a la izquierda y entran deslizándose).
-    struct CintilloCard { let start: Double; let end: Double; let image: CIImage }
+    struct CintilloCard {
+        let start: Double; let end: Double; let image: CIImage
+        var base: CIImage? = nil      // sin texto (para la cortina al entrar)
+        var logoW: CGFloat = 0        // ancho de la cajita del logo (aparece primero, con rebote)
+        var style: String = "news"
+        var sound = true
+    }
     var cintillos: [CintilloCard] = []
     /// Capas (textos, imágenes, stickers) ya dibujadas a su tamaño; centro en fracción del cuadro (y desde arriba).
     struct OverlayCard { let id: Int; let start: Double; let end: Double; let image: CIImage; let cx: Double; let cy: Double; let animate: Bool }
@@ -343,12 +349,46 @@ final class RenderScene: @unchecked Sendable {
         for c in cintillos where t >= c.start && t < c.end {
             let img = c.image
             let m = min(W, H) * 0.04
-            let p = min(1, (t - c.start) / 0.4), q = min(1, (c.end - t) / 0.3)
-            let k = CGFloat(1 - pow(1 - min(p, q), 3))
-            let x = m - (img.extent.width + m) * (1 - k)
-            // Si hay dos a la vez, el segundo va encima del primero (como en vivo)
             let y = max(format.isVertical ? H * 0.30 : m, cintilloTop > 0 ? cintilloTop + m * 0.4 : 0)
-            out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
+            let tin = t - c.start, tout = c.end - t
+            var placed: CIImage
+            if tout < 0.3 {
+                // Sale: se va a la izquierda con fundido (0,3 s)
+                let q = CGFloat(tout / 0.3)
+                let k = 1 - pow(1 - q, 3)
+                let x = m - (img.extent.width + m) * (1 - k)
+                placed = img.transformed(by: .init(translationX: x, y: y))
+                    .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)])
+            } else if tin < 0.9, let base = c.base {
+                // Entra en tres pasos: 0–0,15 s el logo con rebote; 0,15–0,5 s las barras se despliegan desde el logo; 0,5–0,9 s el texto aparece
+                let w = img.extent.width, h = img.extent.height
+                var layer: CIImage
+                if tin < 0.15 {
+                    let k = CGFloat(tin / 0.15)
+                    let sc = 0.6 + 0.5 * k - 0.1 * k * k      // pasa de 0,6 a 1,0 con un pequeño rebote
+                    let logoPart = c.logoW > 0 ? base.cropped(to: CGRect(x: 0, y: 0, width: c.logoW, height: h)) : base.cropped(to: CGRect(x: 0, y: 0, width: min(w, h * 0.9), height: h))
+                    let cx = logoPart.extent.midX, cy = logoPart.extent.midY
+                    layer = logoPart.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(scaleX: sc, y: sc)).concatenating(.init(translationX: cx, y: cy)))
+                        .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)])
+                } else if tin < 0.5 {
+                    let k = CGFloat((tin - 0.15) / 0.35)
+                    let e = 1 - pow(1 - k, 3)
+                    let reveal = c.logoW + (w - c.logoW) * e
+                    layer = base.cropped(to: CGRect(x: 0, y: 0, width: reveal, height: h))
+                } else {
+                    let k = CGFloat((tin - 0.5) / 0.4)
+                    let text = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)])
+                    layer = text.composited(over: base)
+                }
+                placed = layer.transformed(by: .init(translationX: m, y: y))
+            } else if tin < 0.4 {
+                // Sin capa base (cintillos viejos): entra deslizando
+                let k = CGFloat(1 - pow(1 - tin / 0.4, 3))
+                placed = img.transformed(by: .init(translationX: m - (img.extent.width + m) * (1 - k), y: y))
+            } else {
+                placed = img.transformed(by: .init(translationX: m, y: y))
+            }
+            out = placed.composited(over: out)
             cintilloTop = max(cintilloTop, y + img.extent.height)
         }
 
