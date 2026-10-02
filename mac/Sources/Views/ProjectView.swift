@@ -315,6 +315,19 @@ struct TrackInspector: View {
         let lane = session.project.lanes[i]
         header(session.project.laneName(lane.id), "person.fill")
         volumeRow(value: $session.project.lanes[i].volume, max: 2)
+        HStack(spacing: 8) {
+            Text("Volumen dibujado").frame(width: 110, alignment: .leading)
+            if lane.hasAutomation {
+                Text("\(lane.volumePoints.count) puntos en la línea amarilla del timeline").foregroundStyle(Theme.secondary)
+                Button("Quitar la línea") { session.clearVolumePoints(laneId: lane.id) }
+            } else {
+                Text("Doble clic sobre esta persona en el timeline para subir o bajar su volumen en un punto").foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            Toggle("Solo", isOn: Binding(get: { lane.solo }, set: { _ in session.toggleSolo(lane.id) })).toggleStyle(.checkbox)
+            Toggle("Mudo", isOn: Binding(get: { lane.muted }, set: { _ in session.toggleMute(lane.id) })).toggleStyle(.checkbox)
+        }
+        .font(.callout).controlSize(.small)
         fadeRow(label: "Fade entrada", value: $session.project.lanes[i].fadeIn)
         fadeRow(label: "Fade salida", value: $session.project.lanes[i].fadeOut)
         HStack(spacing: 6) {

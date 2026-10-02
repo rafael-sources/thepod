@@ -20,6 +20,10 @@ struct EpisodeTimeline: View {
     ]
 
     private let labelWidth: CGFloat = 132
+    @State private var dragPoint: (lane: Int, id: UUID)?
+    @State private var lastClick: (at: Date, x: CGFloat, y: CGFloat)?
+    @State private var selectionLane: Int?          // persona donde empezó el arrastre (para «solo a esta persona»)
+    @State private var dragDB: Double?
     private let rulerH: CGFloat = 18
     private let marksH: CGFloat = 16
     private let laneH: CGFloat = 36
@@ -46,14 +50,24 @@ struct EpisodeTimeline: View {
                                 .font(.caption).monospacedDigit()
                             Button { session.seek(timeline: sel.start, play: true) } label: { Label("Oír", systemImage: "play.fill") }
                                 .controlSize(.small)
-                            Button(role: .destructive) { session.cutRange(sel.start, sel.end); selection = nil } label: { Label("Cortar este trozo", systemImage: "scissors") }
+                            if let laneId = selectionLane {
+                                Button { session.shapeVolume(laneId: laneId, from: sel.start, to: sel.end, db: VolumePoint.minDB); selection = nil } label: {
+                                    Label("Silenciar solo a \(p.laneName(laneId))", systemImage: "speaker.slash")
+                                }
+                                .controlSize(.small)
+                                Button { session.shapeVolume(laneId: laneId, from: sel.start, to: sel.end, db: -6); selection = nil } label: {
+                                    Label("−6 dB a \(p.laneName(laneId))", systemImage: "speaker.minus")
+                                }
+                                .controlSize(.small)
+                            }
+                            Button(role: .destructive) { session.cutRange(sel.start, sel.end); selection = nil } label: { Label("Cortar de todos", systemImage: "scissors") }
                                 .controlSize(.small).buttonStyle(.borderedProminent).tint(.red)
                             Button { selection = nil } label: { Image(systemName: "xmark") }.controlSize(.small)
                         }
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panelStrong))
                     } else {
-                        Text("Clic: ir ahí · arrastra: marcar un trozo para cortarlo").font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(dragDB.map { String(format: "Volumen %+.0f dB", $0) } ?? "Clic: ir ahí · arrastra: marcar un trozo · doble clic en una persona: punto de volumen").font(.caption2).foregroundStyle(Theme.secondary)
                     }
                     Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
                     Slider(value: $zoom, in: 1...30).frame(width: 140)
@@ -107,7 +121,7 @@ struct EpisodeTimeline: View {
                         let pps = width / p.duration
                         ScrollView(.horizontal, showsIndicators: zoom > 1.01) {
                             ZStack(alignment: .topLeading) {
-                                TimelineCanvas(model: TimelineModel(project: p, energy: session.energy, selectedOverlay: selectedOverlay, selectedBRoll: selectedBRoll), pps: pps,
+                                TimelineCanvas(model: TimelineModel(project: p, energy: session.energy, selectedOverlay: selectedOverlay, selectedBRoll: selectedBRoll, selectedPoint: session.selectedVolumePoint?.id), pps: pps,
                                                rulerH: rulerH, marksH: marksH, laneH: laneH, fxH: fxH, ovH: ovH)
                                     .equatable()
                                 if let sel = selection {
@@ -124,8 +138,21 @@ struct EpisodeTimeline: View {
                             .highPriorityGesture(DragGesture(minimumDistance: 0)
                                 .onChanged { g in
                                     let t = min(max(0, Double(g.location.x / pps)), p.duration)
-                                    if dragAnchor == nil {
-                                        dragAnchor = min(max(0, Double(g.startLocation.x / pps)), p.duration)
+                                    if dragAnchor == nil && dragPoint == nil {
+                                        // ¿Empezó sobre un punto de la línea de volumen? Entonces se mueve el punto
+                                        if let hit = hitPoint(p, at: g.startLocation, pps: pps) {
+                                            dragPoint = hit
+                                            session.selectedVolumePoint = hit
+                                        } else {
+                                            dragAnchor = min(max(0, Double(g.startLocation.x / pps)), p.duration)
+                                            selectionLane = laneAt(p, y: g.startLocation.y)
+                                        }
+                                    }
+                                    if let dp = dragPoint {
+                                        let db = dbAt(p, y: g.location.y, laneId: dp.lane)
+                                        dragDB = db
+                                        session.moveVolumePoint(laneId: dp.lane, id: dp.id, t: t, db: db)
+                                        return
                                     }
                                     let a = dragAnchor ?? t
                                     if abs(g.translation.width) > 4 {
@@ -134,8 +161,18 @@ struct EpisodeTimeline: View {
                                 }
                                 .onEnded { g in
                                     let t = min(max(0, Double(g.location.x / pps)), p.duration)
+                                    if dragPoint != nil { dragPoint = nil; dragDB = nil; dragAnchor = nil; return }
                                     if abs(g.translation.width) <= 4 {
                                         selection = nil
+                                        // Doble clic sobre una persona: agrega un punto de volumen ahí
+                                        if let lc = lastClick, Date().timeIntervalSince(lc.at) < 0.4, abs(lc.x - g.location.x) < 6, abs(lc.y - g.location.y) < 6,
+                                           let laneId = laneAt(p, y: g.location.y) {
+                                            _ = session.addVolumePoint(laneId: laneId, t: t, db: dbAt(p, y: g.location.y, laneId: laneId))
+                                            lastClick = nil; dragAnchor = nil
+                                            return
+                                        }
+                                        lastClick = (Date(), g.location.x, g.location.y)
+                                        session.selectedVolumePoint = nil
                                         // Clic en la fila de textos: elegir esa capa para editarla
                                         let oy = rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH
                                         if (!p.overlays.isEmpty || !p.brolls.isEmpty), g.location.y >= oy, g.location.y <= oy + ovH {
@@ -171,6 +208,7 @@ struct EpisodeTimeline: View {
             legendItem(Color.purple.opacity(0.8), "Sponsor")
             legendItem(Color.white.opacity(0.8), "Efecto")
             legendItem(Color.yellow.opacity(0.75), "Texto")
+            HStack(spacing: 4) { Rectangle().fill(Theme.accent).frame(width: 10, height: 1.5); Text("Volumen") }
         }
         .font(.caption2)
         .foregroundStyle(Theme.secondary)
@@ -193,6 +231,35 @@ struct EpisodeTimeline: View {
         return nil
     }
 
+    /// Persona (id) en la fila donde está `y`, o nil si no es una fila de persona.
+    private func laneAt(_ p: Project, y: CGFloat) -> Int? {
+        let top = rulerH + marksH
+        guard y >= top else { return nil }
+        let i = Int((y - top) / laneH)
+        return i >= 0 && i < p.lanes.count ? p.lanes[i].id : nil
+    }
+    private func laneTop(_ p: Project, laneId: Int) -> CGFloat {
+        let i = p.lanes.firstIndex { $0.id == laneId } ?? 0
+        return rulerH + marksH + CGFloat(i) * laneH
+    }
+    /// dB que corresponde a la altura `y` dentro de la fila de esa persona.
+    private func dbAt(_ p: Project, y: CGFloat, laneId: Int) -> Double {
+        let top = laneTop(p, laneId: laneId)
+        let u = Double(1 - min(1, max(0, (y - top - 4) / (laneH - 8))))
+        let db = VolumePoint.minDB + u * (VolumePoint.maxDB - VolumePoint.minDB)
+        return (db / 1).rounded()      // de a 1 dB
+    }
+    private func hitPoint(_ p: Project, at loc: CGPoint, pps: CGFloat) -> (lane: Int, id: UUID)? {
+        guard let laneId = laneAt(p, y: loc.y), let lane = p.lanes.first(where: { $0.id == laneId }) else { return nil }
+        let top = laneTop(p, laneId: laneId)
+        for pt in lane.volumePoints {
+            let px = CGFloat(pt.t) * pps
+            let py = top + laneH - 4 - CGFloat((pt.db - VolumePoint.minDB) / (VolumePoint.maxDB - VolumePoint.minDB)) * (laneH - 8)
+            if abs(px - loc.x) <= 7 && abs(py - loc.y) <= 7 { return (laneId, pt.id) }
+        }
+        return nil
+    }
+
     private func seek(to t: Double, duration: Double) {
         var t = min(max(0, t), duration)
         if let w = session.previewWindow { t = min(max(t, w.start), w.end) }   // viendo un reel: dentro del reel
@@ -206,6 +273,8 @@ struct TimelineModel: Equatable {
     var lanes: [[ClosedRange<Double>]]          // tramos con voz por persona
     var waves: [[Float]]                        // dB cada 100 ms por persona (forma de onda), vacío si no hay análisis
     var audible: [Bool]
+    var automation: [[VolumePoint]]             // línea de volumen por persona
+    var selectedPoint: UUID?
     var cuts: [ClosedRange<Double>]
     var moments: [Double]
     var reels: [ClosedRange<Double>]
@@ -215,7 +284,9 @@ struct TimelineModel: Equatable {
     var brolls: [ClosedRange<Double>]
     var selectedOverlay: ClosedRange<Double>?
 
-    init(project p: Project, energy: EnergyMap?, selectedOverlay: Int? = nil, selectedBRoll: Int? = nil) {
+    init(project p: Project, energy: EnergyMap?, selectedOverlay: Int? = nil, selectedBRoll: Int? = nil, selectedPoint: UUID? = nil) {
+        automation = p.lanes.map { $0.volumePoints.sorted { $0.t < $1.t } }
+        self.selectedPoint = selectedPoint
         overlays = p.overlays.map { $0.start...$0.end }
         brolls = p.brolls.map { $0.start...$0.end }
         self.selectedOverlay = p.overlays.first { $0.id == selectedOverlay }.map { $0.start...$0.end }
@@ -319,6 +390,22 @@ private struct TimelineCanvas: View, Equatable {
                         px += colW
                     }
                     ctx.fill(path, with: .color(c.opacity(0.9)))
+                }
+                // Línea de volumen (amarilla) con sus puntos
+                let pts = model.automation[i]
+                if !pts.isEmpty {
+                    func py(_ db: Double) -> CGFloat { y + laneH - 4 - CGFloat((db - VolumePoint.minDB) / (VolumePoint.maxDB - VolumePoint.minDB)) * (laneH - 8) }
+                    var line = Path()
+                    line.move(to: CGPoint(x: 0, y: py(pts[0].db)))
+                    for pt in pts { line.addLine(to: CGPoint(x: x(pt.t), y: py(pt.db))) }
+                    line.addLine(to: CGPoint(x: size.width, y: py(pts[pts.count - 1].db)))
+                    ctx.stroke(line, with: .color(Theme.accent.opacity(0.95)), lineWidth: 1.5)
+                    for pt in pts {
+                        let r: CGFloat = pt.id == model.selectedPoint ? 5 : 3.5
+                        let rect = CGRect(x: x(pt.t) - r, y: py(pt.db) - r, width: 2 * r, height: 2 * r)
+                        ctx.fill(Path(ellipseIn: rect), with: .color(pt.id == model.selectedPoint ? .white : Theme.accent))
+                        ctx.stroke(Path(ellipseIn: rect), with: .color(.black.opacity(0.6)), lineWidth: 1)
+                    }
                 }
             }
 

@@ -150,7 +150,33 @@ extension Lane {
         eq = try c.decodeIfPresent(VoiceEQ.self, forKey: .eq) ?? VoiceEQ()
         muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
+        volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
     }
+}
+
+/// Un punto de la línea de volumen de una persona: en el segundo `t` del episodio, `db` más o menos (0 = como está).
+struct VolumePoint: Codable, Equatable, Hashable, Identifiable {
+    var id = UUID()
+    var t: Double
+    var db: Double
+    static let minDB = -60.0, maxDB = 12.0
+}
+
+extension Lane {
+    /// dB de la línea de volumen en el segundo `t` (interpolación lineal entre puntos; plano fuera de ellos).
+    func automationDB(at t: Double) -> Double {
+        let pts = volumePoints.sorted { $0.t < $1.t }
+        guard let first = pts.first, let last = pts.last else { return 0 }
+        if t <= first.t { return first.db }
+        if t >= last.t { return last.db }
+        for i in 0..<(pts.count - 1) where t >= pts[i].t && t <= pts[i + 1].t {
+            let a = pts[i], b = pts[i + 1]
+            let u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0
+            return a.db + (b.db - a.db) * u
+        }
+        return 0
+    }
+    var hasAutomation: Bool { !volumePoints.isEmpty }
 }
 
 extension Project {
@@ -212,6 +238,7 @@ struct Lane: Codable, Identifiable, Equatable {
     var eq = VoiceEQ()                  // ecualizador de 3 bandas (se aplica procesando el audio)
     var muted: Bool = false             // M: esta persona no suena (vista previa y export)
     var solo: Bool = false              // S: solo suenan las personas con solo
+    var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
 
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 

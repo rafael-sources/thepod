@@ -223,6 +223,7 @@ final class ProjectSession: ObservableObject {
     @Published var note: String?          // aviso corto (atajos, deshacer)
     var noteId = UUID()
     var inPoint: Double?                  // tecla I: inicio de un reel pendiente
+    @Published var selectedVolumePoint: (lane: Int, id: UUID)?   // punto elegido de la línea de volumen (Suprimir lo quita)
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
     enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int), reelCintillo(UUID, Int) }
     @Published var selectedTrack: TrackSel?

@@ -118,6 +118,7 @@ extension ProjectSession {
             return false
         }
         switch e.keyCode {
+        case 51, 117: return deleteSelectedVolumePoint()                     // Suprimir: quita el punto de volumen elegido
         case 49: togglePlay(); return true                                   // espacio
         case 123: nudge(flags.contains(.shift) ? -5 : -1); return true       // ←
         case 124: nudge(flags.contains(.shift) ? 5 : 1); return true         // →
@@ -253,7 +254,8 @@ enum Help {
             return """
             «Arreglar todo» hace tres cosas: sonido de estudio (quita ruido y empareja el volumen), quita los silencios \
             largos y las muletillas («eeeh»). Nada se borra de verdad: cada corte queda en la lista y se puede apagar. \
-            También puedes cortar a mano arrastrando sobre el timeline.
+            En el timeline: arrastra un trozo para cortarlo de todos, o solo callar o bajar a una persona ahí (si tose, \
+            si gritó). Doble clic sobre una persona pone un punto en su línea de volumen: arrástralo arriba o abajo.
             """
         case .captions:
             return """
@@ -325,6 +327,8 @@ enum Help {
     ← → · un segundo atrás / adelante (con ⇧, cinco)
     J / L · cinco segundos atrás / adelante
     M · marcar momento (crea un reel de 60 s desde aquí)
+    Doble clic sobre una persona en el timeline · punto de volumen · arrástralo · Suprimir lo quita
+    Arrastra un trozo sobre una persona · «Silenciar solo a…» / «−6 dB a…» / «Cortar de todos»
     I · marcar inicio de un reel · O · marcar fin y crearlo (viendo un reel, O ajusta su fin)
     ⌘Z · deshacer · ⇧⌘Z · rehacer
     """
@@ -402,5 +406,64 @@ extension ProjectSession {
     func contextAround(_ m: SensitiveMark) -> String {
         let ws = project.words.filter { $0.lane == m.lane && $0.s >= m.s - 3 && $0.s <= m.e + 3 }.sorted { $0.s < $1.s }
         return ws.map { $0.w }.joined(separator: " ")
+    }
+}
+
+// MARK: - Volumen dibujado (0.16)
+
+extension ProjectSession {
+    func addVolumePoint(laneId: Int, t: Double, db: Double) -> UUID? {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return nil }
+        let tt = min(max(0, t), project.duration)
+        let d = min(VolumePoint.maxDB, max(VolumePoint.minDB, db))
+        // Si la línea estaba plana, el primer punto va acompañado de dos extremos para que el resto siga igual
+        if project.lanes[i].volumePoints.isEmpty {
+            project.lanes[i].volumePoints = [VolumePoint(t: 0, db: 0), VolumePoint(t: project.duration, db: 0)]
+        }
+        let p = VolumePoint(t: tt, db: d)
+        project.lanes[i].volumePoints.append(p)
+        selectedVolumePoint = (laneId, p.id)
+        return p.id
+    }
+
+    func moveVolumePoint(laneId: Int, id: UUID, t: Double, db: Double) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }),
+              let j = project.lanes[i].volumePoints.firstIndex(where: { $0.id == id }) else { return }
+        project.lanes[i].volumePoints[j].t = min(max(0, t), project.duration)
+        project.lanes[i].volumePoints[j].db = min(VolumePoint.maxDB, max(VolumePoint.minDB, db))
+    }
+
+    func removeVolumePoint(laneId: Int, id: UUID) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+        project.lanes[i].volumePoints.removeAll { $0.id == id }
+        if project.lanes[i].volumePoints.allSatisfy({ $0.db == 0 }) { project.lanes[i].volumePoints = [] }
+        selectedVolumePoint = nil
+    }
+
+    func clearVolumePoints(laneId: Int) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+        project.lanes[i].volumePoints = []
+        selectedVolumePoint = nil
+    }
+
+    /// Un tramo de UNA persona: silenciar solo ahí (−60 dB) o bajar X dB. Son cuatro puntos en la línea.
+    func shapeVolume(laneId: Int, from a: Double, to b: Double, db: Double) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }), b - a > 0.05 else { return }
+        let lane = project.lanes[i]
+        let before = lane.automationDB(at: a - 0.06), after = lane.automationDB(at: b + 0.06)
+        if project.lanes[i].volumePoints.isEmpty {
+            project.lanes[i].volumePoints = [VolumePoint(t: 0, db: 0), VolumePoint(t: project.duration, db: 0)]
+        }
+        // Quitar los puntos que caen dentro y poner los cuatro nuevos
+        project.lanes[i].volumePoints.removeAll { $0.t > a - 0.06 && $0.t < b + 0.06 }
+        project.lanes[i].volumePoints += [VolumePoint(t: max(0, a - 0.05), db: before), VolumePoint(t: a, db: db),
+                                           VolumePoint(t: b, db: db), VolumePoint(t: min(project.duration, b + 0.05), db: after)]
+        flashNote(db <= VolumePoint.minDB ? "\(project.laneName(laneId)) en silencio en ese tramo" : "\(project.laneName(laneId)) \(Int(db)) dB en ese tramo")
+    }
+
+    func deleteSelectedVolumePoint() -> Bool {
+        guard let sel = selectedVolumePoint else { return false }
+        removeVolumePoint(laneId: sel.lane, id: sel.id)
+        return true
     }
 }

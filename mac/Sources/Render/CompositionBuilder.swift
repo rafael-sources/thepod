@@ -124,6 +124,16 @@ enum CompositionBuilder {
             guard z > a else { return nil }
             return (b.lane, introDur + a - 0.03, introDur + z + 0.03)
         }
+        /// Puntos de la línea de volumen de una persona, en tiempo del video final (los que caen en lo que se exporta)
+        func automationPoints(_ lane: Lane) -> [Double] {
+            lane.volumePoints.compactMap { pt in EditEngine.toOutput(pt.t, keep: keep).map { introDur + $0 } }
+                .flatMap { [$0 - 0.001, $0, $0 + 0.001] }
+        }
+        func automationGain(_ lane: Lane, _ t: Double) -> Double {
+            guard lane.hasAutomation else { return 1 }
+            let tl = EditEngine.toTimeline(max(0, t - introDur), keep: keep)
+            return pow(10, lane.automationDB(at: tl) / 20)
+        }
         func bleepPoints(_ lane: Int) -> [Double] { bleepOut.filter { $0.lane == lane }.flatMap { [$0.start - 0.02, $0.start, $0.end, $0.end + 0.02] } }
         func inBleep(_ lane: Int, _ t: Double) -> Bool { bleepOut.contains { $0.lane == lane && t >= $0.start && t < $0.end } }
 
@@ -200,9 +210,10 @@ enum CompositionBuilder {
                 let p = AVMutableAudioMixInputParameters(track: aTrack)
                 let id = lane.id
                 applyEnvelope(p, base: laneBase, span: span,
-                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id)) { t in
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id) + automationPoints(lane)) { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
                     if gate, let who = speaker(at: t), who != id { f *= 0.125 }
+                    f *= automationGain(lane, t)
                     if inBleep(id, t) { f = 0 }
                     return f
                 }
