@@ -9,6 +9,7 @@
   <p class="lede">Dudas comunes y cómo resolver los problemas más habituales.</p>
 </header>
 
+<h2 id="faq-h"><span class="num">01</span> Preguntas</h2>
 <section class="faq" id="faq">
   <details>
     <summary>¿Se sube mi audio a algún servidor para transcribirlo?</summary>
@@ -70,6 +71,60 @@
     <summary>¿Puedo quitar el sonido al abrir o cerrar?</summary>
     <div class="ans"><p>Sí, en Ajustes → Al abrir y cerrar.</p></div>
   </details>
+
+  <details>
+    <summary>El pitido no tapa la palabra / se oye la palabra debajo</summary>
+    <div class="ans"><p>Desde la 0.17.1 el pitido silencia <strong>todos</strong> los micrófonos mientras dura (la palabra también se cuela por el micrófono de la otra persona) y arranca un poco antes y termina un poco después de la palabra. Si todavía se oye, revisa en Preparar → Palabras sensibles que esa palabra tenga <strong>Pitido encima</strong> encendido, y que no esté marcada «Está bien así».</p></div>
+  </details>
+
+  <details>
+    <summary>¿El pitido o el cambio de subtítulo tocan mi audio original?</summary>
+    <div class="ans"><p>No. Como todo en la app, se aplica al exportar y a la vista previa. Las grabaciones quedan como estaban; apagas el pitido y vuelve la palabra.</p></div>
+  </details>
+
+  <details>
+    <summary>Quiero terminar la mezcla en Logic / Audition / Reaper</summary>
+    <div class="ans"><p>En Exportar toca <strong>Pistas por separado (WAV)</strong>: un WAV de 24 bit y 48 kHz por persona (con sus cortes, fades, línea de volumen y pitidos) y otro con la música y los efectos, sin intro ni cierre. Quedan en <code>exports/pistas_&lt;fecha&gt;/</code> del episodio.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Quién ve el teleprompter en la sala?</summary>
+    <div class="ans"><p>Todos ven el aviso 3 s antes («Viene <em>Guion · Nombre</em> en 3 s»). El texto le sale solo a la persona elegida en prePod como quien lo lee. Si no elegiste a nadie, le sale a todos. Los invitados también lo ven si el guion los nombra como lectores.</p></div>
+  </details>
+
+  <details>
+    <summary>El teleprompter no aparece a los segundos que puse</summary>
+    <div class="ans"><p>El tiempo cuenta desde que arranca la grabación (no desde que entras a la sala). Revisa en prePod → Guion que la sección tenga <strong>Teleprompter</strong> marcado y los minutos y segundos puestos; si usa «después del anterior», prePod calcula el inicio por las palabras del anterior y su velocidad, y no reacciona a si el anterior se pausó o cerró antes.</p></div>
+  </details>
+
+  <details>
+    <summary>El fondo virtual parpadea o deja una franja</summary>
+    <div class="ans"><p>Es un límite conocido (ver abajo). Ayuda tener luz pareja y fondo real quieto; en los diseños «Estudio» y «Quien habla con marco» la franja del fondo del podcast se nota menos si eliges como fondo virtual el <em>Fondo del podcast</em>.</p></div>
+  </details>
+
+  <details>
+    <summary>Metí un video en un reel con ventanita y se veía recortado o no se movía</summary>
+    <div class="ans"><p>Arreglado en la 0.12: la ventanita toma la forma del video (no lo recorta) y los videos grabados en vertical con teléfono se ven derechos. Si te pasa con una versión nueva, revisa que el b-roll esté dentro del tramo del reel: lo que queda fuera no entra.</p></div>
+  </details>
+
+  <details>
+    <summary>Mi Mac se calienta al exportar</summary>
+    <div class="ans"><p>Enciende <strong>Modo tranquilo</strong> en Exportar: el render baja el ritmo cuando la Mac se calienta. Tarda más, pero no se detiene. El fondo virtual fino es lo más pesado (unos 9 s por cada 10 s de video con dos personas).</p></div>
+  </details>
+</section>
+
+<section id="limites">
+  <h2><span class="num">02</span> Lo que no hace (todavía) y límites conocidos</h2>
+  <ul>
+    <li>No está firmada ni notarizada: aviso de macOS la primera vez y permisos de cámara y micrófono que se vuelven a pedir en cada versión. Hace falta una cuenta de Apple Developer.</li>
+    <li>El teleprompter encadenado («después del anterior») sale a la hora calculada; no reacciona a que el anterior termine antes o después.</li>
+    <li>En 9:16, el logo, un cintillo, los subtítulos y un texto pueden pisarse si coinciden en el mismo momento.</li>
+    <li>El fondo virtual puede parpadear con movimiento y deja una franja del fondo del podcast detrás de la persona en algunos diseños.</li>
+    <li>El medidor por persona muestra el nivel del análisis con el volumen aplicado, no una medición de la salida real.</li>
+    <li>La mezcla no tiene plugins VST/AU, MIDI, 5.1 ni mastering por bandas, a propósito: para eso están las pistas por separado.</li>
+    <li>En ama falta ver y oír al del Q&amp;A dentro de la sala de prod, grabar en la Mac si la del servidor falla, y chat moderado real.</li>
+    <li>No hay app de iPhone/iPad ni Windows: los invitados usan la web.</li>
+  </ul>
 </section>
 {% endblock %}
 
@@ -77,5 +132,6 @@
 <div class="lbl">EN ESTA PÁGINA</div>
 <nav>
   <a href="#faq">Preguntas frecuentes</a>
+  <a href="#limites">Límites conocidos</a>
 </nav>
 {% endblock %}

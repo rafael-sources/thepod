@@ -93,7 +93,7 @@ def create_app():
         "postpodapp": {"name": "thePod para Mac", "icon": "💻",
                     "tag": "App para Mac",
                     "sections": ["overview", "quickstart", "conceptos",
-                                 "funcionalidades", "integraciones", "faq"]},
+                                 "funcionalidades", "atajos", "integraciones", "faq"]},
         "amapod":  {"name": "amaPod",  "icon": "❓",
                     "tag": "Q&A en vivo",
                     "sections": ["overview", "quickstart", "conceptos",
