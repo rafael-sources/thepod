@@ -331,6 +331,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var exportedFile: String?
     var look: ReelLook?                 // diseño propio de este reel (nil = el de todos los reels)
     var cuts: [Cut] = []                // cortes solo de este reel (frases quitadas, silencios), aparte de los del episodio
+    var brolls: [BRollClip] = []        // b-roll solo de este reel
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -348,6 +349,7 @@ struct Reel: Codable, Identifiable, Equatable {
         exportedFile = try c.decodeIfPresent(String.self, forKey: .exportedFile)
         look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
+        brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
     }
 }
 
@@ -415,7 +417,7 @@ extension Project {
     /// Con `reel` también entran sus cortes propios.
     func applying(_ look: ReelLook, reel: Reel? = nil) -> Project {
         var p = self
-        if let reel { p.cuts += reel.cuts }
+        if let reel { p.cuts += reel.cuts; p.brolls += reel.brolls }
         if let o = look.laneOrder { p.laneOrder = o }
         if let g = look.gateOthers { p.fix.gateOthers = g }
         p.layout = look.layout
@@ -645,7 +647,9 @@ struct BRollClip: Codable, Identifiable, Equatable {
     var srcIn: Double = 0               // desde qué segundo del video de b-roll
     var fill: Bool = true               // llenar la pantalla (recorta) o entrar completo con bordes
     var volume: Double = 0              // sonido del b-roll (0 = mudo)
+    var placement: String = "full"      // full | pipLeft | pipRight (ventanita abajo a la izquierda o a la derecha)
     var end: Double { start + duration }
+    static let maxSeconds = 10.0        // un b-roll es un apoyo corto, no otro video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
 
     init(id: Int, file: String, isVideo: Bool, start: Double, duration: Double = 6) {
@@ -661,6 +665,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
         srcIn = try c.decodeIfPresent(Double.self, forKey: .srcIn) ?? 0
         fill = try c.decodeIfPresent(Bool.self, forKey: .fill) ?? true
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0
+        placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "full"
     }
 }
 

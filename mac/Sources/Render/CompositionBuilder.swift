@@ -242,7 +242,8 @@ enum CompositionBuilder {
 
         // B-roll: cada video en su pista (se ve entero aunque cruce un corte; la voz sigue debajo)
         var brollScene: [RenderScene.BRoll] = []
-        for b in project.brolls where b.duration > 0.1 {
+        for var b in project.brolls where b.duration > 0.1 {
+            b.duration = min(b.duration, BRollClip.maxSeconds)
             let o = EditEngine.toOutput(b.start, keep: keep)
                 ?? keep.firstIndex { $0.start >= b.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
             guard let o, o < outDuration else { continue }
@@ -266,10 +267,10 @@ enum CompositionBuilder {
                     p.setVolume(Float(b.volume), at: .zero)
                     mixParams.append(p)
                 }
-                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill))
+                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement))
             } else {
                 guard let img = CIImage(contentsOf: ProjectStore.url(b.file, in: project.id), options: [.applyOrientationProperty: true]) else { continue }
-                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill))
+                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement))
             }
         }
 

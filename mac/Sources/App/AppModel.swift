@@ -216,7 +216,7 @@ enum Step: String, CaseIterable, Identifiable {
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
-    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int) }
+    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
@@ -865,8 +865,8 @@ final class ProjectSession: ObservableObject {
 
     // MARK: B-roll
 
-    /// Elige un video o una imagen y lo pone como b-roll donde está el video.
-    func chooseBRoll() {
+    /// Elige un video o una imagen y lo pone como b-roll donde está el video (del episodio, o solo de un reel).
+    func chooseBRoll(reelId: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video, .png, .jpeg, .heic, .webP, .gif]
         panel.allowsMultipleSelection = false
@@ -880,25 +880,43 @@ final class ProjectSession: ObservableObject {
         }
         let rel = "broll/\(url.lastPathComponent)"
         let isVideo = !["png", "jpg", "jpeg", "heic", "webp", "gif", "tif", "tiff"].contains(url.pathExtension.lowercased())
-        let id = (project.brolls.map(\.id).max() ?? 0) + 1
-        let start = min(playheadTimeline, max(0, project.duration - 1))
-        var clip = BRollClip(id: id, file: rel, isVideo: isVideo, start: start, duration: 6)
+        let reel = reelId.flatMap { id in project.reels.first { $0.id == id } }
+        let pool = reel?.brolls ?? project.brolls
+        let id = (pool.map(\.id).max() ?? 0) + 1
+        // Tope: 10 s, y dentro de un reel nunca más largo que el reel (menos 1 s)
+        let cap = reel.map { max(1, min(BRollClip.maxSeconds, $0.length - 1)) } ?? BRollClip.maxSeconds
+        var start = min(playheadTimeline, max(0, project.duration - 1))
+        if let reel { start = min(max(reel.start, start), max(reel.start, reel.end - 1)) }
+        var clip = BRollClip(id: id, file: rel, isVideo: isVideo, start: start, duration: min(6, cap))
+        func add(_ c: BRollClip) {
+            if let reelId, let i = project.reels.firstIndex(where: { $0.id == reelId }) {
+                project.reels[i].brolls.append(c)
+                selectedTrack = .reelBRoll(reelId, c.id)
+                if previewReel?.id == reelId { previewReel = project.reels[i] }
+            } else {
+                project.brolls.append(c)
+                selectedTrack = .broll(c.id)
+            }
+        }
         if isVideo {
             Task { [self] in
                 let d = (try? await AVURLAsset(url: to).load(.duration).seconds) ?? 6
-                if d.isFinite, d > 0 { clip.duration = min(d, 20) }
-                project.brolls.append(clip)
-                selectedTrack = .broll(id)
+                if d.isFinite, d > 0 { clip.duration = min(d, cap) }
+                add(clip)
             }
         } else {
-            project.brolls.append(clip)
-            selectedTrack = .broll(id)
+            add(clip)
         }
     }
 
-    func removeBRoll(_ id: Int) {
-        project.brolls.removeAll { $0.id == id }
-        if selectedTrack == .broll(id) { selectedTrack = nil }
+    func removeBRoll(_ id: Int, reelId: UUID? = nil) {
+        if let reelId, let i = project.reels.firstIndex(where: { $0.id == reelId }) {
+            project.reels[i].brolls.removeAll { $0.id == id }
+            if previewReel?.id == reelId { previewReel = project.reels[i] }
+        } else {
+            project.brolls.removeAll { $0.id == id }
+        }
+        selectedTrack = nil
     }
 
     // MARK: Capas (textos, imágenes, stickers)

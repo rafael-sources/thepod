@@ -114,15 +114,25 @@ struct LayersStep: View {
 /// Panel bajo el video para la capa elegida.
 struct OverlayEditor: View {
     @ObservedObject var session: ProjectSession
-    let index: Int
+    let id: Int
+    /// Se busca por id en cada dibujo: si la capa ya se borró, no se dibuja nada (antes se caía con el índice viejo).
+    private var index: Int { session.project.overlays.firstIndex { $0.id == id } ?? -1 }
 
     static let colors = ["#FFFFFF", "#FFD60A", "#FF453A", "#4CC9F0", "#32D74B", "#BF5AF2", "#000000"]
     static let emojis = ["🔥", "😂", "❤️", "👏", "🎉", "😮", "👀", "💯", "🤯", "🙌", "⭐️", "✅", "🎙️", "🤔"]
 
-    private var o: Binding<VideoLayer> { $session.project.overlays[index] }
+    private var o: Binding<VideoLayer> {
+        Binding(get: { session.project.overlays.first { $0.id == id } ?? VideoLayer(id: id, kind: .text, start: 0) },
+                set: { v in if let i = session.project.overlays.firstIndex(where: { $0.id == id }) { session.project.overlays[i] = v } })
+    }
 
     var body: some View {
-        let ov = session.project.overlays[index]
+        if index >= 0 { editor }
+    }
+
+    @ViewBuilder
+    private var editor: some View {
+        let ov = o.wrappedValue
         HStack {
             Label(ov.kind == .text ? "Texto" : ov.kind == .image ? "Imagen" : "Sticker",
                   systemImage: ov.kind == .text ? "textformat" : ov.kind == .image ? "photo" : "face.smiling").font(.headline)
@@ -231,29 +241,62 @@ struct OverlayEditor: View {
 /// Panel bajo el video para el b-roll elegido.
 struct BRollEditor: View {
     @ObservedObject var session: ProjectSession
-    let index: Int
-    private var b: Binding<BRollClip> { $session.project.brolls[index] }
+    let id: Int
+    let reelId: UUID?           // nil = b-roll del episodio; si no, de ese reel
+
+    private var reel: Reel? { reelId.flatMap { rid in session.project.reels.first { $0.id == rid } } }
+    private var current: BRollClip? { (reel?.brolls ?? session.project.brolls).first { $0.id == id } }
+    /// Se busca por id en cada dibujo: si ya se borró, no se dibuja nada (antes se caía con el índice viejo).
+    private var b: Binding<BRollClip> {
+        Binding(get: { current ?? BRollClip(id: id, file: "", isVideo: false, start: 0) },
+                set: { v in
+                    if let reelId, let r = session.project.reels.firstIndex(where: { $0.id == reelId }),
+                       let i = session.project.reels[r].brolls.firstIndex(where: { $0.id == id }) {
+                        session.project.reels[r].brolls[i] = v
+                        if session.previewReel?.id == reelId { session.previewReel = session.project.reels[r] }
+                    } else if let i = session.project.brolls.firstIndex(where: { $0.id == id }) {
+                        session.project.brolls[i] = v
+                    }
+                })
+    }
 
     var body: some View {
-        let clip = session.project.brolls[index]
+        if let clip = current { editor(clip) }
+    }
+
+    @ViewBuilder
+    private func editor(_ clip: BRollClip) -> some View {
+        let maxDur = reel.map { max(1, min(BRollClip.maxSeconds, $0.length - 1)) } ?? BRollClip.maxSeconds
+        let minStart = reel?.start ?? 0
+        let maxStart = reel.map { max($0.start, $0.end - 1) } ?? session.project.duration
         HStack {
-            Label("B-roll · \(clip.title)", systemImage: clip.isVideo ? "film" : "photo").font(.headline).lineLimit(1)
+            Label((reel != nil ? "B-roll del reel · " : "B-roll · ") + clip.title, systemImage: clip.isVideo ? "film" : "photo").font(.headline).lineLimit(1)
             Spacer()
-            Button(role: .destructive) { session.removeBRoll(clip.id) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
+            Button(role: .destructive) { session.removeBRoll(clip.id, reelId: reelId) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
             Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
         }
         HStack(spacing: 6) {
+            Text("Dónde").frame(width: 72, alignment: .leading)
+            Picker("", selection: b.placement) {
+                Text("Toda la pantalla").tag("full")
+                Text("Ventanita izquierda").tag("pipLeft")
+                Text("Ventanita derecha").tag("pipRight")
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+        }
+        .font(.callout)
+        HStack(spacing: 6) {
             Text("Empieza").frame(width: 72, alignment: .leading)
-            Button("−1 s") { b.wrappedValue.start = max(0, clip.start - 1) }
+            Button("−1 s") { b.wrappedValue.start = max(minStart, clip.start - 1) }
             Text(EditEngine.clock(clip.start)).monospacedDigit().frame(width: 56)
-            Button("+1 s") { b.wrappedValue.start = min(session.project.duration, clip.start + 1) }
-            Button("Aquí") { b.wrappedValue.start = session.playheadTimeline }.help("Donde está el video ahora")
+            Button("+1 s") { b.wrappedValue.start = min(maxStart, clip.start + 1) }
+            Button("Aquí") { b.wrappedValue.start = min(maxStart, max(minStart, session.playheadTimeline)) }.help("Donde está el video ahora")
         }
         .font(.callout).controlSize(.small)
         HStack(spacing: 8) {
             Text("Dura").frame(width: 72, alignment: .leading)
-            Slider(value: b.duration, in: 1...60, step: 0.5)
-            Text(String(format: "%.1f s", clip.duration)).monospacedDigit().frame(width: 48, alignment: .trailing)
+            Slider(value: Binding(get: { min(clip.duration, maxDur) }, set: { b.wrappedValue.duration = min($0, maxDur) }), in: 1...max(1.5, maxDur), step: 0.5)
+            Text(String(format: "%.1f s", min(clip.duration, maxDur))).monospacedDigit().frame(width: 48, alignment: .trailing)
         }
         .font(.callout)
         if clip.isVideo {
@@ -271,11 +314,13 @@ struct BRollEditor: View {
             .font(.callout)
         }
         Picker("", selection: b.fill) {
-            Text("Llenar la pantalla").tag(true)
+            Text("Llenar").tag(true)
             Text("Entero, con bordes").tag(false)
         }
         .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 300)
-        Text("Tapa a las personas; el logo, los textos y los subtítulos siguen encima. La voz no se toca.")
+        Text(String(format: "Máximo %.0f s: un b-roll es un apoyo corto. ", BRollClip.maxSeconds)
+             + (reel != nil ? "Solo en este reel, y siempre más corto que el reel. " : "")
+             + "El logo, los textos y los subtítulos siguen encima. La voz no se toca.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }

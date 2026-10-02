@@ -54,7 +54,7 @@ final class RenderScene: @unchecked Sendable {
     var introImage: CIImage?
     var outroImage: CIImage?
     /// B-roll: pista de video (o imagen fija) que tapa la pantalla entre `start` y `end` (tiempos del video final).
-    struct BRoll { let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool }
+    struct BRoll { let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool; let placement: String }
     var brolls: [BRoll] = []
 
     /// Fondo virtual por persona (lo que va detrás, ya preparado) y calidad de la separación (rápida en la vista previa)
@@ -291,7 +291,27 @@ final class RenderScene: @unchecked Sendable {
             if let tid = b.trackID { pic = brollFrames[tid] }
             guard let pic else { continue }
             let k = CGFloat(min(1, (t - b.start) / 0.35, (b.end - t) / 0.35))   // fundido corto al entrar y salir
-            var img = b.fill ? fill(pic, into: full, cropX: 0.5) : fit(pic, into: full).composited(over: dark)
+            var img: CIImage
+            if b.placement == "pipLeft" || b.placement == "pipRight" {
+                // Ventanita abajo, con marco: no tapa a las personas
+                let w = W * (format.isVertical ? 0.38 : 0.28)
+                let e = pic.extent
+                let h = e.width > 0 ? min(w * e.height / e.width, H * 0.22) : w * 9 / 16
+                let m = min(W, H) * 0.035
+                let bottom = format.isVertical ? H * 0.22 : m + (logo == nil ? 0 : 0)
+                let rect = CGRect(x: b.placement == "pipLeft" ? m : W - w - m, y: bottom, width: w, height: h)
+                let border = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect.insetBy(dx: -4, dy: -4))
+                img = (b.fill ? fill(pic, into: rect, cropX: 0.5) : fit(pic, into: rect).composited(over: CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: rect)))
+                    .composited(over: border)
+                if k < 1 {
+                    // Entra creciendo desde su esquina
+                    let s = 0.85 + 0.15 * k
+                    let cx = rect.midX, cy = rect.midY
+                    img = img.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(scaleX: s, y: s)).concatenating(.init(translationX: cx, y: cy)))
+                }
+            } else {
+                img = b.fill ? fill(pic, into: full, cropX: 0.5) : fit(pic, into: full).composited(over: dark)
+            }
             if k < 1 { img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)]) }
             out = img.composited(over: out)
         }

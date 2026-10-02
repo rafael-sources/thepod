@@ -240,9 +240,11 @@ struct TrackInspector: View {
                 case .sound(let id):
                     if let i = session.project.audioLane.firstIndex(where: { $0.id == id }) { soundBody(i) }
                 case .overlay(let id):
-                    if let i = session.project.overlays.firstIndex(where: { $0.id == id }) { OverlayEditor(session: session, index: i) }
+                    OverlayEditor(session: session, id: id)
                 case .broll(let id):
-                    if let i = session.project.brolls.firstIndex(where: { $0.id == id }) { BRollEditor(session: session, index: i) }
+                    BRollEditor(session: session, id: id, reelId: nil)
+                case .reelBRoll(let reelId, let id):
+                    BRollEditor(session: session, id: id, reelId: reelId)
                 }
             }
             .padding(12)

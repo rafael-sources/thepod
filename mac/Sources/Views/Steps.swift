@@ -531,6 +531,7 @@ struct ReelsStep: View {
                     if let reel = currentReel {
                         ReelTextCard(session: session, reel: reel)
                         ReelSoundCard(session: session, reel: reel)
+                        ReelBRollCard(session: session, reel: reel)
                     }
                     Card {
                         Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
@@ -571,6 +572,7 @@ struct ReelsStep: View {
         .onChange(of: session.project.reelLook) { _, _ in refresh() }
         .onChange(of: currentReel?.look) { _, _ in refresh() }
         .onChange(of: currentReel?.cuts) { _, _ in refresh() }
+        .onChange(of: currentReel?.brolls) { _, _ in refresh() }
     }
 
     private func show(_ reel: Reel) {
@@ -1358,6 +1360,49 @@ struct ReelSoundCard: View {
             }
             if let n = session.reelsNote { Text(n).font(.caption2).foregroundStyle(Theme.secondary) }
             Text("Lo que corta aquí no cambia el episodio.").font(.caption2).foregroundStyle(Theme.secondary)
+        }
+    }
+}
+
+
+/// B-roll solo de este reel: video o foto corta (máximo 10 s y siempre más corta que el reel), entera o en ventanita.
+struct ReelBRollCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    var body: some View {
+        Card {
+            HStack {
+                Text("B-roll de este reel").font(.headline)
+                Spacer()
+                Button { session.chooseBRoll(reelId: reel.id) } label: { Label("Agregar video o imagen…", systemImage: "film") }
+                    .controlSize(.small).disabled(reel.length < 2)
+            }
+            if reel.length < 2 {
+                Text("El reel es muy corto para un b-roll.").font(.caption).foregroundStyle(Theme.secondary)
+            } else if reel.brolls.isEmpty {
+                Text("Un video o una foto que entra unos segundos solo en este reel: toda la pantalla o en una ventanita abajo. Máximo \(Int(BRollClip.maxSeconds)) s.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ForEach(reel.brolls.sorted { $0.start < $1.start }) { b in
+                let sel = session.selectedTrack == .reelBRoll(reel.id, b.id)
+                Button {
+                    session.selectedTrack = .reelBRoll(reel.id, b.id)
+                    session.seek(timeline: b.start + min(1, b.duration / 2), play: false)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: b.isVideo ? "film" : "photo").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                        Text(b.title).lineLimit(1)
+                        Spacer()
+                        Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? "ventanita izq." : "ventanita der.") + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                            .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }
