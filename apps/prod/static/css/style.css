@@ -2556,3 +2556,52 @@ a.mark:hover { opacity: 0.8; }
 
 /* Auto-silencio (puerta de ruido en vivo): botón encendido */
 .guest-studio .gc-btn.on, .host-studio .hs-btn.on { border-color: var(--signal-cool); color: var(--signal-cool); }
+
+/* ==========================================================================
+   Teleprompter (thePod 0.11): aviso para todos y panel con el texto corriendo
+   ========================================================================== */
+.tp-notice {
+  position: fixed; top: 18%; left: 50%; transform: translateX(-50%);
+  z-index: 905; display: flex; align-items: center; gap: 16px;
+  padding: 14px 24px; border-radius: 14px;
+  background: rgba(20, 16, 12, 0.92); border: 3px solid #facc15; color: #fff;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: tp-pop 0.25s ease-out;
+}
+.tp-notice-num { font-family: var(--font-mono); font-size: 44px; font-weight: 900; color: #facc15; min-width: 48px; text-align: center; }
+.tp-notice-text { font-size: 18px; font-weight: 600; letter-spacing: 0.02em; }
+.tp-notice-text b { color: #facc15; }
+@keyframes tp-pop { from { transform: translateX(-50%) scale(0.85); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+
+.tp-panel {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 10%;
+  width: min(92vw, 1100px); z-index: 904;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: rgba(10, 8, 6, 0.92); border: 2px solid rgba(250, 204, 21, 0.6); border-radius: 16px;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.6);
+}
+.tp-panel.tp-quarter { height: 25vh; }
+.tp-panel.tp-half    { height: 50vh; }
+.tp-panel.tp-full    { height: 92vh; bottom: 4vh; width: 96vw; }
+.tp-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: rgba(250, 204, 21, 0.12); font-size: 13px; color: #facc15; font-weight: 700; letter-spacing: 0.06em; }
+.tp-btns { display: flex; gap: 6px; }
+.tp-btns .ghost { font-size: 12px; padding: 3px 10px; }
+.tp-scroll { flex: 1; overflow: hidden; position: relative; }
+.tp-scroll::before, .tp-scroll::after { content: ""; position: absolute; left: 0; right: 0; height: 18%; z-index: 2; pointer-events: none; }
+.tp-scroll::before { top: 0; background: linear-gradient(rgba(10,8,6,0.95), transparent); }
+.tp-scroll::after { bottom: 0; background: linear-gradient(transparent, rgba(10,8,6,0.95)); }
+.tp-text {
+  padding: 0 7%; text-align: center; color: #fff; white-space: pre-wrap;
+  font-size: clamp(26px, 4.2vh, 54px); line-height: 1.35; font-weight: 600;
+  transform: translateY(100%);
+  animation-name: tp-run; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+.tp-quarter .tp-text { font-size: clamp(22px, 3.2vh, 40px); }
+.tp-full .tp-text { font-size: clamp(30px, 5vh, 64px); }
+@keyframes tp-run { from { transform: translateY(100%); } to { transform: translateY(-100%); } }
+@media (max-width: 760px) {
+  .tp-notice { top: 12%; padding: 10px 14px; gap: 10px; width: 92vw; box-sizing: border-box; }
+  .tp-notice-num { font-size: 32px; }
+  .tp-notice-text { font-size: 14px; }
+  .tp-panel { width: 96vw; bottom: 8%; }
+}

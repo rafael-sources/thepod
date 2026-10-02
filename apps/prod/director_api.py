@@ -191,7 +191,7 @@ def inject_overlay(sid):
         username = _require_director(db, sid)
         data = request.get_json(silent=True) or {}
         event_type = data.get("event_type", "")
-        if event_type not in ("banner", "sponsor", "comment", "segment", "countdown", "graphic"):
+        if event_type not in ("banner", "sponsor", "comment", "segment", "countdown", "graphic", "teleprompter"):
             return jsonify({"error": f"event_type inválido: {event_type}"}), 400
 
         payload = json.dumps(data.get("payload", {}), ensure_ascii=False)

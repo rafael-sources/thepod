@@ -268,6 +268,52 @@ def get_session(sid):
         db.close()
 
 
+@bp.get("/api/sessions/<int:sid>/teleprompter")
+def session_teleprompter(sid):
+    """Secciones del guion marcadas para teleprompter (de prePod) + sponsors + participantes,
+    para que el host dispare cada teleprompter a quien le toca. Lo puede pedir el host (sesión)
+    o un invitado con su token (?token=)."""
+    import json as _json
+    import urllib.error
+    import urllib.request
+    from config import INTEGRATION_SECRET
+    db = get_db()
+    try:
+        row = _load_session(db, sid)
+        if not current_user():
+            tok = (request.args.get("token") or "").strip()
+            ok = tok and db.execute("SELECT id FROM participants WHERE session_id=? AND invite_token=?", (sid, tok)).fetchone()
+            if not ok:
+                return jsonify({"error": "no autenticado"}), 401
+        keys = row.keys()
+        src = row["source_url"] if "source_url" in keys else None
+        slug = row["source_slug"] if "source_slug" in keys else None
+        ep = row["source_episode_id"] if "source_episode_id" in keys else None
+        sections, sponsors = [], []
+        if src and slug and ep:
+            url = f"{src.rstrip('/')}/api/integrations/teleprompter?slug={slug}&episode_id={ep}"
+            req = urllib.request.Request(url, headers={"X-PodPod-Secret": INTEGRATION_SECRET})
+            try:
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    data = _json.loads(resp.read().decode("utf-8"))
+                    sections = data.get("sections") or []
+                    sponsors = data.get("sponsors") or []
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, ValueError):
+                pass
+        if not sponsors and "sponsors_json" in keys and row["sponsors_json"]:
+            try:
+                sponsors = _json.loads(row["sponsors_json"]) or []
+            except ValueError:
+                sponsors = []
+        parts = db.execute(
+            "SELECT id, display_name, username, role FROM participants WHERE session_id=?", (sid,)
+        ).fetchall()
+        people = [{"identity": f"participant_{p['id']}", "display_name": p["display_name"], "username": p["username"], "role": p["role"]} for p in parts]
+        return jsonify({"sections": sections, "sponsors": sponsors, "participants": people})
+    finally:
+        db.close()
+
+
 @bp.put("/api/sessions/<int:sid>")
 @require_auth
 def update_session(sid):

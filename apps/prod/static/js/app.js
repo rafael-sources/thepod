@@ -648,6 +648,91 @@ function _admitOverlay(activeOverlays, msg) {
   }
 }
 
+
+/* ==========================================================================
+   Teleprompter (thePod 0.11) — mismo contrato que la app de Mac.
+   Mensaje de sala: {type:"teleprompter", action:"show"|"hide", target:"all"|identity,
+   title, text, speed: slow|normal|fast, size: quarter|half|full, countdown: seg, event_id}
+   Con countdown > 0 TODOS ven el aviso ("Viene X en 3 s · ATENTO PATRICIO") y, al terminar,
+   solo el destinatario ve el texto corriendo.
+   ========================================================================== */
+
+var TP_WPM = { slow: 95, normal: 135, fast: 180 };
+
+function _tpSetup(myIdentity, nameOf) {
+  var tp = reactive({
+    notice: null,        // {title, who, remaining}
+    active: null,        // {event_id, title, text, speed, size, paused, startedAt, pauseAt, durationMs}
+    scrollKey: 0,
+  });
+  var _noticeTick = null, _showTimer = null, _hideTimer = null;
+
+  function _durationMs(text, speed) {
+    var words = Math.max(8, (text || "").trim().split(/\s+/).length);
+    return Math.round(words / (TP_WPM[speed] || 135) * 60000) + 2500;
+  }
+  function show(msg) {
+    clearTimeout(_hideTimer);
+    tp.active = {
+      event_id: msg.event_id, title: msg.title || "", text: msg.text || "",
+      speed: msg.speed || "normal", size: msg.size || "half",
+      paused: false, durationMs: _durationMs(msg.text, msg.speed || "normal"),
+    };
+    tp.scrollKey++;
+    // Se va solo cuando termina de correr (más 4 s de margen), salvo que lo cierren antes
+    _hideTimer = setTimeout(function () { if (tp.active && tp.active.event_id === msg.event_id) tp.active = null; }, tp.active.durationMs + 4000);
+  }
+  function handle(msg) {
+    if (msg.type !== "teleprompter") return false;
+    if (msg.action === "hide") {
+      if (!msg.event_id || (tp.active && tp.active.event_id === msg.event_id)) tp.active = null;
+      tp.notice = null;
+      return true;
+    }
+    var mine = msg.target === "all" || msg.target === myIdentity.value;
+    var secs = Math.max(0, +msg.countdown || 0);
+    clearInterval(_noticeTick); clearTimeout(_showTimer);
+    if (secs > 0) {
+      var who = msg.target === "all" ? "" : (nameOf(msg.target) || "").toUpperCase();
+      tp.notice = { title: msg.title || "Teleprompter", who: who, remaining: secs };
+      var endsAt = Date.now() + secs * 1000;
+      _noticeTick = setInterval(function () {
+        var r = Math.ceil((endsAt - Date.now()) / 1000);
+        if (tp.notice) tp.notice.remaining = Math.max(0, r);
+        if (r <= 0) { clearInterval(_noticeTick); tp.notice = null; }
+      }, 200);
+      if (mine) _showTimer = setTimeout(function () { show(msg); }, secs * 1000);
+    } else if (mine) {
+      show(msg);
+    }
+    return true;
+  }
+  function pause() { if (tp.active) tp.active.paused = !tp.active.paused; }
+  function restart() { if (tp.active) { tp.active.paused = false; tp.scrollKey++; } }
+  function close() { tp.active = null; clearTimeout(_hideTimer); }
+  return { tp: tp, tpHandle: handle, tpPause: pause, tpRestart: restart, tpClose: close };
+}
+
+/* Capa visual (igual en host e invitado). Va dentro del contenedor del video. */
+var TP_TEMPLATE = `
+      <div v-if="tp.notice" class="tp-notice">
+        <div class="tp-notice-num">{{ tp.notice.remaining }}</div>
+        <div class="tp-notice-text">Viene <b>{{ tp.notice.title }}</b> en {{ tp.notice.remaining }} s<span v-if="tp.notice.who"> · ATENTO {{ tp.notice.who }}</span></div>
+      </div>
+      <div v-if="tp.active" class="tp-panel" :class="['tp-' + tp.active.size, { paused: tp.active.paused }]">
+        <div class="tp-head">
+          <span class="tp-title">🎬 {{ tp.active.title || 'Teleprompter' }}</span>
+          <span class="tp-btns">
+            <button class="ghost" @click="tpPause">{{ tp.active.paused ? '▶ Seguir' : '⏸ Pausa' }}</button>
+            <button class="ghost" @click="tpRestart">↺ Desde el inicio</button>
+            <button class="ghost" @click="tpClose">✕</button>
+          </span>
+        </div>
+        <div class="tp-scroll">
+          <div class="tp-text" :key="tp.scrollKey" :style="{ animationDuration: tp.active.durationMs + 'ms', animationPlayState: tp.active.paused ? 'paused' : 'running' }">{{ tp.active.text }}</div>
+        </div>
+      </div>`;
+
 function createChunkUploader(opts) {
   // opts: { sid, token, trackType, takeId, onStatus(st), sendData(state, bytes) }
   var skey = "s" + opts.sid + ":" + (opts.token || "host") + ":" + (opts.trackType || "video");
@@ -1223,6 +1308,55 @@ var StudioView = {
       ];
     }
     var myIdentity = ref("");
+    // Teleprompter: quién es quién (identity → nombre) para los avisos
+    function _tpNameOf(identity) {
+      if (identity === myIdentity.value) return props.user.display_name || props.user.username;
+      var r = remoteMap[identity]; if (r && r.name) return r.name;
+      var p = participants.value.find(function (x) { return "participant_" + x.id === identity; });
+      return p ? p.display_name : "";
+    }
+    var _tpH = _tpSetup(myIdentity, _tpNameOf);
+    // Teleprompter del guion (prePod): el host lo dispara a quien le toca cuando la grabación llega al minuto
+    var _tpScript = [];
+    var _tpFired = {};
+    async function loadTeleprompterScript() {
+      try {
+        var d = await api("/api/sessions/" + props.session.id + "/teleprompter");
+        _tpScript = (d.sections || []).filter(function (x) { return x.offset_seconds != null; });
+        _tpPeople = d.participants || [];
+        if (_tpScript.length && window.toast) window.toast({ type: "info", text: "🎬 " + _tpScript.length + " teleprompter del guion listos", duration: 4000 });
+      } catch (_) { _tpScript = []; }
+    }
+    var _tpPeople = [];
+    function _tpIdentityFor(speaker) {
+      var sp = (speaker || "").trim().toLowerCase();
+      if (!sp) return "all";
+      var hit = _tpPeople.find(function (p) {
+        var n = (p.display_name || "").toLowerCase(), u = (p.username || "").toLowerCase();
+        return n === sp || u === sp || n.indexOf(sp) === 0 || sp.indexOf(n) === 0 || n.split(" ")[0] === sp.split(" ")[0];
+      });
+      return hit ? hit.identity : "all";
+    }
+    function _checkTeleprompterTimers() {
+      if (!recording.value || recordingStartedAtMs == null || !_tpScript.length) return;
+      var now = (Date.now() - recordingStartedAtMs) / 1000;
+      _tpScript.forEach(function (sec) {
+        var at = +sec.offset_seconds - 3;   // 3 s de aviso antes
+        if (_tpFired[sec.id] || now < at || now > at + 2) return;
+        _tpFired[sec.id] = true;
+        var msg = { type: "teleprompter", action: "show", event_id: "s" + sec.id, target: _tpIdentityFor(sec.speaker),
+                    title: "Guion · " + (sec.speaker || ""), text: sec.content || "", speed: sec.speed || "normal",
+                    size: sec.size || "half", countdown: 3 };
+        sendData(msg);
+        _tpH.tpHandle(msg);   // también para mí (el host)
+      });
+    }
+    var _tpInterval = null;
+    watch(recording, function (val) {
+      if (val) { _tpFired = {}; loadTeleprompterScript(); _tpInterval = setInterval(_checkTeleprompterTimers, 500); }
+      else if (_tpInterval) { clearInterval(_tpInterval); _tpInterval = null; }
+    });
+
     var readyMap = reactive({});     // identity -> bool
     var ownReady = ref(false);
     var countdown = ref(null);       // null | 3 | 2 | 1 | 0
@@ -1916,6 +2050,7 @@ var StudioView = {
     function onDataReceived(payload, participant) {
       var msg = _decodeMsg(payload);
       if (!msg) return;
+      if (_tpH.tpHandle(msg)) return;
       if (msg.type === "sound_trigger" && msg.filename) {
         var s = sounds.value.find(function (x) { return x.filename === msg.filename; });
         if (s) playLocalSound(s);
@@ -2851,6 +2986,7 @@ var StudioView = {
       activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
       ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
       activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
+      tp: _tpH.tp, tpPause: _tpH.tpPause, tpRestart: _tpH.tpRestart, tpClose: _tpH.tpClose,
       amaPanel: amaPanel, amaEmbedUrl: amaEmbedUrl, amaEventId: amaEventId, amaBusy: amaBusy,
       sideTab: sideTab, openSide: openSide, chatUnreadH: chatUnreadH,
       startAma: startAma, closeAma: closeAma,
@@ -2941,6 +3077,7 @@ var StudioView = {
         {{ activeCue.cue }}
         <div v-if="activeCue.text" style="font-size: 13px; font-weight: 400; margin-top: 4px;">{{ activeCue.text }}</div>
       </div>
+${TP_TEMPLATE}
 
       <div v-if="cintilloOverlays.length" class="cintillo-layer">
         <div v-for="ov in cintilloOverlays" :key="ov.event_id" class="cintillo" :class="ov.event_type">
@@ -3749,6 +3886,12 @@ var GuestStudioView = {
       localStorage.setItem("prodpod.practiceMode", v ? "1" : "0");
     });
     var myIdentity = ref("");
+    function _tpNameOf(identity) {
+      if (identity === myIdentity.value) return props.joinData.display_name || "";
+      var r = remoteMap[identity]; return r && r.name ? r.name : "";
+    }
+    var _tpH = _tpSetup(myIdentity, _tpNameOf);
+
     var readyMap = reactive({});
     var ownReady = ref(false);
     var countdown = ref(null);
@@ -3832,6 +3975,7 @@ var GuestStudioView = {
     function onDataReceived(payload) {
       var msg = _decodeMsg(payload);
       if (!msg) return;
+      if (_tpH.tpHandle(msg)) return;
       if (msg.type === "sound_trigger" && msg.filename) {
         var s = sounds.value.find(function (x) { return x.filename === msg.filename; });
         if (s) playLocalSound(s);
@@ -4319,6 +4463,7 @@ var GuestStudioView = {
              activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
              ovLogoUrl: ovLogoUrl, cintilloTitle: cintilloTitle, cintilloText: cintilloText, fmtCountdown: fmtCountdown,
              activeCue: activeCue, ifbActive: ifbActive, directorConnected: directorConnected,
+             tp: _tpH.tp, tpPause: _tpH.tpPause, tpRestart: _tpH.tpRestart, tpClose: _tpH.tpClose,
              preMeter: preMeter, chatOpen: chatOpen, chatUnread: chatUnread, toggleChat: toggleChat,
              left: left, awayWhileRecording: awayWhileRecording, qualityText: qualityText };
   },
@@ -4444,6 +4589,7 @@ var GuestStudioView = {
           <div class="countdown-num">{{ countdown > 0 ? countdown : '●' }}</div>
           <div class="countdown-label">{{ countdown > 0 ? 'EMPIEZA LA GRABACIÓN' : 'GRABANDO' }}</div>
         </div>
+${TP_TEMPLATE}
         <div v-if="cintilloOverlays.length" class="cintillo-layer">
           <div v-for="ov in cintilloOverlays" :key="ov.event_id" class="cintillo" :class="ov.event_type">
             <div v-if="ovLogoUrl(ov)" class="c-logo"><img :src="ovLogoUrl(ov)" alt=""></div>
@@ -4667,7 +4813,8 @@ var DirectorView = {
     var cinPreview = computed(function () {
       if (cin.tab === "sponsor") {
         var sp = (branding.value.sponsors || [])[cin.sponsorIdx] || {};
-        return { event_type: "sponsor", logo: sp.logo_url || null,
+        return {
+      tpForm: tpForm, tpSponsorIdx: tpSponsorIdx, tpUseSponsor: tpUseSponsor, sendTeleprompter: sendTeleprompter, hideTeleprompter: hideTeleprompter, tpLastId: tpLastId, event_type: "sponsor", logo: sp.logo_url || null,
                  payload: { sponsor_name: sp.name || "Sponsor", sponsor_copy: cin.text, style: "cintillo" } };
       }
       if (cin.tab === "podcast") {
@@ -4719,6 +4866,37 @@ var DirectorView = {
 
     // Cue target
     var cueTarget = ref("all");
+
+    // ---- Teleprompter inyectado por el director (texto libre o de un sponsor) ----
+    var tpForm = reactive({ target: "all", title: "", text: "", speed: "normal", size: "half", countdown: 3 });
+    var tpSponsorIdx = ref(-1);
+    var tpLastId = ref(null);
+    function tpUseSponsor() {
+      var sp = (branding.value.sponsors || [])[tpSponsorIdx.value];
+      if (!sp) return;
+      tpForm.title = "Publicidad de " + (sp.name || "sponsor");
+      tpForm.text = sp.copy || "";
+    }
+    async function sendTeleprompter() {
+      var text = (tpForm.text || "").trim();
+      if (!text) { if (window.toast) window.toast({ type: "warn", text: "Escribe el texto del teleprompter" }); return; }
+      var eid = "d" + Date.now();
+      var msg = { type: "teleprompter", action: "show", event_id: eid, target: tpForm.target,
+                  title: tpForm.title || "Teleprompter", text: text, speed: tpForm.speed, size: tpForm.size,
+                  countdown: Math.max(0, +tpForm.countdown || 0) };
+      sendData(msg);
+      tpLastId.value = eid;
+      try {
+        await api("/api/sessions/" + props.session.id + "/director/inject", {
+          method: "POST", body: { event_type: "teleprompter", payload: { target: tpForm.target, title: msg.title, text: text, speed: tpForm.speed, size: tpForm.size } },
+        });
+      } catch (_) {}
+      if (window.toast) window.toast({ type: "success", text: "🎬 Teleprompter enviado" + (msg.countdown ? " (aviso de " + msg.countdown + " s)" : "") });
+    }
+    function hideTeleprompter() {
+      sendData({ type: "teleprompter", action: "hide", event_id: tpLastId.value || null, target: "all" });
+      tpLastId.value = null;
+    }
 
     // Soundboard
     var sounds = ref([]);
@@ -5357,6 +5535,31 @@ var DirectorView = {
           <input type="checkbox" :checked="guestCuesVisible" @change="toggleGuestCues" style="margin:0;" />\
           Invitados ven cues\
         </label>\
+        </div>\
+        <div class="cr-section">\
+        <div class="eyebrow" style="padding:10px 0 6px 2px;">TELEPROMPTER</div>\
+        <div style="display:flex;gap:6px;margin-bottom:6px;">\
+          <select v-model="tpForm.target" class="input" style="font-size:11px;padding:4px 6px;flex:1;">\
+            <option value="all">A todos</option>\
+            <option v-for="p in participants" :key="\'tp\' + p.id" :value="\'participant_\' + p.id">{{ p.display_name }}</option>\
+          </select>\
+          <select v-if="branding.sponsors.length" v-model="tpSponsorIdx" @change="tpUseSponsor" class="input" style="font-size:11px;padding:4px 6px;flex:1;">\
+            <option :value="-1">Texto de un sponsor…</option>\
+            <option v-for="(sp, i) in branding.sponsors" :key="\'tps\' + i" :value="i">{{ sp.name }}</option>\
+          </select>\
+        </div>\
+        <input v-model="tpForm.title" class="input" placeholder="Título (p. ej. Publicidad de Loma Verde)" style="font-size:11px;padding:4px 6px;margin-bottom:6px;width:100%;box-sizing:border-box;" />\
+        <textarea v-model="tpForm.text" class="input" rows="4" placeholder="Texto que va a leer…" style="font-size:12px;padding:6px;width:100%;box-sizing:border-box;margin-bottom:6px;"></textarea>\
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:11px;color:var(--paper-dim);">\
+          <select v-model="tpForm.speed" class="input" style="font-size:11px;padding:3px 5px;"><option value="slow">lenta</option><option value="normal">normal</option><option value="fast">rápida</option></select>\
+          <select v-model="tpForm.size" class="input" style="font-size:11px;padding:3px 5px;"><option value="quarter">un cuarto</option><option value="half">media pantalla</option><option value="full">toda la pantalla</option></select>\
+          <label style="display:flex;align-items:center;gap:4px;">aviso <input v-model.number="tpForm.countdown" type="number" min="0" max="10" class="input" style="width:44px;font-size:11px;padding:3px 5px;" /> s</label>\
+        </div>\
+        <div style="display:flex;gap:6px;">\
+          <button class="cr-cue-btn ad-read" style="flex:1;" @click="sendTeleprompter">🎬 LANZAR TELEPROMPTER</button>\
+          <button class="ghost" @click="hideTeleprompter" :disabled="!tpLastId" title="Quitar el teleprompter de las pantallas">Quitar</button>\
+        </div>\
+        <div class="muted" style="font-size:10px;margin-top:4px;">Todos ven el aviso con cuenta regresiva; el texto solo le aparece a quien elijas.</div>\
         </div>\
 \
         <div class="cr-sec cr-sec-mas">\
