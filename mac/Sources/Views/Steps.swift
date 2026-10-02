@@ -1272,6 +1272,12 @@ struct ExportStep: View {
                     BigButton(title: "Exportar \(format.title)", symbol: "square.and.arrow.up", disabled: session.isBusy) {
                         session.export(format: format)
                     }
+                    HStack {
+                        Button { session.exportStems() } label: { Label("Pistas por separado (WAV)", systemImage: "square.stack.3d.down.right") }
+                            .controlSize(.small).disabled(session.isBusy)
+                        Text("Una por persona (con sus cortes, volumen y pitidos) y la música aparte, para terminar en Logic, Audition o Reaper.")
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
                     if !session.lastExports.isEmpty {
                         Card {
                             Text("Ya exportados").font(.headline)

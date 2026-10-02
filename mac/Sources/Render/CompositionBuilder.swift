@@ -209,6 +209,9 @@ enum CompositionBuilder {
             if let aTrack, let span = laneSpan {
                 let p = AVMutableAudioMixInputParameters(track: aTrack)
                 let id = lane.id
+                if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
+                    NSLog("lane %d %@ audible=%d base=%.2f span=%.2f-%.2f track=%d", id, lane.name, audible ? 1 : 0, laneBase, span.start, span.end, aTrack.trackID)
+                }
                 applyEnvelope(p, base: laneBase, span: span,
                               points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id) + automationPoints(lane)) { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
@@ -267,8 +270,7 @@ enum CompositionBuilder {
         var brollScene: [RenderScene.BRoll] = []
         for var b in project.brolls where b.duration > 0.1 {
             b.duration = min(b.duration, BRollClip.maxSeconds)
-            let o = EditEngine.toOutput(b.start, keep: keep)
-                ?? keep.firstIndex { $0.start >= b.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+            let o = Self.outputStart(b.start, keep: keep)
             guard let o, o < outDuration else { continue }
             let start = introDur + o
             let end = min(introDur + outDuration, start + b.duration)
@@ -355,6 +357,10 @@ enum CompositionBuilder {
 
         let mix = AVMutableAudioMix()
         mix.inputParameters = mixParams
+        if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
+            let ids = comp.tracks(withMediaType: .audio).map { t in "\(t.trackID):" + t.segments.map { ($0.sourceURL?.lastPathComponent ?? "?") + "@\($0.timeMapping.target.start.seconds)+\($0.timeMapping.target.duration.seconds)" }.joined(separator: "|") }
+            NSLog("audio tracks %@ · mix %@", ids.joined(separator: ","), mixParams.map { "\($0.trackID)" }.joined(separator: ","))
+        }
 
         var videoComposition: AVMutableVideoComposition?
         var scene: RenderScene?
@@ -385,9 +391,7 @@ enum CompositionBuilder {
                 title: project.name,
                 sponsorCards: project.showSponsors ? project.sponsorAppearances().compactMap { a in
                     // map to output time; if the moment was cut, show it at the next kept instant
-                    let o = EditEngine.toOutput(a.start, keep: keep)
-                        ?? keep.firstIndex { $0.start >= a.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
-                    guard let o else { return nil }
+                    guard let o = Self.outputStart(a.start, keep: keep) else { return nil }
                     return RenderScene.SponsorCard(start: o, end: o + (a.end - a.start), name: a.sponsor.name, copy: a.sponsor.copy,
                                                    logo: a.sponsor.logoFile.flatMap { ImageFile.ciImage(ProjectStore.url($0, in: project.id)) })
                 } : [],
@@ -454,13 +458,20 @@ enum CompositionBuilder {
 
     private static let overlayContext = CIContext()
 
+    /// Dónde cae en el video final algo que empieza en `t` (tiempo del episodio): si `t` está dentro de un corte,
+    /// se corre al siguiente tramo que sí queda; si está fuera de lo que se exporta (un trozo, un reel), nil.
+    static func outputStart(_ t: Double, keep: [EditEngine.Span]) -> Double? {
+        if let o = EditEngine.toOutput(t, keep: keep) { return o }
+        guard let first = keep.first, let last = keep.last, t >= first.start, t <= last.end else { return nil }
+        return keep.firstIndex { $0.start >= t }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+    }
+
     /// Dibuja cada capa una vez, al tamaño del video, y la ubica en el tiempo del video editado.
     static func overlayCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize) -> [RenderScene.OverlayCard] {
         let W = renderSize.width, H = renderSize.height
         let base = min(W, H)
         return project.overlays.compactMap { o -> RenderScene.OverlayCard? in
-            let start = EditEngine.toOutput(o.start, keep: keep)
-                ?? keep.firstIndex { $0.start >= o.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
+            let start = Self.outputStart(o.start, keep: keep)
             guard let start, o.duration > 0 else { return nil }
             let k = CGFloat(max(0.2, min(4, o.scale)))
             let img: CIImage?
@@ -496,9 +507,7 @@ enum CompositionBuilder {
         // Color del podcast: el que más se repite en el logo (si hay); si no, el de cada tipo
         let podcastColor = project.logoFile.flatMap { ImageFile.nsImage(ProjectStore.url($0, in: project.id)) }.flatMap { dominantColor($0) }
         return project.cintillos.compactMap { c -> RenderScene.CintilloCard? in
-            let o = EditEngine.toOutput(c.start, keep: keep)
-                ?? keep.firstIndex { $0.start >= c.start }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
-            guard let o else { return nil }
+            guard let o = Self.outputStart(c.start, keep: keep) else { return nil }
             let logoImage = c.logoFile.flatMap { ImageFile.nsImage(ProjectStore.url($0, in: project.id)) }
             let logo = logoImage.flatMap { ImageFile.cgImage($0) }
             let kindColor: NSColor = {

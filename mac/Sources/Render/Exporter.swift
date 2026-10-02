@@ -7,6 +7,42 @@ enum Exporter {
     }
 
     /// Renders the project (or a window of it, e.g. a reel) to ~/Movies/postPod/<slug>/exports.
+    /// Pistas por separado (WAV 48 kHz): una por persona con sus cortes, fades, línea de volumen y pitidos,
+    /// y una con la música y los efectos. Para terminar en Logic, Audition o Reaper.
+    static func exportStems(project: Project, energy: EnergyMap?, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        let stamp = DateFormatter.fileStamp.string(from: Date())
+        let folder = ProjectStore.exportsFolder(for: project.id).appendingPathComponent("pistas_\(stamp)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var jobs: [(name: String, project: Project)] = []
+        for lane in project.lanes {
+            var p = project
+            p.audioLane = []
+            p.intro = nil; p.outro = nil
+            for i in p.lanes.indices { p.lanes[i].muted = p.lanes[i].id != lane.id; p.lanes[i].solo = false }
+            jobs.append((ProjectStore.slugify(project.laneName(lane.id)), p))
+        }
+        if !project.audioLane.isEmpty {
+            var p = project
+            p.intro = nil; p.outro = nil
+            for i in p.lanes.indices { p.lanes[i].muted = true; p.lanes[i].solo = false }
+            jobs.append(("musica-y-efectos", p))
+        }
+        let n = Double(max(1, jobs.count))
+        for (k, job) in jobs.enumerated() {
+            let built = try await CompositionBuilder.build(project: job.project, format: .audio, window: nil, energy: energy)
+            let m4a = folder.appendingPathComponent(job.name + ".m4a")
+            try await run(asset: built.asset, preset: AVAssetExportPresetAppleM4A, videoComposition: nil,
+                          audioMix: built.audioMix, to: m4a, type: .m4a) { progress((Double(k) + $0 * 0.8) / n) }
+            if FFmpeg.isAvailable {
+                let wav = folder.appendingPathComponent(job.name + ".wav")
+                try await FFmpeg.run(["-i", m4a.path, "-ar", "48000", "-c:a", "pcm_s24le", wav.path], duration: built.duration) { progress((Double(k) + 0.8 + 0.2 * $0) / n) }
+                try? FileManager.default.removeItem(at: m4a)
+            }
+        }
+        progress(1)
+        return folder
+    }
+
     static func export(project: Project, format: ExportFormat, window: EditEngine.Span? = nil,
                        baseName: String? = nil, energy: EnergyMap?, layout: LayoutTemplate? = nil,
                        progress: @escaping @Sendable (Double) -> Void) async throws -> URL {

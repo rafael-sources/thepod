@@ -194,7 +194,19 @@ struct VoiceEQ: Codable, Equatable {
     var mid: Double = 0                 // medios (dB, ~1 kHz)
     var high: Double = 0                // agudos (dB, ~6 kHz)
     var rumbleCut = false               // quitar retumbe (corte bajo 120 Hz + menos 250 Hz)
-    var isFlat: Bool { abs(low) < 0.1 && abs(mid) < 0.1 && abs(high) < 0.1 && !rumbleCut }
+    var compress = false                // «Voz pareja»: compresor suave (lo bajo sube, lo alto no pega)
+    var deess = false                   // «Menos siseo»: de-esser
+    var isFlat: Bool { abs(low) < 0.1 && abs(mid) < 0.1 && abs(high) < 0.1 && !rumbleCut && !compress && !deess }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        low = try c.decodeIfPresent(Double.self, forKey: .low) ?? 0
+        mid = try c.decodeIfPresent(Double.self, forKey: .mid) ?? 0
+        high = try c.decodeIfPresent(Double.self, forKey: .high) ?? 0
+        rumbleCut = try c.decodeIfPresent(Bool.self, forKey: .rumbleCut) ?? false
+        compress = try c.decodeIfPresent(Bool.self, forKey: .compress) ?? false
+        deess = try c.decodeIfPresent(Bool.self, forKey: .deess) ?? false
+    }
     static func preset(_ id: String) -> VoiceEQ {
         var e = VoiceEQ()
         switch id {
@@ -206,23 +218,17 @@ struct VoiceEQ: Codable, Equatable {
         return e
     }
     /// Firma corta para nombrar el archivo procesado.
-    var key: String { String(format: "l%+.1fm%+.1fh%+.1f%@", low, mid, high, rumbleCut ? "r" : "") }
+    var key: String { String(format: "l%+.1fm%+.1fh%+.1f%@%@%@", low, mid, high, rumbleCut ? "r" : "", compress ? "c" : "", deess ? "d" : "") }
     var ffmpegFilter: String {
         var f: [String] = []
         if rumbleCut { f += ["highpass=f=120", "equalizer=f=250:t=q:w=1:g=-3"] }
         if abs(low) >= 0.1 { f.append(String(format: "equalizer=f=120:t=q:w=0.8:g=%.1f", low)) }
         if abs(mid) >= 0.1 { f.append(String(format: "equalizer=f=1000:t=q:w=1:g=%.1f", mid)) }
         if abs(high) >= 0.1 { f.append(String(format: "equalizer=f=6000:t=q:w=0.8:g=%.1f", high)) }
+        if deess { f.append("deesser=i=0.5:m=0.5:f=0.5") }
+        if compress { f.append("acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4") }
         f.append("alimiter=limit=0.95:level=0")
         return f.joined(separator: ",")
-    }
-    init() {}
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        low = try c.decodeIfPresent(Double.self, forKey: .low) ?? 0
-        mid = try c.decodeIfPresent(Double.self, forKey: .mid) ?? 0
-        high = try c.decodeIfPresent(Double.self, forKey: .high) ?? 0
-        rumbleCut = try c.decodeIfPresent(Bool.self, forKey: .rumbleCut) ?? false
     }
 }
 

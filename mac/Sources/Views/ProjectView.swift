@@ -363,6 +363,11 @@ struct TrackInspector: View {
             Button("Clara") { setEQ(i, VoiceEQ.preset("clear")) }
             Button("Quitar retumbe") { setEQ(i, VoiceEQ.preset("rumble")) }
             Button("Original") { setEQ(i, VoiceEQ()) }
+            Spacer()
+            Toggle("Voz pareja", isOn: $session.project.lanes[i].eq.compress).toggleStyle(.checkbox)
+                .help("Compresor suave: lo que dice bajito sube y lo que grita no pega")
+            Toggle("Menos siseo", isOn: $session.project.lanes[i].eq.deess).toggleStyle(.checkbox)
+                .help("De-esser: suaviza las eses y las ches que silban")
         }
         .font(.callout).controlSize(.small)
         eqRow("Graves", $session.project.lanes[i].eq.low)

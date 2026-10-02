@@ -576,6 +576,20 @@ final class ProjectSession: ObservableObject {
         }
     }
 
+    /// Pistas por separado (WAV): una por persona y la música aparte.
+    func exportStems() {
+        run("Exportando pistas") { [self] in
+            try await ensureEnergy()
+            player.pause()
+            report("Exportando pistas por separado", "", 0)
+            let folder = try await Exporter.exportStems(project: project, energy: energy) { [weak self] f in
+                self?.reportAsync("Exportando pistas por separado", "", f)
+            }
+            refreshExports()
+            NSWorkspace.shared.activateFileViewerSelecting([folder])
+        }
+    }
+
     func performExport(format: ExportFormat) async throws -> URL {
             try await ensureEnergy()
             player.pause()
