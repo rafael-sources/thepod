@@ -154,7 +154,8 @@ enum CompositionBuilder {
             var vTrack: AVMutableCompositionTrack?
             var aTrack: AVMutableCompositionTrack?
             var laneSpan: (start: Double, end: Double)?
-            var laneBase = lane.volume
+            let audible = project.laneAudible(lane)
+            var laneBase = audible ? lane.volume : 0
             for placed in lane.placed {
                 guard let media = project.mediaItem(placed.clip.mediaId) else { continue }
                 let videoAsset = asset(media.file)
@@ -180,7 +181,7 @@ enum CompositionBuilder {
                         if let span = try place(track: aTrack!, source: src, sourceDuration: aDur,
                                                 tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length) {
                             laneSpan = laneSpan.map { (min($0.start, span.start), max($0.end, span.end)) } ?? span
-                            laneBase = lane.volume * placed.clip.volume
+                            laneBase = audible ? lane.volume * placed.clip.volume : 0
                         }
                     }
                 }

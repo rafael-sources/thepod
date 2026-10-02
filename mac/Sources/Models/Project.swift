@@ -145,6 +145,17 @@ extension Lane {
         fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
         eq = try c.decodeIfPresent(VoiceEQ.self, forKey: .eq) ?? VoiceEQ()
+        muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
+        solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
+    }
+}
+
+extension Project {
+    /// Si una persona se oye, contando mudo y solo.
+    func laneAudible(_ lane: Lane) -> Bool {
+        if lane.muted { return false }
+        let anySolo = lanes.contains { $0.solo }
+        return !anySolo || lane.solo
     }
 }
 
@@ -196,6 +207,8 @@ struct Lane: Codable, Identifiable, Equatable {
     var fadeIn: Double = 0              // segundos de entrada suave del audio de esta persona
     var fadeOut: Double = 0             // segundos de salida suave
     var eq = VoiceEQ()                  // ecualizador de 3 bandas (se aplica procesando el audio)
+    var muted: Bool = false             // M: esta persona no suena (vista previa y export)
+    var solo: Bool = false              // S: solo suenan las personas con solo
 
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 

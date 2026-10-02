@@ -19,10 +19,10 @@ struct EpisodeTimeline: View {
         Color(red: 1.0, green: 0.62, blue: 0.3),
     ]
 
-    private let labelWidth: CGFloat = 96
+    private let labelWidth: CGFloat = 132
     private let rulerH: CGFloat = 18
     private let marksH: CGFloat = 16
-    private let laneH: CGFloat = 20
+    private let laneH: CGFloat = 36
     private let fxH: CGFloat = 12
     private let ovH: CGFloat = 14
 
@@ -36,6 +36,9 @@ struct EpisodeTimeline: View {
                 .buttonStyle(.plain)
                 if !collapsed {
                     legend
+                    Text(p.normalizeLoudness ? "Volumen final: −16 LUFS al exportar" : "Volumen final: sin ajuste")
+                        .font(.caption2).foregroundStyle(p.normalizeLoudness ? Theme.secondary : .orange)
+                        .help("Lo que piden Spotify y YouTube. Se mide y se corrige al exportar; se apaga en Exportar.")
                     Spacer()
                     if let sel = selection, sel.end - sel.start > 0.05 {
                         HStack(spacing: 8) {
@@ -66,21 +69,30 @@ struct EpisodeTimeline: View {
                         Color.clear.frame(height: rulerH + marksH)
                         ForEach(Array(p.lanes.enumerated()), id: \.element.id) { i, lane in
                             let sel = session.selectedTrack == .lane(lane.id)
-                            Button {
-                                session.selectedTrack = sel ? nil : .lane(lane.id)
-                            } label: {
+                            let color = Self.palette[i % Self.palette.count]
+                            VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 3) {
-                                    Text(p.laneName(lane.id)).lineLimit(1)
-                                    if lane.volume == 0 { Image(systemName: "speaker.slash.fill").font(.system(size: 8)) }
+                                    Button {
+                                        session.selectedTrack = sel ? nil : .lane(lane.id)
+                                    } label: {
+                                        Text(p.laneName(lane.id)).lineLimit(1).font(.caption)
+                                            .foregroundStyle(p.laneAudible(lane) ? color : Theme.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 3)
+                                            .background(RoundedRectangle(cornerRadius: 4).fill(sel ? Color.white.opacity(0.14) : .clear))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Toca para editar esta pista (volumen, fades, desfase)")
+                                    LaneToggle(letter: "S", on: lane.solo, onColor: Theme.accent, help: "Solo: se oye solo esta persona") {
+                                        session.toggleSolo(lane.id)
+                                    }
+                                    LaneToggle(letter: "M", on: lane.muted, onColor: .red, help: "Mudo: esta persona no suena") {
+                                        session.toggleMute(lane.id)
+                                    }
                                 }
-                                .font(.caption)
-                                .foregroundStyle(Self.palette[i % Self.palette.count])
-                                .frame(width: labelWidth - 8, height: laneH, alignment: .leading)
-                                .padding(.horizontal, 3)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(sel ? Color.white.opacity(0.14) : .clear))
+                                LaneMeter(session: session, laneId: lane.id, color: color)
                             }
-                            .buttonStyle(.plain)
-                            .help("Toca para editar esta pista (volumen, fades, desfase)")
+                            .frame(width: labelWidth - 8, height: laneH, alignment: .leading)
                         }
                         Text("Efectos").font(.caption2).foregroundStyle(Theme.secondary)
                             .frame(width: labelWidth - 8, height: fxH, alignment: .leading)
@@ -192,6 +204,8 @@ struct EpisodeTimeline: View {
 struct TimelineModel: Equatable {
     var duration: Double
     var lanes: [[ClosedRange<Double>]]          // tramos con voz por persona
+    var waves: [[Float]]                        // dB cada 100 ms por persona (forma de onda), vacío si no hay análisis
+    var audible: [Bool]
     var cuts: [ClosedRange<Double>]
     var moments: [Double]
     var reels: [ClosedRange<Double>]
@@ -213,6 +227,8 @@ struct TimelineModel: Equatable {
         sponsors = (p.showSponsors ? p.sponsorAppearances().map { $0.start...max($0.start, $0.end) } : [])
             + (p.showCintillos ? p.cintillos.map { $0.start...($0.start + $0.duration) } : [])
         effects = p.audioLane.map { $0.tlStart...($0.loop ? max($0.tlStart + 0.3, p.duration) : min(p.duration, $0.tlStart + max(0.3, $0.srcOut - $0.srcIn))) }
+        waves = p.lanes.map { energy?.lanes[$0.id] ?? [] }
+        audible = p.lanes.map { p.laneAudible($0) }
         lanes = p.lanes.map { lane in
             if let arr = energy?.lanes[lane.id], !arr.isEmpty {
                 return Self.runs(arr.enumerated().filter { $0.element > -38 }.map { Double($0.offset) * EnergyMap.hop },
@@ -277,12 +293,33 @@ private struct TimelineCanvas: View, Equatable {
                 ctx.fill(Path(CGRect(x: x(m), y: my, width: 1.2, height: size.height - my)), with: .color(Theme.accent.opacity(0.6)))
             }
 
-            // Personas
+            // Personas: forma de onda (del análisis, dB cada 100 ms) o, si no hay, los tramos con voz
             for (i, spans) in model.lanes.enumerated() {
                 let y = rulerH + marksH + CGFloat(i) * laneH
                 ctx.fill(Path(CGRect(x: 0, y: y + 3, width: size.width, height: laneH - 6)), with: .color(.white.opacity(0.04)))
-                let c = EpisodeTimeline.palette[i % EpisodeTimeline.palette.count]
-                for s in spans { band(s, y: y + 4, h: laneH - 8, c.opacity(0.85)) }
+                let base = EpisodeTimeline.palette[i % EpisodeTimeline.palette.count]
+                let c = model.audible[i] ? base : Color.white.opacity(0.25)
+                let wave = model.waves[i]
+                if wave.isEmpty {
+                    for s in spans { band(s, y: y + 4, h: laneH - 8, c.opacity(0.85)) }
+                } else {
+                    let mid = y + laneH / 2, half = (laneH - 8) / 2
+                    let colW: CGFloat = 2
+                    var path = Path()
+                    var px: CGFloat = 0
+                    let hopPx = CGFloat(EnergyMap.hop) * pps
+                    while px < size.width {
+                        let i0 = Int(px / hopPx), i1 = max(i0, Int((px + colW) / hopPx))
+                        guard i0 < wave.count else { break }
+                        var peak: Float = -120
+                        for k in i0...min(i1, wave.count - 1) { peak = max(peak, wave[k]) }
+                        let a = CGFloat(min(1, max(0, (peak + 60) / 60)))     // −60 dB → 0, 0 dB → 1
+                        let h = max(1, a * a * half * 2)                      // curva: lo bajo se ve bajo
+                        path.addRect(CGRect(x: px, y: mid - h / 2, width: colW, height: h))
+                        px += colW
+                    }
+                    ctx.fill(path, with: .color(c.opacity(0.9)))
+                }
             }
 
             // Efectos
@@ -317,6 +354,46 @@ private struct PlayheadLayer: View {
             Rectangle().fill(Color.white).frame(width: 1.5, height: height)
                 .offset(x: x)
                 .allowsHitTesting(false)
+        }
+    }
+}
+
+
+/// Botón chico S / M de cada persona en el timeline.
+struct LaneToggle: View {
+    let letter: String
+    let on: Bool
+    let onColor: Color
+    let help: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(letter).font(.system(size: 9, weight: .bold))
+                .frame(width: 16, height: 14)
+                .background(RoundedRectangle(cornerRadius: 3).fill(on ? onColor : Color.white.opacity(0.08)))
+                .foregroundStyle(on ? .black : Theme.secondary)
+        }
+        .buttonStyle(.plain).help(help)
+    }
+}
+
+/// Medidor de nivel de una persona: lo que suena ahora (del análisis, con el volumen de la pista aplicado).
+struct LaneMeter: View {
+    @ObservedObject var session: ProjectSession
+    let laneId: Int
+    let color: Color
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+            let level = session.laneLevel(laneId)       // 0…1
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(LinearGradient(colors: [color, color, Theme.accent, .red], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(0, g.size.width * level))
+                }
+            }
+            .frame(height: 5)
         }
     }
 }

@@ -285,8 +285,8 @@ final class ProjectSession: ObservableObject {
         if project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty { fetchBranding() }
         // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
         // calcularlo al abrir si hay más de una persona.
-        if energy == nil, project.lanes.count > 1 {
-            run("Analizando quién habla") { [self] in
+        if energy == nil, !project.lanes.isEmpty {
+            run(project.lanes.count > 1 ? "Analizando quién habla" : "Analizando el sonido") { [self] in
                 try await ensureEnergy()
                 schedulePreview(immediate: true)
             }

@@ -342,3 +342,28 @@ struct HelpButton: View {
             }
     }
 }
+
+
+// MARK: - Mezcla (0.14): solo, mudo y nivel
+
+extension ProjectSession {
+    func toggleSolo(_ laneId: Int) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+        project.lanes[i].solo.toggle()
+    }
+
+    func toggleMute(_ laneId: Int) {
+        guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+        project.lanes[i].muted.toggle()
+    }
+
+    /// Nivel 0…1 de una persona en este instante: el dB del análisis en el reloj, con el volumen de la pista.
+    /// Es lo analizado, no una medición de la salida; sirve para ver quién suena y cuánto.
+    func laneLevel(_ laneId: Int) -> Double {
+        guard let energy, let lane = project.lanes.first(where: { $0.id == laneId }), project.laneAudible(lane) else { return 0 }
+        let t = playheadTimeline
+        var db = Double(energy.db(lane: laneId, at: t))
+        if lane.volume > 0 { db += 20 * log10(lane.volume) } else { return 0 }
+        return min(1, max(0, (db + 60) / 60))
+    }
+}
