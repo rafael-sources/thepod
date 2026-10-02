@@ -1331,9 +1331,14 @@ var StudioView = {
     function _tpIdentityFor(speaker) {
       var sp = (speaker || "").trim().toLowerCase();
       if (!sp) return "all";
+      // 1) usuario o nombre exacto (lo que elige prePod en «lo lee»); 2) parecido por nombre
+      var exact = _tpPeople.find(function (p) {
+        return (p.username || "").toLowerCase() === sp || (p.display_name || "").toLowerCase() === sp;
+      });
+      if (exact) return exact.identity;
       var hit = _tpPeople.find(function (p) {
-        var n = (p.display_name || "").toLowerCase(), u = (p.username || "").toLowerCase();
-        return n === sp || u === sp || n.indexOf(sp) === 0 || sp.indexOf(n) === 0 || n.split(" ")[0] === sp.split(" ")[0];
+        var n = (p.display_name || "").toLowerCase();
+        return n && (n.indexOf(sp) === 0 || sp.indexOf(n) === 0 || n.split(" ")[0] === sp.split(" ")[0]);
       });
       return hit ? hit.identity : "all";
     }
@@ -1344,7 +1349,7 @@ var StudioView = {
         var at = +sec.offset_seconds - 3;   // 3 s de aviso antes
         if (_tpFired[sec.id] || now < at || now > at + 2) return;
         _tpFired[sec.id] = true;
-        var msg = { type: "teleprompter", action: "show", event_id: "s" + sec.id, target: _tpIdentityFor(sec.speaker),
+        var msg = { type: "teleprompter", action: "show", event_id: "s" + sec.id, target: _tpIdentityFor(sec.speaker_key || sec.speaker),
                     title: "Guion · " + (sec.speaker || ""), text: sec.content || "", speed: sec.speed || "normal",
                     size: sec.size || "half", countdown: 3 };
         sendData(msg);
