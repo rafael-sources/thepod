@@ -496,7 +496,7 @@ struct ReelsStep: View {
         var title: String {
             switch self {
             case .look: return "Diseño"
-            case .text: return "Texto"
+            case .text: return "Subtítulos"
             case .sound: return "Música"
             case .broll: return "B-roll"
             case .cintillos: return "Cintillos"
@@ -505,7 +505,7 @@ struct ReelsStep: View {
     }
     @State private var tab: ReelTab = .look
     private var pickReelHint: some View {
-        Text("Toca «Ver» en un reel de la izquierda para editar su texto, música, b-roll y cintillos.")
+        Text("Toca «Ver» en un reel de la izquierda para corregir su texto y editar su música, b-roll y cintillos.")
             .font(.caption).foregroundStyle(Theme.secondary)
     }
     @ObservedObject var session: ProjectSession
@@ -580,6 +580,8 @@ struct ReelsStep: View {
                         case .look:
                             ReelLookCard(session: session, reel: currentReel)
                         case .text:
+                            // Arriba cómo se ven los subtítulos; abajo el texto del reel para corregirlo
+                            ReelCaptionsCard(session: session, reel: currentReel)
                             if let reel = currentReel { ReelTextCard(session: session, reel: reel) } else { pickReelHint }
                         case .sound:
                             if let reel = currentReel {
@@ -659,6 +661,65 @@ struct ReelsStep: View {
     private var captionTarget: ProjectSession.CaptionTarget {
         if let r = currentReel, r.look?.captionStyle != nil { return .reel(r.id) }
         return .allReels
+    }
+}
+
+/// Subtítulos de los reels (pestaña aparte): si salen, y con qué estilo. Para todos o solo para el reel que se ve.
+struct ReelCaptionsCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel?
+
+    private var own: Bool { reel?.look != nil }
+    private var look: Binding<ReelLook> {
+        if let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+            return Binding(get: { session.project.reels[i].look ?? session.project.reelLook },
+                           set: { session.project.reels[i].look = $0 })
+        }
+        return $session.project.reelLook
+    }
+
+    var body: some View {
+        let p = session.project
+        let l = look.wrappedValue
+        Card {
+            HStack {
+                Text(own ? "Subtítulos de este reel" : "Subtítulos de todos los reels").font(.headline)
+                Spacer()
+                if reel != nil {
+                    Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
+                        guard let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+                        session.project.reels[i].look = on ? session.project.reelLook : nil
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini).font(.caption)
+                }
+            }
+            Text(own ? "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con lo de todos."
+                     : "Aparte del episodio: el estilo de los subtítulos del video completo se cambia en Preparar → Subtítulos.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            if !p.isTranscribed {
+                Text("Este episodio no tiene transcripción. Hazla en Preparar → Subtítulos para que los reels lleven subtítulos.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            Toggle("Mostrar subtítulos en los reels", isOn: look.captions).font(.callout)
+            if l.captions {
+                Divider()
+                Toggle("Estilo propio para los reels (distinto al del episodio)", isOn: Binding(
+                    get: { l.captionStyle != nil },
+                    set: { on in look.wrappedValue.captionStyle = on ? (l.captionStyle ?? p.captionStyle) : nil }))
+                    .font(.caption)
+                if l.captionStyle != nil {
+                    Toggle("Resaltar palabra", isOn: Binding(get: { (look.wrappedValue.captionStyle ?? p.captionStyle).karaoke },
+                                                             set: { look.wrappedValue.captionStyle?.karaoke = $0 })).font(.caption)
+                    CaptionStyleEditor(style: Binding(get: { look.wrappedValue.captionStyle ?? p.captionStyle },
+                                                      set: { look.wrappedValue.captionStyle = $0 }))
+                    Text("Arrastra el recuadro de los subtítulos sobre el video para ponerlos donde quieras en el reel.")
+                        .font(.caption2).foregroundStyle(Theme.secondary)
+                } else {
+                    Text("Usan el mismo estilo del episodio (Preparar → Subtítulos), acomodado al formato vertical.")
+                        .font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
     }
 }
 
@@ -760,21 +821,9 @@ struct ReelLookCard: View {
             brandRow(kind: "logo", label: "Logo solo para reels", file: l.logoFile, fallback: p.logoFile)
             Toggle("Nombres de las personas", isOn: look.showNames).font(.caption)
             Divider()
-            Text("Sonido y subtítulos").font(.caption.bold())
+            Text("Sonido").font(.caption.bold())
             Toggle("Música y efectos del episodio", isOn: look.music).font(.caption)
-            Toggle("Subtítulos", isOn: look.captions).font(.caption)
-            if l.captions {
-                Toggle("Subtítulos con estilo propio en el reel", isOn: Binding(
-                    get: { l.captionStyle != nil },
-                    set: { on in look.wrappedValue.captionStyle = on ? (l.captionStyle ?? p.captionStyle) : nil }))
-                    .font(.caption)
-                if l.captionStyle != nil {
-                    CaptionStyleEditor(style: Binding(get: { look.wrappedValue.captionStyle ?? p.captionStyle },
-                                                      set: { look.wrappedValue.captionStyle = $0 }), compact: true)
-                    Text("Arrastra el recuadro de los subtítulos sobre el video para ponerlos donde quieras en el reel.")
-                        .font(.caption2).foregroundStyle(Theme.secondary)
-                }
-            }
+            Text("Los subtítulos de los reels se ajustan en la pestaña «Subtítulos».").font(.caption2).foregroundStyle(Theme.secondary)
             if !l.music {
                 if let reel {
                     HStack {

@@ -1,19 +1,40 @@
-# postPod para Mac (Apple Silicon)
+# thePod para Mac (Apple Silicon)
 
-App nativa (SwiftUI + AVFoundation) para la **post-producción** de postPod, pensada para gente que nunca editó video.
+App nativa (SwiftUI + AVFoundation) con toda la suite: **pre** (prePod), **prod** (prodPod), **ama** (amaPod) y **post**,
+la post-producción, pensada para gente que nunca editó video. Versión actual: la de `MARKETING_VERSION` en `project.yml`.
 
-## Flujo
+El manual de uso completo (pantalla por pantalla) está en la web de thePod: `/docs/postpodapp` (Funcionalidades, Atajos, Conceptos, FAQ).
+Este README es para quien compila y mantiene la app.
 
-1. **Importar**: arrastra el `.zip` que exporta postPod (`export-bundle`), la carpeta con las pistas de prodPod o los videos/audios sueltos.
-   - Los WebM (VP8/VP9/Opus) se convierten una sola vez a MP4 H.264 con VideoToolbox.
-   - Si una pista de prodPod perdió su primer bloque (sin encabezado EBML), se repara con el encabezado de otra pista de la misma grabación.
-   - Si una pista empieza tarde (timestamps absolutos), se rellena con negro/silencio para que todas queden sincronizadas.
-2. **Arreglar todo**: sonido de estudio (misma cadena DSP que postPod web), transcripción local con WhisperKit, quitar silencios y muletillas. Los cortes no son destructivos.
-3. **Subtítulos**: estilos predefinidos, karaoke palabra por palabra, corrección de texto y "quitar esta frase".
-4. **Reels**: sugerencias con Claude (si hay API key en Ajustes) o con un análisis local. Exporta verticales 9:16 con quien habla a pantalla completa.
-5. **Exportar**: YouTube 16:9, vertical 9:16, cuadrado 1:1 o solo audio MP3. Diseños: automático, quien habla, lado a lado, cuadrícula, protagonista, ventanita y arriba/abajo.
+## Qué hace post (resumen)
 
-La vista previa y la exportación usan **la misma composición** (`CompositionBuilder` + `PodCompositor`), así que lo que ves es lo que sale.
+Barra lateral en tres bloques; cada sección tiene un «?» con ayuda y atajos.
+
+- **Preparar**: Grabación (personas, nombres, guion y sponsors de prePod) · Limpiar sonido (cadena DSP de estudio, silencios,
+  muletillas, EQ de tres bandas, Voz pareja = compresor, Menos siseo = de-esser) · Subtítulos (WhisperKit local, estilos, karaoke,
+  corrección por frase) · Palabras sensibles (groserías y temas delicados: pitido encima en todas las pistas y/o subtítulo con eufemismo).
+- **Armar**: Aspecto (diseños de cámaras, fondo virtual con Vision, color, marca, intro/cierre) · Textos, stickers y b-roll
+  (pantalla completa o ventanita que respeta aspecto y `preferredTransform`) · Música y efectos (soundboard, archivos, voz
+  artificial con AVSpeechSynthesizer, ducking, bucle) · Cintillos (Noticiero, Limpio, Sponsor; animación y whoosh) · Patrocinios y marcas.
+- **Mezcla** (no es sección: vive en el timeline): ondas por persona, S/M, medidor, volumen dibujado (puntos dB con rampas lineales),
+  «Silenciar solo a X» / «−6 dB a X» por trozo, −16 LUFS al exportar, pistas WAV por separado.
+- **Entregar**: Reels por pestañas (Diseño, Subtítulos, Música, B-roll, Cintillos; plantillas en
+  `~/Library/Application Support/postPod/plantillas-reel.json`) · Exportar (16:9, 9:16, 1:1, MP3; H.264 o HEVC) · Publicar vía prePod.
+- Reloj grande + `TimecodeField` en todos los campos de tiempo; deshacer/rehacer (120 pasos); atajos (espacio/K, J/L, flechas, M, I, O, ⌘Z).
+
+La vista previa y la exportación usan **la misma composición** (`CompositionBuilder` + `PodCompositor`): lo que ves es lo que sale.
+Las capas, b-roll, cintillos y sponsors fuera de la ventana exportada (reel o trozo) no entran (`CompositionBuilder.outputStart`).
+
+## Dónde está cada cosa (Sources/)
+
+| Carpeta | Qué hay |
+|---|---|
+| `App/` | `AppModel`, `SessionExtras` (historial de deshacer, atajos, plantillas de reel, ayuda, mezcla, palabras sensibles, volumen dibujado), `BrandKit` (logos e intro) |
+| `Models/` | `Project` (lanes, cortes, capas, cintillos, reels, `VolumePoint`, `VoiceEQ`, `sensitive`) |
+| `Services/` | DSP, WhisperKit, `SensitiveWords`, energía/quién habla, Vision (fondo virtual), API de thePod |
+| `Render/` | `CompositionBuilder`, `PodCompositor`, `Exporter` (video, MP3, stems WAV) |
+| `Views/` | `ProjectView` (vista previa, reloj, paneles), `EpisodeTimeline`, `Steps` (secciones), `SensitiveStep`, `Timecode` |
+| `PrePod/`, `ProdPod/`, `AmaPod/` | las otras tres secciones (prod incluye `ProdTeleprompter`) |
 
 ## Compilar
 
@@ -22,12 +43,23 @@ brew install xcodegen
 cd macos
 zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg en Vendor/ffmpeg (≈10 min)
 xcodegen generate
-open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
+open thePod.xcodeproj   # o: xcodebuild -scheme thePod -destination 'platform=macOS,arch=arm64' build
 ```
 
 Requisitos: macOS 15+, Apple Silicon y Xcode 16 o posterior. La primera transcripción descarga el modelo de Whisper (~600 MB) a `~/Library/Application Support/postPod/whisper`.
 
-Los proyectos se guardan en `~/Movies/postPod/<slug>/` (`project.json`, `media/`, `exports/`, `cache/`).
+Los proyectos se guardan en `~/Movies/postPod/<slug>/` (`project.json`, `media/`, `exports/`, `cache/`). Las grabaciones de la sala,
+en `~/Library/Application Support/postPod/grabaciones/`.
+
+## Publicar una versión
+
+1. Sube `MARKETING_VERSION` en `project.yml` (función nueva: minor; arreglo: patch).
+2. `zsh scripts/package-dmg.sh` deja `build/thePod-<versión>.dmg` y `build/thePod.json` (tamaño, sha256, fecha, min_macos).
+3. En el repo `thepod`, rama `releases` (solo contiene la última versión): reemplaza `thePod.dmg` y `thePod.json`, commit «release X (build N)», push.
+4. En el servidor: `bash scripts/publish-thepod-mac.sh` (verifica el sha256 y lo deja donde lo sirve `/descargas`).
+5. Notas de versión: doc «thePod para Mac · Notas de versión»; manual: doc «thePod para Mac · Manual» y `thepod/templates/docs/postpodapp/`.
+
+La app busca actualizaciones al abrir (y en Ajustes → Buscar ahora), verifica el sha256 y reemplaza al reiniciar.
 
 ## Firma y contraseña guardada
 
@@ -35,9 +67,8 @@ Sin cuenta de Apple Developer la app va firmada "ad hoc" y su firma cambia en ca
 cada dato a la firma exacta de la app que lo guardó, así que pedía la clave de la Mac al abrir cada versión nueva.
 Por eso la cuenta de thePod se guarda en `~/Library/Application Support/postPod/cuenta.dat` (permisos 0600, ofuscado,
 no cifrado fuerte). Con Developer ID se podría volver al llavero.
-Macs ajenas ven la app como "desarrollador no identificado" la primera vez (Privacidad y seguridad → Abrir igualmente).
-
-Para publicar una versión en thePod: `zsh scripts/package-dmg.sh` (deja `build/postPod-<versión>.dmg` y `build/postPod.json`).
+Macs ajenas ven la app como "desarrollador no identificado" la primera vez (Privacidad y seguridad → Abrir igualmente),
+y los permisos de cámara y micrófono se vuelven a pedir en cada versión.
 
 ## ffmpeg dentro de la app
 
@@ -46,27 +77,33 @@ Los compila `scripts/build-ffmpeg.sh` (sin ffprobe: los tiempos de inicio se lee
 (sin `--enable-gpl` ni `--enable-nonfree`), con VideoToolbox, AudioToolbox y LAME para MP3.
 Las licencias quedan en `Contents/Resources/` (`FFmpeg-LGPLv2.1.txt`, `LAME-COPYING.txt`, `README.txt`).
 
-**Versión fijada** (`FFMPEG_VERSION` en el script, hoy 9.0.2). No hace falta tener la última:
-la app usa funciones que llevan años sin cambiar (decodificar WebM/VP9/Opus, filtros de audio, MP3,
-H.264 por hardware). Se actualiza cuando:
-
-- sale una corrección de seguridad que afecte a lo que usamos (demuxers de Matroska/WebM, MP4, decoders VP8/VP9/Opus/AAC), o
-- necesitamos algo nuevo.
-
+**Versión fijada** (`FFMPEG_VERSION` en el script, hoy 9.0.2). Se actualiza cuando sale una corrección de seguridad que afecte
+a lo que usamos (demuxers de Matroska/WebM, MP4, decoders VP8/VP9/Opus/AAC) o cuando necesitamos algo nuevo.
 Para actualizar: cambia `FFMPEG_VERSION`, borra `Vendor/ffmpeg`, corre el script, prueba importar un paquete con WebM,
-Arreglar todo y exportar video y MP3, y publica una versión nueva de la app. Si falta `Vendor/ffmpeg`, la app de desarrollo
+Limpiar sonido y exportar video y MP3, y publica una versión nueva. Si falta `Vendor/ffmpeg`, la app de desarrollo
 usa el de Homebrew como respaldo.
 
-## Prueba de punta a punta sin interfaz
+## Pruebas sin interfaz (CLI)
 
-```bash
-postPod.app/Contents/MacOS/postPod --selftest pista1.webm pista2.webm
-```
+Todas se corren con el binario de la app (`thePod.app/Contents/MacOS/thePod`), con `<slug>` = carpeta en `~/Movies/postPod/`:
 
-Importa, arregla, sugiere reels y exporta un 16:9, el primer reel y el MP3. Al final imprime un reporte en JSON.
+| Comando | Qué hace |
+|---|---|
+| `--selftest p1.webm p2.webm` | importa, arregla, crea reels y exporta 16:9, primer reel y MP3; imprime un JSON |
+| `--render <slug> <inicio> <fin> <landscape\|vertical\|square\|audio> [reel N]` | exporta una ventana del episodio (o un reel) a `exports/` |
+| `--post-snapshot`, `--pre-snapshot`, `--intro-snapshot` | capturas de pantalla de la interfaz (sin ventana real) |
+| `--extras-test <slug>`, `--sensitive-test <slug>`, `--stems-test <slug>` | prueban capas/b-roll, palabras sensibles y pistas WAV |
+| `--brand-kit <carpeta>`, `--intro-frames <carpeta> <w> <h> <0\|1\|2>` | generan el set de marca y los cuadros de la intro |
+
+Con `THEPOD_DEBUG=1` el render imprime por `NSLog` el volumen base de cada pista, los puntos de envolvente y las pistas de audio de la mezcla.
+Para medir resultados: `ffmpeg -af astats`/`volumedetect` sobre lo exportado (ver notas de versión para los umbrales usados).
 
 ## Pendiente / limitaciones conocidas
 
 - Para distribuirla a otras Macs sin avisos de seguridad falta firmarla con un Developer ID y notarizarla.
-- Todavía no se aplican los momentos/operaciones del timeline web (zoom, text_overlay, color_effect, jump_to_moment), ni los banners de sponsors ni los overlays del director.
-- Whisper a veces omite las muletillas ("eh", "mmm"). Esas no se pueden cortar si no aparecen en la transcripción.
+- El teleprompter encadenado («después del anterior») sale a la hora calculada; no reacciona al final real del anterior.
+- En 9:16 el logo, un cintillo, los subtítulos y un texto pueden pisarse si coinciden.
+- El fondo virtual puede parpadear con movimiento y deja una franja del fondo del podcast en algunos diseños.
+- El medidor por persona muestra el análisis con el volumen aplicado, no la salida real.
+- Whisper a veces omite las muletillas ("eh", "mmm"); esas no se pueden cortar si no aparecen en la transcripción.
+- Probado sin ratón (capturas y renders medidos con ffmpeg); el arrastre de puntos de volumen, el menú de plantillas y los atajos en ventana real no se probaron a mano.

@@ -303,8 +303,8 @@ enum Help {
         case .reels:
             return """
             Cada momento marcado (en postPod, con «Marcar momento» o con las teclas I y O) es un video vertical. \
-            Cada reel puede tener su diseño, sus subtítulos, su música, su b-roll y sus cintillos, aparte del \
-            episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta \
+            Cada reel se edita por pestañas: Diseño, Subtítulos (cómo se ven y el texto), Música, B-roll y Cintillos; todo aparte \
+            del episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta \
             solo ese reel.
             """
         case .export:
