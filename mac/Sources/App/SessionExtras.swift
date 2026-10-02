@@ -261,6 +261,13 @@ enum Help {
             quitan una frase del video. Elige un estilo y arrástralos sobre el video para ponerlos donde quieras. \
             «Guardar .srt» te da el archivo para YouTube.
             """
+        case .sensitive:
+            return """
+            Busca en la transcripción groserías y palabras que las redes bajan de alcance (muerte, suicidio, drogas, \
+            sexo, armas…). Para cada una eliges: pitido encima (no se oye) y/o cambiar el subtítulo por la palabra que se \
+            usa en redes para decir lo mismo (desvivirse, intimidad, sustancias…). También puedes agregar tus propias \
+            palabras. El audio original no se toca: el pitido y el cambio van en la vista previa y en el export.
+            """
         case .look:
             return """
             Cómo se ve el video: el diseño (quién sale dónde), el orden de las personas, espejo, fondo virtual por \
@@ -365,5 +372,35 @@ extension ProjectSession {
         var db = Double(energy.db(lane: laneId, at: t))
         if lane.volume > 0 { db += 20 * log10(lane.volume) } else { return 0 }
         return min(1, max(0, (db + 60) / 60))
+    }
+}
+
+
+// MARK: - Palabras sensibles
+
+extension ProjectSession {
+    func scanSensitive() {
+        project.sensitive = SensitiveWords.scan(project)
+        project.sensitiveScanned = true
+        let n = project.sensitive.filter { !$0.ignored }.count
+        flashNote(n == 0 ? "No se encontraron palabras sensibles" : "\(n) palabras encontradas")
+    }
+
+    func sensitiveBinding(_ id: String) -> Binding<SensitiveMark>? {
+        guard let i = project.sensitive.firstIndex(where: { $0.id == id }) else { return nil }
+        return Binding(get: { self.project.sensitive[i] }, set: { self.project.sensitive[i] = $0 })
+    }
+
+    func setAllSensitive(bleep: Bool? = nil, replace: Bool? = nil, category: SensitiveWords.Category? = nil) {
+        for i in project.sensitive.indices where category == nil || project.sensitive[i].category == category {
+            if let bleep { project.sensitive[i].bleep = bleep }
+            if let replace { project.sensitive[i].replace = replace }
+        }
+    }
+
+    /// Frase corta alrededor de una palabra, para ver el contexto.
+    func contextAround(_ m: SensitiveMark) -> String {
+        let ws = project.words.filter { $0.lane == m.lane && $0.s >= m.s - 3 && $0.s <= m.e + 3 }.sorted { $0.s < $1.s }
+        return ws.map { $0.w }.joined(separator: " ")
     }
 }

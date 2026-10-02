@@ -117,6 +117,16 @@ enum CompositionBuilder {
         }
         let gatePoints: [Double] = switches.dropFirst().flatMap { [introDur + $0.time - 0.05, introDur + $0.time + 0.10] }
 
+        // Pitidos (palabras sensibles): la persona se calla en ese tramo y suena un tono encima
+        let bleepOut: [(lane: Int, start: Double, end: Double)] = project.bleeps.compactMap { b in
+            guard let a = EditEngine.toOutput(b.start, keep: keep) else { return nil }
+            let z = EditEngine.toOutput(b.end, keep: keep) ?? (a + (b.end - b.start))
+            guard z > a else { return nil }
+            return (b.lane, introDur + a - 0.03, introDur + z + 0.03)
+        }
+        func bleepPoints(_ lane: Int) -> [Double] { bleepOut.filter { $0.lane == lane }.flatMap { [$0.start - 0.02, $0.start, $0.end, $0.end + 0.02] } }
+        func inBleep(_ lane: Int, _ t: Double) -> Bool { bleepOut.contains { $0.lane == lane && t >= $0.start && t < $0.end } }
+
         /// Tramos (tiempo del video final) en que alguien habla: para bajar la música bajo la voz.
         let speech: [(start: Double, end: Double)] = {
             guard let energy else { return [] }
@@ -190,9 +200,10 @@ enum CompositionBuilder {
                 let p = AVMutableAudioMixInputParameters(track: aTrack)
                 let id = lane.id
                 applyEnvelope(p, base: laneBase, span: span,
-                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : [])) { t in
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id)) { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
                     if gate, let who = speaker(at: t), who != id { f *= 0.125 }
+                    if inBleep(id, t) { f = 0 }
                     return f
                 }
                 mixParams.append(p)
@@ -316,6 +327,21 @@ enum CompositionBuilder {
             await Self.cintilloSounds(cards: cintilloCardsBuilt, shift: introDur, comp: comp, mixParams: &mixParams)
         }
 
+        // Pitidos encima de las palabras sensibles (también en el MP3)
+        if !bleepOut.isEmpty, let tone = await bleepAsset(slug: project.id), let toneTrack = try? await tone.loadTracks(withMediaType: .audio).first {
+            let toneDur = (try? await tone.load(.duration).seconds) ?? 0
+            for b in bleepOut {
+                let len = min(toneDur, b.end - b.start)
+                guard len > 0.05 else { continue }
+                let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                do { try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: toneTrack, at: cm(b.start)) }
+                catch { comp.removeTrack(track); continue }
+                let p = AVMutableAudioMixInputParameters(track: track)
+                p.setVolume(0.25, at: .zero)      // −12 dB: se nota, no lastima
+                mixParams.append(p)
+            }
+        }
+
         let mix = AVMutableAudioMix()
         mix.inputParameters = mixParams
 
@@ -326,7 +352,7 @@ enum CompositionBuilder {
             var style = project.captionStyle
             style.enabled = captionsOn && !project.words.isEmpty
             let captions = style.enabled
-                ? EditEngine.captionLines(words: project.words, keep: keep, vertical: format.isVertical, uppercase: style.uppercase)
+                ? EditEngine.captionLines(words: project.captionWords, keep: keep, vertical: format.isVertical, uppercase: style.uppercase)
                 : []
             var names: [Int: (name: String, handle: String?)] = [:]
             for lane in project.lanes {
@@ -390,6 +416,18 @@ enum CompositionBuilder {
     }
 
     /// Un archivo de silencio (lo genera ffmpeg una vez por proyecto) para alargar el video bajo el cierre.
+    /// Tono de 1 kHz (10 s) para tapar palabras; lo genera ffmpeg una vez por proyecto.
+    static func bleepAsset(slug: String) async -> AVURLAsset? {
+        let url = ProjectStore.cacheFolder(for: slug).appendingPathComponent("pitido.m4a")
+        if FileManager.default.fileExists(atPath: url.path) { return AVURLAsset(url: url) }
+        guard FFmpeg.isAvailable else { return nil }
+        do {
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000", "-t", "10",
+                                      "-af", "volume=-6dB", "-c:a", "aac", "-b:a", "64k", url.path])
+        } catch { return nil }
+        return FileManager.default.fileExists(atPath: url.path) ? AVURLAsset(url: url) : nil
+    }
+
     static func silenceAsset(slug: String, seconds: Double) async -> AVURLAsset? {
         let url = ProjectStore.cacheFolder(for: slug).appendingPathComponent("silencio.m4a")
         let need = max(20, ceil(seconds))

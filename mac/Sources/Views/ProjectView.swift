@@ -17,6 +17,7 @@ struct ProjectView: View {
                     case .overview: OverviewStep(session: session)
                     case .fix: FixStep(session: session)
                     case .captions: CaptionsStep(session: session)
+                    case .sensitive: SensitiveStep(session: session)
                     case .look: LookStep(session: session)
                     case .layers: LayersStep(session: session)
                     case .cintillos: CintillosStep(session: session)
@@ -124,6 +125,7 @@ struct ProjectView: View {
         case .overview: return true
         case .fix: return p.fix.lastRun != nil
         case .captions: return p.isTranscribed
+        case .sensitive: return p.sensitiveScanned
         case .look: return p.backgroundFile != nil || p.layout != .auto || p.intro != nil
         case .layers: return !p.overlays.isEmpty || !p.brolls.isEmpty
         case .cintillos: return !p.cintillos.isEmpty
@@ -140,6 +142,9 @@ struct ProjectView: View {
         let p = session.project
         switch step {
         case .captions: return p.isTranscribed ? nil : "sin transcribir"
+        case .sensitive:
+            let n = p.sensitive.filter { !$0.ignored }.count
+            return p.sensitiveScanned ? (n == 0 ? nil : "\(n)") : nil
         case .sounds: return p.audioLane.isEmpty ? nil : "\(p.audioLane.count)"
         case .layers: return p.overlays.isEmpty ? nil : "\(p.overlays.count)"
         case .cintillos: return p.cintillos.isEmpty ? nil : "\(p.cintillos.count)"

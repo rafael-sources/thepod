@@ -20,6 +20,9 @@ struct Project: Codable, Identifiable, Equatable {
 
     var language: String = "es"
     var words: [Word] = []              // merged transcript, timeline time
+    var sensitive: [SensitiveMark] = [] // palabras sensibles detectadas y qué hacer con cada una
+    var sensitiveCustom: [String] = []  // palabras propias que también se buscan
+    var sensitiveScanned = false
     var transcribedLanes: [Int] = []    // lane ids already transcribed
 
     var cuts: [Cut] = []
@@ -783,6 +786,9 @@ extension Project {
         participants = try c.decodeIfPresent([Participant].self, forKey: .participants) ?? []
         language = try c.decodeIfPresent(String.self, forKey: .language) ?? "es"
         words = try c.decodeIfPresent([Word].self, forKey: .words) ?? []
+        sensitive = try c.decodeIfPresent([SensitiveMark].self, forKey: .sensitive) ?? []
+        sensitiveCustom = try c.decodeIfPresent([String].self, forKey: .sensitiveCustom) ?? []
+        sensitiveScanned = try c.decodeIfPresent(Bool.self, forKey: .sensitiveScanned) ?? false
         transcribedLanes = try c.decodeIfPresent([Int].self, forKey: .transcribedLanes) ?? []
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
         fix = try c.decodeIfPresent(FixSettings.self, forKey: .fix) ?? FixSettings()
@@ -934,3 +940,29 @@ struct CaptionLine: Equatable {
 
 /// Active speaker change in OUTPUT time.
 struct SpeakerSwitch: Equatable { var time: Double; var lane: Int }
+
+
+extension Project {
+    /// Las palabras para subtítulos y transcripción, con las palabras sensibles ya cambiadas.
+    var captionWords: [Word] {
+        let marks = sensitive.filter { $0.replace && !$0.ignored && !$0.replacement.isEmpty }
+        guard !marks.isEmpty else { return words }
+        let byId = Dictionary(marks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return words.map { w in
+            guard let m = byId[SensitiveMark.makeId(lane: w.lane, s: w.s)] else { return w }
+            var out = w
+            // Conserva mayúscula inicial y puntuación final de la palabra original
+            let trimmed = w.w.trimmingCharacters(in: .whitespaces)
+            let tail = trimmed.reversed().prefix { !$0.isLetter && !$0.isNumber }.reversed()
+            var rep = m.replacement
+            if let f = trimmed.first, f.isUppercase, let r = rep.first { rep = String(r).uppercased() + rep.dropFirst() }
+            out.w = rep + String(tail)
+            return out
+        }
+    }
+
+    /// Tramos (tiempo del episodio) que llevan pitido, por persona.
+    var bleeps: [(lane: Int, start: Double, end: Double)] {
+        sensitive.filter { $0.bleep && !$0.ignored }.map { ($0.lane, $0.s, $0.e) }
+    }
+}

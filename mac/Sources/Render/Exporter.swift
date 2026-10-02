@@ -142,7 +142,7 @@ extension Exporter {
     /// Subtítulos en SRT sobre el video ya editado (sin cortes), corridos el intro si lo hay.
     static func srt(project p: Project) -> String {
         let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
-        let lines = EditEngine.captionLines(words: p.words, keep: keep, vertical: false, uppercase: false)
+        let lines = EditEngine.captionLines(words: p.captionWords, keep: keep, vertical: false, uppercase: false)
         let shift = p.intro.map { max(1, $0.seconds) } ?? 0
         func ts(_ t: Double) -> String {
             let ms = Int((t * 1000).rounded()); let h = ms / 3_600_000, m = (ms / 60_000) % 60, s = (ms / 1000) % 60, f = ms % 1000
@@ -158,7 +158,7 @@ extension Exporter {
     /// Transcripción en texto corrido, con el nombre de quien habla en cada cambio de persona.
     static func transcriptText(project p: Project) -> String {
         let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
-        let words = p.words.filter { w in keep.contains { w.s >= $0.start - 0.05 && w.s < $0.end } }.sorted { $0.s < $1.s }
+        let words = p.captionWords.filter { w in keep.contains { w.s >= $0.start - 0.05 && w.s < $0.end } }.sorted { $0.s < $1.s }
         var out = episodeTitle(p) + "\n\n"
         var lane = -1
         var para: [String] = []

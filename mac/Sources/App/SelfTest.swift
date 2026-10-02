@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -482,6 +482,28 @@ enum SelfTest {
                         print("snapshot \(name)")
                     }
                 }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--sensitive-test"), args.count > i + 1 {
+            // Busca palabras sensibles en un proyecto, pone pitido en la primera y guarda (en una copia de prueba)
+            Task { @MainActor in
+                let app = AppModel()
+                guard var p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
+                p.sensitive = SensitiveWords.scan(p)
+                p.sensitiveScanned = true
+                print("encontradas \(p.sensitive.count)")
+                for m in p.sensitive.prefix(12) { print("  \(Timecode.string(m.s, tenths: false)) \(p.laneName(m.lane)): \(m.word) → \(m.category.rawValue) / \(m.replacement)") }
+                let cw = p.captionWords
+                let changed = zip(p.words, cw).filter { $0.0.w != $0.1.w }.count
+                print("subtitulos cambiados \(changed)")
+                if let first = p.sensitive.first {
+                    p.sensitive[0].bleep = true
+                    try? ProjectStore.save(p)
+                    print("pitido en \(first.s)-\(first.e) lane \(first.lane)")
+                }
+                _ = app
                 fflush(stdout); exit(0)
             }
             return

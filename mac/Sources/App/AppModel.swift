@@ -170,13 +170,14 @@ final class AppModel: ObservableObject {
 }
 
 enum Step: String, CaseIterable, Identifiable {
-    case overview, fix, captions, look, layers, sounds, cintillos, brands, reels, export, publish
+    case overview, fix, captions, sensitive, look, layers, sounds, cintillos, brands, reels, export, publish
     var id: String { rawValue }
     var title: String {
         switch self {
         case .overview: return "Grabación"
         case .fix: return "Limpiar sonido"
         case .captions: return "Subtítulos"
+        case .sensitive: return "Palabras sensibles"
         case .look: return "Aspecto"
         case .layers: return "Textos y stickers"
         case .cintillos: return "Cintillos"
@@ -192,6 +193,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .overview: return "person.2.wave.2"
         case .fix: return "wand.and.stars"
         case .captions: return "captions.bubble"
+        case .sensitive: return "exclamationmark.bubble"
         case .look: return "rectangle.3.group"
         case .layers: return "textformat"
         case .cintillos: return "rectangle.bottomthird.inset.filled"
@@ -206,7 +208,7 @@ enum Step: String, CaseIterable, Identifiable {
     enum Group: String, CaseIterable { case prepare = "PREPARAR", build = "ARMAR", deliver = "ENTREGAR" }
     var group: Group {
         switch self {
-        case .overview, .fix, .captions: return .prepare
+        case .overview, .fix, .captions, .sensitive: return .prepare
         case .look, .layers, .sounds, .cintillos, .brands: return .build
         case .reels, .export, .publish: return .deliver
         }
