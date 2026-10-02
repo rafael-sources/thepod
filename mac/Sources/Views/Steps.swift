@@ -490,6 +490,24 @@ struct PhraseRow: View {
 // MARK: - 4. Reels
 
 struct ReelsStep: View {
+    enum ReelTab: String, CaseIterable, Identifiable {
+        case look, text, sound, broll, cintillos
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .look: return "Diseño"
+            case .text: return "Texto"
+            case .sound: return "Música"
+            case .broll: return "B-roll"
+            case .cintillos: return "Cintillos"
+            }
+        }
+    }
+    @State private var tab: ReelTab = .look
+    private var pickReelHint: some View {
+        Text("Toca «Ver» en un reel de la izquierda para editar su texto, música, b-roll y cintillos.")
+            .font(.caption).foregroundStyle(Theme.secondary)
+    }
     @ObservedObject var session: ProjectSession
     @State private var previewing: UUID?
 
@@ -528,12 +546,6 @@ struct ReelsStep: View {
                             removeReel(reel.id)
                         }, export: { session.exportReel(reel) }, busy: session.isBusy)
                     }
-                    if let reel = currentReel {
-                        ReelTextCard(session: session, reel: reel)
-                        ReelSoundCard(session: session, reel: reel)
-                        ReelBRollCard(session: session, reel: reel)
-                        ReelCintilloCard(session: session, reel: reel)
-                    }
                     Card {
                         Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
                         Text("Mira el episodio y, cuando pase algo bueno, toca “Marcar momento” debajo del video. Se crea un reel de 60 segundos desde ahí; luego ajustas inicio y fin.")
@@ -555,14 +567,50 @@ struct ReelsStep: View {
             }
             .frame(minWidth: 460, maxWidth: 560)
             VStack(spacing: 12) {
-                PreviewPane(session: session, allowedFormats: [.vertical])
+                PreviewPane(session: session, allowedFormats: [.vertical], showInspector: false)
                     .frame(minHeight: 380)
+                // Lo del reel, por pestañas: así el panel de lo que se edita no se monta sobre el diseño
+                Picker("", selection: $tab) {
+                    ForEach(ReelTab.allCases) { t in Text(t.title).tag(t) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 520)
                 ScrollView {
-                    ReelLookCard(session: session, reel: currentReel)
-                        .frame(maxWidth: 420)
+                    VStack(alignment: .leading, spacing: 12) {
+                        switch tab {
+                        case .look:
+                            ReelLookCard(session: session, reel: currentReel)
+                        case .text:
+                            if let reel = currentReel { ReelTextCard(session: session, reel: reel) } else { pickReelHint }
+                        case .sound:
+                            if let reel = currentReel {
+                                ReelSoundCard(session: session, reel: reel)
+                                if case .reelSound = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        case .broll:
+                            if let reel = currentReel {
+                                ReelBRollCard(session: session, reel: reel)
+                                if case .reelBRoll = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        case .cintillos:
+                            if let reel = currentReel {
+                                ReelCintilloCard(session: session, reel: reel)
+                                if case .reelCintillo = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        }
+                    }
+                    .frame(maxWidth: 520)
                 }
             }
             .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onChange(of: session.selectedTrack) { _, sel in
+            // Al elegir una música, un b-roll o un cintillo del reel, se abre su pestaña sola
+            switch sel {
+            case .reelSound: tab = .sound
+            case .reelBRoll: tab = .broll
+            case .reelCintillo: tab = .cintillos
+            default: break
+            }
         }
         .onAppear {
             if let r = session.project.reels.first { show(r) }

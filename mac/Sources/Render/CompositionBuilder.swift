@@ -87,6 +87,9 @@ enum CompositionBuilder {
             pts = pts.reduce(into: [Double]()) { acc, t in if let l = acc.last, t - l < 0.004 { return }; acc.append(t) }
             func v(_ t: Double) -> Float { Float(max(0, base * factor(t))) }
             p.setVolume(v(span.start), at: .zero)
+            if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
+                NSLog("envelope track %d: %@", p.trackID, pts.map { String(format: "%.2f→%.2f", $0, v($0)) }.joined(separator: " "))
+            }
             for k in 0..<(pts.count - 1) {
                 let a = pts[k], b = pts[k + 1]
                 let va = v(a), vb = v(b)
@@ -122,7 +125,8 @@ enum CompositionBuilder {
             guard let a = EditEngine.toOutput(b.start, keep: keep) else { return nil }
             let z = EditEngine.toOutput(b.end, keep: keep) ?? (a + (b.end - b.start))
             guard z > a else { return nil }
-            return (b.lane, introDur + a - 0.03, introDur + z + 0.03)
+            // Un poco más ancho que la palabra: la transcripción puede ir corrida unas décimas
+            return (b.lane, introDur + a - 0.10, introDur + z + 0.12)
         }
         /// Puntos de la línea de volumen de una persona, en tiempo del video final (los que caen en lo que se exporta)
         func automationPoints(_ lane: Lane) -> [Double] {
@@ -134,8 +138,11 @@ enum CompositionBuilder {
             let tl = EditEngine.toTimeline(max(0, t - introDur), keep: keep)
             return pow(10, lane.automationDB(at: tl) / 20)
         }
-        func bleepPoints(_ lane: Int) -> [Double] { bleepOut.filter { $0.lane == lane }.flatMap { [$0.start - 0.02, $0.start, $0.end, $0.end + 0.02] } }
-        func inBleep(_ lane: Int, _ t: Double) -> Bool { bleepOut.contains { $0.lane == lane && t >= $0.start && t < $0.end } }
+        // El pitido calla a TODAS las personas en ese tramo: la palabra también se cuela por el micrófono de los demás.
+        // Inclusivo en el fin: así la rampa start→end se queda en 0 y la de end→end+0.02 vuelve a subir
+        // (antes el fin valía 1 y la voz subía en rampa durante toda la palabra: se oía bajito con el pitido).
+        func bleepPoints(_ lane: Int) -> [Double] { bleepOut.flatMap { [$0.start - 0.02, $0.start, $0.end, $0.end + 0.02] } }
+        func inBleep(_ lane: Int, _ t: Double) -> Bool { bleepOut.contains { t >= $0.start && t <= $0.end } }
 
         /// Tramos (tiempo del video final) en que alguien habla: para bajar la música bajo la voz.
         let speech: [(start: Double, end: Double)] = {
@@ -350,7 +357,7 @@ enum CompositionBuilder {
                 do { try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: toneTrack, at: cm(b.start)) }
                 catch { comp.removeTrack(track); continue }
                 let p = AVMutableAudioMixInputParameters(track: track)
-                p.setVolume(0.25, at: .zero)      // −12 dB: se nota, no lastima
+                p.setVolume(0.5, at: .zero)       // −6 dB: se nota bien sin lastimar
                 mixParams.append(p)
             }
         }

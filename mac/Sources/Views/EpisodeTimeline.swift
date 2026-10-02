@@ -204,18 +204,18 @@ struct EpisodeTimeline: View {
     private var legend: some View {
         HStack(spacing: 12) {
             legendItem(Color.red.opacity(0.55), "Se corta")
-            legendItem(Theme.accent, "Momento / reel")
+            legendItem(Theme.accent, "Reel")
             legendItem(Color.purple.opacity(0.8), "Sponsor")
             legendItem(Color.white.opacity(0.8), "Efecto")
             legendItem(Color.yellow.opacity(0.75), "Texto")
-            HStack(spacing: 4) { Rectangle().fill(Theme.accent).frame(width: 10, height: 1.5); Text("Volumen") }
+            HStack(spacing: 4) { Rectangle().fill(Theme.accent).frame(width: 10, height: 1.5); Text("Volumen") }.fixedSize()
         }
         .font(.caption2)
         .foregroundStyle(Theme.secondary)
     }
 
     private func legendItem(_ c: Color, _ t: String) -> some View {
-        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 8); Text(t) }
+        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 8); Text(t) }.fixedSize()
     }
 
     private func rowLayout(_ p: Project) -> CGFloat {

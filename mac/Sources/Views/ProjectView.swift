@@ -200,6 +200,7 @@ struct PlayerView: NSViewRepresentable {
 struct PreviewPane: View {
     @ObservedObject var session: ProjectSession
     var allowedFormats: [ExportFormat] = [.landscape, .vertical, .square]
+    var showInspector = true              // en Reels el panel de la pista va en su pestaña, no bajo el video
     @State private var marked = false
 
     var body: some View {
