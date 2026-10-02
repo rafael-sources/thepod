@@ -520,12 +520,12 @@ struct ReelsStep: View {
                         }
                         .font(.callout)
                     }
-                    ForEach($session.project.reels) { $reel in
-                        ReelCard(reel: $reel, isPreviewing: previewing == reel.id, duration: session.project.duration, preview: {
+                    // Cada tarjeta busca su reel por id: borrar uno no deja tarjetas apuntando a un índice que ya no existe (antes la app se cerraba)
+                    ForEach(session.project.reels) { reel in
+                        ReelCard(reel: reelBinding(reel), isPreviewing: previewing == reel.id, duration: session.project.duration, preview: {
                             show(reel)
                         }, remove: {
-                            session.project.reels.removeAll { $0.id == reel.id }
-                            if previewing == reel.id { previewing = nil }
+                            removeReel(reel.id)
                         }, export: { session.exportReel(reel) }, busy: session.isBusy)
                     }
                     if let reel = currentReel {
@@ -573,6 +573,23 @@ struct ReelsStep: View {
         .onChange(of: currentReel?.look) { _, _ in refresh() }
         .onChange(of: currentReel?.cuts) { _, _ in refresh() }
         .onChange(of: currentReel?.brolls) { _, _ in refresh() }
+        .onChange(of: currentReel?.music) { _, _ in refresh() }
+    }
+
+    private func reelBinding(_ reel: Reel) -> Binding<Reel> {
+        Binding(get: { session.project.reels.first { $0.id == reel.id } ?? reel },
+                set: { v in if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i] = v } })
+    }
+
+    private func removeReel(_ id: UUID) {
+        if previewing == id {
+            previewing = nil
+            session.selectedTrack = nil
+            session.captionDragTarget = .allReels
+            session.setPreview(format: .vertical, window: nil, look: session.project.reelLook)
+        }
+        if case .reelBRoll(let rid, _) = session.selectedTrack ?? .lane(-1), rid == id { session.selectedTrack = nil }
+        session.project.reels.removeAll { $0.id == id }
     }
 
     private func show(_ reel: Reel) {
@@ -708,7 +725,37 @@ struct ReelLookCard: View {
                 }
             }
             if !l.music {
-                Text("Sin música: ideal cuando la plataforma pone la suya o para evitar reclamos de derechos.").font(.caption2).foregroundStyle(Theme.secondary)
+                if let reel {
+                    HStack {
+                        Text("Música de este reel").font(.caption.bold())
+                        Spacer()
+                        Button { session.importSounds(placeAt: session.playheadTimeline, reelId: reel.id) } label: { Label("Agregar…", systemImage: "music.note.list") }
+                            .controlSize(.mini)
+                    }
+                    if reel.music.isEmpty {
+                        Text("Sin música del episodio. Agrega una canción solo para este reel: empieza al inicio del reel y, si es más corta, se repite hasta el final.")
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
+                    ForEach(reel.music) { m in
+                        let sel = session.selectedTrack == .reelSound(reel.id, m.id)
+                        Button {
+                            session.selectedTrack = .reelSound(reel.id, m.id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "music.note").frame(width: 18).foregroundStyle(sel ? Theme.accent : .white)
+                                Text(session.project.mediaItem(m.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Música").lineLimit(1).font(.caption)
+                                Spacer()
+                                Text("\(EditEngine.clock(m.tlStart))\(m.loop ? " · bucle" : "") · \(Int(m.volume * 100)) %").font(.caption2).monospacedDigit().foregroundStyle(Theme.secondary)
+                            }
+                            .padding(6)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(sel ? Theme.panelStrong : Theme.panel))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Text("Sin música del episodio en los reels. Al ver un reel puedes agregarle una canción propia.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
             }
             if !onePerson {
                 Divider()

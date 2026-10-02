@@ -218,7 +218,7 @@ enum Step: String, CaseIterable, Identifiable {
 final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { dirty() } } }
     /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
-    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int) }
+    enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
     @Published var job: JobState?
@@ -808,7 +808,7 @@ final class ProjectSession: ObservableObject {
     }
 
     /// El usuario elige archivos de música/efectos; se copian al proyecto y quedan en la biblioteca (y si se pide, puestos).
-    func importSounds(placeAt: Double? = nil) {
+    func importSounds(placeAt: Double? = nil, reelId: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
         panel.allowsMultipleSelection = true
@@ -821,13 +821,13 @@ final class ProjectSession: ObservableObject {
             if !FileManager.default.fileExists(atPath: to.path) { try? FileManager.default.copyItem(at: url, to: to) }
             let rel = "sfx/\(url.lastPathComponent)"
             if !project.sfxLibrary.contains(rel) { project.sfxLibrary.insert(rel, at: 0) }
-            if let placeAt { Task { await addSound(rel, at: placeAt) } }
+            if let placeAt { Task { await addSound(rel, at: placeAt, reelId: reelId) } }
         }
     }
 
     // MARK: Sound effects
 
-    func addSound(_ rel: String, at timeline: Double) async {
+    func addSound(_ rel: String, at timeline: Double, reelId: UUID? = nil) async {
         var p = project
         let mediaId: Int
         if let existing = p.media.first(where: { $0.file == rel }) {
@@ -840,10 +840,56 @@ final class ProjectSession: ObservableObject {
                                        duration: d.isFinite ? d : 1, hasAudio: true, hasVideo: false))
         }
         let len = p.mediaItem(mediaId)?.duration ?? 1
+        if let reelId, let r = p.reels.firstIndex(where: { $0.id == reelId }) {
+            // Música propia del reel: empieza donde empieza el reel (o donde está el video, si está dentro del reel)
+            let reel = p.reels[r]
+            let id = (reel.music.map(\.id).max() ?? 0) + 1
+            let at = (timeline >= reel.start && timeline < reel.end) ? timeline : reel.start
+            var clip = AudioLaneClip(id: id, mediaId: mediaId, tlStart: at, srcIn: 0, srcOut: len, volume: 0.8)
+            clip.loop = len < reel.length   // más corta que el reel: se repite hasta el final
+            p.reels[r].music.append(clip)
+            project = p
+            if previewReel?.id == reelId { previewReel = project.reels[r] }
+            selectedTrack = .reelSound(reelId, id)
+            return
+        }
         let id = (p.audioLane.map(\.id).max() ?? 0) + 1
         p.audioLane.append(AudioLaneClip(id: id, mediaId: mediaId, tlStart: max(0, timeline), srcIn: 0, srcOut: len, volume: 0.8))
         project = p
         selectedTrack = .sound(id)
+    }
+
+    /// Acceso a un sonido por dónde vive (episodio o reel), para el panel bajo el video.
+    func soundBinding(_ sel: TrackSel) -> Binding<AudioLaneClip>? {
+        switch sel {
+        case .sound(let id):
+            guard let clip = project.audioLane.first(where: { $0.id == id }) else { return nil }
+            return Binding(get: { self.project.audioLane.first { $0.id == id } ?? clip },
+                           set: { v in if let i = self.project.audioLane.firstIndex(where: { $0.id == id }) { self.project.audioLane[i] = v } })
+        case .reelSound(let rid, let id):
+            guard let r = project.reels.firstIndex(where: { $0.id == rid }), let clip = project.reels[r].music.first(where: { $0.id == id }) else { return nil }
+            return Binding(get: { self.project.reels.first { $0.id == rid }?.music.first { $0.id == id } ?? clip },
+                           set: { v in
+                               guard let r = self.project.reels.firstIndex(where: { $0.id == rid }),
+                                     let i = self.project.reels[r].music.firstIndex(where: { $0.id == id }) else { return }
+                               self.project.reels[r].music[i] = v
+                               if self.previewReel?.id == rid { self.previewReel = self.project.reels[r] }
+                           })
+        default: return nil
+        }
+    }
+
+    func removeSound(_ sel: TrackSel) {
+        switch sel {
+        case .sound(let id): project.audioLane.removeAll { $0.id == id }
+        case .reelSound(let rid, let id):
+            if let r = project.reels.firstIndex(where: { $0.id == rid }) {
+                project.reels[r].music.removeAll { $0.id == id }
+                if previewReel?.id == rid { previewReel = project.reels[r] }
+            }
+        default: break
+        }
+        selectedTrack = nil
     }
 
     // MARK: Voz artificial

@@ -332,6 +332,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var look: ReelLook?                 // diseño propio de este reel (nil = el de todos los reels)
     var cuts: [Cut] = []                // cortes solo de este reel (frases quitadas, silencios), aparte de los del episodio
     var brolls: [BRollClip] = []        // b-roll solo de este reel
+    var music: [AudioLaneClip] = []     // música propia del reel (se usa cuando el reel no lleva la del episodio)
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -350,6 +351,7 @@ struct Reel: Codable, Identifiable, Equatable {
         look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
+        music = try c.decodeIfPresent([AudioLaneClip].self, forKey: .music) ?? []
     }
 }
 
@@ -427,7 +429,7 @@ extension Project {
         p.showNames = look.showNames
         if let f = look.logoFile { p.logoFile = f }
         if let f = look.backgroundFile { p.backgroundFile = f }
-        if !look.music { p.audioLane = [] }
+        if !look.music { p.audioLane = reel?.music ?? [] }   // sin la del episodio: la propia del reel (si tiene)
         if let cs = look.captionStyle { p.captionStyle = cs }
         if !look.captions { p.captionStyle.enabled = false }
         return p

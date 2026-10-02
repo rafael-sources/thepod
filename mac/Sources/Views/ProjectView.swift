@@ -244,8 +244,8 @@ struct TrackInspector: View {
                 switch sel {
                 case .lane(let id):
                     if let i = session.project.lanes.firstIndex(where: { $0.id == id }) { laneBody(i) }
-                case .sound(let id):
-                    if let i = session.project.audioLane.firstIndex(where: { $0.id == id }) { soundBody(i) }
+                case .sound, .reelSound:
+                    if let b = session.soundBinding(sel) { soundBody(b, sel: sel) }
                 case .overlay(let id):
                     OverlayEditor(session: session, id: id)
                 case .broll(let id):
@@ -363,45 +363,49 @@ struct TrackInspector: View {
     }
 
     @ViewBuilder
-    private func soundBody(_ i: Int) -> some View {
-        let clip = session.project.audioLane[i]
+    private func soundBody(_ b: Binding<AudioLaneClip>, sel: ProjectSession.TrackSel) -> some View {
+        let clip = b.wrappedValue
+        let reel: Reel? = { if case .reelSound(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }()
         let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido"
-        header("\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
-        volumeRow(value: $session.project.audioLane[i].volume, max: 1.5)
-        Toggle("Bajar sola cuando alguien habla", isOn: Binding(get: { session.project.audioLane[i].ducks },
-                                                                 set: { session.project.audioLane[i].duck = $0 }))
+        let lo = reel?.start ?? 0
+        let hi = reel?.end ?? session.project.duration
+        let len = clip.srcOut - clip.srcIn
+        return Group {
+        header((reel != nil ? "Música del reel · " : "") + "\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
+        volumeRow(value: b.volume, max: 1.5)
+        Toggle("Bajar sola cuando alguien habla", isOn: Binding(get: { clip.ducks }, set: { b.wrappedValue.duck = $0 }))
             .font(.callout)
-        if session.project.audioLane[i].ducks {
+        if clip.ducks {
             HStack(spacing: 8) {
                 Text("Cuánto baja").frame(width: 72, alignment: .leading)
-                Slider(value: $session.project.audioLane[i].duckDB, in: 6...24, step: 1)
-                Text(String(format: "−%.0f dB", session.project.audioLane[i].duckDB)).monospacedDigit().frame(width: 52, alignment: .trailing)
+                Slider(value: b.duckDB, in: 6...24, step: 1)
+                Text(String(format: "−%.0f dB", clip.duckDB)).monospacedDigit().frame(width: 52, alignment: .trailing)
             }
             .font(.callout)
         }
-        Toggle("Repetir en bucle hasta el final del episodio", isOn: $session.project.audioLane[i].loop)
+        Toggle(reel != nil ? "Repetir en bucle hasta el final del reel" : "Repetir en bucle hasta el final del episodio", isOn: b.loop)
             .font(.callout)
-        fadeRow(label: "Fade entrada", value: $session.project.audioLane[i].fadeIn)
-        fadeRow(label: "Fade salida", value: $session.project.audioLane[i].fadeOut)
+        fadeRow(label: "Fade entrada", value: b.fadeIn)
+        fadeRow(label: "Fade salida", value: b.fadeOut)
         HStack(spacing: 6) {
             Text("Mover").frame(width: 72, alignment: .leading)
-            Button("Al inicio") { session.moveSound(clip.id, to: 0) }
-            Button("−1 s") { session.moveSound(clip.id, to: clip.tlStart - 1) }
-            Button("Aquí") { session.moveSound(clip.id, to: session.playheadTimeline) }.help("Donde está el video ahora")
-            Button("+1 s") { session.moveSound(clip.id, to: clip.tlStart + 1) }
-            Button("Al final") { session.moveSound(clip.id, to: session.project.duration - max(0, clip.srcOut - clip.srcIn)) }
+            Button("Al inicio") { b.wrappedValue.tlStart = lo }
+            Button("−1 s") { b.wrappedValue.tlStart = max(lo, clip.tlStart - 1) }
+            Button("Aquí") { b.wrappedValue.tlStart = min(max(lo, session.playheadTimeline), max(lo, hi - 0.5)) }.help("Donde está el video ahora")
+            Button("+1 s") { b.wrappedValue.tlStart = min(max(lo, hi - 0.5), clip.tlStart + 1) }
+            Button("Al final") { b.wrappedValue.tlStart = max(lo, hi - max(0, len)) }
             Spacer()
-            Button(role: .destructive) { session.project.audioLane.removeAll { $0.id == clip.id }; session.selectedTrack = nil } label: { Image(systemName: "trash") }
+            Button(role: .destructive) { session.removeSound(sel) } label: { Image(systemName: "trash") }
                 .buttonStyle(.borderless).help("Quitar")
         }
         .font(.callout).controlSize(.small)
-        let len = clip.srcOut - clip.srcIn
-        let over = clip.tlStart + len - session.project.duration
+        let over = clip.tlStart + len - hi
         Text(String(format: "Dura %.0f s.", len)
-             + (clip.loop ? " Se repite hasta el final y hace fade al terminar." : (over > 0.5 ? String(format: " Se corta al final del episodio (sobran %.0f s).", over) : ""))
-             + " Los cortes del episodio también se aplican a la música."
-             + (session.project.intro != nil || session.project.outro != nil ? " Nunca suena dentro del intro ni del cierre: «Al inicio» es justo después del intro y «Al final» justo antes del cierre." : ""))
+             + (clip.loop ? " Se repite hasta el final y hace fade al terminar." : (over > 0.5 ? String(format: " Se corta al final (sobran %.0f s).", over) : ""))
+             + (reel != nil ? " Solo suena en este reel." : " Los cortes del episodio también se aplican a la música.")
+             + (reel == nil && (session.project.intro != nil || session.project.outro != nil) ? " Nunca suena dentro del intro ni del cierre: «Al inicio» es justo después del intro y «Al final» justo antes del cierre." : ""))
             .font(.caption2).foregroundStyle(Theme.secondary)
+        }
     }
 }
 

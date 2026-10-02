@@ -309,6 +309,13 @@ enum SelfTest {
                         try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
                         print("snapshot \(name)")
                     }
+                    // Reels: borrar el que se está viendo con la pantalla abierta (antes la app se cerraba de golpe)
+                    if step == .reels, let first = session.project.reels.first {
+                        session.project.reels.removeAll { $0.id == first.id }
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        host.layoutSubtreeIfNeeded()
+                        print("reel borrado sin cerrar la app")
+                    }
                 }
             } catch { print("ERROR \(error.localizedDescription)") }
             fflush(stdout); exit(0)
