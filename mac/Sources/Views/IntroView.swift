@@ -7,6 +7,8 @@ import AVFoundation
 /// Tiempos tomados de ThePodSound.timing('cambur') del handoff de diseño.
 struct IntroView: View {
     let onFinish: () -> Void
+    var transparent = false          // para exportar la animación sin fondo
+    var silent = false
 
     private enum Pod: Int, CaseIterable { case pre, prod, ama, post }
     // Segundos desde que arranca el audio (el WAV empieza a sonar a los 0.02 s).
@@ -24,7 +26,7 @@ struct IntroView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.102, green: 0.082, blue: 0.063).ignoresSafeArea()      // #1A1510
+            if !transparent { Color(red: 0.102, green: 0.082, blue: 0.063).ignoresSafeArea() }     // #1A1510
             VStack(spacing: 28) {
                 ZStack {
                     Grid(horizontalSpacing: 8, verticalSpacing: 8) {
@@ -80,7 +82,7 @@ struct IntroView: View {
     }
 
     private func start() {
-        if let url = Bundle.main.url(forResource: "thepod-login", withExtension: "wav"),
+        if !silent, let url = Bundle.main.url(forResource: "thepod-login", withExtension: "wav"),
            let p = try? AVAudioPlayer(contentsOf: url) {
             p.prepareToPlay()
             p.play()

@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -482,6 +482,23 @@ enum SelfTest {
                         print("snapshot \(name)")
                     }
                 }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--brand-kit"), args.count > i + 1 {
+            Task { @MainActor in
+                BrandKit.export(to: URL(fileURLWithPath: args[i + 1]))
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--intro-frames"), args.count > i + 4 {
+            // --intro-frames <carpeta> <ancho> <alto> <0 con fondo | 1 transparente | 2 transparente para fondo claro>: cuadros a 30 fps.
+            let dir = URL(fileURLWithPath: args[i + 1])
+            let w = Double(args[i + 2]) ?? 1920, h = Double(args[i + 3]) ?? 1080
+            Task { @MainActor in
+                BrandKit.introFrames(to: dir, w: w, h: h, alpha: args[i + 4] != "0", light: args[i + 4] == "2")
                 fflush(stdout); exit(0)
             }
             return
