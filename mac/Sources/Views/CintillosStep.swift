@@ -231,8 +231,8 @@ struct CintilloEditor: View {
         }
         HStack(spacing: 6) {
             Text("Empieza").frame(width: 72, alignment: .leading)
+            TimecodeField(seconds: c.start, range: lo...max(lo, hi - 2))
             Button("−1 s") { c.wrappedValue.start = max(lo, cin.start - 1) }
-            Text(EditEngine.clock(cin.start)).monospacedDigit().frame(width: 56)
             Button("+1 s") { c.wrappedValue.start = min(max(lo, hi - 2), cin.start + 1) }
             Button("Aquí") { c.wrappedValue.start = min(max(lo, session.playheadTimeline), max(lo, hi - 2)) }.help("Donde está el video ahora")
             Spacer().frame(width: 10)

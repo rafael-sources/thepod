@@ -267,7 +267,9 @@ enum CompositionBuilder {
                     p.setVolume(Float(b.volume), at: .zero)
                     mixParams.append(p)
                 }
-                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement))
+                // Videos de teléfono vienen grabados "acostados" con una rotación en los metadatos: se aplica al dibujar
+                let xf = (try? await v.load(.preferredTransform)) ?? .identity
+                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf))
             } else {
                 guard let img = CIImage(contentsOf: ProjectStore.url(b.file, in: project.id), options: [.applyOrientationProperty: true]) else { continue }
                 brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement))

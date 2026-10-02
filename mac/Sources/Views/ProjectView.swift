@@ -188,6 +188,7 @@ struct PreviewPane: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            HStack { BigClock(session: session); Spacer() }
             ZStack {
                 RoundedRectangle(cornerRadius: 14).fill(Color.black)
                 PlayerView(player: session.player)
@@ -388,7 +389,8 @@ struct TrackInspector: View {
         fadeRow(label: "Fade entrada", value: b.fadeIn)
         fadeRow(label: "Fade salida", value: b.fadeOut)
         HStack(spacing: 6) {
-            Text("Mover").frame(width: 72, alignment: .leading)
+            Text("Empieza").frame(width: 72, alignment: .leading)
+            TimecodeField(seconds: b.tlStart, range: lo...max(lo, hi - 0.5))
             Button("Al inicio") { b.wrappedValue.tlStart = lo }
             Button("−1 s") { b.wrappedValue.tlStart = max(lo, clip.tlStart - 1) }
             Button("Aquí") { b.wrappedValue.tlStart = min(max(lo, session.playheadTimeline), max(lo, hi - 0.5)) }.help("Donde está el video ahora")

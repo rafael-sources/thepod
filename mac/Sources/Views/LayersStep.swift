@@ -213,8 +213,8 @@ struct OverlayEditor: View {
                 }
                 HStack(spacing: 6) {
                     Text("Empieza").frame(width: 60, alignment: .leading)
+                    TimecodeField(seconds: o.start, range: 0...max(0, session.project.duration))
                     Button("−1 s") { o.wrappedValue.start = max(0, ov.start - 1) }
-                    Text(EditEngine.clock(ov.start)).monospacedDigit().frame(width: 56)
                     Button("+1 s") { o.wrappedValue.start = min(session.project.duration, ov.start + 1) }
                     Button("Aquí") { o.wrappedValue.start = session.playheadTimeline }.help("Donde está el video ahora")
                 }
@@ -287,8 +287,8 @@ struct BRollEditor: View {
         .font(.callout)
         HStack(spacing: 6) {
             Text("Empieza").frame(width: 72, alignment: .leading)
+            TimecodeField(seconds: b.start, range: minStart...max(minStart, maxStart))
             Button("−1 s") { b.wrappedValue.start = max(minStart, clip.start - 1) }
-            Text(EditEngine.clock(clip.start)).monospacedDigit().frame(width: 56)
             Button("+1 s") { b.wrappedValue.start = min(maxStart, clip.start + 1) }
             Button("Aquí") { b.wrappedValue.start = min(maxStart, max(minStart, session.playheadTimeline)) }.help("Donde está el video ahora")
         }

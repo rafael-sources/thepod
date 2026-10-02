@@ -856,7 +856,7 @@ struct ReelCard: View {
         HStack(spacing: 2) {
             Button { value.wrappedValue = max(0, value.wrappedValue - 1) } label: { Image(systemName: "minus") }
                 .buttonStyle(.borderless).help("\(label) 1 s antes")
-            Text(EditEngine.clock(value.wrappedValue)).monospacedDigit().font(.caption)
+            TimecodeField(seconds: value, range: 0...max(0, duration)).controlSize(.small)
             Button { value.wrappedValue = min(duration, value.wrappedValue + 1) } label: { Image(systemName: "plus") }
                 .buttonStyle(.borderless).help("\(label) 1 s después")
         }

@@ -60,7 +60,10 @@ final class RenderScene: @unchecked Sendable {
     var introImage: CIImage?
     var outroImage: CIImage?
     /// B-roll: pista de video (o imagen fija) que tapa la pantalla entre `start` y `end` (tiempos del video final).
-    struct BRoll { let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool; let placement: String }
+    struct BRoll {
+        let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool; let placement: String
+        var transform: CGAffineTransform = .identity     // preferredTransform de la pista (rotación de videos de teléfono)
+    }
     var brolls: [BRoll] = []
 
     /// Fondo virtual por persona (lo que va detrás, ya preparado) y calidad de la separación (rápida en la vista previa)
@@ -294,15 +297,18 @@ final class RenderScene: @unchecked Sendable {
         // B-roll: tapa a las personas (el logo, sponsors, capas y subtítulos van encima)
         for b in brolls where t >= b.start && t < b.end {
             var pic: CIImage? = b.image
-            if let tid = b.trackID { pic = brollFrames[tid] }
+            if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
             guard let pic else { continue }
             let k = CGFloat(min(1, (t - b.start) / 0.35, (b.end - t) / 0.35))   // fundido corto al entrar y salir
             var img: CIImage
             if b.placement == "pipLeft" || b.placement == "pipRight" {
                 // Ventanita abajo, con marco: no tapa a las personas
-                let w = W * (format.isVertical ? 0.38 : 0.28)
+                // La ventanita toma la forma del video (no se recorta): ancho tope 28 % / 38 %, alto tope 30 %
                 let e = pic.extent
-                let h = e.width > 0 ? min(w * e.height / e.width, H * 0.22) : w * 9 / 16
+                let ar = e.width > 0 ? e.height / e.width : 9.0 / 16.0
+                var w = W * (format.isVertical ? 0.38 : 0.28)
+                var h = w * ar
+                if h > H * 0.3 { h = H * 0.3; w = h / ar }
                 let m = min(W, H) * 0.035
                 let bottom = format.isVertical ? H * 0.22 : m + (logo == nil ? 0 : 0)
                 let rect = CGRect(x: b.placement == "pipLeft" ? m : W - w - m, y: bottom, width: w, height: h)
@@ -600,6 +606,20 @@ final class RenderScene: @unchecked Sendable {
     }
 
     // MARK: Image helpers
+
+    /// Aplica la rotación de los metadatos del video (preferredTransform, con origen arriba-izquierda)
+    /// a una imagen de Core Image (origen abajo-izquierda) y la deja con origen en (0, 0).
+    func oriented(_ img: CIImage, _ t: CGAffineTransform) -> CIImage {
+        guard !t.isIdentity else { return img }
+        let e = img.extent
+        let flip = CGAffineTransform(scaleX: 1, y: -1).concatenating(.init(translationX: 0, y: e.height))
+        var out = img.transformed(by: flip).transformed(by: t)
+        let e2 = out.extent
+        let unflip = CGAffineTransform(scaleX: 1, y: -1).concatenating(.init(translationX: 0, y: e2.height + 2 * e2.minY))
+        out = out.transformed(by: unflip)
+        let e3 = out.extent
+        return out.transformed(by: .init(translationX: -e3.minX, y: -e3.minY))
+    }
 
     /// Aspect-fill `img` into `rect`, keeping `cropX` (0…1) of the source horizontally centered.
     func fill(_ img: CIImage, into rect: CGRect, cropX: Double) -> CIImage {
