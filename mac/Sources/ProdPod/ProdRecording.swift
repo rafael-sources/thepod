@@ -124,6 +124,8 @@ extension ProdStudio {
                 cue = c
                 Task { try? await Task.sleep(nanoseconds: 6_000_000_000); if cue == c { cue = nil } }
             }
+        case "teleprompter":
+            handleTeleprompter(m)
         case "ifb_start":
             let t = m["targets"]
             ifbOn = (t as? String) == "all_hosts" || ((t as? [String])?.contains(myIdentity) ?? false)
@@ -213,6 +215,7 @@ extension ProdStudio {
         recSeconds = 0
         triggerLog = []
         firedSponsors = []
+        if isOwner { Task { await loadTeleprompterScript() } }
         // Con audífonos: micrófono directo (mejor calidad). Con parlantes: la voz ya sin eco.
         let raw = headphones
         pipe.recordRawAudio = raw
@@ -385,6 +388,7 @@ extension ProdStudio {
         guard recording else { return }
         let t = Date().timeIntervalSince(recordStart)
         recSeconds = Int(t)
+        tickTeleprompter(t)
         for s in sponsors where !firedSponsors.contains(s.id) {
             let left = s.at - t
             if left <= 60 && left > 0 && sponsorAlert?.id != s.id { sponsorAlert = s }

@@ -98,6 +98,8 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var sponsors: [SponsorMark] = []
     @Published var sponsorAlert: SponsorMark?
     @Published var cue: String?
+    @Published var tpNotice: TPNotice?
+    @Published var tpActive: TPActive?
     @Published var directorPresent = false
     @Published var exportState: String?
     @Published var exporting = false
@@ -120,6 +122,13 @@ final class ProdStudio: NSObject, ObservableObject {
     var players: [String: AVAudioPlayer] = [:]
     var triggerLog: [[String: Any]] = []
     var firedSponsors: Set<Int> = []
+    var tpScript: [TPSection] = []
+    var tpFired: Set<Int> = []
+    var tpPeople: [String: String] = [:]      // identity -> nombre
+    var tpUsernames: [String: String] = [:]   // identity -> usuario
+    var tpNoticeTask: Task<Void, Never>?
+    var tpShowTask: Task<Void, Never>?
+    var tpHideTask: Task<Void, Never>?
     var keyMonitor: Any?
     var ifbOn = false
 

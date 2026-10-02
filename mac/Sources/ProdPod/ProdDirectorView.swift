@@ -99,7 +99,7 @@ struct DirectorView: View {
 
     private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), ("Avisos", "megaphone.fill"),
                                             ("Sala", "person.2.fill"), ("Chat", "bubble.left.and.bubble.right.fill"),
-                                            ("Sonidos", "speaker.wave.2.fill")]
+                                            ("Sonidos", "speaker.wave.2.fill"), ("Prompter", "text.viewfinder")]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -383,6 +383,7 @@ struct DirectorView: View {
                     case 2: roomPanel
                     case 3: DirectorChatPanel(dir: dir)
                     case 4: soundsPanel
+                    case 5: TeleprompterPanel(dir: dir)
                     default: CintillosPanel(dir: dir)
                     }
                 }
@@ -755,6 +756,94 @@ struct CuesPanel: View {
         }
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.15), value: justSent)
+    }
+}
+
+// MARK: - Teleprompter
+
+struct TeleprompterPanel: View {
+    @ObservedObject var dir: DirectorStudio
+    @State private var target = "all"
+    @State private var sponsorId: Int?
+    @State private var title = ""
+    @State private var text = ""
+    @State private var speed = "normal"
+    @State private var size = "half"
+    @State private var countdown = 3
+    @State private var sent = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Para", trailing: "todos ven el aviso; el texto solo quien lo lee")
+                FlowPills(items: [("all", "Todos")] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
+                          selected: $target)
+            }
+            if !dir.sponsors.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Texto de un sponsor (prePod)")
+                    FlowPills(items: dir.sponsors.map { ("\($0.id)", $0.name) },
+                              selected: Binding(get: { sponsorId.map(String.init) ?? "" },
+                                                set: { v in
+                                                    sponsorId = Int(v)
+                                                    if let s = dir.sponsors.first(where: { "\($0.id)" == v }) {
+                                                        title = "Publicidad de \(s.name)"
+                                                        text = s.copy.isEmpty ? "Sponsor: \(s.name)" : s.copy
+                                                    }
+                                                }))
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Título del aviso")
+                CRField(placeholder: "Ej.: Publicidad de Café Loma Verde", text: $title)
+                SectionTitle(text: "Texto que va a leer")
+                CRField(placeholder: "Escribe o pega el texto…", text: $text, lines: 4...10)
+            }
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Velocidad")
+                    HStack(spacing: 6) {
+                        ForEach([("slow", "Lenta"), ("normal", "Normal"), ("fast", "Rápida")], id: \.0) { v, l in
+                            Pill(text: l, selected: speed == v) { speed = v }
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionTitle(text: "Tamaño")
+                    HStack(spacing: 6) {
+                        ForEach([("quarter", "¼ pantalla"), ("half", "½ pantalla"), ("full", "Toda")], id: \.0) { v, l in
+                            Pill(text: l, selected: size == v) { size = v }
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                SectionTitle(text: "Aviso previo")
+                HStack(spacing: 6) {
+                    ForEach([(0, "Sin aviso"), (3, "3 s"), (5, "5 s"), (10, "10 s")], id: \.0) { v, l in
+                        Pill(text: l, selected: countdown == v) { countdown = v }
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                CRButton(title: sent ? "Enviado" : "Lanzar teleprompter", symbol: sent ? "checkmark" : "text.viewfinder",
+                         enabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                    dir.sendTeleprompter(target: target, title: title, text: text, speed: speed, size: size, countdown: countdown)
+                    sent = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { sent = false }
+                }
+                Button { dir.hideTeleprompter() } label: {
+                    Label("Quitar", systemImage: "xmark").font(.system(size: 14, weight: .bold))
+                        .frame(width: 100, height: 44)
+                        .background(RoundedRectangle(cornerRadius: 11).fill(CR.field))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Los teleprompter marcados en el guion de prePod salen solos al minuto indicado, sin que hagas nada.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+        }
+        .disabled(!dir.connected)
     }
 }
 

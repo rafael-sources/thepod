@@ -235,6 +235,35 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
+    // MARK: Teleprompter (0.11.0)
+
+    var tpLastId: String?
+
+    /// Manda el teleprompter a una persona o a todos. Con `countdown` > 0 todos ven primero el aviso
+    /// ("Viene X en 3 s · ATENTO …") y el texto solo le aparece a quien le toca.
+    func sendTeleprompter(target: String, title: String, text: String, speed: String, size: String, countdown: Int) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { error = "Escribe el texto del teleprompter"; return }
+        let eid = "d\(Int(Date().timeIntervalSince1970 * 1000))"
+        let ttl = title.isEmpty ? "Teleprompter" : title
+        send(["type": "teleprompter", "action": "show", "event_id": eid, "target": target,
+              "title": ttl, "text": t, "speed": speed, "size": size, "countdown": max(0, countdown)])
+        tpLastId = eid
+        Task {
+            _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/director/inject",
+                ["event_type": "teleprompter",
+                 "payload": ["target": target, "title": ttl, "text": t, "speed": speed, "size": size]])
+        }
+        flash("Teleprompter enviado" + (countdown > 0 ? " (aviso de \(countdown) s)" : ""))
+    }
+
+    func hideTeleprompter() {
+        var m: [String: Any] = ["type": "teleprompter", "action": "hide", "target": "all"]
+        if let tpLastId { m["event_id"] = tpLastId }
+        send(m)
+        flash("Teleprompter quitado")
+    }
+
     func setGuestCues(_ show: Bool) { send(["type": "cue_visibility", "show": show]) }
 
     // MARK: Hablar al oído (mantener presionado)

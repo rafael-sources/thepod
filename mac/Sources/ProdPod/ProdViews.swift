@@ -424,6 +424,7 @@ struct StudioView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay { countdownOverlay }
                 .overlay(alignment: .top) { banners }
+                .overlay { TeleprompterLayer(studio: studio) }
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(studio.overlays) { o in Cintillo(overlay: o, scale: 0.9) }
