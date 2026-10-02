@@ -817,6 +817,7 @@ struct ScriptTab: View {
                                 .scrollContentBackground(.hidden)
                                 .frame(maxWidth: .infinity, minHeight: 70)
                                 .onChange(of: s.content) { _, v in save(s.id, ["content": v]) }
+                            teleprompterRow($s)
                         }
                         .padding(12)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
@@ -834,8 +835,110 @@ struct ScriptTab: View {
 
     private var totalMinutes: Int { Int((sections.compactMap(\.estimatedDuration).reduce(0, +) / 60).rounded()) }
 
+    // MARK: Teleprompter
+
+    /// Quién puede leer un teleprompter: conductores del podcast (por usuario) e invitados del episodio (por nombre).
+    struct TPPerson: Identifiable, Hashable { let key: String; let label: String; let isHost: Bool; var id: String { key } }
+    @State private var tpPeople: [TPPerson] = []
+
+    @ViewBuilder private func teleprompterRow(_ s: Binding<ScriptSection>) -> some View {
+        let on = s.wrappedValue.tpEnabled ?? false
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { on }, set: { v in toggleTP(s, v) })) {
+                Label("Teleprompter", systemImage: "text.viewfinder").font(.callout)
+            }
+            .toggleStyle(.switch).controlSize(.small)
+            if on {
+                HStack(spacing: 10) {
+                    Text("lo lee").font(.caption).foregroundStyle(Theme.secondary)
+                    Picker("", selection: Binding(get: { s.wrappedValue.tpSpeaker ?? "" },
+                                                  set: { v in s.wrappedValue.tpSpeaker = v; save(s.wrappedValue.id, ["tp_speaker": v]) })) {
+                        Text("— elegir —").tag("")
+                        if tpPeople.contains(where: \.isHost) {
+                            Section("Conductores") { ForEach(tpPeople.filter(\.isHost)) { p in Text(p.label).tag(p.key) } }
+                        }
+                        if tpPeople.contains(where: { !$0.isHost }) {
+                            Section("Invitados") { ForEach(tpPeople.filter { !$0.isHost }) { p in Text(p.label).tag(p.key) } }
+                        }
+                    }
+                    .labelsHidden().frame(maxWidth: 240)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder((s.wrappedValue.tpSpeaker ?? "").isEmpty ? Color.orange : .clear))
+                    Text("aparece a los").font(.caption).foregroundStyle(Theme.secondary)
+                    let secs = s.wrappedValue.tpOffsetSeconds ?? 0
+                    TextField("min", value: Binding(get: { Int(secs) / 60 },
+                                                    set: { m in setTPOffset(s, min: max(0, m), sec: Int(secs) % 60) }), format: .number)
+                        .frame(width: 44)
+                    Text("min").font(.caption).foregroundStyle(Theme.secondary)
+                    TextField("seg", value: Binding(get: { Int(secs) % 60 },
+                                                    set: { x in setTPOffset(s, min: Int(secs) / 60, sec: min(59, max(0, x))) }), format: .number)
+                        .frame(width: 44)
+                    Text("seg").font(.caption).foregroundStyle(Theme.secondary)
+                    Button("sugerir") { setTPOffset(s, total: tpSuggested(for: s.wrappedValue)) }
+                        .buttonStyle(.borderless).font(.caption)
+                        .help("Sumar lo que duran las secciones anteriores")
+                }
+                HStack(spacing: 10) {
+                    Text("velocidad").font(.caption).foregroundStyle(Theme.secondary)
+                    Picker("", selection: Binding(get: { s.wrappedValue.tpSpeed ?? "normal" },
+                                                  set: { v in s.wrappedValue.tpSpeed = v; save(s.wrappedValue.id, ["tp_speed": v]) })) {
+                        Text("lenta").tag("slow"); Text("normal").tag("normal"); Text("rápida").tag("fast")
+                    }
+                    .labelsHidden().pickerStyle(.segmented).frame(width: 190)
+                    Text("ocupa").font(.caption).foregroundStyle(Theme.secondary)
+                    Picker("", selection: Binding(get: { s.wrappedValue.tpSize ?? "half" },
+                                                  set: { v in s.wrappedValue.tpSize = v; save(s.wrappedValue.id, ["tp_size": v]) })) {
+                        Text("¼ pantalla").tag("quarter"); Text("½ pantalla").tag("half"); Text("toda").tag("full")
+                    }
+                    .labelsHidden().pickerStyle(.segmented).frame(width: 230)
+                }
+                Text("Todos ven el aviso 3 s antes; el texto le sale solo a quien lo lee. Si no eliges a nadie, le sale a todos.")
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func tpSuggested(for sec: ScriptSection) -> Int {
+        var acc = 0.0
+        for x in sections { if x.id == sec.id { break }; acc += x.estimatedDuration ?? 0 }
+        return Int(acc)
+    }
+    private func toggleTP(_ s: Binding<ScriptSection>, _ v: Bool) {
+        s.wrappedValue.tpEnabled = v
+        var fields: [String: Any] = ["tp_enabled": v]
+        if v && s.wrappedValue.tpOffsetSeconds == nil {
+            let t = tpSuggested(for: s.wrappedValue)
+            s.wrappedValue.tpOffsetSeconds = Double(t); fields["tp_offset_seconds"] = t
+        }
+        if v && (s.wrappedValue.tpSpeaker ?? "").isEmpty {
+            let sp = s.wrappedValue.speaker.trimmingCharacters(in: .whitespaces).lowercased()
+            let hit = tpPeople.first { $0.key.lowercased() == sp || $0.label.lowercased().hasPrefix(sp) && !sp.isEmpty } ?? tpPeople.first
+            if let hit { s.wrappedValue.tpSpeaker = hit.key; fields["tp_speaker"] = hit.key }
+        }
+        save(s.wrappedValue.id, fields)
+    }
+    private func setTPOffset(_ s: Binding<ScriptSection>, min: Int, sec: Int) { setTPOffset(s, total: min * 60 + sec) }
+    private func setTPOffset(_ s: Binding<ScriptSection>, total: Int) {
+        s.wrappedValue.tpOffsetSeconds = Double(total)
+        save(s.wrappedValue.id, ["tp_offset_seconds": total])
+    }
+    private func loadTPPeople() async {
+        var out: [TPPerson] = []
+        if let h = try? await api.hosts(slug) {
+            for u in ([h.owner].compactMap { $0 } + h.extraHosts) {
+                let found = (try? await api.searchUsers(u))?.first { $0.username == u }
+                out.append(TPPerson(key: u, label: found?.displayName.map { "\($0) (@\(u))" } ?? "@\(u)", isHost: true))
+            }
+        }
+        if let gs = try? await api.guests(slug, episodeId) {
+            for g in gs where !g.name.isEmpty { out.append(TPPerson(key: g.name, label: g.name, isHost: false)) }
+        }
+        tpPeople = out
+    }
+
     private func load() async {
         do { sections = try await api.script(slug, episodeId) } catch { self.error = error.localizedDescription }
+        await loadTPPeople()
     }
     private func save(_ id: Int, _ fields: [String: Any]) {
         saver.run("\(id)-\(fields.keys.sorted().joined())") {

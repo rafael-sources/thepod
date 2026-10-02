@@ -69,6 +69,12 @@ struct ScriptSection: Decodable, Identifiable, Hashable {
     var content: String
     var estimatedDuration: Double?
     var notes: String
+    // Teleprompter (0.11): quién lo lee (usuario del conductor o nombre del invitado), cuándo, velocidad y tamaño
+    var tpEnabled: Bool?
+    var tpOffsetSeconds: Double?
+    var tpSpeed: String?
+    var tpSize: String?
+    var tpSpeaker: String?
 }
 
 enum BlockKind: String, CaseIterable, Identifiable {
