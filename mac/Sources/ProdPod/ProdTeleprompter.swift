@@ -42,7 +42,8 @@ struct TPActive: Equatable {
 /// Sección del guion de prePod marcada para teleprompter.
 struct TPSection {
     let id: Int
-    let speaker: String
+    let speaker: String          // etiqueta para mostrar
+    let speakerKey: String       // usuario del conductor o nombre del invitado (para elegir a quién va)
     let content: String
     let offset: Double
     let speed: String
@@ -145,20 +146,23 @@ extension ProdStudio {
         tpScript = (j["sections"] as? [[String: Any]] ?? []).compactMap { s in
             guard let id = s["id"] as? Int,
                   let off = (s["offset_seconds"] as? Double) ?? (s["offset_seconds"] as? Int).map(Double.init) else { return nil }
-            return TPSection(id: id, speaker: s["speaker"] as? String ?? "", content: s["content"] as? String ?? "",
+            let label = s["speaker"] as? String ?? ""
+            return TPSection(id: id, speaker: label, speakerKey: (s["speaker_key"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? label,
+                             content: s["content"] as? String ?? "",
                              offset: off, speed: s["speed"] as? String ?? "normal", size: s["size"] as? String ?? "half")
         }
         if !tpScript.isEmpty { flash("\(tpScript.count) teleprompter del guion listos") }
     }
 
-    /// Igual que la web: nombre o usuario igual, o que uno empiece con el otro, o mismo primer nombre.
+    /// Igual que la web: primero usuario o nombre exacto (lo que eligió prePod en «lo lee»), luego parecido por nombre.
     func tpIdentity(for speaker: String) -> String {
         let sp = speaker.trimmingCharacters(in: .whitespaces).lowercased()
         guard !sp.isEmpty else { return "all" }
+        for (id, name) in tpPeople where name.lowercased() == sp || (tpUsernames[id] ?? "").lowercased() == sp { return id }
         for (id, name) in tpPeople {
-            let n = name.lowercased(), u = (tpUsernames[id] ?? "").lowercased()
-            if n == sp || u == sp || n.hasPrefix(sp) || (!n.isEmpty && sp.hasPrefix(n))
-                || n.split(separator: " ").first == sp.split(separator: " ").first { return id }
+            let n = name.lowercased()
+            guard !n.isEmpty else { continue }
+            if n.hasPrefix(sp) || sp.hasPrefix(n) || n.split(separator: " ").first == sp.split(separator: " ").first { return id }
         }
         return "all"
     }
@@ -171,7 +175,7 @@ extension ProdStudio {
             guard t >= at, t <= at + 2 else { continue }
             tpFired.insert(s.id)
             let msg: [String: Any] = ["type": "teleprompter", "action": "show", "event_id": "s\(s.id)",
-                                      "target": tpIdentity(for: s.speaker), "title": "Guion · \(s.speaker)",
+                                      "target": tpIdentity(for: s.speakerKey), "title": "Guion · \(s.speaker)",
                                       "text": s.content, "speed": s.speed, "size": s.size, "countdown": 3]
             send(msg)
             handleTeleprompter(msg)      // también para mí
