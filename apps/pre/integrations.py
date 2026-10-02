@@ -438,6 +438,7 @@ def teleprompter_for_episode():
                 "id": d["id"],
                 "position": d["position"],
                 "speaker": d.get("speaker") or "",
+                "speaker_key": d.get("tp_speaker") or d.get("speaker") or "",   # usuario del conductor o nombre del invitado
                 "content": d.get("content") or "",
                 "offset_seconds": d.get("tp_offset_seconds"),
                 "speed": d.get("tp_speed") or "normal",

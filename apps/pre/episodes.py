@@ -84,6 +84,7 @@ def _serialize_section(row):
         "tp_offset_seconds": _rowget(row, "tp_offset_seconds", None),
         "tp_speed": _rowget(row, "tp_speed", "normal") or "normal",
         "tp_size": _rowget(row, "tp_size", "half") or "half",
+        "tp_speaker": _rowget(row, "tp_speaker", None) or "",
     }
 
 
@@ -657,7 +658,7 @@ def update_script_section(slug, sec_id):
                 _normalize_script_positions(db, ep_id)
 
         other_updates = {}
-        for k in ("speaker", "content", "estimated_duration", "notes", "tp_offset_seconds"):
+        for k in ("speaker", "content", "estimated_duration", "notes", "tp_offset_seconds", "tp_speaker"):
             if k in data:
                 other_updates[k] = data[k]
         if "tp_enabled" in data:

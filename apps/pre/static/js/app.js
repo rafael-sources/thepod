@@ -1364,6 +1364,7 @@ var ScriptEditor = {
                 tp_offset_seconds: sec.tp_offset_seconds,
                 tp_speed: sec.tp_speed || "normal",
                 tp_size: sec.tp_size || "half",
+                tp_speaker: sec.tp_speaker || "",
               },
             });
           } catch (e) { error.value = e.message; }
@@ -1378,27 +1379,47 @@ var ScriptEditor = {
     );
     watch(totalSeconds, (v) => emit("total-seconds-changed", v));
 
-    /* Teleprompter: minuto de aparición como "mm:ss" en el campo; se guarda en segundos. */
-    function tpOffsetText(sec) {
-      const s = sec.tp_offset_seconds;
-      if (s == null || s === "") return "";
-      const m = Math.floor(s / 60), r = Math.floor(s % 60);
-      return m + ":" + String(r).padStart(2, "0");
-    }
-    function setTpOffset(sec, text) {
-      const t = (text || "").trim();
-      if (!t) { sec.tp_offset_seconds = null; saveSection(sec); return; }
-      const parts = t.split(":").map(Number);
-      let secs = null;
-      if (parts.length === 2 && parts.every(n => !isNaN(n))) secs = parts[0] * 60 + parts[1];
-      else if (parts.length === 1 && !isNaN(parts[0])) secs = parts[0];
-      if (secs != null) { sec.tp_offset_seconds = secs; saveSection(sec); }
+    /* Teleprompter: minutos y segundos por separado; se guarda en segundos. */
+    function tpMin(sec) { const s = sec.tp_offset_seconds; return s == null ? 0 : Math.floor(s / 60); }
+    function tpSec(sec) { const s = sec.tp_offset_seconds; return s == null ? 0 : Math.floor(s % 60); }
+    function setTpMinSec(sec, mins, secs) {
+      mins = Math.max(0, parseInt(mins, 10) || 0); secs = Math.max(0, Math.min(59, parseInt(secs, 10) || 0));
+      sec.tp_offset_seconds = mins * 60 + secs; saveSection(sec);
     }
     /* Sugerencia: el minuto donde empieza la sección sumando las anteriores. */
     function tpSuggest(sec) {
       let acc = 0;
       for (const s of sections.value) { if (s.id === sec.id) break; acc += s.estimated_duration || 0; }
       sec.tp_offset_seconds = acc; saveSection(sec);
+    }
+    /* Quién lo lee: se elige entre los conductores del podcast (por usuario) y los invitados del episodio,
+       así prodPod lo manda a la persona correcta aunque el nombre esté escrito distinto. */
+    const tpPeople = ref([]);   // [{key, label, kind}]
+    async function loadTpPeople() {
+      const out = [];
+      try {
+        const h = await api(`/api/podcasts/${props.slug}/hosts`);
+        const users = [h.owner].concat(h.extra_hosts || []).filter(Boolean);
+        for (const u of users) {
+          let label = "@" + u;
+          try {
+            const found = await api("/api/podcasts/search-users?q=" + encodeURIComponent(u));
+            const hit = (found || []).find(x => x.username === u);
+            if (hit && hit.display_name) label = hit.display_name + " (@" + u + ")";
+          } catch (_) {}
+          out.push({ key: u, label, kind: "host" });
+        }
+      } catch (_) {}
+      try {
+        const gs = await api(`/api/podcasts/${props.slug}/episodes/${props.episodeId}/guests`);
+        for (const g of gs || []) if (g.name) out.push({ key: g.name, label: g.name, kind: "guest" });
+      } catch (_) {}
+      tpPeople.value = out;
+    }
+    function tpGuess(sec) {
+      const sp = (sec.speaker || "").trim().toLowerCase();
+      const hit = tpPeople.value.find(p => p.key.toLowerCase() === sp || p.label.toLowerCase().startsWith(sp) || p.key.toLowerCase().startsWith(sp));
+      return hit ? hit.key : (tpPeople.value[0] ? tpPeople.value[0].key : "");
     }
     function toggleTp(sec) {
       sec.tp_enabled = !sec.tp_enabled;
@@ -1407,12 +1428,13 @@ var ScriptEditor = {
         for (const s of sections.value) { if (s.id === sec.id) break; acc += s.estimated_duration || 0; }
         sec.tp_offset_seconds = acc;
       }
+      if (sec.tp_enabled && !sec.tp_speaker) sec.tp_speaker = tpGuess(sec);
       saveSection(sec);
     }
 
-    watch(() => props.episodeId, load, { immediate: true });
+    watch(() => props.episodeId, () => { load(); loadTpPeople(); }, { immediate: true });
     return { sections, error, addSection, removeSection, move, saveSection, totalSeconds, fmtTotalSeconds,
-             tpOffsetText, setTpOffset, tpSuggest, toggleTp };
+             tpMin, tpSec, setTpMinSec, tpSuggest, toggleTp, tpPeople };
   },
   template: `
     <div>
@@ -1450,10 +1472,24 @@ var ScriptEditor = {
               <span>🎬 Teleprompter</span>
             </label>
             <template v-if="sec.tp_enabled">
-              <span class="tp-who">lo lee <b>{{ sec.speaker || '(sin speaker)' }}</b></span>
               <span class="tp-field">
-                <span class="tiny">aparece en</span>
-                <input type="text" class="mono tp-offset" :value="tpOffsetText(sec)" @change="setTpOffset(sec, $event.target.value)" placeholder="mm:ss">
+                <span class="tiny">lo lee</span>
+                <select v-model="sec.tp_speaker" @change="saveSection(sec)" :class="{ warn: !sec.tp_speaker }">
+                  <option value="">— elegir —</option>
+                  <optgroup label="Conductores" v-if="tpPeople.some(p => p.kind === 'host')">
+                    <option v-for="p in tpPeople.filter(p => p.kind === 'host')" :key="'h' + p.key" :value="p.key">{{ p.label }}</option>
+                  </optgroup>
+                  <optgroup label="Invitados" v-if="tpPeople.some(p => p.kind === 'guest')">
+                    <option v-for="p in tpPeople.filter(p => p.kind === 'guest')" :key="'g' + p.key" :value="p.key">{{ p.label }}</option>
+                  </optgroup>
+                </select>
+              </span>
+              <span class="tp-field">
+                <span class="tiny">aparece a los</span>
+                <input type="number" class="mono tp-offset" min="0" step="1" :value="tpMin(sec)" @change="setTpMinSec(sec, $event.target.value, tpSec(sec))" title="minutos">
+                <span class="tiny">min</span>
+                <input type="number" class="mono tp-offset" min="0" max="59" step="1" :value="tpSec(sec)" @change="setTpMinSec(sec, tpMin(sec), $event.target.value)" title="segundos">
+                <span class="tiny">seg</span>
                 <button class="ghost tiny" @click="tpSuggest(sec)" title="Sumar lo que duran las secciones anteriores">sugerir</button>
               </span>
               <span class="tp-field">
