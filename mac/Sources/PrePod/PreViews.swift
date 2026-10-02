@@ -801,11 +801,12 @@ struct ScriptTab: View {
                                 if !s.speaker.isEmpty { Avatar(name: s.speaker, size: 24) }
                                 TextField("Quién habla", text: $s.speaker).frame(maxWidth: 220)
                                     .onChange(of: s.speaker) { _, v in save(s.id, ["speaker": v]) }
-                                TextField("min", value: Binding(get: { s.estimatedDuration.map { $0 / 60 } },
+                                TextField("dura", value: Binding(get: { s.estimatedDuration.map { $0 / 60 } },
                                                                 set: { s.estimatedDuration = $0.map { $0 * 60 } }), format: .number)
                                     .frame(width: 50)
                                     .onChange(of: s.estimatedDuration) { _, v in save(s.id, ["estimated_duration": v ?? NSNull()]) }
                                 Text("min").font(.caption).foregroundStyle(Theme.secondary)
+                                    .help("Cuánto dura esta sección (no es el teleprompter)")
                                 Spacer()
                                 Button { move(s, -1) } label: { Image(systemName: "arrow.up") }.disabled(s.position == 0)
                                 Button { move(s, 1) } label: { Image(systemName: "arrow.down") }.disabled(s.position >= sections.count - 1)
@@ -863,19 +864,37 @@ struct ScriptTab: View {
                     }
                     .labelsHidden().frame(maxWidth: 240)
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder((s.wrappedValue.tpSpeaker ?? "").isEmpty ? Color.orange : .clear))
-                    Text("aparece a los").font(.caption).foregroundStyle(Theme.secondary)
-                    let secs = s.wrappedValue.tpOffsetSeconds ?? 0
-                    TextField("min", value: Binding(get: { Int(secs) / 60 },
-                                                    set: { m in setTPOffset(s, min: max(0, m), sec: Int(secs) % 60) }), format: .number)
-                        .frame(width: 44)
-                    Text("min").font(.caption).foregroundStyle(Theme.secondary)
-                    TextField("seg", value: Binding(get: { Int(secs) % 60 },
-                                                    set: { x in setTPOffset(s, min: Int(secs) / 60, sec: min(59, max(0, x))) }), format: .number)
-                        .frame(width: 44)
-                    Text("seg").font(.caption).foregroundStyle(Theme.secondary)
-                    Button("sugerir") { setTPOffset(s, total: tpSuggested(for: s.wrappedValue)) }
-                        .buttonStyle(.borderless).font(.caption)
-                        .help("Sumar lo que duran las secciones anteriores")
+                }
+                HStack(spacing: 10) {
+                    let chained = (s.wrappedValue.tpAfterPrev ?? false) && tpHasPrev(s.wrappedValue)
+                    if tpHasPrev(s.wrappedValue) {
+                        Toggle("después del anterior", isOn: Binding(get: { s.wrappedValue.tpAfterPrev ?? false },
+                                                                    set: { v in s.wrappedValue.tpAfterPrev = v; save(s.wrappedValue.id, ["tp_after_prev": v]) }))
+                            .toggleStyle(.checkbox).controlSize(.small)
+                    }
+                    if chained {
+                        Text("separación").font(.caption).foregroundStyle(Theme.secondary)
+                        TextField("seg", value: Binding(get: { s.wrappedValue.tpGapSeconds ?? 0.5 },
+                                                        set: { g in s.wrappedValue.tpGapSeconds = max(0, g); save(s.wrappedValue.id, ["tp_gap_seconds": max(0, g)]) }),
+                                  format: .number)
+                            .frame(width: 44)
+                        Text("seg → empieza en \(clockTP(tpStart(s.wrappedValue)))").font(.caption).foregroundStyle(Theme.secondary)
+                    } else {
+                        Text("aparece a los").font(.caption).foregroundStyle(Theme.secondary)
+                        let secs = s.wrappedValue.tpOffsetSeconds ?? 0
+                        TextField("min", value: Binding(get: { Int(secs) / 60 },
+                                                        set: { m in setTPOffset(s, min: max(0, m), sec: Int(secs) % 60) }), format: .number)
+                            .frame(width: 44)
+                        Text("min").font(.caption).foregroundStyle(Theme.secondary)
+                        TextField("seg", value: Binding(get: { Int(secs) % 60 },
+                                                        set: { x in setTPOffset(s, min: Int(secs) / 60, sec: min(59, max(0, x))) }), format: .number)
+                            .frame(width: 44)
+                        Text("seg").font(.caption).foregroundStyle(Theme.secondary)
+                        Button("sugerir") { setTPOffset(s, total: tpSuggested(for: s.wrappedValue)) }
+                            .buttonStyle(.borderless).font(.caption)
+                            .help("Sumar lo que duran las secciones anteriores")
+                    }
+                    Text("corre ~\(Int(tpRunSeconds(s.wrappedValue).rounded())) s").font(.caption).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 10) {
                     Text("velocidad").font(.caption).foregroundStyle(Theme.secondary)
@@ -898,6 +917,31 @@ struct ScriptTab: View {
         .padding(.top, 4)
     }
 
+    /// Cuánto tarda en correr (misma fórmula que prodPod): palabras / velocidad + 2,5 s.
+    private func tpRunSeconds(_ sec: ScriptSection) -> Double {
+        let wpm: [String: Double] = ["slow": 95, "normal": 135, "fast": 180]
+        let words = max(8, sec.content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count)
+        return Double(words) / (wpm[sec.tpSpeed ?? "normal"] ?? 135) * 60 + 2.5
+    }
+    private func tpHasPrev(_ sec: ScriptSection) -> Bool {
+        for x in sections { if x.id == sec.id { return false }; if x.tpEnabled ?? false { return true } }
+        return false
+    }
+    /// Inicio real, resolviendo los encadenados en orden (igual que el endpoint de prePod).
+    private func tpStart(_ sec: ScriptSection) -> Double? {
+        var prevEnd: Double? = nil
+        for x in sections where x.tpEnabled ?? false {
+            var off = x.tpOffsetSeconds
+            if (x.tpAfterPrev ?? false), let pe = prevEnd { off = pe + (x.tpGapSeconds ?? 0.5) }
+            if x.id == sec.id { return off }
+            if let o = off { prevEnd = o + tpRunSeconds(x) }
+        }
+        return sec.tpOffsetSeconds
+    }
+    private func clockTP(_ t: Double?) -> String {
+        guard let t else { return "—" }
+        return String(format: "%d:%02d", Int(t) / 60, Int(t.rounded()) % 60)
+    }
     private func tpSuggested(for sec: ScriptSection) -> Int {
         var acc = 0.0
         for x in sections { if x.id == sec.id { break }; acc += x.estimatedDuration ?? 0 }

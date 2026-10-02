@@ -75,6 +75,8 @@ struct ScriptSection: Decodable, Identifiable, Hashable {
     var tpSpeed: String?
     var tpSize: String?
     var tpSpeaker: String?
+    var tpAfterPrev: Bool?
+    var tpGapSeconds: Double?
 }
 
 enum BlockKind: String, CaseIterable, Identifiable {
