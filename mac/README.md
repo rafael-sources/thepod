@@ -43,7 +43,7 @@ brew install xcodegen
 cd macos
 zsh scripts/build-ffmpeg.sh        # una sola vez: compila ffmpeg en Vendor/ffmpeg (≈10 min)
 xcodegen generate
-open thePod.xcodeproj   # o: xcodebuild -scheme thePod -destination 'platform=macOS,arch=arm64' build
+open PostPodApp.xcodeproj   # o: xcodebuild -scheme PostPodApp -destination 'platform=macOS,arch=arm64' build
 ```
 
 Requisitos: macOS 15+, Apple Silicon y Xcode 16 o posterior. La primera transcripción descarga el modelo de Whisper (~600 MB) a `~/Library/Application Support/postPod/whisper`.
