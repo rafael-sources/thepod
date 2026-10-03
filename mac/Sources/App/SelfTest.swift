@@ -515,7 +515,13 @@ enum SelfTest {
                     }
                     if let l = try? JSONDecoder().decode(VideoLayer.self, from: JSONSerialization.data(withJSONObject: layer)) { p.overlays.append(l) }
                 }
-                p = p.applying(p.look(for: reel), reel: reel)
+                if args.contains("--capbottom") {   // subtítulos en su lugar de siempre (sin la posición arrastrada)
+                    p.captionStyle.freeX = nil; p.captionStyle.freeY = nil
+                    p.reelLook.captionStyle?.freeX = nil; p.reelLook.captionStyle?.freeY = nil
+                    for k in p.reels.indices { p.reels[k].look?.captionStyle?.freeX = nil; p.reels[k].look?.captionStyle?.freeY = nil }
+                }
+                let reelNow = p.reels[n - 1]
+                p = p.applying(p.look(for: reelNow), reel: reelNow)
                 do {
                     let built = try await CompositionBuilder.build(project: p, format: .vertical, window: (reel.start, reel.end),
                                                                    energy: AudioAnalysis.loadEnergy(p.id))
