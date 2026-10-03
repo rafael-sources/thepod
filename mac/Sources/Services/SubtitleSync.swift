@@ -108,6 +108,19 @@ enum SubtitleSync {
                     phrase.append(i)
                 }
                 flush()
+                // 3. Palabras estiradas sobre una pausa ("creo" de 2,5 s): Whisper le pega el silencio a la palabra.
+                //    Al cortar ese silencio la palabra desaparecía del subtítulo o salía antes de tiempo. Se deja
+                //    solo el pedazo donde suena la voz.
+                let floor = percentile(env, 0.2)
+                for i in inChunk {
+                    let dur = out[i].e - out[i].s
+                    let chars = Double(out[i].w.count)
+                    guard dur > max(0.7, 0.3 + 0.09 * chars) else { continue }
+                    if let seg = loudest(env, origin: e0, from: out[i].s, to: out[i].e, threshold: floor + 12) {
+                        out[i].s = max(out[i].s, seg.start - 0.03)
+                        out[i].e = min(out[i].e, max(out[i].s + 0.08, seg.end + 0.03))
+                    }
+                }
                 progress((Double(li) + min(1, (c1 - first) / max(1, last - first))) / Double(lanes.count))
             }
         }
@@ -117,6 +130,30 @@ enum SubtitleSync {
     }
 
     private static func bin(_ t: Double, origin: Double) -> Int { Int(((t - origin) / hop).rounded()) }
+
+    private static func percentile(_ v: [Float], _ q: Double) -> Float {
+        guard !v.isEmpty else { return -60 }
+        let sorted = v.sorted()
+        return sorted[min(sorted.count - 1, Int(Double(sorted.count) * q))]
+    }
+
+    /// El tramo de voz más largo (por encima de `threshold` dB) dentro de [from, to]; los huecos de menos de 0,15 s no lo cortan.
+    private static func loudest(_ env: [Float], origin: Double, from: Double, to: Double, threshold: Float) -> (start: Double, end: Double)? {
+        let a = max(0, bin(from, origin: origin)), b = min(env.count, bin(to, origin: origin))
+        guard b - a > 2 else { return nil }
+        var best: (Int, Int)?
+        var segStart: Int?
+        var lastLoud = -100
+        for k in a..<b {
+            if env[k] >= threshold {
+                if segStart == nil || k - lastLoud > 15 { segStart = k }
+                lastLoud = k
+                if let st = segStart, (best == nil || (k - st) > (best!.1 - best!.0)) { best = (st, k + 1) }
+            }
+        }
+        guard let best, best.1 - best.0 >= 8 else { return nil }      // al menos 80 ms de voz
+        return (origin + Double(best.0) * hop, origin + Double(best.1) * hop)
+    }
 
     private static func zscore(_ v: [Float]) -> [Double] {
         let d = v.map { Double(max(-60, $0)) }
