@@ -99,6 +99,8 @@ Todas se corren con el binario de la app (`thePod.app/Contents/MacOS/thePod`), c
 | `--render <slug> <inicio> <fin> <landscape\|vertical\|square\|audio> [reel N]` | exporta una ventana del episodio (o un reel) a `exports/` |
 | `--post-snapshot`, `--pre-snapshot`, `--intro-snapshot` | capturas de pantalla de la interfaz (sin ventana real) |
 | `--extras-test <slug>`, `--sensitive-test <slug>`, `--stems-test <slug>` | prueban capas/b-roll, palabras sensibles y pistas WAV |
+| `--frame-test <slug> <reel> <seg> <png> [--crowd] [--capbottom] [--bgpodcast]` | un cuadro de un reel en 9:16 (con un cintillo y un texto de más, subtítulos en su lugar, fondo del podcast) |
+| `--meter-test <slug>`, `--sync-test <slug> [--listen]` | medidor con el volumen aplicado; subtítulos ajustados a la voz |
 | `--brand-kit <carpeta>`, `--intro-frames <carpeta> <w> <h> <0\|1\|2>` | generan el set de marca y los cuadros de la intro |
 
 Con `THEPOD_DEBUG=1` el render imprime por `NSLog` el volumen base de cada pista, los puntos de envolvente y las pistas de audio de la mezcla.
@@ -108,8 +110,12 @@ Para medir resultados: `ffmpeg -af astats`/`volumedetect` sobre lo exportado (ve
 
 - Para distribuirla a otras Macs sin avisos de seguridad falta firmarla con un Developer ID y notarizarla.
 - El teleprompter encadenado («después del anterior») sale a la hora calculada; no reacciona al final real del anterior.
-- En 9:16 el logo, un cintillo, los subtítulos y un texto pueden pisarse si coinciden.
-- El fondo virtual puede parpadear con movimiento y deja una franja del fondo del podcast en algunos diseños.
-- El medidor por persona muestra el análisis con el volumen aplicado, no la salida real.
+- Acomodo en 9:16 y 1:1 (`RenderScene.arrangement` + `FrameLayout`): lo automático (subtítulos, sponsors, b-roll en ventanita,
+  cintillos, nombres) se corre en vertical para no pisar el logo, las capas ni los subtítulos arrastrados (que no se mueven).
+  Si no hay lugar libre, queda donde iba. En 16:9 sigue la regla vieja (los subtítulos suben sobre el cintillo).
+- Fondo virtual: máscara con suavizado que sigue el movimiento y reusa la anterior si Vision falla un cuadro; «Fondo del
+  podcast» se recorta en pantalla sobre el mismo fondo de los recuadros. El parpadeo no está medido con números, solo visto.
+- Medidor por persona: reproduciendo, `LevelTap` (MTAudioProcessingTap) + la curva de volumen de la mezcla (el tap escucha
+  ANTES del volumen de `AVAudioMixInputParameters`: medido con `--meter-test`, −11 dB al bajar a 25 %); en pausa, estimación.
 - Whisper a veces omite las muletillas ("eh", "mmm"); esas no se pueden cortar si no aparecen en la transcripción.
 - Probado sin ratón (capturas y renders medidos con ffmpeg); el arrastre de puntos de volumen, el menú de plantillas y los atajos en ventana real no se probaron a mano.
