@@ -12,7 +12,9 @@ Barra lateral en tres bloques; cada sección tiene un «?» con ayuda y atajos.
 
 - **Preparar**: Grabación (personas, nombres, guion y sponsors de prePod) · Limpiar sonido (cadena DSP de estudio, silencios,
   muletillas, EQ de tres bandas, Voz pareja = compresor, Menos siseo = de-esser) · Subtítulos (WhisperKit local, estilos, karaoke,
-  corrección por frase) · Palabras sensibles (groserías y temas delicados: pitido encima en todas las pistas y/o subtítulo con eufemismo).
+  corrección por frase que conserva los tiempos de las palabras que no cambian; «Ajustar al audio» = `SubtitleSync`: corre cada
+  frase a donde suena el micrófono de esa persona y recorta palabras estiradas sobre pausas; «Volver a escuchar» el episodio
+  o solo un reel → `Reel.words`, texto propio del reel) · Palabras sensibles (groserías y temas delicados: pitido encima en todas las pistas y/o subtítulo con eufemismo).
 - **Armar**: Aspecto (diseños de cámaras, fondo virtual con Vision, color, marca, intro/cierre) · Textos, stickers y b-roll
   (pantalla completa o ventanita que respeta aspecto y `preferredTransform`) · Música y efectos (soundboard, archivos, voz
   artificial con AVSpeechSynthesizer, ducking, bucle) · Cintillos (Noticiero, Limpio, Sponsor; animación y whoosh) · Patrocinios y marcas.
@@ -21,6 +23,10 @@ Barra lateral en tres bloques; cada sección tiene un «?» con ayuda y atajos.
 - **Entregar**: Reels por pestañas (Diseño, Subtítulos, Música, B-roll, Cintillos; plantillas en
   `~/Library/Application Support/postPod/plantillas-reel.json`) · Exportar (16:9, 9:16, 1:1, MP3; H.264 o HEVC) · Publicar vía prePod.
 - Reloj grande + `TimecodeField` en todos los campos de tiempo; deshacer/rehacer (120 pasos); atajos (espacio/K, J/L, flechas, M, I, O, ⌘Z).
+
+Los tiempos de Whisper por palabra salen adelantados (medido: 0,1–0,45 s, a veces 0,8 s) y a veces una palabra se estira
+sobre una pausa. Por eso toda transcripción nueva pasa por `SubtitleSync.align`, y los proyectos viejos muestran el aviso
+«pueden aparecer un poco antes» hasta que se ajustan (`Project.wordsSynced`). Prueba sin ventana: `thePod --sync-test <proyecto> [--listen]`.
 
 La vista previa y la exportación usan **la misma composición** (`CompositionBuilder` + `PodCompositor`): lo que ves es lo que sale.
 Las capas, b-roll, cintillos y sponsors fuera de la ventana exportada (reel o trozo) no entran (`CompositionBuilder.outputStart`).
