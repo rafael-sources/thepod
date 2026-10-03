@@ -142,6 +142,40 @@ enum SubtitleSync {
         return out
     }
 
+    /// Escucha de nuevo un tramo del episodio (cada persona por separado) y devuelve sus palabras en tiempo
+    /// del episodio, SIN ajustar. Se escucha 1 s de más a cada lado para no perder la primera y la última palabra.
+    static func listen(project: Project, from start: Double, to end: Double,
+                       report: @escaping @Sendable (String, Double?) -> Void) async throws -> [Word] {
+        let a = max(0, start - 1), b = min(project.duration, end + 1)
+        var words: [Word] = []
+        for (li, lane) in project.lanes.enumerated() {
+            let who = project.laneName(lane.id)
+            let label = "\(who) (\(li + 1) de \(project.lanes.count))"
+            for placed in lane.placed {
+                let t0 = max(a, placed.tlStart), t1 = min(b, placed.tlEnd)
+                guard t1 - t0 > 0.3, let media = project.mediaItem(placed.clip.mediaId), media.hasAudio else { continue }
+                report(label, nil)
+                let full = try await AudioAnalysis.whisperAudio(media: media, slug: project.id) { _ in }
+                let piece = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("tramo_\(media.id)_\(UUID().uuidString).wav")
+                defer { try? FileManager.default.removeItem(at: piece) }
+                let src0 = placed.clip.srcIn + (t0 - placed.tlStart)
+                try await FFmpeg.run(["-ss", String(format: "%.3f", src0), "-t", String(format: "%.3f", t1 - t0),
+                                      "-i", full.path, "-c:a", "pcm_s16le", piece.path], duration: t1 - t0)
+                let heard = try await Transcriber.shared.transcribe(
+                    wav: piece, language: project.language,
+                    status: { st in report("\(st) — \(label)", nil) },
+                    progress: { f in report(label, f) })
+                for w in heard {
+                    let s = w.s + t0, e = w.e + t0
+                    let mid = (s + e) / 2
+                    guard mid >= start - 0.3, mid <= end + 0.3 else { continue }
+                    words.append(Word(w: w.w, s: s, e: e, p: w.p, lane: lane.id))
+                }
+            }
+        }
+        return Transcripts.merge(words)
+    }
+
     /// Lleva las palabras sensibles a los tiempos nuevos de sus palabras (las marcas se buscan por persona y tiempo).
     static func remapSensitive(_ marks: [SensitiveMark], old: [Word], new: [Word]) -> [SensitiveMark] {
         guard !marks.isEmpty, old.count == new.count else { return marks }

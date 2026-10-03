@@ -514,6 +514,16 @@ enum SelfTest {
                     let out = res.words.map { ["w": $0.w, "s": $0.s, "e": $0.e, "lane": Double($0.lane)] as [String: Any] }
                     let data = try JSONSerialization.data(withJSONObject: out)
                     try data.write(to: URL(fileURLWithPath: "/tmp/thepod-sync-\(p.id).json"))
+                    // Volver a escuchar el primer reel (si hay): cuántas palabras y cómo quedan
+                    if let reel = p.reels.first, args.contains("--listen") {
+                        let t1 = Date()
+                        let heard = try await SubtitleSync.listen(project: p, from: reel.start, to: reel.end) { _, _ in }
+                        let synced = try await SubtitleSync.align(heard, project: p).words
+                        print(String(format: "reel %@: %d palabras escuchadas en %.1f s", reel.title, heard.count, Date().timeIntervalSince(t1)))
+                        print(synced.sorted { $0.s < $1.s }.prefix(25).map { "\($0.w)@\(String(format: "%.2f", $0.s))" }.joined(separator: " "))
+                        let out = synced.map { ["w": $0.w, "s": $0.s, "e": $0.e, "lane": Double($0.lane)] as [String: Any] }
+                        try JSONSerialization.data(withJSONObject: out).write(to: URL(fileURLWithPath: "/tmp/thepod-reel-\(p.id).json"))
+                    }
                 } catch { print("FAIL \(error.localizedDescription)") }
                 fflush(stdout); exit(0)
             }

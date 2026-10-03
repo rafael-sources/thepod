@@ -1478,34 +1478,9 @@ final class ProjectSession: ObservableObject {
     /// Vuelve a escuchar solo el tramo de un reel y le deja ese texto propio (el episodio no cambia).
     func relistenReel(_ reel: Reel) {
         run("Escuchando el reel de nuevo") { [self] in
-            let a = max(0, reel.start - 1), b = min(project.duration, reel.end + 1)
-            var words: [Word] = []
-            let lanes = project.lanes
-            for (li, lane) in lanes.enumerated() {
-                let who = project.laneName(lane.id)
-                for placed in lane.placed {
-                    let t0 = max(a, placed.tlStart), t1 = min(b, placed.tlEnd)
-                    guard t1 - t0 > 0.3, let media = project.mediaItem(placed.clip.mediaId), media.hasAudio else { continue }
-                    report("Escuchando el reel de nuevo", "\(who) (\(li + 1) de \(lanes.count))", nil)
-                    let full = try await AudioAnalysis.whisperAudio(media: media, slug: project.id) { _ in }
-                    let piece = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("reel_\(media.id)_\(UUID().uuidString).wav")
-                    defer { try? FileManager.default.removeItem(at: piece) }
-                    let src0 = placed.clip.srcIn + (t0 - placed.tlStart)
-                    try await FFmpeg.run(["-ss", String(format: "%.3f", src0), "-t", String(format: "%.3f", t1 - t0),
-                                          "-i", full.path, "-c:a", "pcm_s16le", piece.path], duration: t1 - t0)
-                    let heard = try await Transcriber.shared.transcribe(
-                        wav: piece, language: project.language,
-                        status: { [weak self] st in self?.reportAsync("Escuchando el reel de nuevo", "\(st) — \(who)", nil) },
-                        progress: { [weak self] f in self?.reportAsync("Escuchando el reel de nuevo", who, f) })
-                    for w in heard {
-                        let s = w.s + t0, e = w.e + t0
-                        let mid = (s + e) / 2
-                        guard mid >= reel.start - 0.3, mid <= reel.end + 0.3 else { continue }
-                        words.append(Word(w: w.w, s: s, e: e, p: w.p, lane: lane.id))
-                    }
-                }
+            var words = try await SubtitleSync.listen(project: project, from: reel.start, to: reel.end) { [weak self] detail, f in
+                self?.reportAsync("Escuchando el reel de nuevo", detail, f)
             }
-            words = Transcripts.merge(words)
             report("Ajustando los subtítulos al audio", "", nil)
             words = try await SubtitleSync.align(words, project: project).words.sorted { $0.s < $1.s }
             guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
