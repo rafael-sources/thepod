@@ -14,6 +14,8 @@ struct BuiltComposition {
     let scene: RenderScene?
     /// Segundos de intro antes del contenido (0 si no hay). El cierre va después del contenido.
     var introDuration: Double = 0
+    /// Solo en la vista previa: lo que suena de cada persona (id de pista → medidor), para el medidor del timeline.
+    var meters: [Int: LevelTap] = [:]
 
     func playerItem() -> AVPlayerItem {
         let item = AVPlayerItem(asset: asset)
@@ -177,6 +179,7 @@ enum CompositionBuilder {
         let duckPoints: [Double] = speech.flatMap { [$0.start - 0.3, $0.start, $0.end, $0.end + 0.8] }
 
         let wantVideo = format != .audio
+        var meters: [Int: LevelTap] = [:]
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
             var aTrack: AVMutableCompositionTrack?
@@ -226,6 +229,10 @@ enum CompositionBuilder {
                     f *= automationGain(lane, t)
                     if inBleep(id, t) { f = 0 }
                     return f
+                }
+                if preview {
+                    let meter = LevelTap()
+                    if let proc = meter.makeProcessor() { p.audioTapProcessor = proc; meters[id] = meter }
                 }
                 mixParams.append(p)
             }
@@ -433,8 +440,10 @@ enum CompositionBuilder {
             scene = s
         }
 
-        return BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
-                                keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
+        var built = BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
+                                     keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
+        built.meters = meters
+        return built
     }
 
     /// Un archivo de silencio (lo genera ffmpeg una vez por proyecto) para alargar el video bajo el cierre.

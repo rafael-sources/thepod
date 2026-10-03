@@ -84,7 +84,12 @@ final class RenderScene: @unchecked Sendable {
         req.qualityLevel = fastSegmentation ? .fast : .balanced   // .accurate da menos confianza en cámaras oscuras (la persona se transparenta)
         req.outputPixelFormat = kCVPixelFormatType_OneComponent8
         let handler = VNImageRequestHandler(cvPixelBuffer: pb, options: [:])
-        guard (try? handler.perform([req])) != nil, let mpb = req.results?.first?.pixelBuffer else { return nil }
+        guard (try? handler.perform([req])) != nil, let mpb = req.results?.first?.pixelBuffer else {
+            // Si en un cuadro no se pudo separar a la persona, se usa la máscara anterior (antes ese cuadro mostraba
+            // el fondo real: un parpadeo). Solo si es reciente.
+            if let prev = lastMask[lane], let pt = lastMaskTime[lane], abs(time - pt) < 0.5 { return finish(prev, extent: extent) }
+            return nil
+        }
         var mask = CIImage(cvPixelBuffer: mpb)
         let native = mask.extent
         let r: CGFloat = fastSegmentation ? 1.5 : 2.5
@@ -93,10 +98,20 @@ final class RenderScene: @unchecked Sendable {
             .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: r])
             .applyingFilter("CIMorphologyMinimum", parameters: [kCIInputRadiusKey: r])
             .cropped(to: native)
-        // 2) Mezcla con el cuadro anterior (si es el siguiente cuadro, no un salto): 65 % nuevo + 35 % anterior.
+        // 2) Mezcla con el cuadro anterior (si es el siguiente cuadro, no un salto). Donde la máscara casi no cambió
+        //    se promedia mitad y mitad (el borde deja de temblar: era el parpadeo); donde cambió mucho (la persona se
+        //    movió) manda el cuadro nuevo, para que no quede una estela.
         //    CIMix mezcla también el alfa; sumar las dos imágenes duplicaba el alfa y la máscara se iba a la mitad.
         if let prev = lastMask[lane], let pt = lastMaskTime[lane], time - pt < 0.2, time > pt, prev.extent == native {
-            mask = mask.applyingFilter("CIMix", parameters: [kCIInputBackgroundImageKey: prev, "inputAmount": 0.65]).cropped(to: native)
+            let calm = mask.applyingFilter("CIMix", parameters: [kCIInputBackgroundImageKey: prev, "inputAmount": 0.5]).cropped(to: native)
+            let moved = mask.applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: prev])
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 6, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 6, y: 0, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 6, y: 0, z: 0, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                    "inputBiasVector": CIVector(x: -0.6, y: -0.6, z: -0.6, w: 0)])
+                .applyingFilter("CIColorClamp")
+                .clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.5]).cropped(to: native)
+            mask = mask.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: calm, kCIInputMaskImageKey: moved]).cropped(to: native)
         }
         // Guardar la máscara ya calculada como imagen plana de un canal, sin gestión de color
         // (pasarla por CGImage sRGB la oscurecía cuadro a cuadro y la persona se iba transparentando).
@@ -107,9 +122,20 @@ final class RenderScene: @unchecked Sendable {
             lastMask[lane] = CIImage(cvPixelBuffer: out)
             lastMaskTime[lane] = time
         }
-        // 3) Al tamaño del cuadro, borde suave y decidido: lo dudoso (< 35 %) es fondo, lo seguro (> 70 %) es persona
+        return finish(mask, extent: extent)
+    }
+
+    /// La máscara al tamaño y en el lugar del cuadro, con borde suave y decidido.
+    private func finish(_ m: CIImage, extent: CGRect) -> CIImage {
+        var mask = m
+        let native = m.extent
+        // 3) Al tamaño del cuadro, borde suave y decidido: lo dudoso (< 35 %) es fondo, lo seguro (> 70 %) es persona.
+        //    También en su lugar: si el cuadro no empieza en 0,0 (videos girados) la máscara quedaba corrida y dejaba
+        //    una franja del fondo en un costado.
         let sx = extent.width / max(1, native.width), sy = extent.height / max(1, native.height)
-        mask = mask.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+        mask = mask.transformed(by: CGAffineTransform(translationX: -native.minX, y: -native.minY)
+            .concatenating(CGAffineTransform(scaleX: sx, y: sy))
+            .concatenating(CGAffineTransform(translationX: extent.minX, y: extent.minY)))
         let feather = max(1.5, min(extent.width, extent.height) * (fastSegmentation ? 0.006 : 0.004))
         mask = mask.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: feather])
             .applyingFilter("CIColorMatrix", parameters: [
@@ -237,6 +263,12 @@ final class RenderScene: @unchecked Sendable {
         var out: CIImage = background.map { fill($0, into: full, cropX: 0.5) }
             ?? CIImage(color: CIColor(red: 0.055, green: 0.055, blue: 0.07)).cropped(to: full)
 
+        // Reels y cuadrado: lo automático (subtítulos, sponsors, b-roll en ventanita, cintillos, nombres) se acomoda
+        // para no pisar el logo, las capas puestas a mano ni a lo demás. Lo puesto a mano no se mueve.
+        let arrange = format == .vertical || format == .square
+        let plan = arrange ? arrangement(at: t, brollFrames: brollFrames) : nil
+        var layout = plan?.layout ?? FrameLayout(W: W, H: H, gap: 0)
+
         let visible = laneOrder.filter { frames[$0] != nil }
         let (active, since) = activeLane(at: t)
         let main = visible.contains(active) ? active : visible.first
@@ -262,14 +294,31 @@ final class RenderScene: @unchecked Sendable {
             let rects = panels(for: resolved, lanes: visible, main: mainLane, speaking: main ?? visible[0], in: full, frames: frames)
             for (lane, rect, border) in rects {
                 guard var frame = frames[lane] else { continue }
-                if virtualBG[lane] != nil, let pb = buffers[lane] { frame = replacedBackground(frame, buffer: pb, lane: lane, time: time) }
+                // «Fondo del podcast»: se recorta a la persona y detrás queda el MISMO fondo que hay alrededor de los
+                // recuadros, en su lugar de la pantalla. Antes se ponía otra copia del fondo dentro del recuadro y se
+                // veía una franja o un corte donde no coincidían.
+                var cutout: CIImage?
+                if let vb = virtualBG[lane], let pb = buffers[lane] {
+                    if vb.mode == .podcast, background != nil {
+                        cutout = personMask(pb, extent: frame.extent, lane: lane, time: time)
+                    } else {
+                        frame = replacedBackground(frame, buffer: pb, lane: lane, time: time)
+                    }
+                }
                 if colorLook != "none" || laneGain[lane] != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
                     let e = frame.extent
-                    frame = frame.transformed(by: CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -(e.minX * 2 + e.width), y: 0))
+                    let flip = CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -(e.minX * 2 + e.width), y: 0)
+                    frame = frame.transformed(by: flip)
+                    cutout = cutout?.transformed(by: flip)
                 }
                 var panel = fill(frame, into: rect, cropX: cropX[lane] ?? 0.5)
+                if let cutout, let bg = background {
+                    let behind = fill(bg, into: full, cropX: 0.5).cropped(to: rect)
+                    let m = fill(cutout, into: rect, cropX: cropX[lane] ?? 0.5)
+                    panel = panel.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: behind, kCIInputMaskImageKey: m]).cropped(to: rect)
+                }
                 if border {
                     let b = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect.insetBy(dx: -4, dy: -4))
                     panel = panel.composited(over: b)
@@ -289,13 +338,19 @@ final class RenderScene: @unchecked Sendable {
                     let margin = min(W, H) * 0.025
                     var y = rect.minY + margin
                     if format.isVertical && !multi { y = rect.minY + H * 0.30 }
+                    if arrange {
+                        let want = CGRect(x: rect.minX + margin, y: y, width: tag.extent.width, height: tag.extent.height)
+                        let got = layout.place(want, minY: rect.minY, maxY: rect.maxY)
+                        layout.reserve(got)
+                        y = got.minY
+                    }
                     out = tag.transformed(by: .init(translationX: rect.minX + margin, y: y)).composited(over: out)
                 }
             }
         }
 
         // B-roll: tapa a las personas (el logo, sponsors, capas y subtítulos van encima)
-        for b in brolls where t >= b.start && t < b.end {
+        for (bi, b) in brolls.enumerated() where t >= b.start && t < b.end {
             var pic: CIImage? = b.image
             if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
             guard let pic else { continue }
@@ -310,7 +365,7 @@ final class RenderScene: @unchecked Sendable {
                 var h = w * ar
                 if h > H * 0.3 { h = H * 0.3; w = h / ar }
                 let m = min(W, H) * 0.035
-                let bottom = format.isVertical ? H * 0.22 : m + (logo == nil ? 0 : 0)
+                let bottom = plan?.pipY[bi] ?? (format.isVertical ? H * 0.22 : m)
                 let rect = CGRect(x: b.placement == "pipLeft" ? m : W - w - m, y: bottom, width: w, height: h)
                 let border = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect.insetBy(dx: -4, dy: -4))
                 img = (b.fill ? fill(pic, into: rect, cropX: 0.5) : fit(pic, into: rect).composited(over: CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: rect)))
@@ -345,17 +400,17 @@ final class RenderScene: @unchecked Sendable {
                 let p = min(1, (t - card.start) / 0.35), q = min(1, (card.end - t) / 0.35)
                 let k = CGFloat(min(p, q))
                 let x = W - m - img.extent.width * k
-                let y = format.isVertical ? H * 0.62 : H - img.extent.height - m - (logo != nil ? min(W, H) * 0.11 : 0)
+                let y = plan?.sponsorY[i] ?? (format.isVertical ? H * 0.62 : H - img.extent.height - m - (logo != nil ? min(W, H) * 0.11 : 0))
                 out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
             }
         }
 
         // Cintillos del director: abajo a la izquierda, entran desde la izquierda y salen igual
         var cintilloTop: CGFloat = 0
-        for c in cintillos where t >= c.start && t < c.end {
+        for (ci, c) in cintillos.enumerated() where t >= c.start && t < c.end {
             let img = c.image
             let m = min(W, H) * 0.04
-            let y = max(format.isVertical ? H * 0.30 : m, cintilloTop > 0 ? cintilloTop + m * 0.4 : 0)
+            let y = plan?.cintilloY[ci] ?? max(format.isVertical ? H * 0.30 : m, cintilloTop > 0 ? cintilloTop + m * 0.4 : 0)
             let tin = t - c.start, tout = c.end - t
             var placed: CIImage
             if tout < 0.3 {
@@ -437,11 +492,108 @@ final class RenderScene: @unchecked Sendable {
                     // Posición libre (arrastrada sobre la vista previa): centro en fracciones del cuadro, sin salirse
                     x = min(max(0, CGFloat(fx) * W - img.extent.width / 2), max(0, W - img.extent.width))
                     y = min(max(0, (1 - CGFloat(fy)) * H - img.extent.height / 2), max(0, H - img.extent.height))
+                } else if let band = plan?.captionBand {
+                    // Su franja (puede haberse corrido para no tapar una capa puesta a mano)
+                    switch style.position {
+                    case .bottom: y = band.minY
+                    case .top: y = band.maxY - img.extent.height
+                    case .center: y = band.midY - img.extent.height / 2
+                    }
                 }
                 out = img.transformed(by: .init(translationX: x, y: y)).composited(over: out)
             }
         }
         return out.cropped(to: full)
+    }
+
+    // MARK: Acomodo (reels y cuadrado)
+
+    /// Tamaño de letra de los subtítulos.
+    func captionFontSize() -> CGFloat {
+        let factor: CGFloat
+        switch style.size {
+        case .small: factor = format.isVertical ? 0.058 : 0.045
+        case .medium: factor = format.isVertical ? 0.075 : 0.057
+        case .large: factor = format.isVertical ? 0.095 : 0.072
+        }
+        return min(renderSize.width, renderSize.height) * factor
+    }
+
+    struct Arrangement {
+        var layout: FrameLayout
+        var captionBand: CGRect?
+        var sponsorY: [Int: CGFloat] = [:]
+        var pipY: [Int: CGFloat] = [:]
+        var cintilloY: [Int: CGFloat] = [:]
+    }
+
+    /// Dónde va cada cosa automática en el instante `t`, en orden de importancia: lo fijo primero (logo, capas puestas
+    /// a mano, subtítulos arrastrados), después los subtítulos, los sponsors, el b-roll en ventanita y los cintillos.
+    /// Cada uno toma su lugar de siempre si está libre; si no, el lugar libre más cercano (sube antes que bajar).
+    /// Los subtítulos reservan siempre su franja (dos renglones), así nada salta cuando cambia la frase.
+    func arrangement(at t: Double, brollFrames: [CMPersistentTrackID: CIImage]) -> Arrangement {
+        let W = renderSize.width, H = renderSize.height
+        let unit = min(W, H)
+        var a = Arrangement(layout: FrameLayout(W: W, H: H, gap: unit * 0.015))
+        // Fijo: logo arriba a la derecha
+        if let logo {
+            let h = unit * 0.085, w = logo.extent.width * h / max(1, logo.extent.height), m = unit * 0.03
+            a.layout.reserve(CGRect(x: W - w - m, y: H - h - m, width: w, height: h))
+        }
+        // Fijo: capas puestas a mano
+        for c in overlays where t >= c.start && t < c.end { a.layout.reserve(overlayRect(c)) }
+        // Subtítulos
+        if style.enabled, !captions.isEmpty {
+            let bandH = captionFontSize() * 2.6, bandW = W * 0.86
+            if let fx = style.freeX, let fy = style.freeY {
+                a.layout.reserve(CGRect(x: CGFloat(fx) * W - bandW / 2, y: (1 - CGFloat(fy)) * H - bandH / 2, width: bandW, height: bandH))
+            } else {
+                let y: CGFloat
+                switch style.position {
+                case .bottom: y = format.isVertical ? H * 0.20 : H * 0.07
+                case .top: y = H - H * (format.isVertical ? 0.14 : 0.07) - bandH
+                case .center: y = H / 2 - (format.isVertical ? H * 0.05 : 0) - bandH / 2
+                }
+                let band = a.layout.place(CGRect(x: (W - bandW) / 2, y: y, width: bandW, height: bandH),
+                                          minY: H * 0.04, maxY: H * 0.96, preferUp: style.position != .top)
+                a.layout.reserve(band)
+                a.captionBand = band
+            }
+        }
+        // Sponsors (a la derecha)
+        let m3 = unit * 0.03
+        for (i, card) in sponsorCards.enumerated() where t >= card.start && t < card.end {
+            guard let img = cached("sponsor-\(i)-\(Int(W))", { sponsorImage(card) }) else { continue }
+            let y0 = format.isVertical ? H * 0.62 : H - img.extent.height - m3 - (logo != nil ? unit * 0.11 : 0)
+            let r = a.layout.place(CGRect(x: W - m3 - img.extent.width, y: y0, width: img.extent.width, height: img.extent.height))
+            a.layout.reserve(r)
+            a.sponsorY[i] = r.minY
+        }
+        // B-roll en ventanita (abajo)
+        for (i, b) in brolls.enumerated() where t >= b.start && t < b.end && (b.placement == "pipLeft" || b.placement == "pipRight") {
+            var pic: CIImage? = b.image
+            if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
+            guard let e = pic?.extent else { continue }
+            let ar = e.width > 0 ? e.height / e.width : 9.0 / 16.0
+            var w = W * (format.isVertical ? 0.38 : 0.28)
+            var h = w * ar
+            if h > H * 0.3 { h = H * 0.3; w = h / ar }
+            let m = unit * 0.035
+            let r = a.layout.place(CGRect(x: b.placement == "pipLeft" ? m : W - w - m, y: format.isVertical ? H * 0.22 : m, width: w, height: h),
+                                   minY: m, maxY: H - m)
+            a.layout.reserve(r)
+            a.pipY[i] = r.minY
+        }
+        // Cintillos (a la izquierda, uno encima del otro)
+        let m4 = unit * 0.04
+        for (i, c) in cintillos.enumerated() where t >= c.start && t < c.end {
+            let e = c.image.extent
+            let r = a.layout.place(CGRect(x: m4, y: format.isVertical ? H * 0.30 : m4, width: e.width, height: e.height),
+                                   minY: m4, maxY: H - m4)
+            a.layout.reserve(r)
+            a.cintilloY[i] = r.minY
+        }
+        return a
     }
 
     private func sponsorImage(_ card: SponsorCard) -> CIImage? {
@@ -720,5 +872,37 @@ final class PodCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
 
     func cancelAllPendingVideoCompositionRequests() {
         queue.sync {}
+    }
+}
+
+
+/// Lugares ocupados en un cuadro (coordenadas de Core Image, y hacia arriba), para acomodar lo automático sin pisar nada.
+struct FrameLayout {
+    let W: CGFloat, H: CGFloat, gap: CGFloat
+    var taken: [CGRect] = []
+
+    mutating func reserve(_ r: CGRect) { taken.append(r) }
+
+    func isFree(_ r: CGRect) -> Bool { !taken.contains { $0.insetBy(dx: -gap, dy: -gap).intersects(r) } }
+
+    /// El lugar libre más cercano moviéndose solo en vertical, entre `minY` y `maxY` (prefiere subir).
+    /// Si no hay ninguno libre, devuelve el original: mejor pisarse que desaparecer.
+    func place(_ r: CGRect, minY: CGFloat = 0, maxY: CGFloat? = nil, preferUp: Bool = true) -> CGRect {
+        if isFree(r) { return r }
+        let top = (maxY ?? H) - r.height
+        var ys: [CGFloat] = []
+        for o in taken where o.maxX + gap > r.minX && o.minX - gap < r.maxX {
+            ys.append(o.maxY + gap)
+            ys.append(o.minY - gap - r.height)
+        }
+        func cost(_ y: CGFloat) -> CGFloat {
+            let d = y - r.minY
+            return abs(d) * ((d > 0) == preferUp ? 1 : 1.6)
+        }
+        for y in ys.filter({ $0 >= minY && $0 <= top }).sorted(by: { cost($0) < cost($1) }) {
+            let c = CGRect(x: r.minX, y: y, width: r.width, height: r.height)
+            if isFree(c) { return c }
+        }
+        return r
     }
 }

@@ -464,7 +464,7 @@ struct LaneToggle: View {
     }
 }
 
-/// Medidor de nivel de una persona: lo que suena ahora (del análisis, con el volumen de la pista aplicado).
+/// Medidor de nivel de una persona: lo que realmente suena mientras se reproduce; en pausa, una estimación.
 struct LaneMeter: View {
     @ObservedObject var session: ProjectSession
     let laneId: Int

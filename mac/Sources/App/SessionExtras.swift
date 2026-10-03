@@ -371,6 +371,11 @@ extension ProjectSession {
     /// Nivel 0…1 de una persona en este instante: el dB del análisis en el reloj, con el volumen de la pista.
     /// Es lo analizado, no una medición de la salida; sirve para ver quién suena y cuánto.
     func laneLevel(_ laneId: Int) -> Double {
+        // Reproduciendo: lo que realmente suena de esa persona (con todo lo que le hace la mezcla)
+        if player.rate > 0, let db = built?.meters[laneId]?.recent() {
+            return min(1, max(0, (Double(db) + 60) / 60))
+        }
+        // En pausa: una estimación con el análisis del sonido y el volumen de la pista
         guard let energy, let lane = project.lanes.first(where: { $0.id == laneId }), project.laneAudible(lane) else { return 0 }
         let t = playheadTimeline
         var db = Double(energy.db(lane: laneId, at: t))

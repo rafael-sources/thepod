@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -492,6 +492,78 @@ enum SelfTest {
                 do {
                     let folder = try await Exporter.exportStems(project: p, energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
                     print("OK \(folder.path)")
+                } catch { print("FAIL \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--frame-test"), args.count > i + 4 {
+            // Solo lectura: un cuadro de un reel en 9:16 a PNG. Con --crowd le suma (en memoria) un cintillo y un texto
+            // abajo en ese momento, para ver que lo automático se acomoda sin pisarse.
+            Task { @MainActor in
+                guard var p = try? ProjectStore.load(slug: args[i + 1]), let n = Int(args[i + 2]), n >= 1, n <= p.reels.count,
+                      let off = Double(args[i + 3]) else { print("FAIL args"); exit(1) }
+                let reel = p.reels[n - 1]
+                let at = reel.start + off
+                if args.contains("--crowd") {
+                    let cint: [String: Any] = ["id": 9001, "kind": "banner", "title": "AHORA", "text": "Lee la letra chica antes de firmar",
+                                               "start": at - 1, "duration": 6]
+                    let layer: [String: Any] = ["id": 9002, "kind": "text", "start": at - 1, "duration": 6, "text": "¡Suscríbete!",
+                                                "style": "label", "color": "#E4002B", "x": 0.5, "y": 0.76]
+                    if let c = try? JSONDecoder().decode(DirectorCintillo.self, from: JSONSerialization.data(withJSONObject: cint)) {
+                        p.cintillos.append(c); p.showCintillos = true
+                    }
+                    if let l = try? JSONDecoder().decode(VideoLayer.self, from: JSONSerialization.data(withJSONObject: layer)) { p.overlays.append(l) }
+                }
+                p = p.applying(p.look(for: reel), reel: reel)
+                do {
+                    let built = try await CompositionBuilder.build(project: p, format: .vertical, window: (reel.start, reel.end),
+                                                                   energy: AudioAnalysis.loadEnergy(p.id))
+                    let gen = AVAssetImageGenerator(asset: built.asset)
+                    gen.videoComposition = built.videoComposition
+                    gen.requestedTimeToleranceBefore = .zero
+                    gen.requestedTimeToleranceAfter = .zero
+                    let outT = EditEngine.toOutput(at, keep: built.keep) ?? off
+                    let (img, _) = try await gen.image(at: CMTime(seconds: outT, preferredTimescale: 600))
+                    let rep = NSBitmapImageRep(cgImage: img)
+                    try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 4]))
+                    if let sc = built.scene {
+                        let plan = sc.arrangement(at: outT, brollFrames: [:])
+                        print("subtitulos", plan.captionBand.map { "\(Int($0.minY))-\(Int($0.maxY))" } ?? "-",
+                              "cintillos", plan.cintilloY, "sponsors", plan.sponsorY)
+                    }
+                    print("OK \(args[i + 4])")
+                } catch { print("FAIL \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--meter-test"), args.count > i + 1 {
+            // Solo lectura: el medidor mide lo que sale (con el volumen aplicado). Lee 20 s con la persona 1 a volumen
+            // normal y al 25 %: la diferencia debe rondar −12 dB.
+            Task { @MainActor in
+                guard let base = try? ProjectStore.load(slug: args[i + 1]), let lane = base.lanes.first else { print("FAIL no project"); exit(1) }
+                func measure(_ vol: Double) async throws -> Float {
+                    var p = base
+                    p.lanes[0].volume = vol
+                    let start = min(300, max(0, p.duration - 30))
+                    let built = try await CompositionBuilder.build(project: p, format: .audio, window: (start, start + 20),
+                                                                   energy: AudioAnalysis.loadEnergy(p.id), preview: true)
+                    guard let meter = built.meters[lane.id] else { print("FAIL sin medidor"); return -999 }
+                    let reader = try AVAssetReader(asset: built.asset)
+                    let out = AVAssetReaderAudioMixOutput(audioTracks: try await built.asset.loadTracks(withMediaType: .audio), audioSettings: nil)
+                    out.audioMix = built.audioMix
+                    reader.add(out)
+                    reader.startReading()
+                    var sum: Float = 0, n: Float = 0
+                    while let _ = out.copyNextSampleBuffer() {
+                        if let db = meter.recent(maxAge: 5), db > -90 { sum += db; n += 1 }
+                    }
+                    return n > 0 ? sum / n : -999
+                }
+                do {
+                    let a = try await measure(1.0), b = try await measure(0.25)
+                    print(String(format: "medidor persona 1: normal %.1f dB, al 25%% %.1f dB, diferencia %.1f dB", a, b, b - a))
                 } catch { print("FAIL \(error.localizedDescription)") }
                 fflush(stdout); exit(0)
             }
