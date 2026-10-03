@@ -1453,11 +1453,20 @@ final class ProjectSession: ObservableObject {
     func relistenEpisode() {
         run("Escribiendo la transcripción de nuevo") { [self] in
             let previous = project.sensitive
+            let backup = (project.words, project.transcribedLanes, project.wordsSynced)
             var p = project
             p.words = []
             p.transcribedLanes = []
             project = p
-            try await transcribeMissing()
+            do {
+                try await transcribeMissing()
+            } catch {
+                // Cancelado o con error: se devuelve el texto que había (nunca quedar sin transcripción)
+                var back = project
+                (back.words, back.transcribedLanes, back.wordsSynced) = backup
+                project = back
+                throw error
+            }
             project.wordsSynced = true
             if project.sensitiveScanned {
                 project.sensitive = SensitiveWords.scan(project).map { m in
