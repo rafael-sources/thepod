@@ -221,6 +221,56 @@ enum EditEngine {
         return lines
     }
 
+    // MARK: Corregir texto
+
+    /// Palabras nuevas para una frase corregida a mano. Las que siguen iguales conservan su tiempo exacto;
+    /// las nuevas o cambiadas se reparten (según su largo) en el hueco que dejan las que se fueron.
+    static func retime(old: [Word], tokens: [String], lane: Int) -> [Word] {
+        guard !old.isEmpty else { return [] }
+        if tokens.count == old.count { return zip(old, tokens).map { var w = $0; w.w = $1; return w } }
+        func plain(_ t: String) -> String { t.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let a = old.map { plain($0.w) }, b = tokens.map(plain)
+        // Subsecuencia común más larga: qué palabras viejas siguen en el texto nuevo
+        var dp = [[Int]](repeating: [Int](repeating: 0, count: b.count + 1), count: a.count + 1)
+        for i in stride(from: a.count - 1, through: 0, by: -1) {
+            for j in stride(from: b.count - 1, through: 0, by: -1) {
+                dp[i][j] = (!a[i].isEmpty && a[i] == b[j]) ? dp[i + 1][j + 1] + 1 : max(dp[i + 1][j], dp[i][j + 1])
+            }
+        }
+        var pairs: [(Int, Int)] = []
+        var i = 0, j = 0
+        while i < a.count && j < b.count {
+            if !a[i].isEmpty && a[i] == b[j] { pairs.append((i, j)); i += 1; j += 1 }
+            else if dp[i + 1][j] >= dp[i][j + 1] { i += 1 } else { j += 1 }
+        }
+        var out: [Word] = []
+        /// Reparte `toks` entre `from` y `to` según el largo de cada palabra.
+        func spread(_ toks: ArraySlice<String>, from: Double, to: Double) {
+            guard !toks.isEmpty else { return }
+            let end = max(to, from + 0.12 * Double(toks.count))
+            let weights = toks.map { Double(max(1, $0.count)) }
+            let total = weights.reduce(0, +)
+            var t = from
+            for (k, tok) in toks.enumerated() {
+                let len = (end - from) * weights[k] / total
+                out.append(Word(w: tok, s: t, e: t + max(0.05, len - 0.02), p: 1, lane: lane))
+                t += len
+            }
+        }
+        var oi = 0, tj = 0
+        for (pi, pj) in pairs + [(old.count, tokens.count)] {
+            // Hueco: palabras viejas oi..<pi se reemplazan por los tokens tj..<pj
+            let from = oi < pi ? old[oi].s : (oi > 0 ? old[oi - 1].e : old[0].s)
+            let to = oi < pi ? old[pi - 1].e : (pi < old.count ? old[pi].s : from)
+            spread(tokens[tj..<pj], from: from, to: to)
+            if pi < old.count {
+                var w = old[pi]; w.w = tokens[pj]; out.append(w)
+            }
+            oi = pi + 1; tj = pj + 1
+        }
+        return out
+    }
+
     // MARK: Transcript text for AI
 
     static func transcriptForAI(_ project: Project) -> String {

@@ -24,6 +24,7 @@ struct Project: Codable, Identifiable, Equatable {
     var sensitiveCustom: [String] = []  // palabras propias que también se buscan
     var sensitiveScanned = false
     var transcribedLanes: [Int] = []    // lane ids already transcribed
+    var wordsSynced = false             // las palabras ya se ajustaron al audio (SubtitleSync)
 
     var cuts: [Cut] = []
     var fix = FixSettings()
@@ -383,6 +384,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var brolls: [BRollClip] = []        // b-roll solo de este reel
     var music: [AudioLaneClip] = []     // música propia del reel (se usa cuando el reel no lleva la del episodio)
     var cintillos: [DirectorCintillo] = []   // cintillos solo de este reel
+    var words: [Word]?                  // texto propio del reel (se volvió a escuchar solo este reel); nil = el del episodio
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -403,6 +405,7 @@ struct Reel: Codable, Identifiable, Equatable {
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
         music = try c.decodeIfPresent([AudioLaneClip].self, forKey: .music) ?? []
         cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
+        words = try c.decodeIfPresent([Word].self, forKey: .words)
     }
 }
 
@@ -471,6 +474,7 @@ extension Project {
     func applying(_ look: ReelLook, reel: Reel? = nil) -> Project {
         var p = self
         if let reel {
+            if let own = reel.words { p.words = own }   // el texto propio del reel (no cambia el episodio)
             p.cuts += reel.cuts
             p.brolls += reel.brolls
             if !reel.cintillos.isEmpty { p.cintillos += reel.cintillos; p.showCintillos = true }
@@ -823,6 +827,7 @@ extension Project {
         sensitiveCustom = try c.decodeIfPresent([String].self, forKey: .sensitiveCustom) ?? []
         sensitiveScanned = try c.decodeIfPresent(Bool.self, forKey: .sensitiveScanned) ?? false
         transcribedLanes = try c.decodeIfPresent([Int].self, forKey: .transcribedLanes) ?? []
+        wordsSynced = try c.decodeIfPresent(Bool.self, forKey: .wordsSynced) ?? false
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
         fix = try c.decodeIfPresent(FixSettings.self, forKey: .fix) ?? FixSettings()
         enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? false
@@ -981,8 +986,13 @@ extension Project {
         let marks = sensitive.filter { $0.replace && !$0.ignored && !$0.replacement.isEmpty }
         guard !marks.isEmpty else { return words }
         let byId = Dictionary(marks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        func plain(_ t: String) -> String { t.lowercased().filter { $0.isLetter || $0.isNumber } }
         return words.map { w in
-            guard let m = byId[SensitiveMark.makeId(lane: w.lane, s: w.s)] else { return w }
+            // Por id (persona + tiempo exacto); si no, la misma palabra de la misma persona a menos de 0,6 s
+            // (el texto propio de un reel se escribió de nuevo y sus tiempos no son idénticos a los del episodio).
+            guard let m = byId[SensitiveMark.makeId(lane: w.lane, s: w.s)]
+                    ?? marks.first(where: { $0.lane == w.lane && abs($0.s - w.s) < 0.6 && plain($0.word) == plain(w.w) })
+            else { return w }
             var out = w
             // Conserva mayúscula inicial y puntuación final de la palabra original
             let trimmed = w.w.trimmingCharacters(in: .whitespaces)

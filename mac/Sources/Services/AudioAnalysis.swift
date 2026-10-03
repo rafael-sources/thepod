@@ -78,7 +78,7 @@ enum AudioAnalysis {
     }
 
     /// Reads audio as 8 kHz mono float and returns RMS in dB per 100 ms window.
-    static func windowedDB(url: URL, from: Double, to: Double, progress: (Double) -> Void) async throws -> [Float] {
+    static func windowedDB(url: URL, from: Double, to: Double, hop: Double = EnergyMap.hop, progress: (Double) -> Void) async throws -> [Float] {
         let asset = AVURLAsset(url: url)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else { return [] }
         let reader = try AVAssetReader(asset: asset)
@@ -96,7 +96,7 @@ enum AudioAnalysis {
         ])
         reader.add(output)
         guard reader.startReading() else { throw reader.error ?? NSError(domain: "audio", code: 1) }
-        let win = Int(sr * EnergyMap.hop)
+        let win = Int(sr * hop)
         var acc: Float = 0
         var count = 0
         var out: [Float] = []
@@ -121,7 +121,7 @@ enum AudioAnalysis {
                     }
                 }
             }
-            if out.count % 600 == 0 { progress(min(1, Double(out.count) * EnergyMap.hop / total)) }
+            if out.count % 600 == 0 { progress(min(1, Double(out.count) * hop / total)) }
         }
         return out
     }

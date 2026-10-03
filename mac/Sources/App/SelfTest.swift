@@ -497,6 +497,28 @@ enum SelfTest {
             }
             return
         }
+        if let i = args.firstIndex(of: "--sync-test"), args.count > i + 1 {
+            // Solo lectura: ajusta las palabras al audio y deja el resultado en /tmp (no guarda el proyecto)
+            Task { @MainActor in
+                guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
+                // Corregir texto: las palabras iguales conservan su tiempo
+                let old = [Word(w: "hola", s: 1, e: 1.3), Word(w: "que", s: 1.3, e: 1.5), Word(w: "tal", s: 1.6, e: 2.0)]
+                let r1 = EditEngine.retime(old: old, tokens: ["hola", "qué", "tal", "amigos"], lane: 1)
+                print("retime 1:", r1.map { "\($0.w)@\(String(format: "%.2f-%.2f", $0.s, $0.e))" }.joined(separator: " "))
+                let r2 = EditEngine.retime(old: old, tokens: ["hola", "tal"], lane: 1)
+                print("retime 2:", r2.map { "\($0.w)@\(String(format: "%.2f-%.2f", $0.s, $0.e))" }.joined(separator: " "))
+                let t0 = Date()
+                do {
+                    let res = try await SubtitleSync.align(p.words, project: p)
+                    print(String(format: "OK %d palabras, %d corridas, típico %+.3f s, %.1f s", p.words.count, res.moved, res.typicalShift, Date().timeIntervalSince(t0)))
+                    let out = res.words.map { ["w": $0.w, "s": $0.s, "e": $0.e, "lane": Double($0.lane)] as [String: Any] }
+                    let data = try JSONSerialization.data(withJSONObject: out)
+                    try data.write(to: URL(fileURLWithPath: "/tmp/thepod-sync-\(p.id).json"))
+                } catch { print("FAIL \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
         if let i = args.firstIndex(of: "--sensitive-test"), args.count > i + 1 {
             // Busca palabras sensibles en un proyecto, pone pitido en la primera y guarda (en una copia de prueba)
             Task { @MainActor in

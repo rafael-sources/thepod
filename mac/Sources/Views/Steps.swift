@@ -303,6 +303,7 @@ struct CaptionsStep: View {
     @State private var editing: Int?
     @State private var draft = ""
     @State private var filter = ""
+    @State private var askRelisten = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
@@ -323,6 +324,7 @@ struct CaptionsStep: View {
                     }
                 } else {
                     styleCard
+                    syncCard
                     phraseList
                 }
             }
@@ -347,6 +349,43 @@ struct CaptionsStep: View {
         }
         .onAppear { session.captionDragTarget = .episode }
         .onDisappear { if session.captionDragTarget == .episode { session.captionDragTarget = nil } }
+    }
+
+    /// Que los subtítulos salgan cuando se escucha la voz: ajustar al audio o escribir todo de nuevo.
+    private var syncCard: some View {
+        Card {
+            HStack {
+                Text("Que coincidan con la voz").font(.headline)
+                Spacer()
+            }
+            if !session.project.wordsSynced {
+                Label("Los subtítulos de este episodio pueden aparecer un poco antes de que hablen.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            if let note = session.captionsNote {
+                Text(note).font(.caption).foregroundStyle(Theme.secondary)
+            }
+            HStack(spacing: 8) {
+                Button { session.syncSubtitles() } label: {
+                    Label(session.project.wordsSynced ? "Ajustar de nuevo" : "Ajustar al audio", systemImage: "waveform.badge.magnifyingglass")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Corre cada frase a donde suena la voz. No cambia el texto.")
+                Button { askRelisten = true } label: { Label("Volver a escuchar todo", systemImage: "ear") }
+                    .help("Escribe la transcripción de nuevo escuchando el episodio")
+                Spacer()
+            }
+            .controlSize(.small)
+            .disabled(session.isBusy)
+            Text("Si quitaste silencios, se vuelven a buscar con los tiempos nuevos. Para un solo reel: Entregar → Reels → Subtítulos.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
+        }
+        .confirmationDialog("¿Volver a escuchar todo el episodio?", isPresented: $askRelisten) {
+            Button("Escribir todo de nuevo") { session.relistenEpisode() }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se escribe la transcripción otra vez y se pierden las correcciones que hiciste a mano en el texto. Tarda unos minutos. Los reels con texto propio no cambian.")
+        }
     }
 
     private var phraseList: some View {
@@ -1453,15 +1492,36 @@ struct ReelTextCard: View {
     let reel: Reel
     @State private var editing: Int?
     @State private var draft = ""
+    @State private var askRelisten = false
 
     var body: some View {
         Card {
             Text("Texto de este reel").font(.headline)
-            if !session.project.isTranscribed {
+            if !session.project.isTranscribed && reel.words == nil {
                 Text("Este episodio no tiene transcripción. Hazla en Subtítulos y aquí aparecen las frases del reel.")
                     .font(.caption).foregroundStyle(Theme.secondary)
             } else {
-                Text("Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel.")
+                if reel.words != nil {
+                    Label("Este reel tiene su propio texto: lo que corrijas aquí no cambia el episodio.", systemImage: "text.badge.checkmark")
+                        .font(.caption).foregroundStyle(Theme.accent)
+                } else if !session.project.wordsSynced {
+                    Label("Los subtítulos pueden aparecer un poco antes de que hablen. «Volver a escuchar este reel» lo arregla solo aquí, o ajusta todo el episodio en Preparar → Subtítulos.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                HStack(spacing: 8) {
+                    Button { askRelisten = true } label: { Label("Volver a escuchar este reel", systemImage: "ear") }
+                        .help("Escribe de nuevo el texto de este reel escuchando solo su tramo, ajustado a la voz")
+                    if reel.words != nil {
+                        Button("Usar el texto del episodio") { session.useEpisodeText(reel) }
+                    }
+                    Spacer()
+                }
+                .controlSize(.small)
+                .disabled(session.isBusy)
+                Text(reel.words != nil
+                     ? "Doble clic para corregir una palabra (solo en este reel). Las tijeras quitan la frase solo de este reel."
+                     : "Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel.")
                     .font(.caption).foregroundStyle(Theme.secondary)
                 ForEach(session.phrases(reel: reel)) { ph in
                     PhraseRow(session: session, phrase: ph, editing: $editing, draft: $draft, reel: reel)
@@ -1477,6 +1537,14 @@ struct ReelTextCard: View {
                     }
                 }
             }
+        }
+        .confirmationDialog("¿Volver a escuchar este reel?", isPresented: $askRelisten) {
+            Button("Escuchar de nuevo") { session.relistenReel(reel) }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text(reel.words != nil
+                 ? "Se escribe otra vez el texto de este reel y se pierden las correcciones que le hiciste. El episodio no cambia."
+                 : "Este reel tendrá su propio texto, escrito de nuevo y ajustado a la voz. El episodio no cambia.")
         }
     }
 }

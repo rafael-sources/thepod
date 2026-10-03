@@ -268,6 +268,7 @@ final class ProjectSession: ObservableObject {
     @Published var lastExports: [URL] = []
     @Published var fixSummary: String?
     @Published var reelsNote: String?
+    @Published var captionsNote: String?            // resultado de ajustar o volver a escuchar los subtítulos
     @Published private(set) var built: BuiltComposition?
 
     let player = AVPlayer()
@@ -456,25 +457,13 @@ final class ProjectSession: ObservableObject {
             let settings = project.fix
             if settings.enhanceAudio { try await enhanceAudio() }
             try await transcribeMissing()
+            // Los silencios se calculan con los tiempos de las palabras: primero que estén donde suena la voz
+            if !project.wordsSynced, !project.words.isEmpty { _ = try await syncWords() }
             if energy == nil || settings.removeSilences { try await ensureEnergy() }
 
             var p = project
             p.cuts.removeAll { $0.kind == .silence || $0.kind == .filler }
-            var silences: [Cut] = []
-            var fillers: [Cut] = []
-            if settings.removeSilences {
-                if !p.words.isEmpty {
-                    silences = EditEngine.silenceCuts(words: p.words, duration: p.duration, minGap: settings.minSilence, pad: settings.keepPad)
-                    if let energy {
-                        silences = EditEngine.protectSpeech(silences, energy: energy.combined, hop: EnergyMap.hop, pad: settings.keepPad)
-                    }
-                } else if let energy {
-                    silences = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: settings.minSilence, pad: settings.keepPad)
-                }
-            }
-            if settings.removeFillers, !p.words.isEmpty {
-                fillers = EditEngine.fillerCuts(words: p.words, includeWordFillers: settings.removeWordFillers)
-            }
+            let (silences, fillers) = autoCuts(p)
             p.cuts += silences + fillers
             p.fix.lastRun = Date()
             project = p
@@ -485,6 +474,27 @@ final class ProjectSession: ObservableObject {
             if settings.removeFillers { parts.append("\(fillers.count) muletillas") }
             fixSummary = "Listo. Quitamos \(parts.joined(separator: " y ")) — tu episodio ahora dura \(EditEngine.clock(p.duration - saved)) (antes \(EditEngine.clock(p.duration)))."
                 + (settings.enhanceAudio ? " El audio quedó con sonido de estudio." : "")
+    }
+
+    /// Silencios y muletillas que quita "Arreglar", con los ajustes del proyecto (no los agrega).
+    private func autoCuts(_ p: Project) -> (silences: [Cut], fillers: [Cut]) {
+        let settings = p.fix
+        var silences: [Cut] = []
+        var fillers: [Cut] = []
+        if settings.removeSilences {
+            if !p.words.isEmpty {
+                silences = EditEngine.silenceCuts(words: p.words, duration: p.duration, minGap: settings.minSilence, pad: settings.keepPad)
+                if let energy {
+                    silences = EditEngine.protectSpeech(silences, energy: energy.combined, hop: EnergyMap.hop, pad: settings.keepPad)
+                }
+            } else if let energy {
+                silences = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: settings.minSilence, pad: settings.keepPad)
+            }
+        }
+        if settings.removeFillers, !p.words.isEmpty {
+            fillers = EditEngine.fillerCuts(words: p.words, includeWordFillers: settings.removeWordFillers)
+        }
+        return (silences, fillers)
     }
 
     func undoFix() {
@@ -542,7 +552,13 @@ final class ProjectSession: ObservableObject {
             }
             project.transcribedLanes.append(lane.id)
         }
+        let wasEmpty = project.words.isEmpty
+        report("Ajustando los subtítulos al audio", "", 0)
+        newWords = try await SubtitleSync.align(newWords, project: project) { [weak self] f in
+            self?.reportAsync("Ajustando los subtítulos al audio", "", f)
+        }.words
         project.words = Transcripts.merge(project.words + newWords)
+        if wasEmpty { project.wordsSynced = true }
     }
 
     private func ensureEnergy() async throws {
@@ -1290,11 +1306,13 @@ final class ProjectSession: ObservableObject {
         var lane: Int
         var text: String
         var isCut: Bool
+        var reelId: UUID?               // la frase es del texto propio de ese reel (no del episodio)
     }
 
     /// Frases del transcrito. Con `reel`: solo las que caen en ese reel, y "cortada" cuenta también sus cortes propios.
     func phrases(reel: Reel? = nil) -> [Phrase] {
-        let words = project.words
+        let ownId = reel?.words != nil ? reel?.id : nil
+        let words = reel?.words ?? project.words
         guard !words.isEmpty else { return [] }
         var out: [Phrase] = []
         var startIdx = 0
@@ -1306,7 +1324,7 @@ final class ProjectSession: ObservableObject {
             let mid = (slice.first!.s + slice.last!.e) / 2
             out.append(Phrase(range: startIdx..<end, start: slice.first!.s, end: slice.last!.e, lane: slice.first!.lane,
                               text: slice.map(\.w).joined(separator: " "),
-                              isCut: EditEngine.toOutput(mid, keep: keep) == nil))
+                              isCut: EditEngine.toOutput(mid, keep: keep) == nil, reelId: ownId))
             startIdx = end
         }
         for i in words.indices.dropFirst() {
@@ -1341,22 +1359,27 @@ final class ProjectSession: ObservableObject {
         run("Buscando silencios en el reel") { [self] in
             try await ensureEnergy()
             guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
-            let st = project.fix
-            var found: [Cut] = []
-            if !project.words.isEmpty {
-                found = EditEngine.silenceCuts(words: project.words, duration: project.duration, minGap: st.minSilence, pad: st.keepPad)
-                if let energy { found = EditEngine.protectSpeech(found, energy: energy.combined, hop: EnergyMap.hop, pad: st.keepPad) }
-            } else if let energy {
-                found = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: st.minSilence, pad: st.keepPad)
-            }
-            // Solo lo que cae dentro del reel y no está ya cortado en el episodio
-            let inside = found.filter { $0.start >= reel.start - 0.01 && $0.end <= reel.end + 0.01 }
-                .filter { c in !project.cuts.contains { $0.enabled && $0.start <= c.start + 0.05 && $0.end >= c.end - 0.05 } }
+            let inside = reelSilences(project.reels[i])
             project.reels[i].cuts.removeAll { $0.kind == .silence }
             project.reels[i].cuts += inside
             if previewReel?.id == reel.id { previewReel = project.reels[i] }
             reelsNote = inside.isEmpty ? "No hay silencios largos en este reel." : "Quitamos \(inside.count) silencios solo en este reel (\(String(format: "%.1f", inside.reduce(0) { $0 + $1.length })) s)."
         }
+    }
+
+    /// Silencios dentro de un reel que no estén ya cortados en el episodio (con el texto del reel si tiene uno propio).
+    private func reelSilences(_ reel: Reel) -> [Cut] {
+        let st = project.fix
+        let words = reel.words ?? project.words
+        var found: [Cut] = []
+        if !words.isEmpty {
+            found = EditEngine.silenceCuts(words: words, duration: project.duration, minGap: st.minSilence, pad: st.keepPad)
+            if let energy { found = EditEngine.protectSpeech(found, energy: energy.combined, hop: EnergyMap.hop, pad: st.keepPad) }
+        } else if let energy {
+            found = EditEngine.silenceCuts(energy: energy.combined, hop: EnergyMap.hop, minGap: st.minSilence, pad: st.keepPad)
+        }
+        return found.filter { $0.start >= reel.start - 0.01 && $0.end <= reel.end + 0.01 }
+            .filter { c in !project.cuts.contains { $0.enabled && $0.start <= c.start + 0.05 && $0.end >= c.end - 0.05 } }
     }
 
     /// Solo el sonido de estudio (sin tocar cortes ni transcripción): para reels cuando el episodio no se limpió.
@@ -1368,23 +1391,168 @@ final class ProjectSession: ObservableObject {
         }
     }
 
+    // MARK: Subtítulos: ajustar al audio y volver a escuchar
+
+    /// Ajusta al audio todas las palabras del episodio. Devuelve cuántas se corrieron y el corrimiento típico.
+    @discardableResult
+    func syncWords() async throws -> SubtitleSync.Result {
+        report("Ajustando los subtítulos al audio", "", 0)
+        let old = project.words
+        let res = try await SubtitleSync.align(old, project: project) { [weak self] f in
+            self?.reportAsync("Ajustando los subtítulos al audio", "", f)
+        }
+        var p = project
+        p.sensitive = SubtitleSync.remapSensitive(p.sensitive, old: old, new: res.words)
+        p.words = res.words.sorted { $0.s < $1.s }
+        p.wordsSynced = true
+        project = p
+        return res
+    }
+
+    /// Botón «Ajustar al audio»: corre las palabras a donde suena la voz y, si el episodio ya se arregló,
+    /// vuelve a calcular sus silencios y muletillas (y los silencios de cada reel) con los tiempos nuevos.
+    func syncSubtitles() {
+        run("Ajustando los subtítulos al audio") { [self] in
+            let res = try await syncWords()
+            let redid = try await redoAutoCuts()
+            var msg = res.moved == 0
+                ? "Los subtítulos ya estaban en su lugar."
+                : "Listo: corrimos \(res.moved) palabras para que salgan cuando se escucha la voz (en general \(Self.ms(res.typicalShift)))."
+            if redid { msg += " También volvimos a buscar los silencios con los tiempos nuevos." }
+            captionsNote = msg
+            schedulePreview(immediate: true)
+        }
+    }
+
+    /// Recalcula los cortes automáticos (si el episodio se arregló) y los silencios propios de los reels. true si cambió algo.
+    private func redoAutoCuts() async throws -> Bool {
+        var changed = false
+        if project.fix.lastRun != nil {
+            try await ensureEnergy()
+            var p = project
+            p.cuts.removeAll { $0.kind == .silence || $0.kind == .filler }
+            let (silences, fillers) = autoCuts(p)
+            p.cuts += silences + fillers
+            project = p
+            changed = true
+        }
+        for i in project.reels.indices where project.reels[i].cuts.contains(where: { $0.kind == .silence }) {
+            try await ensureEnergy()
+            let found = reelSilences(project.reels[i])
+            project.reels[i].cuts.removeAll { $0.kind == .silence }
+            project.reels[i].cuts += found
+            if previewReel?.id == project.reels[i].id { previewReel = project.reels[i] }
+            changed = true
+        }
+        return changed
+    }
+
+    /// Vuelve a escuchar TODO el episodio y escribe la transcripción de nuevo (ya ajustada al audio).
+    /// Se pierden las correcciones hechas a mano en el texto; las palabras sensibles se vuelven a buscar
+    /// y conservan lo que se había elegido (pitido, cambio) cuando son la misma palabra.
+    func relistenEpisode() {
+        run("Escribiendo la transcripción de nuevo") { [self] in
+            let previous = project.sensitive
+            var p = project
+            p.words = []
+            p.transcribedLanes = []
+            project = p
+            try await transcribeMissing()
+            project.wordsSynced = true
+            if project.sensitiveScanned {
+                project.sensitive = SensitiveWords.scan(project).map { m in
+                    guard let old = previous.first(where: { $0.lane == m.lane && abs($0.s - m.s) < 0.8
+                                                          && $0.word.lowercased() == m.word.lowercased() }) else { return m }
+                    var out = m
+                    out.bleep = old.bleep; out.replace = old.replace; out.replacement = old.replacement; out.ignored = old.ignored
+                    return out
+                }
+            }
+            let redid = try await redoAutoCuts()
+            captionsNote = "Listo: escribimos la transcripción de nuevo y la ajustamos al audio."
+                + (redid ? " También volvimos a buscar los silencios." : "")
+            schedulePreview(immediate: true)
+        }
+    }
+
+    /// Vuelve a escuchar solo el tramo de un reel y le deja ese texto propio (el episodio no cambia).
+    func relistenReel(_ reel: Reel) {
+        run("Escuchando el reel de nuevo") { [self] in
+            let a = max(0, reel.start - 1), b = min(project.duration, reel.end + 1)
+            var words: [Word] = []
+            let lanes = project.lanes
+            for (li, lane) in lanes.enumerated() {
+                let who = project.laneName(lane.id)
+                for placed in lane.placed {
+                    let t0 = max(a, placed.tlStart), t1 = min(b, placed.tlEnd)
+                    guard t1 - t0 > 0.3, let media = project.mediaItem(placed.clip.mediaId), media.hasAudio else { continue }
+                    report("Escuchando el reel de nuevo", "\(who) (\(li + 1) de \(lanes.count))", nil)
+                    let full = try await AudioAnalysis.whisperAudio(media: media, slug: project.id) { _ in }
+                    let piece = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("reel_\(media.id)_\(UUID().uuidString).wav")
+                    defer { try? FileManager.default.removeItem(at: piece) }
+                    let src0 = placed.clip.srcIn + (t0 - placed.tlStart)
+                    try await FFmpeg.run(["-ss", String(format: "%.3f", src0), "-t", String(format: "%.3f", t1 - t0),
+                                          "-i", full.path, "-c:a", "pcm_s16le", piece.path], duration: t1 - t0)
+                    let heard = try await Transcriber.shared.transcribe(
+                        wav: piece, language: project.language,
+                        status: { [weak self] st in self?.reportAsync("Escuchando el reel de nuevo", "\(st) — \(who)", nil) },
+                        progress: { [weak self] f in self?.reportAsync("Escuchando el reel de nuevo", who, f) })
+                    for w in heard {
+                        let s = w.s + t0, e = w.e + t0
+                        let mid = (s + e) / 2
+                        guard mid >= reel.start - 0.3, mid <= reel.end + 0.3 else { continue }
+                        words.append(Word(w: w.w, s: s, e: e, p: w.p, lane: lane.id))
+                    }
+                }
+            }
+            words = Transcripts.merge(words)
+            report("Ajustando los subtítulos al audio", "", nil)
+            words = try await SubtitleSync.align(words, project: project).words.sorted { $0.s < $1.s }
+            guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+            project.reels[i].words = words
+            if project.reels[i].cuts.contains(where: { $0.kind == .silence }) {
+                try await ensureEnergy()
+                let found = reelSilences(project.reels[i])
+                project.reels[i].cuts.removeAll { $0.kind == .silence }
+                project.reels[i].cuts += found
+            }
+            if previewReel?.id == reel.id { previewReel = project.reels[i] }
+            reelsNote = words.isEmpty
+                ? "No escuchamos palabras en este reel."
+                : "Listo: este reel tiene su propio texto (\(words.count) palabras), ajustado al audio. El episodio no cambió."
+            schedulePreview(immediate: true)
+        }
+    }
+
+    /// Deja que el reel vuelva a usar el texto del episodio.
+    func useEpisodeText(_ reel: Reel) {
+        guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+        project.reels[i].words = nil
+        if previewReel?.id == reel.id { previewReel = project.reels[i] }
+        schedulePreview(immediate: true)
+    }
+
+    static func ms(_ seconds: Double) -> String {
+        let txt = String(format: "%.2f", abs(seconds)).replacingOccurrences(of: ".", with: ",") + " s"
+        return seconds >= 0 ? "\(txt) más tarde" : "\(txt) antes"
+    }
+
     func updatePhrase(_ phrase: Phrase, text: String) {
         let tokens = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         guard !tokens.isEmpty else { return }
-        var words = project.words
+        let reelIndex = phrase.reelId.flatMap { id in project.reels.firstIndex { $0.id == id } }
+        var words = reelIndex.flatMap { project.reels[$0].words } ?? project.words
+        guard phrase.range.upperBound <= words.count else { return }
         let old = Array(words[phrase.range])
-        var replacement: [Word] = []
-        if tokens.count == old.count {
-            replacement = zip(old, tokens).map { var w = $0; w.w = $1; return w }
+        // Las palabras que quedan iguales conservan su tiempo; solo las nuevas se reparten en su hueco
+        // (antes se repartía toda la frase en partes iguales y los subtítulos dejaban de coincidir con la voz).
+        words.replaceSubrange(phrase.range, with: EditEngine.retime(old: old, tokens: tokens, lane: phrase.lane))
+        if let reelIndex {
+            project.reels[reelIndex].words = words
+            if previewReel?.id == project.reels[reelIndex].id { previewReel = project.reels[reelIndex] }
         } else {
-            let span = phrase.end - phrase.start
-            let step = span / Double(tokens.count)
-            replacement = tokens.enumerated().map { (i, t) in
-                Word(w: t, s: phrase.start + Double(i) * step, e: phrase.start + Double(i + 1) * step - 0.02, p: 1, lane: phrase.lane)
-            }
+            project.words = words
         }
-        words.replaceSubrange(phrase.range, with: replacement)
-        project.words = words
     }
 
     func togglePhraseCut(_ phrase: Phrase) {
