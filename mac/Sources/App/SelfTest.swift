@@ -556,15 +556,16 @@ enum SelfTest {
                     let built = try await CompositionBuilder.build(project: p, format: .audio, window: (start, start + 20),
                                                                    energy: AudioAnalysis.loadEnergy(p.id), preview: true)
                     guard let meter = built.meters[lane.id] else { print("FAIL sin medidor"); return -999 }
-                    let reader = try AVAssetReader(asset: built.asset)
-                    let out = AVAssetReaderAudioMixOutput(audioTracks: try await built.asset.loadTracks(withMediaType: .audio), audioSettings: nil)
-                    out.audioMix = built.audioMix
-                    reader.add(out)
-                    reader.startReading()
+                    // Como en la app: reproduciendo con AVPlayer (sin sonido en la Mac)
+                    let player = AVPlayer(playerItem: built.playerItem())
+                    player.volume = 0
+                    player.play()
                     var sum: Float = 0, n: Float = 0
-                    while let _ = out.copyNextSampleBuffer() {
-                        if let db = meter.recent(maxAge: 5), db > -90 { sum += db; n += 1 }
+                    for _ in 0..<60 {
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                        if let db = meter.recent(maxAge: 0.5), db > -90 { sum += db; n += 1 }
                     }
+                    player.pause()
                     return n > 0 ? sum / n : -999
                 }
                 do {
