@@ -555,7 +555,7 @@ enum SelfTest {
                     let start = min(300, max(0, p.duration - 30))
                     let built = try await CompositionBuilder.build(project: p, format: .audio, window: (start, start + 20),
                                                                    energy: AudioAnalysis.loadEnergy(p.id), preview: true)
-                    guard let meter = built.meters[lane.id] else { print("FAIL sin medidor"); return -999 }
+                    guard built.meters[lane.id] != nil else { print("FAIL sin medidor"); return -999 }
                     // Como en la app: reproduciendo con AVPlayer (sin sonido en la Mac)
                     let player = AVPlayer(playerItem: built.playerItem())
                     player.volume = 0
@@ -563,7 +563,7 @@ enum SelfTest {
                     var sum: Float = 0, n: Float = 0
                     for _ in 0..<60 {
                         try await Task.sleep(nanoseconds: 100_000_000)
-                        if let db = meter.recent(maxAge: 0.5), db > -90 { sum += db; n += 1 }
+                        if let db = built.levelDB(lane: lane.id, at: player.currentTime().seconds), db > -90 { sum += Float(db); n += 1 }
                     }
                     player.pause()
                     return n > 0 ? sum / n : -999

@@ -16,6 +16,16 @@ struct BuiltComposition {
     var introDuration: Double = 0
     /// Solo en la vista previa: lo que suena de cada persona (id de pista → medidor), para el medidor del timeline.
     var meters: [Int: LevelTap] = [:]
+    /// Solo en la vista previa: volumen que la mezcla le da a cada persona en cada instante del video (0…).
+    var gains: [Int: (Double) -> Double] = [:]
+
+    /// Lo que suena de una persona en el instante `t` del video, en dB (nil si no está sonando ahora).
+    func levelDB(lane: Int, at t: Double) -> Double? {
+        guard let db = meters[lane]?.recent() else { return nil }
+        let g = gains[lane]?(t) ?? 1
+        guard g > 0.0001 else { return -120 }
+        return Double(db) + 20 * log10(g)
+    }
 
     func playerItem() -> AVPlayerItem {
         let item = AVPlayerItem(asset: asset)
@@ -180,6 +190,7 @@ enum CompositionBuilder {
 
         let wantVideo = format != .audio
         var meters: [Int: LevelTap] = [:]
+        var gains: [Int: (Double) -> Double] = [:]
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
             var aTrack: AVMutableCompositionTrack?
@@ -222,17 +233,22 @@ enum CompositionBuilder {
                 if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
                     NSLog("lane %d %@ audible=%d base=%.2f span=%.2f-%.2f track=%d", id, lane.name, audible ? 1 : 0, laneBase, span.start, span.end, aTrack.trackID)
                 }
-                applyEnvelope(p, base: laneBase, span: span,
-                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id) + automationPoints(lane)) { t in
+                let factor: (Double) -> Double = { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
                     if gate, let who = speaker(at: t), who != id { f *= 0.125 }
                     f *= automationGain(lane, t)
                     if inBleep(id, t) { f = 0 }
                     return f
                 }
+                applyEnvelope(p, base: laneBase, span: span,
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id) + automationPoints(lane),
+                              factor: factor)
                 if preview {
+                    // El medidor escucha la pista ANTES del volumen de la mezcla (medido): se le suma la misma curva
                     let meter = LevelTap()
                     if let proc = meter.makeProcessor() { p.audioTapProcessor = proc; meters[id] = meter }
+                    let base = laneBase
+                    gains[id] = { t in t >= span.start && t <= span.end ? base * factor(t) : 0 }
                 }
                 mixParams.append(p)
             }
@@ -443,6 +459,7 @@ enum CompositionBuilder {
         var built = BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
                                      keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
         built.meters = meters
+        built.gains = gains
         return built
     }
 
