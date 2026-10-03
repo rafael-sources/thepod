@@ -520,6 +520,9 @@ enum SelfTest {
                     p.reelLook.captionStyle?.freeX = nil; p.reelLook.captionStyle?.freeY = nil
                     for k in p.reels.indices { p.reels[k].look?.captionStyle?.freeX = nil; p.reels[k].look?.captionStyle?.freeY = nil }
                 }
+                if args.contains("--bgpodcast") {   // fondo virtual «Fondo del podcast» para todas las personas
+                    for l in p.lanes { var vb = VirtualBackground(); vb.mode = .podcast; p.laneBackground[l.id] = vb }
+                }
                 let reelNow = p.reels[n - 1]
                 p = p.applying(p.look(for: reelNow), reel: reelNow)
                 do {
