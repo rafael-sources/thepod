@@ -267,7 +267,7 @@ final class RenderScene: @unchecked Sendable {
         // para no pisar el logo, las capas puestas a mano ni a lo demás. Lo puesto a mano no se mueve.
         let arrange = format == .vertical || format == .square
         let plan = arrange ? arrangement(at: t, brollFrames: brollFrames) : nil
-        var layout = plan?.layout ?? FrameLayout(W: W, H: H, gap: 0)
+        var spots = plan?.layout ?? FrameLayout(W: W, H: H, gap: 0)
 
         let visible = laneOrder.filter { frames[$0] != nil }
         let (active, since) = activeLane(at: t)
@@ -340,8 +340,8 @@ final class RenderScene: @unchecked Sendable {
                     if format.isVertical && !multi { y = rect.minY + H * 0.30 }
                     if arrange {
                         let want = CGRect(x: rect.minX + margin, y: y, width: tag.extent.width, height: tag.extent.height)
-                        let got = layout.place(want, minY: rect.minY, maxY: rect.maxY)
-                        layout.reserve(got)
+                        let got = spots.place(want, minY: rect.minY, maxY: rect.maxY)
+                        spots.reserve(got)
                         y = got.minY
                     }
                     out = tag.transformed(by: .init(translationX: rect.minX + margin, y: y)).composited(over: out)
