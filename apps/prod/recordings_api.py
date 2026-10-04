@@ -424,7 +424,13 @@ def stream_recording_chunk(sid):
                     db.commit()
                     row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
                     size = row["size_bytes"]
-            return jsonify({"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}), 201
+            body = {"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}
+            db.close()
+            try:
+                maybe_auto_export(sid)
+            except Exception:
+                pass   # el envío automático nunca debe romper el registro de la grabación
+            return jsonify(body), 201
 
         size = streaming_path.stat().st_size if streaming_path.exists() else 0
         return jsonify({"ok": True, "bytes_received": size})
@@ -683,6 +689,69 @@ def export_recordings_to_postpod(sid):
             if already and already["n"] > 0:
                 return jsonify({"error": f"Ya fue enviado a postPod por {hname}"}), 200
             return jsonify({"error": f"Solo {hname} (host) o un director puede enviar a postPod"}), 403
+    finally:
+        db.close()
+    body, status = export_session_to_postpod(sid)
+    return jsonify(body), status
+
+
+_AUTO_EXPORT_STALE_SECS = 20 * 60   # una subida sin escribir en 20 min se da por abandonada
+
+
+def maybe_auto_export(sid):
+    """Envío automático a postPod: cuando la sala ya terminó y no queda
+    ninguna subida en curso, manda lo pendiente sin que nadie apriete el
+    botón. Se llama al registrarse cada grabación y al detener la sala.
+    Una subida abandonada (pestaña cerrada) no bloquea a las demás."""
+    import time
+    db = get_db()
+    try:
+        sess = db.execute("SELECT status FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess or sess["status"] != "finished":
+            return False
+        pending = db.execute(
+            "SELECT COUNT(*) AS n FROM recordings WHERE session_id=? AND exported_to_postpod_at IS NULL",
+            (sid,),
+        ).fetchone()["n"]
+    finally:
+        db.close()
+    if not pending:
+        return False
+    rec_dir = session_dir(sid) / "recordings"
+    now = time.time()
+    for f in rec_dir.glob("*_streaming*"):
+        try:
+            if now - f.stat().st_mtime < _AUTO_EXPORT_STALE_SECS:
+                return False   # alguien sigue subiendo: esperar a su finalize
+        except OSError:
+            continue
+
+    import logging
+    import threading
+
+    def _run():
+        try:
+            body, status = export_session_to_postpod(sid)
+            logging.getLogger(__name__).info(
+                "envío automático sesión %s → postPod: %s (exportadas=%s, fallidas=%s)",
+                sid, status, body.get("exported"), body.get("failed"))
+        except Exception:
+            logging.getLogger(__name__).exception("envío automático sesión %s falló", sid)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
+
+
+def export_session_to_postpod(sid):
+    """Envía a postPod todas las grabaciones de la sesión que aún no se
+    enviaron. Sin chequeo de permisos: lo usan el botón (que ya los revisó)
+    y el envío automático al registrarse la última grabación.
+    Devuelve (dict, status_http)."""
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return {"error": "sesión no encontrada"}, 404
         spid = sess["shared_project_id"]
         if not spid:
             # Auto-generate and persist a shared_project_id so postPod can
@@ -716,7 +785,7 @@ def export_recordings_to_postpod(sid):
         db.close()
 
     if not pending:
-        return jsonify({"exported": 0, "failed": 0, "project": None, "message": "sin pistas nuevas"}), 200
+        return {"exported": 0, "failed": 0, "project": None, "message": "sin pistas nuevas"}, 200
 
     endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-track"
     headers = {"X-PodPod-Secret": INTEGRATION_SECRET}
@@ -782,7 +851,9 @@ def export_recordings_to_postpod(sid):
                         "track_number": str(idx + 1),
                     },
                     files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
-                    timeout=120,
+                    # (conexión, respuesta): con pistas de varios GB postPod tarda
+                    # minutos en generar miniatura y forma de onda antes de responder.
+                    timeout=(30, 3600),
                 )
             if resp.status_code not in (200, 201):
                 failed += 1
@@ -999,7 +1070,7 @@ def export_recordings_to_postpod(sid):
             "postpod_url": postpod_project_url,
         })
 
-    return jsonify({
+    return {
         "exported": exported,
         "failed": failed,
         "errors": errors,
@@ -1009,7 +1080,7 @@ def export_recordings_to_postpod(sid):
         "chapters_sent": chapters_sent,
         "director_events_sent": director_events_sent,
         "director_assets_sent": director_assets_sent,
-    }), (200 if failed == 0 else 207)
+    }, (200 if failed == 0 else 207)
 
 
 @bp.get("/api/sessions/<int:sid>/recordings/bundle.zip")

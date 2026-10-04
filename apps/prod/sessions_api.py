@@ -404,9 +404,16 @@ def stop_recording(sid):
             "started_at": row["started_at"],
             "finished_at": row["finished_at"],
         })
-        return jsonify(_serialize_session(row))
+        body = _serialize_session(row)
     finally:
         db.close()
+    # Si todas las subidas ya terminaron antes de detener, envía a postPod ya.
+    try:
+        from recordings_api import maybe_auto_export
+        maybe_auto_export(sid)
+    except Exception:
+        pass
+    return jsonify(body)
 
 
 # ---------------------------------------------------------------------------

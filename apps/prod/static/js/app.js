@@ -496,7 +496,8 @@ async function measureDevice1080(videoTrack) {
 
 /* Corre la prueba completa (~5 s: subida y equipo en paralelo) sobre el
    stream de la vista previa. Devuelve { profileId, upMbps, device }. */
-async function runRecordingPreflight(previewStream, token) {
+async function runRecordingPreflight(previewStream, token, opts) {
+  opts = opts || {};
   var videoTrack = previewStream ? previewStream.getVideoTracks()[0] : null;
   var results = await Promise.all([
     measureUploadMbps(token),
@@ -509,7 +510,15 @@ async function runRecordingPreflight(previewStream, token) {
   var ROOM_UPLOAD_MBPS = 2.5;
   // Sin medida de subida (endpoint caído): decidir solo por el equipo.
   var effectiveUp = (upMbps == null) ? 4 : Math.max(0, upMbps - ROOM_UPLOAD_MBPS);
-  return { profileId: decideRecProfile(effectiveUp, device), upMbps: upMbps, device: device };
+  if (opts.guest) {
+    // Invitados: margen (la grabación usa como mucho ~65% de lo que queda
+    // libre, la conexión de un invitado varía más) y tope de 720p, para
+    // que su subida vaya al día y pueda irse apenas termina la sesión.
+    effectiveUp = effectiveUp * 0.65;
+  }
+  var profileId = decideRecProfile(effectiveUp, device);
+  if (opts.guest && recProfileById(profileId).quality === "1080p") profileId = "720p25";
+  return { profileId: profileId, upMbps: upMbps, device: device };
 }
 
 /* --- Cola de chunks persistida en IndexedDB -------------------------------
@@ -578,6 +587,16 @@ function _idbDelete(ids) {
    - si la cola crece (red lenta), sube MÁS LENTO durante la llamada para no
      pelearle ancho de banda a la sala, y termina de subir al final
    - guarda lo pendiente en IndexedDB por si se cierra la pestaña */
+/* "unos 12 minutos", "menos de un minuto"… para los avisos de subida. */
+function etaText(secs) {
+  if (secs == null) return "";
+  if (secs < 60) return "menos de un minuto";
+  var m = Math.round(secs / 60);
+  if (m < 60) return "unos " + m + (m === 1 ? " minuto" : " minutos");
+  var h = Math.floor(m / 60), r = m % 60;
+  return "unas " + h + (h === 1 ? " hora" : " horas") + (r ? " y " + r + " min" : "");
+}
+
 function _newTakeId() {
   try { return crypto.randomUUID(); }
   catch (_) { return "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
@@ -758,10 +777,24 @@ function createChunkUploader(opts) {
   var MIN_UPLOAD_RATE = 256 * 1024;
   var MAX_BATCH = 8 * 1024 * 1024;
 
+  // Velocidad real de subida (últimos ~30 s) para estimar cuánto falta.
+  var ackLog = [];   // [{t, bytes}]
+  function _uploadRate() {
+    var now = Date.now();
+    while (ackLog.length && now - ackLog[0].t > 30000) ackLog.shift();
+    if (ackLog.length < 2) return 0;
+    var bytes = 0;
+    for (var i = 1; i < ackLog.length; i++) bytes += ackLog[i].bytes;
+    var secs = (ackLog[ackLog.length - 1].t - ackLog[0].t) / 1000;
+    return secs > 0 ? bytes / secs : 0;
+  }
+
   function emit() {
     state.sentBytes = ackedBytes;
     state.pendingBytes = pendingBytes;
     state.retries = retries;
+    var rate = _uploadRate();
+    state.etaSeconds = (rate > 0 && pendingBytes > 0) ? Math.round(pendingBytes / rate) : null;
     if (opts.onStatus) opts.onStatus(state);
   }
 
@@ -829,6 +862,7 @@ function createChunkUploader(opts) {
     queue.splice(0, batch.length);
     pendingBytes -= bytes;
     ackedBytes = batch[batch.length - 1].offset + batch[batch.length - 1].blob.size;
+    ackLog.push({ t: Date.now(), bytes: bytes });
     _idbDelete(batch.map(function (e) { return e.idbId; }));
     retries = 0;
   }
@@ -2640,6 +2674,8 @@ var StudioView = {
     var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
     var hostStreamedBytes = ref(0);
     var hostPendingMB = ref(0);
+    var hostEta = ref(null);
+    var hostDoneSeen = ref(false);
 
     function startLocalRecorders() {
       if (room) {
@@ -2681,6 +2717,7 @@ var StudioView = {
           onStatus: function (st) {
             hostStreamedBytes.value = st.sentBytes;
             hostPendingMB.value = st.pendingBytes / (1024 * 1024);
+            hostEta.value = st.etaSeconds;
             if (st.state === "error") {
               hostUploadStatus.state = "error";
               hostUploadStatus.error = st.error;
@@ -3003,7 +3040,7 @@ var StudioView = {
       applyMicCheckGain: applyMicCheckGain, resetMicCheckGain: resetMicCheckGain,
       practiceMode: practiceMode, markChapter: markChapter,
       recPreflight: recPreflight, recProfileChoices: recProfileChoices,
-      recProfile: recProfile, hostPendingMB: hostPendingMB,
+      recProfile: recProfile, hostPendingMB: hostPendingMB, hostEta: hostEta, etaText: etaText, hostDoneSeen: hostDoneSeen,
       handsRaised: handsRaised, ownHandUp: ownHandUp, toggleHand: toggleHand,
       screenSharing: screenSharing, screenRecordOnly: screenRecordOnly, remoteScreen: remoteScreen,
       askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
@@ -3089,11 +3126,22 @@ var StudioView = {
       <div v-if="hostUploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
         Subiendo en tiempo real · {{ (hostStreamedBytes / (1024*1024)).toFixed(1) }} MB enviados<span v-if="hostPendingMB > 0.5"> · falta {{ hostPendingMB.toFixed(1) }} MB</span>
       </div>
-      <div v-if="hostUploadStatus.state === 'finalizing'" class="upload-banner" style="background:#3a2a00;border-bottom:2px solid var(--signal);padding:8px 16px;text-align:center;font-weight:700;color:var(--signal);">
-        ⏳ Subiendo… falta {{ hostPendingMB.toFixed(1) }} MB — no cierres esta pestaña
+      <div v-if="hostUploadStatus.state === 'finalizing'" class="upload-overlay">
+        <div class="upload-overlay-box">
+          <div class="upload-overlay-icon">⏳</div>
+          <h2>Terminando de subir tu grabación…</h2>
+          <p class="upload-overlay-big">{{ hostPendingMB > 0.05 ? "Faltan " + hostPendingMB.toFixed(1) + " MB" : "Casi listo" }}</p>
+          <p v-if="hostEta && hostPendingMB > 0.05" class="upload-overlay-eta">Tiempo estimado: {{ etaText(hostEta) }}</p>
+          <p class="muted">No cierres esta pestaña ni apagues el computador hasta que diga «Listo». Puedes dejarla abierta y seguir con lo tuyo.</p>
+        </div>
       </div>
-      <div v-if="hostUploadStatus.state === 'done'" class="upload-banner" style="background:#1a3a1a;border-bottom:2px solid #4a4;padding:8px 16px;text-align:center;font-weight:700;color:#6c6;">
-        ✓ Grabación del host subida correctamente ({{ hostUploadStatus.sizeMB }} MB)
+      <div v-if="hostUploadStatus.state === 'done' && !hostDoneSeen" class="upload-overlay">
+        <div class="upload-overlay-box">
+          <div class="upload-overlay-icon ok">✓</div>
+          <h2>Listo, tu grabación llegó completa</h2>
+          <p class="muted">{{ hostUploadStatus.sizeMB }} MB enviados. Ya puedes salir; se enviará sola a postPod cuando lleguen las de todos.</p>
+          <button class="primary" @click="hostDoneSeen = true">Entendido</button>
+        </div>
       </div>
       <div v-if="hostUploadStatus.state === 'error'" class="upload-banner" style="background:#5a1a1a;border-bottom:2px solid red;padding:8px 16px;text-align:center;font-weight:700;color:#f66;">
         ✕ Error al subir grabación: {{ hostUploadStatus.error }}
@@ -3229,6 +3277,7 @@ ${TP_TEMPLATE}
                 </div>
               </div>
 
+              <p class="upload-heads-up">⏳ Al terminar la grabación, quédate en esta página hasta que diga «Listo»: tu grabación termina de subirse y te mostramos cuánto falta.</p>
               <button class="primary" @click="connect" :disabled="busy" style="width: 100%; padding: 14px;">
                 {{ busy ? "Conectando…" : "Entrar al estudio" }}
               </button>
@@ -3361,7 +3410,7 @@ ${TP_TEMPLATE}
           </div>
           <div v-if="exportStatus" class="export-status">{{ exportStatus }}</div>
           <div v-if="!finishedRecordings.length" class="muted" style="padding: 12px; text-align: center;">
-            Aún no llegaron pistas al servidor. Esperá unos segundos y dale ↻ Recargar.
+            Aún no llegaron pistas al servidor. Espera unos segundos y toca ↻ Recargar.
           </div>
           <div v-else class="recordings-list">
             <div v-for="r in finishedRecordings" :key="r.id" class="recording-row">
@@ -3807,7 +3856,7 @@ var GuestStudioView = {
         if (preflightVideoEl.value) preflightVideoEl.value.srcObject = _preflightStream;
         var _preMic = _preflightStream.getAudioTracks()[0];
         if (_preMic) _preflightMeterStop = _attachMeter({ mediaStreamTrack: _preMic }, function (lvl) { preMeter.value = lvl; });
-        var r = await runRecordingPreflight(_preflightStream, props.inviteToken);
+        var r = await runRecordingPreflight(_preflightStream, props.inviteToken, { guest: true });
         recPreflight.upMbps = r.upMbps;
         recPreflight.fps = r.device.fps;
         recPreflight.profileId = r.profileId;
@@ -4184,6 +4233,7 @@ var GuestStudioView = {
     var recordingCaps = reactive({ hasCam: true, hasMic: true });
     var streamedBytes = ref(0);
     var pendingMB = ref(0);
+    var guestEta = ref(null);
 
     function _preventClose(e) { e.preventDefault(); e.returnValue = ""; }
 
@@ -4222,6 +4272,7 @@ var GuestStudioView = {
         onStatus: function (st) {
           streamedBytes.value = st.sentBytes;
           pendingMB.value = st.pendingBytes / (1024 * 1024);
+          guestEta.value = st.etaSeconds;
           _chunkRetries.value = st.retries;
           if (st.state === "error") {
             uploadStatus.state = "error";
@@ -4483,7 +4534,7 @@ var GuestStudioView = {
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, gateOn: gateOn, toggleGate: toggleGate, leave: leave, initials: initials,
              countdown: countdown, myIdentity: myIdentity, practiceMode: practiceMode,
              preflightVideoEl: preflightVideoEl, recPreflight: recPreflight,
-             recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB,
+             recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB, guestEta: guestEta, etaText: etaText,
              uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
              postRecording: postRecording,
              activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
@@ -4533,7 +4584,8 @@ var GuestStudioView = {
           <div class="guest-post-icon">⏳</div>
           <h2>Terminando de subir tu grabación…</h2>
           <p class="guest-post-big">{{ pendingMB > 0.05 ? "Faltan " + pendingMB.toFixed(1) + " MB" : "Casi listo" }}</p>
-          <p class="muted">No cierres esta pestaña ni bloquees el teléfono hasta que diga “listo”.</p>
+          <p v-if="guestEta && pendingMB > 0.05" class="guest-post-eta">Tiempo estimado: {{ etaText(guestEta) }}</p>
+          <p class="muted">No cierres esta pestaña ni bloquees el teléfono hasta que diga “listo”. Puedes dejarla abierta y seguir con lo tuyo.</p>
         </div>
         <div v-else-if="uploadStatus.state === 'done'" class="guest-post-box">
           <div class="guest-post-icon ok">✓</div>
@@ -4579,6 +4631,7 @@ var GuestStudioView = {
                 <li>🎧 Usa audífonos para que no haya eco.</li>
                 <li>📱 Apoya el teléfono y no cambies de app mientras graban.</li>
                 <li>🔋 Mejor conectado al cargador.</li>
+                <li><strong>⏳ Al terminar, quédate en esta página hasta que diga «Listo»:</strong> tu grabación termina de subirse (te mostramos cuánto falta).</li>
               </ul>
               <button class="primary guest-join" @click="connect" :disabled="recPreflight.state === 'testing'">
                 {{ recPreflight.state === 'testing' ? "Revisando…" : "Entrar a la sala" }}

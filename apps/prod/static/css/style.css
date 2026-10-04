@@ -2605,3 +2605,20 @@ a.mark:hover { opacity: 0.8; }
   .tp-notice-text { font-size: 14px; }
   .tp-panel { width: 96vw; bottom: 8%; }
 }
+
+/* Aviso grande de subida al terminar (anfitrión) y tiempo estimado */
+.upload-overlay {
+  position: fixed; inset: 0; z-index: 950;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 8, 6, 0.88); backdrop-filter: blur(6px);
+  padding: 24px; text-align: center;
+}
+.upload-overlay-box { max-width: 480px; }
+.upload-overlay-icon { font-size: 56px; margin-bottom: 12px; }
+.upload-overlay-icon.ok { color: var(--signal-cool); }
+.upload-overlay h2 { margin: 0 0 8px; font-size: clamp(22px, 5vw, 30px); color: var(--paper); }
+.upload-overlay-big { font-size: 24px; font-weight: 700; color: var(--paper); margin: 4px 0 6px; }
+.upload-overlay-eta, .guest-studio .guest-post-eta { font-size: 16px; color: var(--signal-cool); margin: 0 0 12px; }
+.upload-overlay .primary { margin-top: 18px; padding: 14px 48px; font-size: 17px; }
+.upload-heads-up { font-size: 12.5px; line-height: 1.45; color: var(--paper-dim); background: rgba(255,255,255,0.05);
+  border: 1px solid var(--ink-line); border-radius: 8px; padding: 10px 12px; margin: 12px 0; text-align: left; }
