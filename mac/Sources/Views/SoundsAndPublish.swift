@@ -354,6 +354,10 @@ struct PrePodSettingsSection: View {
                     if let u = URL(string: base + "/?olvide=1") { NSWorkspace.shared.open(u) }
                 }
                 .buttonStyle(.link)
+                if !PrePodClient.username.isEmpty {
+                    Button("Mi perfil") { Links.open("/perfil") }.buttonStyle(.link)
+                        .help("Tu foto, tu nombre, tu correo y tu contraseña. Si cambias la contraseña, escríbela aquí también.")
+                }
                 Button("Privacidad") { Links.open("/privacidad") }.buttonStyle(.link)
                 Spacer()
                 if !PrePodClient.username.isEmpty {
