@@ -169,6 +169,16 @@ def billing_webhook():
     username = ((ev.get("meta") or {}).get("custom_data") or {}).get("username")
     data = ev.get("data") or {}
     a = data.get("attributes") or {}
+    if name.startswith("subscription_payment_"):
+        # Llega la factura, no la suscripción: se trae la suscripción tal como está ahora
+        sub_id = a.get("subscription_id")
+        if not sub_id:
+            return jsonify({"ok": True, "ignored": "pago sin suscripción"})
+        try:
+            data = _api("GET", f"/subscriptions/{sub_id}").get("data") or {}
+            a = data.get("attributes") or {}
+        except Exception:
+            return jsonify({"ok": True, "ignored": "no se pudo leer la suscripción"})
     if not username:
         # Renovaciones y cambios: se busca por la suscripción guardada
         with _db() as c:
