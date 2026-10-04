@@ -129,8 +129,8 @@ def billing_checkout():
     body = {"data": {
         "type": "checkouts",
         "attributes": {
-            "checkout_data": {"email": user.get("email") or None, "name": user.get("display_name") or u,
-                              "custom": {"username": u}},
+            "checkout_data": {k: v for k, v in {"email": user.get("email"), "name": user.get("display_name") or u,
+                                                "custom": {"username": u}}.items() if v},
             "product_options": {"redirect_url": base + "/planes?listo=1"},
             "test_mode": bool(cfg.get("test_mode")),
         },
@@ -142,7 +142,9 @@ def billing_checkout():
     try:
         r = _api("POST", "/checkouts", body)
         return jsonify({"url": r["data"]["attributes"]["url"]})
-    except Exception:
+    except Exception as e:
+        detail = e.read()[:300] if hasattr(e, "read") else str(e)
+        print("billing checkout error:", detail, flush=True)
         return jsonify({"error": "No se pudo abrir el pago. Prueba de nuevo en un rato."}), 502
 
 
