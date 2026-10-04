@@ -221,6 +221,7 @@ final class ProjectSession: ObservableObject {
     @Published var project: Project { didSet { if project != oldValue { history.record(before: oldValue); dirty() } } }
     let history = ProjectHistory()
     @Published var note: String?          // aviso corto (atajos, deshacer)
+    private var offsetWork: Task<Void, Never>?
     var noteId = UUID()
     var inPoint: Double?                  // tecla I: inicio de un reel pendiente
     @Published var selectedVolumePoint: (lane: Int, id: UUID)?   // punto elegido de la línea de volumen (Suprimir lo quita)
@@ -859,27 +860,49 @@ final class ProjectSession: ObservableObject {
 
     // MARK: Sincronizar personas
 
-    /// Mueve el inicio de la grabación de una persona (desfase). Arrastra con ella sus palabras transcritas
-    /// y vuelve a calcular quién habla.
+    /// Mueve el inicio de la grabación de una persona (desfase). Negativo = suena antes (se salta el
+    /// principio de su grabación); positivo = suena después. Arrastra con ella sus palabras transcritas,
+    /// actualiza la vista previa al instante y vuelve a calcular quién habla cuando se deja de tocar.
     func setLaneOffset(_ laneId: Int, _ newOffset: Double) {
         guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
-        let delta = max(0, newOffset) - project.lanes[i].offset
+        let target = (max(project.lanes[i].minOffset, newOffset) * 100).rounded() / 100
+        let delta = target - project.lanes[i].offset
         guard abs(delta) > 0.0005 else { return }
         var p = project
-        p.lanes[i].offset = max(0, newOffset)
+        p.lanes[i].offset = target
         for w in p.words.indices where p.words[w].lane == laneId {
-            p.words[w].s = max(0, p.words[w].s + delta)
-            p.words[w].e = max(0, p.words[w].e + delta)
+            p.words[w].s += delta
+            p.words[w].e += delta
         }
         project = p
-        try? FileManager.default.removeItem(at: AudioAnalysis.energyURL(project.id))
-        energy = nil
-        if project.lanes.count > 1 {
-            run("Analizando quién habla") { [self] in
+        let name = project.laneName(laneId)
+        flashNote("\(name): \(Self.offsetText(target))")
+        schedulePreview(immediate: true)
+        // Quién habla (y los silencios) se recalculan una sola vez, cuando se deja de tocar el desfase
+        offsetWork?.cancel()
+        offsetWork = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard let self, !Task.isCancelled else { return }
+            while self.job != nil {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if Task.isCancelled { return }
+            }
+            try? FileManager.default.removeItem(at: AudioAnalysis.energyURL(self.project.id))
+            self.energy = nil
+            guard self.project.lanes.count > 1 else { return }
+            self.run("Analizando quién habla") { [self] in
                 try await ensureEnergy()
                 schedulePreview(immediate: true)
             }
         }
+    }
+
+    /// «9,0 s antes» / «0,3 s después» / «en su lugar original».
+    static func offsetText(_ o: Double) -> String {
+        if abs(o) < 0.005 { return "en su lugar original" }
+        let v = String(format: "%.2f", abs(o)).replacingOccurrences(of: ".", with: ",")
+            .replacingOccurrences(of: #",?0+$"#, with: "", options: .regularExpression)
+        return o < 0 ? "suena \(v) s antes" : "suena \(v) s después"
     }
 
     // MARK: Música y efectos

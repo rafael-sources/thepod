@@ -250,13 +250,28 @@ struct Lane: Codable, Identifiable, Equatable {
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
     /// Timeline spans of each clip.
+    /// Con desfase negativo la persona suena antes: se salta el principio de su grabación
+    /// (lo que quedaría antes del segundo 0 del episodio no se usa).
     var placed: [(clip: LaneClip, tlStart: Double, tlEnd: Double)] {
         var t = offset
-        return clips.map { c in
-            defer { t += c.length }
-            return (c, t, t + c.length)
+        var out: [(clip: LaneClip, tlStart: Double, tlEnd: Double)] = []
+        for c in clips {
+            let start = t, end = t + c.length
+            t = end
+            if end <= 0 { continue }
+            if start < 0 {
+                var cut = c
+                cut.srcIn += -start
+                out.append((cut, 0, end))
+            } else {
+                out.append((c, start, end))
+            }
         }
+        return out
     }
+
+    /// Lo más que se puede adelantar: siempre queda al menos un segundo de su grabación.
+    var minOffset: Double { -max(0, clips.reduce(0) { $0 + $1.length } - 1) }
 
     var primaryMediaId: Int? { clips.first?.mediaId }
 }

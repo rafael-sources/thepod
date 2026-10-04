@@ -333,11 +333,14 @@ struct TrackInspector: View {
         fadeRow(label: "Fade salida", value: $session.project.lanes[i].fadeOut)
         HStack(spacing: 6) {
             Text("Desfase").frame(width: 72, alignment: .leading)
-            Button("−0.5") { session.setLaneOffset(lane.id, lane.offset - 0.5) }
-            Button("−0.1") { session.setLaneOffset(lane.id, lane.offset - 0.1) }
-            Text(String(format: "%+.2f s", lane.offset)).monospacedDigit().frame(width: 70)
-            Button("+0.1") { session.setLaneOffset(lane.id, lane.offset + 0.1) }
-            Button("+0.5") { session.setLaneOffset(lane.id, lane.offset + 0.5) }
+            Button("−1 s") { session.setLaneOffset(lane.id, lane.offset - 1) }.help("Que suene un segundo antes")
+            Button("−0,1") { session.setLaneOffset(lane.id, lane.offset - 0.1) }.help("Que suene una décima antes")
+            OffsetField(value: lane.offset) { session.setLaneOffset(lane.id, $0) }
+            Button("+0,1") { session.setLaneOffset(lane.id, lane.offset + 0.1) }.help("Que suene una décima después")
+            Button("+1 s") { session.setLaneOffset(lane.id, lane.offset + 1) }.help("Que suene un segundo después")
+            if abs(lane.offset) > 0.005 {
+                Button("Original") { session.setLaneOffset(lane.id, 0) }.help("Volver a como se grabó")
+            }
             Spacer()
             Toggle("Espejo", isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
                                            set: { session.project.laneMirror[lane.id] = $0 }))
@@ -383,7 +386,7 @@ struct TrackInspector: View {
                     .disabled(session.isBusy)
             }
         }
-        Text("El desfase mueve el inicio de su grabación (no puede ser negativo: si va adelantada, atrasa a los demás). Los cortes se aplican igual a todas las pistas.")
+        Text("\(session.project.laneName(lane.id)) \(ProjectSession.offsetText(lane.offset)). Con − suena antes (se salta el principio de su grabación); con + suena después. También puedes escribir los segundos. Los cortes se aplican igual a todas las pistas.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 
@@ -522,5 +525,36 @@ extension Color {
     var hex: String {
         let c = NSColor(self).usingColorSpace(.sRGB) ?? .white
         return String(format: "#%02X%02X%02X", Int(round(c.redComponent * 255)), Int(round(c.greenComponent * 255)), Int(round(c.blueComponent * 255)))
+    }
+}
+
+
+/// Segundos de desfase escritos a mano: «-9» o «-9,5». Se aplica al pulsar Enter o al salir del campo.
+struct OffsetField: View {
+    let value: Double
+    let commit: (Double) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("0", text: $text)
+            .multilineTextAlignment(.center).monospacedDigit()
+            .frame(width: 64)
+            .focused($focused)
+            .onAppear { text = Self.format(value) }
+            .onChange(of: value) { _, v in if !focused { text = Self.format(v) } }
+            .onChange(of: focused) { _, f in if !f { apply() } }
+            .onSubmit { apply() }
+            .help("Segundos: negativo = suena antes, positivo = después")
+    }
+
+    private func apply() {
+        let t = text.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: "s", with: "")
+            .trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "−", with: "-")
+        if let v = Double(t) { commit(v); text = Self.format(v) } else { text = Self.format(value) }
+    }
+
+    static func format(_ v: Double) -> String {
+        abs(v) < 0.005 ? "0" : String(format: "%+.2f", v).replacingOccurrences(of: ".", with: ",")
     }
 }
