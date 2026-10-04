@@ -17,6 +17,7 @@ actor PostPodWebClient {
         let owner: String?
         let podcastName: String?
         let episodeNumber: Int?
+        var importing: Int? = nil          // pistas que todavía están llegando desde prodPod (nil = listo)
         var id: String { slug }
     }
 
@@ -90,6 +91,12 @@ actor PostPodWebClient {
         loggedIn = true
     }
 
+    private static let isoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
     func projects() async throws -> [WebProject] {
         let data = try await send("GET", "/api/projects")
         guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
@@ -101,12 +108,21 @@ actor PostPodWebClient {
             let source = m["source"] as? [String: Any]
             let created = (m["created_at"] as? String).flatMap { iso.date(from: $0) }
             let number = (source?["episode_number"] as? Int) ?? (source?["episode_number"] as? String).flatMap(Int.init)
+            // «Episodio en proceso»: prodPod todavía está mandando pistas. Una marca de más de 6 h es un envío cortado.
+            var importing: Int?
+            if let imp = m["importing"] as? [String: Any] {
+                let started = (imp["started_at"] as? String).flatMap { iso.date(from: $0) ?? Self.isoFrac.date(from: $0) }
+                if started.map({ Date().timeIntervalSince($0) < 6 * 3600 }) ?? true {
+                    importing = (imp["expected"] as? Int) ?? 0
+                }
+            }
             return WebProject(slug: slug,
                               name: (m["name"] as? String) ?? slug,
                               createdAt: created,
                               owner: m["owner_username"] as? String,
                               podcastName: (source?["podcast_name"] as? String) ?? (source?["podcast_title"] as? String),
-                              episodeNumber: number)
+                              episodeNumber: number,
+                              importing: importing)
         }
     }
 

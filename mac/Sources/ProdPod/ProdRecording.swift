@@ -114,7 +114,10 @@ extension ProdStudio {
             }
         case "upload_status":
             if let id = m["identity"] as? String {
-                remoteUploads[id] = UploadState(state: m["state"] as? String ?? "", bytes: Int64(m["bytes"] as? Int ?? 0))
+                let pending = (m["pending"] as? Int).map(Int64.init) ?? (m["pending"] as? Double).map { Int64($0) }
+                let eta = (m["eta"] as? Int) ?? (m["eta"] as? Double).map { Int($0) }
+                remoteUploads[id] = UploadState(state: m["state"] as? String ?? "", bytes: Int64(m["bytes"] as? Int ?? 0),
+                                                pending: pending, eta: eta)
             }
         case "director_cue":
             let target = m["target"] as? String ?? "all"
@@ -224,8 +227,12 @@ extension ProdStudio {
         recording = true
         if screenOn { startScreenRecording() }
         if !practice {
+            uploadSamples = []
             await ChunkUploader.shared.begin(sessionId: session.id, file: file)
             myUpload = UploadState(state: "streaming", bytes: 0)
+            // Respaldo grabado por el servidor (red de seguridad si la subida no llega). Si está apagado no hace nada.
+            let sid = session.id
+            Task { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(sid)/backup/start") }
         }
         flash(practice ? "Ensayo: se graba solo en tu Mac" : "Grabando")
     }
@@ -259,6 +266,15 @@ extension ProdStudio {
         ownReady = false
         readyMap = [:]
         flash(wasPractice ? "Ensayo terminado" : "Grabación terminada: subiendo tu pista")
+        // Como en la web: la grabación ya se detuvo (las pistas quedan sincronizadas); recién después de
+        // avisar con una cuenta 3-2-1 se apagan cámara y micrófono, en vez de cortarlos de golpe.
+        for n in [3, 2, 1] {
+            endCountdown = n
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        endCountdown = nil
+        if camOn { toggleCam() }
+        if micOn { toggleMic() }
     }
 
     func togglePractice() {
@@ -271,9 +287,20 @@ extension ProdStudio {
 
     func uploadProgress(file: String, sent: Int64, total: Int64, done: Bool, message: String?) {
         guard file == recordFile?.path else { return }
+        // Cuánto falta y en cuánto tiempo, con la velocidad real de los últimos ~30 s (lo mismo que manda la web)
+        let now = Date()
+        uploadSamples.append((now, sent))
+        uploadSamples.removeAll { now.timeIntervalSince($0.at) > 30 }
+        let pending = max(0, total - sent)
+        var eta: Int?
+        if let first = uploadSamples.first, now.timeIntervalSince(first.at) >= 3, sent > first.sent {
+            let speed = Double(sent - first.sent) / now.timeIntervalSince(first.at)
+            eta = Int((Double(pending) / speed).rounded(.up))
+        }
         let state = done ? "done" : (message != nil ? "error" : (recording ? "streaming" : "finalizing"))
-        myUpload = UploadState(state: state, bytes: sent, total: total, message: message)
-        send(["type": "upload_status", "identity": myIdentity, "state": done ? "done" : "streaming", "bytes": sent])
+        myUpload = UploadState(state: state, bytes: sent, total: total, message: message, pending: done ? 0 : pending, eta: done ? 0 : eta)
+        send(["type": "upload_status", "identity": myIdentity, "state": done ? "done" : (message != nil ? "error" : "streaming"),
+              "bytes": sent, "pending": done ? 0 : pending, "eta": done ? 0 : (eta.map { $0 as Any } ?? NSNull())])
         if done { flash("Tu pista ya está en prodPod") }
     }
 
@@ -290,7 +317,7 @@ extension ProdStudio {
                 if let e = r["error"] as? String { exportState = e; return }
                 let n = r["exported"] as? Int ?? 0
                 exportState = n > 0 ? "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post, tócalo en “En postPod web” → Traer a la Mac."
-                                    : "Ya estaba en postPod."
+                                    : "Ya estaba en postPod (se envía solo cuando terminan de subir todas las pistas)."
             } catch { self.error = error.localizedDescription }
         }
     }

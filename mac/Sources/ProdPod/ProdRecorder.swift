@@ -254,8 +254,10 @@ actor ChunkUploader {
         while var j = jobs[key], !j.finalized {
             let size = (try? FileManager.default.attributesOfItem(atPath: key)[.size] as? Int64) ?? 0
             if j.sent < size {
-                // Durante la grabación, partes de hasta 2 MB con pausa; al terminar, a toda velocidad.
-                let piece = min(size - j.sent, j.recordingDone ? 8 << 20 : 2 << 20)
+                // Durante la grabación, partes de hasta 2 MB con una pausa corta; si se atrasó (más de 16 MB
+                // pendientes) o ya terminó, partes de 8 MB sin pausa. Nunca más lento que lo que produce el video.
+                let behind = size - j.sent > 16 << 20
+                let piece = min(size - j.sent, (j.recordingDone || behind) ? 8 << 20 : 2 << 20)
                 do {
                     let data = try Self.read(key, from: j.sent, count: Int(piece))
                     let got = try await post(j, chunk: data, offset: j.sent, finalize: false)
@@ -270,7 +272,7 @@ actor ChunkUploader {
                     try? await Task.sleep(nanoseconds: UInt64(min(30, 2 * failures)) * 1_000_000_000)
                     continue
                 }
-                if !j.recordingDone { try? await Task.sleep(nanoseconds: 500_000_000) }
+                if !j.recordingDone && !behind { try? await Task.sleep(nanoseconds: 500_000_000) }
                 continue
             }
             if j.recordingDone {

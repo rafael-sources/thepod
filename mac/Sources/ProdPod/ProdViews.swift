@@ -423,6 +423,7 @@ struct StudioView: View {
                 .padding(.horizontal, 20)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay { countdownOverlay }
+                .overlay { endCountdownOverlay }
                 .overlay(alignment: .top) { banners }
                 .overlay { TeleprompterLayer(studio: studio) }
                 .overlay(alignment: .bottomLeading) {
@@ -556,6 +557,28 @@ struct StudioView: View {
         }
     }
 
+    @ViewBuilder private var endCountdownOverlay: some View {
+        if let n = studio.endCountdown {
+            VStack(spacing: 10) {
+                Text("La grabación terminó").font(.system(size: 34, weight: .heavy, design: .rounded))
+                Text("Apagamos cámara y micrófono en \(n)").font(.title2.weight(.semibold))
+                Text("Quédate en esta pantalla hasta que tu pista diga Listo").font(.callout).opacity(0.85)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 36).padding(.vertical, 26)
+            .background(RoundedRectangle(cornerRadius: 22).fill(Color.black.opacity(0.82)))
+            .transition(.opacity)
+        }
+    }
+
+    /// «faltan 120 MB · unos 3 minutos»
+    static func pendingText(_ u: ProdStudio.UploadState) -> String? {
+        guard let p = u.pending, p > 0 else { return nil }
+        var t = "faltan \(max(1, p / 1_048_576)) MB"
+        if let e = u.eta, e > 0 { t += e < 90 ? " · menos de 2 minutos" : " · unos \(Int((Double(e) / 60).rounded())) minutos" }
+        return t
+    }
+
     @ViewBuilder private var banners: some View {
         VStack(spacing: 8) {
             if let c = studio.cue {
@@ -591,7 +614,7 @@ struct StudioView: View {
                             .foregroundStyle(Theme.good)
                     } else {
                         Text(u.message ?? (studio.recording ? "Subiendo mientras grabas · \(String(format: "%.0f", mb)) MB"
-                                                            : "Subiendo… falta \(String(format: "%.0f", max(0, total - mb))) MB"))
+                                                            : "Subiendo… " + (Self.pendingText(u) ?? "falta \(String(format: "%.0f", max(0, total - mb))) MB")))
                             .foregroundStyle(u.message == nil ? Theme.secondary : .orange)
                         if total > 0 { ProgressView(value: min(1, mb / total)) }
                     }
@@ -600,16 +623,19 @@ struct StudioView: View {
             }
             ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
                 let name = studio.people.first(where: { $0.id == id })?.name ?? "Otra persona"
-                Text("\(name): \(u.state == "done" ? "subida completa" : "subiendo \(u.bytes / 1_048_576) MB")")
+                Text("\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))")
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
             if studio.canExport {
                 Button { studio.exportToPost() } label: {
-                    Label(studio.exporting ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
+                    Label(studio.exporting ? "Enviando…" : "Enviar a post ahora", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).disabled(studio.exporting)
             } else if studio.sessionEnded && studio.directorPresent {
                 Text("El director envía a post cuando todas las pistas terminen de subir.").font(.caption).foregroundStyle(Theme.secondary)
+            }
+            if studio.sessionEnded && !studio.recording {
+                Text("Cuando todas las pistas terminan de subir, el episodio se envía solo a postPod.").font(.caption2).foregroundStyle(Theme.secondary)
             }
             if let e = studio.exportState { Text(e).font(.caption).foregroundStyle(Theme.good) }
         }

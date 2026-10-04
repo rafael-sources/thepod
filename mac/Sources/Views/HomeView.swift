@@ -156,8 +156,29 @@ extension NSItemProvider {
 /// "En postPod web": the projects this account can see online, downloadable in one click.
 struct WebProjectsSection: View {
     @EnvironmentObject var app: AppModel
+    @State private var pendingBring: PostPodWebClient.WebProject?
 
     var body: some View {
+        list
+            .confirmationDialog("Este episodio todavía se está procesando", isPresented: Binding(get: { pendingBring != nil }, set: { if !$0 { pendingBring = nil } }),
+                                presenting: pendingBring) { w in
+                Button("Traerlo igual") { app.importFromWeb(w); pendingBring = nil }
+                Button("Esperar", role: .cancel) { pendingBring = nil }
+            } message: { w in
+                Text("Todavía están llegando pistas desde prodPod. Si lo traés ahora puede quedar incompleto. Lo mejor es esperar a que desaparezca el aviso rojo (la lista se actualiza sola).")
+            }
+            // Mientras haya un episodio en proceso, revisar cada 20 s si ya terminó
+            .task(id: app.webProjects.contains { $0.importing != nil }) {
+                guard app.webProjects.contains(where: { $0.importing != nil }) else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 20_000_000_000)
+                    if Task.isCancelled { break }
+                    app.loadWebProjects()
+                }
+            }
+    }
+
+    private var list: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Text("En postPod web").font(.title2.bold())
@@ -193,6 +214,11 @@ struct WebProjectsSection: View {
         }
     }
 
+    /// Traer a la Mac; si el episodio todavía está llegando desde prodPod, primero pregunta.
+    private func bring(_ w: PostPodWebClient.WebProject) {
+        if w.importing != nil { pendingBring = w } else { app.importFromWeb(w) }
+    }
+
     private func row(_ w: PostPodWebClient.WebProject) -> some View {
         let local = app.localProject(forWeb: w.slug)
         let busy = app.webDownloading == w.slug
@@ -205,6 +231,10 @@ struct WebProjectsSection: View {
                     if let d = w.createdAt { Text(d, style: .date) }
                     if let o = w.owner { Label(o, systemImage: "person") }
                     if local != nil { Label("Ya está en esta Mac", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good) }
+                    if let n = w.importing {
+                        Label(n > 0 ? "Episodio en proceso · llegando \(n) \(n == 1 ? "pista" : "pistas") desde prodPod" : "Episodio en proceso",
+                              systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    }
                     if let partial {
                         Label(partial.total > 0 ? "Descarga a medias · \(Int(Double(partial.got) / Double(partial.total) * 100))%" : "Descarga a medias",
                               systemImage: "pause.circle.fill").foregroundStyle(Theme.accent)
@@ -216,7 +246,7 @@ struct WebProjectsSection: View {
             if busy {
                 ProgressView().controlSize(.small)
             } else if partial != nil {
-                Button { app.importFromWeb(w) } label: {
+                Button { bring(w) } label: {
                     Label("Reanudar", systemImage: "arrow.clockwise.circle.fill")
                 }
                 .buttonStyle(.borderedProminent)
@@ -226,12 +256,12 @@ struct WebProjectsSection: View {
                     .disabled(app.importJob != nil)
             } else if let local {
                 Button("Abrir") { app.open(local) }.buttonStyle(.borderedProminent)
-                Button("Traer de nuevo") { app.importFromWeb(w) }
+                Button("Traer de nuevo") { bring(w) }
                     .buttonStyle(.bordered)
                     .disabled(app.importJob != nil)
                     .help("Descarga otra copia desde postPod (la actual no se borra)")
             } else {
-                Button { app.importFromWeb(w) } label: {
+                Button { bring(w) } label: {
                     Label("Traer a la Mac", systemImage: "arrow.down.circle.fill")
                 }
                 .buttonStyle(.borderedProminent)

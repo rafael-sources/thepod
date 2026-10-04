@@ -88,6 +88,8 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var ownReady = false
     @Published var readyMap: [String: Bool] = [:]
     @Published var countdown: Int?
+    @Published var endCountdown: Int?           // «La grabación terminó · Apagamos cámara y micrófono en 3, 2, 1»
+    var uploadSamples: [(at: Date, sent: Int64)] = []   // para estimar cuánto falta (últimos ~30 s)
     @Published var recording = false
     @Published var practice = false
     @Published var sessionEnded = false
@@ -104,7 +106,11 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var exportState: String?
     @Published var exporting = false
 
-    struct UploadState: Equatable { var state: String; var bytes: Int64; var total: Int64 = 0; var message: String? }
+    struct UploadState: Equatable {
+        var state: String; var bytes: Int64; var total: Int64 = 0; var message: String?
+        var pending: Int64? = nil       // bytes que faltan por subir (lo manda cada persona en upload_status)
+        var eta: Int? = nil             // segundos estimados para terminar
+    }
     struct Pad: Identifiable, Equatable {
         let id: Int; let name: String; let filename: String; let key: String?; let color: String?; let url: String
     }
