@@ -71,9 +71,11 @@ def create_app():
         u = session.get("username")
         if not u:
             return jsonify({"error": "no autenticado"}), 401
+        from plans import limits_for
         return jsonify({
             "username": u,
             "is_admin": bool(policy_for(u).get("see_all")),
+            "plan": limits_for(u),
         })
 
     # ----- Documentation routes -----
