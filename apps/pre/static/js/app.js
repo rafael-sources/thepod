@@ -5332,7 +5332,7 @@ var App = {
         <button class="settings-btn" @click="state.showSettings = true" title="Integraciones">⚙</button>
         <div class="user-chip">
           <span class="tiny">{{ state.isAdmin ? 'ADMIN' : 'USR' }}</span>
-          <span class="name">{{ state.username }}</span>
+          <a class="name" :href="(thepodUrl || '') + '/perfil'" title="Mi perfil: foto, nombre y contraseña" style="text-decoration:none; color:inherit;">{{ state.username }}</a>
           <button class="ghost" @click="logout">Salir</button>
         </div>
       </header>
