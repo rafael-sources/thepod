@@ -388,7 +388,7 @@ final class ProdStudio: NSObject, ObservableObject {
 
     /// Promedio de energía a dBFS y sugerencia hacia −18 dBFS, igual que la web:
     /// entre −12 y +18 dB; si casi no hubo señal (< −55) no se sugiere nada.
-    static func evaluate(power: [Float], peak: Float) -> MicCheck {
+    nonisolated static func evaluate(power: [Float], peak: Float) -> MicCheck {
         let mean = power.isEmpty ? 0 : power.reduce(0, +) / Float(power.count)
         let avg = mean > 0 ? max(-90, 10 * log10f(mean)) : -90
         let pk = max(-90, min(0, peak))
