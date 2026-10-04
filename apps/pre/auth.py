@@ -151,3 +151,23 @@ def reset_password():
 
     update_user_fields(username, {"password_md5": md5(new_password)})
     return jsonify({"ok": True, "message": "Contraseña actualizada. Ya puedes iniciar sesión."})
+
+
+# ---------------------------------------------------------------------------
+# Planes: la app de Mac cuenta un episodio nuevo (proyecto importado en la Mac)
+# ---------------------------------------------------------------------------
+
+@bp.post("/plan/claim")
+def plan_claim():
+    username = session.get("username")
+    if not username:
+        return jsonify({"error": "no autenticado"}), 401
+    import re as _re
+    ref = _re.sub(r"[^A-Za-z0-9:_-]", "", ((request.get_json(silent=True) or {}).get("ref") or ""))[:80]
+    if not ref.startswith("mac:"):
+        return jsonify({"error": "ref inválida"}), 400
+    from plans import claim_episode, limits_for
+    ok, msg = claim_episode(username, ref)
+    if not ok:
+        return jsonify({"error": msg, "code": "plan_limit", "plan": limits_for(username)}), 403
+    return jsonify({"ok": True, "plan": limits_for(username)})
