@@ -338,6 +338,7 @@ struct PrePodSettingsSection: View {
     @State private var ok = false
     @State private var confirmLogout = false
     @State private var showServers = false
+    @ObservedObject private var role = AccountRole.shared
 
     var body: some View {
         Section("Tu cuenta de thePod") {
@@ -360,6 +361,10 @@ struct PrePodSettingsSection: View {
                 }
             }
             .font(.caption)
+            if let plan = role.planSummary {
+                Label(plan, systemImage: Plan.isFree ? "gift" : "checkmark.seal")
+                    .font(.caption).foregroundStyle(Plan.isFree ? Theme.accent : Theme.good)
+            }
             Text("Es la misma cuenta de la web. La contraseña queda guardada en esta Mac, solo para tu usuario.")
                 .font(.caption).foregroundStyle(.secondary)
             DisclosureGroup("Servidores", isExpanded: $showServers) {

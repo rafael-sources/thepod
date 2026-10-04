@@ -60,7 +60,20 @@ final class AppModel: ObservableObject {
         importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
         importTask = Task {
             do {
+                // Plan Gratis: cada grabación nueva que se importa cuenta como un episodio
+                if PrePodClient.isConfigured, Plan.isFree {
+                    _ = await PrePodClient.shared.me()
+                    if Plan.episodesLeft == 0 {
+                        importJob = nil
+                        errorMessage = Plan.noEpisodesMessage
+                        return
+                    }
+                }
                 let project = try await runImport(urls)
+                if PrePodClient.isConfigured, Plan.isFree {
+                    _ = await PrePodClient.shared.claimEpisode("mac:\(project.id)")
+                    AccountRole.shared.refresh()
+                }
                 importJob = nil
                 reload()
                 open(project)

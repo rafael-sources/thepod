@@ -122,6 +122,7 @@ actor PrePodClient {
     }
 
     func resetSession() { loggedIn = false; cookies = [:]; adminCache = nil }
+    func resetAdminCache() { adminCache = nil }
 
     private var adminCache: Bool?
     /// Si la cuenta es administradora (prePod `/api/auth/me`). Ante cualquier duda, no.
@@ -134,11 +135,31 @@ actor PrePodClient {
 
     func isAdmin() async -> Bool {
         if let a = adminCache { return a }
+        guard let o = await me() else { return false }
+        return (o["is_admin"] as? Bool) ?? false
+    }
+
+    /// La cuenta: usuario, si es admin y su plan (también lo guarda en `Plan`).
+    func me() async -> [String: Any]? {
         guard let d = try? await send("GET", "/api/auth/me"),
-              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return false }
-        let a = (o["is_admin"] as? Bool) ?? false
-        adminCache = a
-        return a
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
+        adminCache = (o["is_admin"] as? Bool) ?? false
+        let plan = o["plan"] as? [String: Any]
+        await MainActor.run { Plan.update(plan) }
+        return o
+    }
+
+    /// Cuenta un episodio nuevo hecho en la Mac. nil si se pudo; el mensaje si el plan ya no tiene episodios.
+    func claimEpisode(_ ref: String) async -> String? {
+        do {
+            let d = try await send("POST", "/api/auth/plan/claim", json: ["ref": ref])
+            let plan = ((try? JSONSerialization.jsonObject(with: d)) as? [String: Any])?["plan"] as? [String: Any]
+            await MainActor.run { Plan.update(plan) }
+            return nil
+        } catch {
+            let msg = error.localizedDescription
+            return msg.hasPrefix("El plan") ? msg : nil      // sin conexión: no se bloquea
+        }
     }
 
     /// Crea (o encuentra) la sala de grabación de prodPod para un episodio. Devuelve el número de sesión.
@@ -244,6 +265,13 @@ actor PrePodClient {
 @MainActor final class AccountRole: ObservableObject {
     static let shared = AccountRole()
     @Published private(set) var isAdmin = false
-    func refresh() { Task { isAdmin = await PrePodClient.shared.isAdmin() } }
-    func clear() { isAdmin = false }
+    @Published private(set) var planSummary: String? = Plan.summary
+    func refresh() {
+        Task {
+            await PrePodClient.shared.resetAdminCache()
+            isAdmin = await PrePodClient.shared.isAdmin()
+            planSummary = Plan.summary
+        }
+    }
+    func clear() { isAdmin = false; Plan.clear(); planSummary = nil }
 }

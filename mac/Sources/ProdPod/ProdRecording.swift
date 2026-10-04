@@ -31,7 +31,8 @@ extension ProdStudio {
         do {
             let mbps = try await ProdPodClient.shared.uploadTest()
             uploadMbps = mbps
-            let q = RecordingQuality.decide(uploadMbps: mbps, cameraHeight: camHeight)
+            var q = RecordingQuality.decide(uploadMbps: mbps, cameraHeight: camHeight)
+            if let mh = session.limits?.max_height, q.height > mh { q = RecordingQuality(height: 720, bitrate: 2_500_000) }
             recMax = q
             recQuality = q
             preflight = "Tu grabación irá en \(q.label) · subida \(String(format: "%.1f", mbps)) Mbps"
@@ -201,7 +202,19 @@ extension ProdStudio {
 
     func beginRecordingNow() async {
         guard !recording else { return }
-        if isOwner && !practice { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/start") }
+        if isOwner && !practice {
+            do { _ = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/start") }
+            catch {
+                // Plan Gratis sin episodios: no se graba, y se avisa a los demás para que tampoco
+                if error.localizedDescription.hasPrefix("El plan") {
+                    send(["type": "recording_stop"])
+                    self.error = error.localizedDescription
+                    return
+                }
+            }
+        }
+        planWarned = false
+        planStopped = false
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("postPod/grabaciones")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -415,6 +428,19 @@ extension ProdStudio {
         guard recording else { return }
         let t = Date().timeIntervalSince(recordStart)
         recSeconds = Int(t)
+        // Plan Gratis: aviso un minuto antes y corte al llegar al máximo (lo detiene quien creó la sala)
+        if let maxS = session.limits?.max_record_seconds, maxS > 0, !practice {
+            let name = session.limits?.plan_name ?? "Gratis"
+            if !planWarned, t >= Double(maxS - 60) {
+                planWarned = true
+                flash("Queda 1 minuto: el plan \(name) graba hasta \(maxS / 60) minutos")
+            }
+            if isOwner, t >= Double(maxS), !planStopped {
+                planStopped = true
+                flash("Llegaste a los \(maxS / 60) minutos del plan \(name): la grabación se detuvo")
+                stopRecording()
+            }
+        }
         tickTeleprompter(t)
         for s in sponsors where !firedSponsors.contains(s.id) {
             let left = s.at - t

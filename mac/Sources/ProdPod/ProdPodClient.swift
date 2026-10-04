@@ -22,6 +22,16 @@ actor ProdPodClient {
         var created_at: String?
         var finished_at: String?
         var shared_project_id: String?
+        var limits: Limits?
+    }
+
+    /// Plan de quien creó la sala: cuánto puede durar la grabación y la resolución máxima (nil = sin límite).
+    struct Limits: Decodable, Hashable {
+        var plan: String?
+        var plan_name: String?
+        var max_record_seconds: Int?
+        var max_height: Int?
+        var episodes_left: Int?
     }
 
     struct Person: Decodable, Identifiable, Hashable {

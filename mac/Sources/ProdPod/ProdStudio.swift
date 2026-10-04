@@ -83,6 +83,8 @@ final class ProdStudio: NSObject, ObservableObject {
     // Grabación (etapa 2)
     @Published var preflight: String?                 // "Midiendo tu conexión…" / resultado
     @Published var uploadMbps: Double?
+    var planWarned = false              // plan Gratis: ya se avisó que queda un minuto
+    var planStopped = false             // plan Gratis: ya se cortó al llegar al máximo
     @Published var recMax = RecordingQuality(height: 1080, bitrate: 8_000_000)
     @Published var recQuality = RecordingQuality(height: 1080, bitrate: 8_000_000)
     @Published var ownReady = false

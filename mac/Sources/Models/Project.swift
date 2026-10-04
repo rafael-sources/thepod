@@ -603,9 +603,9 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     }
     var subtitle: String {
         switch self {
-        case .landscape: return "Horizontal 16:9 · 1080p"
-        case .vertical: return "Vertical 9:16 · 1080×1920"
-        case .square: return "Cuadrado 1:1 · 1080×1080"
+        case .landscape: return "Horizontal 16:9 · \(Int(renderSize.height))p" + planNote
+        case .vertical: return "Vertical 9:16 · \(Int(renderSize.width))×\(Int(renderSize.height))" + planNote
+        case .square: return "Cuadrado 1:1 · \(Int(renderSize.width))×\(Int(renderSize.height))" + planNote
         case .audio: return "Para Spotify, Apple Podcasts…"
         }
     }
@@ -617,11 +617,16 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
         case .audio: return "waveform"
         }
     }
+    /// Tamaño del video. Con el plan Gratis el lado corto es 720 (1280×720, 720×1280, 720×720).
+    private var planNote: String { (Plan.maxHeight ?? 1080) < 1080 ? " (plan \(Plan.name))" : "" }
+
     var renderSize: CGSize {
+        let short = CGFloat(min(1080, Plan.maxHeight ?? 1080))
+        let long = (short * 16 / 9 / 2).rounded() * 2
         switch self {
-        case .landscape: return CGSize(width: 1920, height: 1080)
-        case .vertical: return CGSize(width: 1080, height: 1920)
-        case .square: return CGSize(width: 1080, height: 1080)
+        case .landscape: return CGSize(width: long, height: short)
+        case .vertical: return CGSize(width: short, height: long)
+        case .square: return CGSize(width: short, height: short)
         case .audio: return CGSize(width: 16, height: 16)
         }
     }
