@@ -42,6 +42,10 @@ def create_app():
         data = request.get_json(silent=True) or {}
         username = (data.get("username") or "").strip().lower()
         password = data.get("password") or ""
+        if "@" in username:   # también se puede entrar con el correo
+            from shared_users import list_user_rows
+            username = next((r["username"] for r in list_user_rows()
+                             if (r.get("email") or "").strip().lower() == username), username)
         passwords = users_passwords()
         expected = passwords.get(username)
         if not expected or md5(password) != expected:
