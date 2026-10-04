@@ -239,6 +239,19 @@ struct PreHomeView: View {
                     }
                     .pickerStyle(.segmented).labelsHidden().frame(width: 230)
                     Spacer()
+                    if showCalendar {
+                        Button {
+                            Task {
+                                do {
+                                    if let url = try await PrePodClient.shared.saveDownload("/api/podcasts/\(model.slug)/calendar.ics",
+                                                                                            suggestedName: "\(model.slug)-grabaciones.ics") {
+                                        NSWorkspace.shared.open(url)      // lo abre Calendario y ofrece agregarlo
+                                    }
+                                } catch { model.error = error.localizedDescription }
+                            }
+                        } label: { Label("Agregar a mi calendario", systemImage: "calendar.badge.plus") }
+                        .help("Baja las grabaciones como archivo de calendario y lo abre en Calendario")
+                    }
                     if !showCalendar {
                         Toggle("Ver archivados", isOn: $model.showArchived).toggleStyle(.checkbox)
                             .foregroundStyle(Theme.secondary)

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 // Configuración del podcast en prePod: datos, branding, equipo, sponsors, soundboard y distribución.
@@ -96,6 +97,25 @@ extension PrePodClient {
     func deleteBranding(_ slug: String, kind: String) async throws { _ = try await send("DELETE", pc(slug) + "/branding/\(kind)") }
     /// Imágenes y audios de prePod (necesitan la sesión).
     func media(_ path: String) async throws -> Data { try await send("GET", path) }
+
+    /// Baja un archivo de prePod (calendario, reporte, exportación) y lo guarda donde la persona elija.
+    /// Devuelve dónde quedó, o nil si canceló.
+    @MainActor
+    func saveDownload(_ path: String, suggestedName: String) async throws -> URL? {
+        let data = try await send("GET", path)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedName
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        try data.write(to: url)
+        return url
+    }
+
+    /// Reporte de un sponsor: en qué episodios aparece y cuánto tiempo al aire.
+    func sponsorReport(_ slug: String, _ id: Int) async throws -> [String: Any] {
+        let d = try await send("GET", "/api/podcasts/\(slug)/sponsors/\(id)/report")
+        return (try JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
+    }
 
     // Equipo
     func hosts(_ slug: String) async throws -> PodcastHosts { try dec(PodcastHosts.self, await send("GET", pc(slug) + "/hosts")) }

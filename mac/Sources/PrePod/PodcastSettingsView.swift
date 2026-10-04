@@ -63,6 +63,7 @@ private func pickFile(_ types: [UTType], _ done: @escaping (URL) -> Void) {
 
 private struct GeneralTab: View {
     let slug: String
+    @State private var exporting = false
     @State private var cfg: PodcastConfig?
     @State private var error: String?
     @State private var saver = Debouncer()
@@ -79,6 +80,22 @@ private struct GeneralTab: View {
                     .scrollContentBackground(.hidden).padding(8)
                     .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
                     .frame(minHeight: 160)
+                Divider().padding(.vertical, 6)
+                Text("Copia del podcast").font(.headline)
+                Text("Un .zip con todo el podcast (datos, episodios, guiones, branding y sonidos) para guardarlo o pasarlo a otra cuenta.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Button {
+                    Task {
+                        do {
+                            exporting = true
+                            if let url = try await api.saveDownload("/api/podcasts/\(slug)/export-bundle", suggestedName: "\(slug).zip") {
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            }
+                        } catch { self.error = error.localizedDescription }
+                        exporting = false
+                    }
+                } label: { Label(exporting ? "Preparando…" : "Exportar podcast (.zip)", systemImage: "archivebox") }
+                .disabled(exporting)
             } else { ProgressView() }
         }
         .task { do { cfg = try await api.podcastConfig(slug) } catch { self.error = error.localizedDescription } }
@@ -318,6 +335,7 @@ private struct TeamTab: View {
 
 private struct SponsorsTab: View {
     let slug: String
+    @State private var reportFor: Sponsor2?
     @State private var items: [Sponsor2] = []
     @State private var logos: [Int: NSImage] = [:]
     @State private var newName = ""
@@ -356,6 +374,7 @@ private struct SponsorsTab: View {
                         HStack {
                             TextField("Link", text: $s.url).onChange(of: s.url) { _, v in save(s.id, ["url": v]) }
                             if let n = s.episodeCount { Text("\(n) episodios").font(.caption).foregroundStyle(Theme.secondary) }
+                            Button("Reporte") { reportFor = s }.controlSize(.small).help("En qué episodios aparece y cuánto tiempo al aire")
                             Button(role: .destructive) { remove(s.id) } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                         }
                     }
@@ -366,6 +385,7 @@ private struct SponsorsTab: View {
             if items.isEmpty { Text("Todavía no hay sponsors.").foregroundStyle(Theme.secondary) }
         }
         .task { await load() }
+        .sheet(item: $reportFor) { s in SponsorReportSheet(slug: slug, sponsor: s) { reportFor = nil } }
     }
 
     private func load() async {
@@ -562,5 +582,77 @@ private struct PlatformCard: View {
             do { try await api.setDistribution(slug, platform: platform.platform, status: platform.status, url: platform.externalUrl ?? ""); reload() }
             catch { self.error = error.localizedDescription }
         }
+    }
+}
+
+
+/// Reporte para el sponsor: en qué episodios salió (o va a salir), cuántas menciones y minutos al aire.
+/// Igual que en prePod web; se guarda como .csv para mandárselo.
+private struct SponsorReportSheet: View {
+    let slug: String
+    let sponsor: Sponsor2
+    let onClose: () -> Void
+    @State private var report: [String: Any]?
+    @State private var error: String?
+
+    private var totals: [String: Any] { report?["totals"] as? [String: Any] ?? [:] }
+    private var rows: [[String: Any]] { report?["episodes"] as? [[String: Any]] ?? [] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Reporte de \(sponsor.name)").font(.title2.bold())
+            ErrorLine(text: error)
+            if report == nil && error == nil { ProgressView() }
+            if report != nil {
+                HStack(spacing: 22) {
+                    stat("\(totals["episodes"] as? Int ?? 0)", "episodios")
+                    stat("\(totals["blocks"] as? Int ?? 0)", "menciones")
+                    stat(String(format: "%.1f", (totals["duration_minutes_estimated"] as? Double) ?? 0), "minutos al aire (aprox.)")
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+                            HStack {
+                                Text((r["episode_number"] as? Int).map { "#\($0)" } ?? "").frame(width: 40, alignment: .leading)
+                                    .foregroundStyle(Theme.secondary)
+                                Text(r["title"] as? String ?? "").lineLimit(1)
+                                Spacer()
+                                Text(r["scheduled_date"] as? String ?? "").font(.caption).foregroundStyle(Theme.secondary)
+                                Text(statusName(r["status"] as? String)).font(.caption).foregroundStyle(Theme.secondary).frame(width: 90, alignment: .trailing)
+                            }
+                            .font(.callout)
+                        }
+                        if rows.isEmpty { Text("Todavía no aparece en ningún episodio.").foregroundStyle(Theme.secondary) }
+                    }
+                }
+                .frame(maxHeight: 320)
+            }
+            HStack {
+                Button("Guardar .csv") {
+                    Task {
+                        do { _ = try await api.saveDownload("/api/podcasts/\(slug)/sponsors/\(sponsor.id)/report.csv",
+                                                            suggestedName: "reporte-\(sponsor.name).csv") }
+                        catch { self.error = error.localizedDescription }
+                    }
+                }
+                .disabled(report == nil)
+                Spacer()
+                Button("Cerrar", action: onClose).keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 620)
+        .task { do { report = try await api.sponsorReport(slug, sponsor.id) } catch { self.error = error.localizedDescription } }
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.system(size: 26, weight: .bold, design: .rounded))
+            Text(label).font(.caption).foregroundStyle(Theme.secondary)
+        }
+    }
+    private func statusName(_ s: String?) -> String {
+        ["idea": "Idea", "planned": "Planificado", "scheduled": "Agendado", "recorded": "Grabado",
+         "editing": "En edición", "published": "Publicado", "archived": "Archivado"][s ?? ""] ?? (s ?? "")
     }
 }

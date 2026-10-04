@@ -458,6 +458,16 @@ struct LandingTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Aquí van los datos básicos de tu página. El diseño completo (secciones, colores, orden) se edita en la web.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Spacer()
+                Button {
+                    let base = PrePodClient.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+                    if let u = URL(string: base + "/") { NSWorkspace.shared.open(u) }
+                } label: { Label("Abrir el editor completo", systemImage: "safari") }
+                .controlSize(.small)
+            }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if cfg != nil {
                 HStack {
