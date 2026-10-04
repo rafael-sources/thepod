@@ -57,7 +57,7 @@ def _variants() -> dict:
     if v.get("web") and v.get("mac") or not c.get("api_key"):
         return v
     try:
-        data = _api("GET", f"/variants?filter[status]=published&page[size]=50").get("data") or []
+        data = _api("GET", f"/variants?page[size]=50").get("data") or []
         prods = {p["id"]: (p["attributes"].get("name") or "").lower()
                  for p in (_api("GET", f"/products?filter[store_id]={c.get('store_id')}").get("data") or [])}
         found = {}
