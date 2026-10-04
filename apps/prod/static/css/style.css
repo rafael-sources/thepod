@@ -2622,3 +2622,28 @@ a.mark:hover { opacity: 0.8; }
 .upload-overlay .primary { margin-top: 18px; padding: 14px 48px; font-size: 17px; }
 .upload-heads-up { font-size: 12.5px; line-height: 1.45; color: var(--paper-dim); background: rgba(255,255,255,0.05);
   border: 1px solid var(--ink-line); border-radius: 8px; padding: 10px 12px; margin: 12px 0; text-align: left; }
+
+/* Fin de grabación: cuenta regresiva grande y estado de subida en cada cuadro */
+.end-countdown {
+  position: fixed; inset: 0; z-index: 960; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(10, 8, 6, 0.72); text-align: center; padding: 24px;
+}
+.end-countdown-title { font-size: clamp(26px, 5vw, 40px); font-weight: 800; color: var(--paper); }
+.end-countdown-sub { font-size: clamp(16px, 3vw, 20px); color: var(--paper-dim); margin-top: 8px; }
+.end-countdown-num { font-size: clamp(96px, 22vw, 180px); font-weight: 800; line-height: 1; color: var(--signal); margin-top: 14px;
+  font-family: var(--font-mono); animation: end-pulse 1s ease-in-out infinite; }
+@keyframes end-pulse { 0% { transform: scale(1.15); opacity: 0.6; } 40% { transform: scale(1); opacity: 1; } 100% { opacity: 1; } }
+.tile-upload {
+  position: absolute; inset: 0; z-index: 5; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 10px;
+}
+.tile-upload .tu-main { font-size: 18px; font-weight: 700; color: var(--paper); }
+.tile-upload .tu-sub { font-size: 13px; color: var(--paper-dim); margin-top: 4px; }
+.tile-upload .tu-ok { font-size: 20px; font-weight: 800; color: var(--signal-cool); }
+.tile-upload .tu-bad { font-size: 18px; font-weight: 700; color: #f66; }
+/* El aviso grande del anfitrión deja ver los cuadros con el progreso de cada uno */
+.upload-overlay { inset: auto; top: 72px; left: 50%; right: auto; bottom: auto; transform: translateX(-50%);
+  width: min(560px, 92vw); background: rgba(20, 16, 12, 0.96); border: 2px solid var(--signal-cool);
+  border-radius: 14px; padding: 18px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); backdrop-filter: none; }
+.upload-overlay .upload-overlay-icon { font-size: 40px; margin-bottom: 6px; }

@@ -892,7 +892,7 @@ function createChunkUploader(opts) {
       _ackBatch(batch);
       if (state.state !== "finalizing") state.state = "streaming";
       emit();
-      if (opts.sendData) opts.sendData("streaming", ackedBytes);
+      if (opts.sendData) opts.sendData("streaming", ackedBytes, pendingBytes, state.etaSeconds);
       return true;
     } catch (e) {
       retries++;
@@ -967,7 +967,7 @@ function createChunkUploader(opts) {
     }
     state.state = "done";
     emit();
-    if (opts.sendData) opts.sendData("done", ackedBytes);
+    if (opts.sendData) opts.sendData("done", ackedBytes, 0, 0);
     return true;
   }
 
@@ -1276,6 +1276,28 @@ var StudioView = {
     var layoutMode = ref("grid");   // "grid" | "spotlight"
     var spotlightId = ref(null);    // identity of the spotlighted participant (or "__local__")
 
+
+    // Al detener: cuenta regresiva grande (3, 2, 1) antes de apagar cámara y
+    // micrófono, en vez de cortarlos de golpe. La grabación ya se detuvo en
+    // el instante exacto del "detener"; esto es solo la transición visual.
+    var endCountdown = ref(null);
+    var camsOffAfterRec = ref(false);
+    function startEndCountdown() {
+      if (endCountdown.value !== null || camsOffAfterRec.value) return;
+      endCountdown.value = 3;
+      var t = setInterval(function () {
+        endCountdown.value -= 1;
+        if (endCountdown.value <= 0) {
+          clearInterval(t);
+          endCountdown.value = null;
+          camsOffAfterRec.value = true;
+          if (room) {
+            try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
+            try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+          }
+        }
+      }, 1000);
+    }
     // ---- Director signals (host receives these) ----
     var activeOverlays = reactive([]);
     var cintilloOverlays = computed(function () {
@@ -2136,7 +2158,7 @@ var StudioView = {
           scrollChatBottom();
         }
       } else if (msg.type === "upload_status") {
-        participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0 };
+        participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0, pending: msg.pending || 0, eta: msg.eta == null ? null : msg.eta };
       } else if (msg.type === "ready_toggle") {
         readyMap[msg.identity] = !!msg.ready;
         if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
@@ -2147,10 +2169,7 @@ var StudioView = {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
         finishRecording();
-        if (room) {
-          try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
-          try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
-        }
+        startEndCountdown();
       } else if (msg.type === "hand_raise") {
         handsRaised[msg.identity] = !!msg.up;
         if (msg.up && window.toast) {
@@ -2734,8 +2753,8 @@ var StudioView = {
               hostUploadStatus.error = st.error;
             }
           },
-          sendData: function (stt, bytes) {
-            sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes });
+          sendData: function (stt, bytes, pending, eta) {
+            sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes, pending: pending || 0, eta: eta == null ? null : eta });
           },
         });
         recorder = _startRecorder(localStream, function () {}, 1000, false, function (data) {
@@ -2821,6 +2840,7 @@ var StudioView = {
         }
         sendData({ type: "recording_stop" });
         finishRecording();
+        startEndCountdown();
       } catch (e) { error.value = e.message; }
     }
 
@@ -3051,7 +3071,7 @@ var StudioView = {
       applyMicCheckGain: applyMicCheckGain, resetMicCheckGain: resetMicCheckGain,
       practiceMode: practiceMode, markChapter: markChapter,
       recPreflight: recPreflight, recProfileChoices: recProfileChoices,
-      recProfile: recProfile, hostPendingMB: hostPendingMB, hostEta: hostEta, etaText: etaText, hostDoneSeen: hostDoneSeen,
+      recProfile: recProfile, hostPendingMB: hostPendingMB, hostEta: hostEta, etaText: etaText, hostDoneSeen: hostDoneSeen, endCountdown: endCountdown, camsOffAfterRec: camsOffAfterRec,
       handsRaised: handsRaised, ownHandUp: ownHandUp, toggleHand: toggleHand,
       screenSharing: screenSharing, screenRecordOnly: screenRecordOnly, remoteScreen: remoteScreen,
       askStartScreenShare: askStartScreenShare, stopScreenShare: stopScreenShare,
@@ -3136,6 +3156,11 @@ var StudioView = {
 
       <div v-if="hostUploadStatus.state === 'streaming'" class="upload-banner" style="background:var(--bg-2);border-bottom:2px solid var(--accent);padding:6px 16px;text-align:center;font-size:12px;">
         Subiendo en tiempo real · {{ (hostStreamedBytes / (1024*1024)).toFixed(1) }} MB enviados<span v-if="hostPendingMB > 0.5"> · falta {{ hostPendingMB.toFixed(1) }} MB</span>
+      </div>
+      <div v-if="endCountdown !== null" class="end-countdown">
+        <div class="end-countdown-title">La grabación terminó</div>
+        <div class="end-countdown-sub">Apagamos cámara y micrófono en</div>
+        <div class="end-countdown-num">{{ endCountdown }}</div>
       </div>
       <div v-if="hostUploadStatus.state === 'finalizing'" class="upload-overlay">
         <div class="upload-overlay-box">
@@ -3369,6 +3394,15 @@ ${TP_TEMPLATE}
             </div>
             <div v-if="localMuted" class="muted-icon">🔇</div>
             <div class="vu" :style="'--vu:' + localMeter"></div>
+            <div v-if="camsOffAfterRec" class="tile-upload">
+              <template v-if="hostUploadStatus.state === 'done'"><div class="tu-ok">✓ Listo</div><div class="tu-sub">Grabación completa</div></template>
+              <template v-else-if="hostUploadStatus.state === 'error'"><div class="tu-bad">✕ Error al subir</div></template>
+              <template v-else-if="hostUploadStatus.state === 'idle'"><div class="tu-sub">Sin grabación</div></template>
+              <template v-else>
+                <div class="tu-main">Subiendo…</div>
+                <div class="tu-sub">{{ hostPendingMB > 0.05 ? "Faltan " + hostPendingMB.toFixed(0) + " MB" : "Casi listo" }}<span v-if="hostEta && hostPendingMB > 0.05"> · {{ etaText(hostEta) }}</span></div>
+              </template>
+            </div>
           </div>
 
           <div v-for="p in participants.filter(pp => pp.username !== user.username && pp.status === 'connected' && pp.role !== 'director')"
@@ -3385,6 +3419,15 @@ ${TP_TEMPLATE}
               <span v-if="readyMap['participant_' + p.id] && !recording" class="role-chip" style="background: var(--signal); color:#fff;">LISTO</span>
             </div>
             <div class="vu" :style="'--vu:' + ((remoteMap['participant_' + p.id] && remoteMap['participant_' + p.id].meter) || 0)"></div>
+            <div v-if="camsOffAfterRec" class="tile-upload">
+              <template v-if="!participantUploads['participant_' + p.id]"><div class="tu-sub">Esperando estado de subida…</div></template>
+              <template v-else-if="participantUploads['participant_' + p.id].state === 'done'"><div class="tu-ok">✓ Listo</div><div class="tu-sub">Grabación completa</div></template>
+              <template v-else-if="participantUploads['participant_' + p.id].state === 'error'"><div class="tu-bad">✕ Error al subir</div></template>
+              <template v-else>
+                <div class="tu-main">Subiendo…</div>
+                <div class="tu-sub">{{ participantUploads['participant_' + p.id].pending > 50000 ? "Faltan " + (participantUploads['participant_' + p.id].pending / 1048576).toFixed(0) + " MB" : "Casi listo" }}<span v-if="participantUploads['participant_' + p.id].eta"> · {{ etaText(participantUploads['participant_' + p.id].eta) }}</span></div>
+              </template>
+            </div>
           </div>
 
           <div v-for="p in participants.filter(pp => pp.status === 'invited')"
@@ -3983,6 +4026,28 @@ var GuestStudioView = {
     var countdown = ref(null);
     var countdownHandle = null;
 
+
+    // Al detener: cuenta regresiva grande (3, 2, 1) antes de apagar cámara y
+    // micrófono, en vez de cortarlos de golpe. La grabación ya se detuvo en
+    // el instante exacto del "detener"; esto es solo la transición visual.
+    var endCountdown = ref(null);
+    var camsOffAfterRec = ref(false);
+    function startEndCountdown() {
+      if (endCountdown.value !== null || camsOffAfterRec.value) return;
+      endCountdown.value = 3;
+      var t = setInterval(function () {
+        endCountdown.value -= 1;
+        if (endCountdown.value <= 0) {
+          clearInterval(t);
+          endCountdown.value = null;
+          camsOffAfterRec.value = true;
+          if (room) {
+            try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
+            try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
+          }
+        }
+      }, 1000);
+    }
     // Director state
     var activeOverlays = reactive([]);
     var cintilloOverlays = computed(function () {
@@ -4080,10 +4145,7 @@ var GuestStudioView = {
         beginCountdown(msg.start_at_ms);
       } else if (msg.type === "recording_stop") {
         finishRecording();
-        if (room) {
-          try { room.localParticipant.setCameraEnabled(false); } catch (_) {}
-          try { room.localParticipant.setMicrophoneEnabled(false); } catch (_) {}
-        }
+        startEndCountdown();
       } else if (msg.type === "practice_mode") {
         practiceMode.value = !!msg.active;
       } else if (msg.type === "kick" && room && room.localParticipant &&
@@ -4291,8 +4353,8 @@ var GuestStudioView = {
             uploadStatus.error = st.error;
           }
         },
-        sendData: function (stt, bytes) {
-          sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes });
+        sendData: function (stt, bytes, pending, eta) {
+          sendData({ type: "upload_status", identity: myIdentity.value, state: stt, bytes: bytes, pending: pending || 0, eta: eta == null ? null : eta });
         },
       });
       _uploader.setExt(ext);
@@ -4546,7 +4608,7 @@ var GuestStudioView = {
              connect: connect, connectStep: connectStep, toggleMute: toggleMute, toggleCam: toggleCam, gateOn: gateOn, toggleGate: toggleGate, leave: leave, initials: initials,
              countdown: countdown, myIdentity: myIdentity, practiceMode: practiceMode,
              preflightVideoEl: preflightVideoEl, recPreflight: recPreflight,
-             recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB, guestEta: guestEta, etaText: etaText,
+             recProfileChoices: recProfileChoices, recProfileG: recProfileG, pendingMB: pendingMB, guestEta: guestEta, etaText: etaText, endCountdown: endCountdown, camsOffAfterRec: camsOffAfterRec,
              uploadStatus: uploadStatus, recordingCaps: recordingCaps, streamedBytes: streamedBytes, chunkRetries: _chunkRetries,
              postRecording: postRecording,
              activeOverlays: activeOverlays, cintilloOverlays: cintilloOverlays, otherOverlays: otherOverlays,
@@ -4558,6 +4620,11 @@ var GuestStudioView = {
   },
   template: `
     <div class="studio guest-studio" :class="{ 'is-connected': connected, 'chat-open': chatOpen }">
+      <div v-if="endCountdown !== null" class="end-countdown">
+        <div class="end-countdown-title">La grabación terminó</div>
+        <div class="end-countdown-sub">Apagamos cámara y micrófono en</div>
+        <div class="end-countdown-num">{{ endCountdown }}</div>
+      </div>
       <!-- Terminó: gracias -->
       <div v-if="left" class="guest-end">
         <div class="guest-end-icon">{{ error ? "✕" : "✓" }}</div>
@@ -5268,7 +5335,7 @@ var DirectorView = {
             loadParticipants();
           }
           if (msg.type === "upload_status") {
-            participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0 };
+            participantUploads[msg.identity] = { state: msg.state, bytes: msg.bytes || 0, pending: msg.pending || 0, eta: msg.eta == null ? null : msg.eta };
           }
           if (msg.type === "director_chat" && msg.text) {
             directorChat.value.push({ id: msg.id, author: msg.author, text: msg.text });
