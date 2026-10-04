@@ -57,6 +57,8 @@ actor ProdPodClient {
     }()
     private var cookies: [String: String] = [:]
     private var loggedIn = false
+    /// Olvida la sesión (al cerrar sesión o cambiar de cuenta).
+    func resetSession() { loggedIn = false; cookies = [:]; }
 
     private func send(_ method: String, _ path: String, json: [String: Any]? = nil, retry: Bool = true) async throws -> Data {
         if !loggedIn && path != "/api/auth/login" { try await login() }

@@ -336,37 +336,87 @@ struct PrePodSettingsSection: View {
     @State private var password = Keychain.get("prepod-password") ?? ""
     @State private var result: String?
     @State private var ok = false
+    @State private var confirmLogout = false
+    @State private var showServers = false
 
     var body: some View {
-        Section("Tu cuenta de prePod / postPod") {
-            TextField("Dirección de prePod", text: $url)
-            TextField("Dirección de postPod", text: $postURL)
-            TextField("Usuario", text: $user)
+        Section("Tu cuenta de thePod") {
+            TextField("Usuario o correo", text: $user)
             SecureField("Contraseña", text: $password)
             HStack {
-                Button("Guardar y probar") {
-                    PrePodClient.baseURL = url
-                    PostPodWebClient.baseURL = postURL
-                    PrePodClient.username = user
-                    Keychain.set(password, for: "prepod-password")
-                    Task {
-                        await PrePodClient.shared.resetSession()
-                        await PostPodWebClient.shared.resetSession()
-                        do {
-                            let list = try await PrePodClient.shared.podcasts()
-                            let web = try await PostPodWebClient.shared.projects()
-                            ok = true
-                            result = "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod"
-                        } catch {
-                            ok = false
-                            result = error.localizedDescription
-                        }
-                    }
-                }
+                Button("Guardar y probar") { saveAndTest() }
                 if let result { Text(result).font(.caption).foregroundStyle(ok ? Theme.good : .orange) }
             }
-            Text("La contraseña queda guardada en esta Mac, solo para tu usuario.").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Button("¿Olvidaste tu contraseña?") {
+                    let base = url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    if let u = URL(string: base + "/?olvide=1") { NSWorkspace.shared.open(u) }
+                }
+                .buttonStyle(.link)
+                Button("Privacidad") { Links.open("/privacidad") }.buttonStyle(.link)
+                Spacer()
+                if !PrePodClient.username.isEmpty {
+                    Button("Cerrar sesión", role: .destructive) { confirmLogout = true }
+                }
+            }
+            .font(.caption)
+            Text("Es la misma cuenta de la web. La contraseña queda guardada en esta Mac, solo para tu usuario.")
+                .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup("Servidores", isExpanded: $showServers) {
+                TextField("Dirección de prePod", text: $url)
+                TextField("Dirección de postPod", text: $postURL)
+            }
+            .font(.caption)
         }
+        .confirmationDialog("¿Cerrar sesión en esta Mac?", isPresented: $confirmLogout) {
+            Button("Cerrar sesión", role: .destructive) { logout() }
+        } message: {
+            Text("Tus episodios en esta Mac no se tocan. Para grabar, traer o publicar vas a tener que entrar de nuevo.")
+        }
+    }
+
+    private func saveAndTest() {
+        PrePodClient.baseURL = url
+        PostPodWebClient.baseURL = postURL
+        PrePodClient.username = user.trimmingCharacters(in: .whitespaces)
+        Keychain.set(password, for: "prepod-password")
+        Task {
+            await resetAll()
+            do {
+                let list = try await PrePodClient.shared.podcasts()
+                // Si entró con el correo, se guarda su usuario (salas y permisos se reconocen por usuario)
+                if let canonical = await PrePodClient.shared.canonicalUsername(), canonical != PrePodClient.username {
+                    PrePodClient.username = canonical
+                    user = canonical
+                    await resetAll()
+                }
+                let web = try await PostPodWebClient.shared.projects()
+                AccountRole.shared.refresh()
+                ok = true
+                result = "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod"
+            } catch {
+                ok = false
+                result = error.localizedDescription
+            }
+        }
+    }
+
+    private func logout() {
+        PrePodClient.username = ""
+        Keychain.set(nil, for: "prepod-password")
+        user = ""
+        password = ""
+        ok = true
+        result = "Sesión cerrada en esta Mac."
+        AccountRole.shared.clear()
+        Task { await resetAll() }
+    }
+
+    private func resetAll() async {
+        await PrePodClient.shared.resetSession()
+        await PostPodWebClient.shared.resetSession()
+        await ProdPodClient.shared.resetSession()
+        await AmaClient.shared.resetSession()
     }
 }
 

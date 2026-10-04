@@ -30,6 +30,13 @@ struct PostPodApp: App {
                 Divider()
                 OpenProbeButton()
             }
+            CommandGroup(replacing: .help) {
+                Button("Manual de thePod") { Links.open("/docs/postpodapp") }
+                Button("Preguntas frecuentes") { Links.open("/docs/postpodapp/faq") }
+                Divider()
+                Button("Privacidad") { Links.open("/privacidad") }
+                Button("Escribirnos…") { NSWorkspace.shared.open(URL(string: "mailto:thepod@castmedia.space")!) }
+            }
         }
 
         Window("Prueba de sala", id: "prueba-sala") {
@@ -122,4 +129,13 @@ struct OpenProbeButton: View {
     var body: some View {
         Button("Prueba de sala…") { openWindow(id: "prueba-sala") }
     }
+}
+
+
+/// Páginas de thePod en la web (manual, privacidad), con la misma dirección que usan las actualizaciones.
+@MainActor enum Links {
+    static func url(_ path: String) -> URL? {
+        URL(string: Updater.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)
+    }
+    static func open(_ path: String) { if let u = url(path) { NSWorkspace.shared.open(u) } }
 }

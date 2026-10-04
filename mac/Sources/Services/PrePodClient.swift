@@ -125,6 +125,13 @@ actor PrePodClient {
 
     private var adminCache: Bool?
     /// Si la cuenta es administradora (prePod `/api/auth/me`). Ante cualquier duda, no.
+    /// El usuario de verdad de la cuenta (si se entró con el correo, devuelve el usuario).
+    func canonicalUsername() async -> String? {
+        guard let d = try? await send("GET", "/api/auth/me"),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
+        return o["username"] as? String
+    }
+
     func isAdmin() async -> Bool {
         if let a = adminCache { return a }
         guard let d = try? await send("GET", "/api/auth/me"),
@@ -238,4 +245,5 @@ actor PrePodClient {
     static let shared = AccountRole()
     @Published private(set) var isAdmin = false
     func refresh() { Task { isAdmin = await PrePodClient.shared.isAdmin() } }
+    func clear() { isAdmin = false }
 }

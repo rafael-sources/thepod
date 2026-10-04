@@ -68,6 +68,8 @@ actor AmaClient {
     }()
     private var cookies: [String: String] = [:]
     private var loggedIn = false
+    /// Olvida la sesión (al cerrar sesión o cambiar de cuenta).
+    func resetSession() { loggedIn = false; cookies = [:]; wsURL = nil; }
     private var wsURL: String?
 
     private func send(_ method: String, _ path: String, json: Any? = nil, retry: Bool = true) async throws -> Data {
