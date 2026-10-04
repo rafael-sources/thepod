@@ -164,6 +164,12 @@ def create_app():
             username=session.get("username"),
         )
 
+    @app.get("/privacidad")
+    def privacidad():
+        return render_template("privacidad.html", username=session.get("username"),
+                               app_key=None, app_cfg=None, section=None, section_labels=None,
+                               prev_section=None, next_section=None, app_urls={})
+
     # ----- Descargas (solo con sesión) -----
     # El .dmg y su ficha viven fuera del repo: ~/.podpod/downloads/thePod.dmg y thePod.json
     # (o "downloads_dir" en ~/.podpod/config.json). scripts/publish-thepod-mac.sh los deja ahí.
