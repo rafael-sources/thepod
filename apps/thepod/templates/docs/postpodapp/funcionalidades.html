@@ -119,7 +119,7 @@
 <li><strong>Diseños</strong>: Quien habla (pantalla completa para quien habla; con «marco de estudio» opcional), Lado a lado, Cuadrícula (con quien habla en grande), Protagonista, Ventanita (con «en grande quien habla»), Arriba y abajo (sin estirar), Estudio. Quién habla sale del análisis de sonido (0,3 s de suavizado, 1 s mínimo).</li>
 <li><strong>Orden en pantalla</strong>: flechas, o «Posición 1/2/…» en el panel de la pista.</li>
 <li><strong>Espejo</strong> por persona.</li>
-<li><strong>Fondo virtual por persona</strong>: se quita el fondo real y detrás va Difuminado (con control), el Fondo del podcast, un Color o una Imagen propia. Lo hace Apple Vision en la Mac. Vista previa con separación rápida, export con la fina (unos 9 s por cada 10 s de video con dos personas). Se tapan huecos chicos (audífonos, manos), borde suave y la máscara se mezcla con el cuadro anterior para que no tiemble.</li>
+<li><strong>Fondo virtual por persona</strong>: se quita el fondo real y detrás va Difuminado (con control), el Fondo del podcast, un Color o una Imagen propia. Lo hace Apple Vision en la Mac. Vista previa con separación rápida, export con la fina (unos 9 s por cada 10 s de video con dos personas). Se tapan huecos chicos (audífonos, manos) y el borde es suave; donde la persona está quieta el borde no tiembla y cuando se mueve no deja estela. Con «Fondo del podcast» la persona queda recortada sobre el mismo fondo que rodea los recuadros, sin costura.</li>
 <li><strong>Color</strong>: Original, Cálido, Frío, Cine, B/N, Vivo, e «Igualar el color de las cámaras» (toma de referencia a quien está primero).</li>
 <li><strong>Marca del podcast</strong>: fondo, logo (esquina superior derecha), nombres. Vienen de prePod; si no, se eligen a mano.</li>
 <li><strong>Intro y cierre</strong>: una imagen fija de 1 a 15 s, con música opcional y fundido. La música y los efectos del episodio nunca suenan dentro del intro ni del cierre.</li>
@@ -130,7 +130,7 @@
 <li><strong>Textos</strong> en 3 estilos: Título (letras grandes con contorno), Caja (sobre fondo oscuro), Etiqueta (fondo de color). Siete colores.</li>
 <li><strong>Imágenes</strong>: PNG con transparencia, JPG, HEIC, GIF (cuadro fijo).</li>
 <li><strong>Stickers</strong>: 14 emojis a un clic, o cualquiera pegándolo.</li>
-<li>Se mueven con el ratón sobre la vista previa (arrastrar; la esquina cambia el tamaño), más 9 posiciones rápidas y tamaño. Van encima del video y los cintillos y debajo de los subtítulos. Si se corta el trozo donde empieza una capa, sale en lo siguiente que quede.</li>
+<li>Se mueven con el ratón sobre la vista previa (arrastrar; la esquina cambia el tamaño), más 9 posiciones rápidas y tamaño. Van encima del video y los cintillos y debajo de los subtítulos. En los reels (9:16) y en cuadrado, lo que pone la app sola (subtítulos, sponsors, b-roll en ventanita, cintillos, nombres) se corre para no tapar tus capas, el logo ni lo demás; lo que pusiste a mano no se mueve. Si se corta el trozo donde empieza una capa, sale en lo siguiente que quede.</li>
 <li><strong>B-roll</strong>: un video o una foto que tapa la pantalla unos segundos mientras la voz sigue. Toda la pantalla, o <strong>ventanita</strong> abajo a la izquierda o a la derecha (con marco, entra creciendo; toma la forma del video, no lo recorta). Se elige desde qué segundo del video empieza, si llena la pantalla o va entero con bordes, y si suena o va mudo. Tope de 10 s. Los videos grabados en vertical con teléfono se ven derechos.</li>
 </ul>
 <h3>4.3 Música y efectos</h3>
@@ -154,7 +154,7 @@
 <ul>
 <li><strong>Ondas</strong>: forma de onda real por persona, del análisis de sonido (se hace también con una sola persona).</li>
 <li><strong>Solo / Mudo</strong> por persona (S y M en el timeline; también en el panel). Valen en la vista previa y en el export; la pista muda se ve gris.</li>
-<li><strong>Medidor</strong> por persona, corriendo al reproducir. Es el nivel del análisis con el volumen de la pista: muestra quién suena y cuánto; no es una medición de la salida.</li>
+<li><strong>Medidor</strong> por persona: al reproducir muestra lo que realmente suena de esa persona, con su volumen, fades, silenciar a quien no habla, línea de volumen y pitidos. En pausa es una estimación.</li>
 <li><strong>Volumen dibujado</strong>: la línea amarilla. Doble clic sobre una persona agrega un punto; arrastrar arriba o abajo (−60 a +12 dB, de a 1 dB, el valor se ve arriba mientras arrastras) y a los lados; clic lo elige, Suprimir lo quita; ⌘Z deshace. Entre puntos el volumen cambia de a poco. Se mezcla con lo automático (fades, silenciar a quien no habla, pitidos): lo tuyo manda.</li>
 <li><strong>Trozos de una sola persona</strong>: al arrastrar sobre una persona, «Silenciar solo a X» (tose, un golpe) y «−6 dB a X» (gritó) ponen cuatro puntos en su línea; el video no se acorta y las demás siguen. «Cortar de todos» es el corte de siempre.</li>
 <li><strong>Voz</strong>: ecualizador de tres bandas con presets, Voz pareja (compresor suave: lo bajo sube, lo alto no pega) y Menos siseo (de-esser), por persona, con «Aplicar».</li>
