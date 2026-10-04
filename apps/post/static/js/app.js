@@ -4028,7 +4028,7 @@ var AiPanel = {
         <button v-if="!notes && !activeJob" class="ai-btn ai-btn-primary" @click="startAnalysis" :disabled="loading">
           {{ loading ? 'Iniciando...' : 'Analizar episodio' }}
         </button>
-        <button v-if="notes" class="ai-btn" @click="regenNotes">Regenerar notas</button>
+        <span v-if="notes" class="ai-once" style="font-size:11px;opacity:.7;">Se generan una sola vez por episodio · puedes editarlas a mano</span>
       </h3>
 
       <div v-if="activeJob && ['pending','running'].includes(activeJob.status)" class="ai-status">
@@ -4049,7 +4049,7 @@ var AiPanel = {
         <h3 style="margin-top:1rem;">
           Clips sugeridos
           <button class="ai-btn" @click="createAll">Crear todos</button>
-          <button class="ai-btn" @click="regenClips">Regenerar</button>
+
         </h3>
         <div class="ai-clips-grid">
           <div class="ai-clip-card" v-for="clip in clips" :key="clip.start+clip.end">

@@ -227,11 +227,19 @@ def _detect_language(slug: str) -> str | None:
     return None
 
 
-def _start_analysis(slug: str, analysis_type: str) -> dict:
-    """Create a pending ai_analysis row, spawn a daemon thread, return serialized job."""
+ONCE_MSG = ("Este episodio ya tiene sus notas y momentos de la IA. Se generan una sola vez por episodio; "
+            "puedes editarlos a mano.")
+
+
+def _start_analysis(slug: str, analysis_type: str) -> dict | None:
+    """Create a pending ai_analysis row, spawn a daemon thread, return serialized job.
+    Devuelve None si el episodio ya tiene un análisis hecho o en curso (la IA corre una sola vez
+    por episodio para ahorrar; si falló, se puede reintentar)."""
     db = get_db(slug)
     try:
         _ensure_ai_table(db)
+        if db.execute("SELECT 1 FROM ai_analysis WHERE status IN ('done','pending','running') LIMIT 1").fetchone():
+            return None
         cur = db.execute(
             "INSERT INTO ai_analysis (type, status) VALUES (?, 'pending')",
             (analysis_type,),
@@ -262,6 +270,8 @@ def _start_analysis(slug: str, analysis_type: str) -> dict:
 def analyze_episode(slug):
     """Trigger full AI analysis (notes + clips)."""
     job = _start_analysis(slug, "full")
+    if job is None:
+        return jsonify({"error": ONCE_MSG, "code": "ai_once"}), 409
     return jsonify(job), 201
 
 
@@ -270,6 +280,8 @@ def analyze_episode(slug):
 def regenerate_notes(slug):
     """Trigger notes-only AI analysis."""
     job = _start_analysis(slug, "notes")
+    if job is None:
+        return jsonify({"error": ONCE_MSG, "code": "ai_once"}), 409
     return jsonify(job), 201
 
 
@@ -278,6 +290,8 @@ def regenerate_notes(slug):
 def regenerate_clips(slug):
     """Trigger clips-only AI analysis."""
     job = _start_analysis(slug, "clips")
+    if job is None:
+        return jsonify({"error": ONCE_MSG, "code": "ai_once"}), 409
     return jsonify(job), 201
 
 
@@ -351,3 +365,83 @@ def get_show_notes(slug):
         "generated_at": row["created_at"],
         "model": row["model"],
     })
+
+
+# ---------------------------------------------------------------------------
+# App de Mac: notas y momentos de un episodio que vive en la Mac
+# ---------------------------------------------------------------------------
+# La app manda la transcripción (con [MM:SS] y quién habla) y un identificador del episodio
+# («mac:<id del proyecto>»). Se analiza UNA sola vez por episodio y cuenta: si se vuelve a
+# pedir, se devuelve lo que ya se generó (no se gasta de nuevo). Si falló, se puede reintentar.
+
+import re as _re
+import sqlite3 as _sqlite3
+
+_MAC_DB = Path.home() / ".podpod" / "ai_mac.db"
+
+
+def _mac_db():
+    c = _sqlite3.connect(str(_MAC_DB), timeout=10)
+    c.row_factory = _sqlite3.Row
+    c.execute("""CREATE TABLE IF NOT EXISTS runs (
+        username TEXT NOT NULL, ref TEXT NOT NULL, status TEXT NOT NULL, result TEXT, error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (username, ref))""")
+    return c
+
+
+def _mac_row(row) -> dict:
+    out = {"status": row["status"], "error": row["error"], "created_at": row["created_at"]}
+    if row["result"]:
+        try:
+            out["result"] = json.loads(row["result"])
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def _run_mac(username: str, ref: str, text: str, language: str):
+    try:
+        result = ai_engine.analyze_episode(text, language)
+        with _mac_db() as c:
+            c.execute("UPDATE runs SET status='done', result=?, error=NULL WHERE username=? AND ref=?",
+                      (json.dumps(result, ensure_ascii=False), username, ref))
+    except Exception as exc:
+        with _mac_db() as c:
+            c.execute("UPDATE runs SET status='error', error=? WHERE username=? AND ref=?",
+                      (str(exc)[:500], username, ref))
+
+
+@bp.post("/api/ai/mac/analyze")
+@require_auth
+def mac_analyze():
+    from auth import current_user
+    username = current_user()
+    data = request.get_json(silent=True) or {}
+    ref = _re.sub(r"[^A-Za-z0-9:_-]", "", data.get("ref") or "")[:80]
+    text = (data.get("text") or "")[:180_000]
+    language = (data.get("language") or "es")[:5]
+    if not ref.startswith("mac:"):
+        return jsonify({"error": "ref inválida"}), 400
+    with _mac_db() as c:
+        row = c.execute("SELECT * FROM runs WHERE username=? AND ref=?", (username, ref)).fetchone()
+        if row and row["status"] in ("done", "running"):
+            out = _mac_row(row)
+            out["already"] = row["status"] == "done"
+            return jsonify(out)
+        if len(text.strip()) < 200:
+            return jsonify({"error": "La transcripción es muy corta para analizarla."}), 400
+        c.execute("INSERT OR REPLACE INTO runs (username, ref, status, created_at) VALUES (?, ?, 'running', datetime('now'))",
+                  (username, ref))
+    threading.Thread(target=_run_mac, args=(username, ref, text, language), daemon=True, name=f"ai-mac-{ref}").start()
+    return jsonify({"status": "running"}), 202
+
+
+@bp.get("/api/ai/mac/<path:ref>")
+@require_auth
+def mac_result(ref):
+    from auth import current_user
+    with _mac_db() as c:
+        row = c.execute("SELECT * FROM runs WHERE username=? AND ref=?", (current_user(), ref)).fetchone()
+    if not row:
+        return jsonify({"status": "none"})
+    return jsonify(_mac_row(row))
