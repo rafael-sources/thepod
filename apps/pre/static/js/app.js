@@ -100,6 +100,7 @@ var LoginView = {
         mode.value = "reset";
         resetToken.value = token;
       }
+      if (params.get("olvide")) { mode.value = "forgot"; }   // enlace «¿Olvidaste tu contraseña?» de la app
       // Registro escondido: solo con el enlace que trae la clave
       if (window.location.pathname === "/registro" && params.get("clave")) {
         api("/api/auth/signup/open?clave=" + encodeURIComponent(params.get("clave"))).then(function (r) {
