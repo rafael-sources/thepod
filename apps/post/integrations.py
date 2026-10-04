@@ -620,6 +620,44 @@ def _auto_create_from_prodpod(data, spid, src_ep_id, created_by):
     return meta
 
 
+@bp.post("/api/integrations/prodpod/import-status")
+def import_status_from_prodpod():
+    """prodPod avisa que empieza (state=begin, expected=N pistas) o termina
+    (state=end) de enviar pistas. Mientras tanto el proyecto queda marcado
+    'importing' y el editor advierte que modificarlo puede dañarlo."""
+    err = _require_shared_secret()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    spid = (data.get("shared_project_id") or "").strip()
+    if not spid:
+        return jsonify({"error": "shared_project_id requerido"}), 400
+    src_ep_id = data.get("source_episode_id")
+    state = (data.get("state") or "").strip()
+    if state not in ("begin", "end"):
+        return jsonify({"error": "state debe ser begin o end"}), 400
+    meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
+    if not meta:
+        if state == "end":
+            return jsonify({"ok": True, "project": None})
+        meta = _auto_create_from_prodpod(data, spid, src_ep_id, "prodpod_import_status")
+    from projects import _write_meta
+    m = _read_meta(meta["slug"]) or dict(meta)
+    if state == "begin":
+        try:
+            expected = int(data.get("expected") or 0)
+        except (TypeError, ValueError):
+            expected = 0
+        m["importing"] = {
+            "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "expected": expected,
+        }
+    else:
+        m.pop("importing", None)
+    _write_meta(meta["slug"], m)
+    return jsonify({"ok": True, "project": _summarize_project(m), "importing": m.get("importing")})
+
+
 @bp.post("/api/integrations/prodpod/import-chapters")
 def import_chapters_from_prodpod():
     """

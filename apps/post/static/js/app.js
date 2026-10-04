@@ -391,8 +391,44 @@ var ProjectListView = {
       }
     }
 
+    // Episodio en proceso: prodPod todavía le está enviando pistas. Se
+    // ignora una marca de más de 6 h (envío que se cortó sin avisar el fin).
+    function isImporting(p) {
+      const imp = p && p.importing;
+      if (!imp || !imp.started_at) return false;
+      const t = Date.parse(imp.started_at);
+      return !isNaN(t) && (Date.now() - t) < 6 * 3600 * 1000;
+    }
+    async function openProject(p) {
+      if (isImporting(p)) {
+        const msg = "Este episodio todavía se está procesando: están llegando pistas desde prodPod.\n\n" +
+                    "Si lo abres y lo modificas ahora podrías dañarlo. ¿Abrir de todas formas, bajo tu propio riesgo?";
+        let ok;
+        if (window.Swal) {
+          const r = await window.Swal.fire({ title: "Episodio en proceso", text: msg, icon: "warning",
+            showCancelButton: true, confirmButtonText: "Abrir bajo mi riesgo", cancelButtonText: "Esperar",
+            confirmButtonColor: "#c03428" });
+          ok = r.isConfirmed;
+        } else {
+          ok = window.confirm(msg);
+        }
+        if (!ok) return;
+      }
+      props.onOpen(p);
+    }
+    // Mientras haya alguno en proceso, refrescar la lista para que la
+    // tarjeta vuelva a la normalidad sola cuando termine.
+    let importPoll = null;
+    watch(projects, (list) => {
+      const any = (list || []).some(isImporting);
+      if (any && !importPoll) importPoll = setInterval(load, 20000);
+      if (!any && importPoll) { clearInterval(importPoll); importPoll = null; }
+    });
+    onBeforeUnmount(() => { if (importPoll) clearInterval(importPoll); });
+
     onMounted(load);
-    return { projects, loading, error, showCreate, newName, creating, create, remove, fmtDate, importProject };
+    return { projects, loading, error, showCreate, newName, creating, create, remove, fmtDate, importProject,
+             isImporting, openProject };
   },
   template: `
     <div class="container">
@@ -413,10 +449,14 @@ var ProjectListView = {
         <div style="font-family:var(--font-display); font-size:18px; font-style:italic; margin-bottom:4px;">
           Todavía no hay proyectos.
         </div>
-        <div>Creá el primero para arrancar a editar.</div>
+        <div>Crea el primero para empezar a editar.</div>
       </div>
       <div v-else class="project-list">
-        <div v-for="p in projects" :key="p.slug" class="project-tile" @click="$props.onOpen(p)">
+        <div v-for="p in projects" :key="p.slug" class="project-tile" :class="{ importing: isImporting(p) }" @click="openProject(p)">
+          <div v-if="isImporting(p)" class="tile-importing">
+            ⚠ Episodio en proceso — ábrelo bajo tu propio riesgo
+            <span v-if="p.importing.expected">· llegando {{ p.importing.expected }} pista(s) desde prodPod</span>
+          </div>
           <div class="stamp">SESIÓN · {{ fmtDate(p.created_at) }}</div>
           <h3>{{ p.name }}</h3>
           <div class="slug">/ {{ p.slug }}</div>

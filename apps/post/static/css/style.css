@@ -2723,3 +2723,11 @@ a.mark:hover { opacity: 0.8; }
   background: rgba(74, 222, 128, 0.12);
   border-color: rgba(74, 222, 128, 0.45);
 }
+
+/* Tarjeta de un episodio que todavía recibe pistas desde prodPod */
+.project-tile.importing { border: 2px solid #c03428; box-shadow: 0 0 0 3px rgba(192, 52, 40, 0.18); }
+.tile-importing {
+  background: #c03428; color: #fff; font-weight: 700; font-size: 13px; line-height: 1.35;
+  margin: -6px -6px 10px; padding: 8px 10px; border-radius: 8px;
+}
+.tile-importing span { font-weight: 500; opacity: 0.9; }
