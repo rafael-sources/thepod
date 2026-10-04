@@ -97,6 +97,27 @@ actor PostPodWebClient {
         return f
     }()
 
+    /// Notas y momentos de un episodio de la Mac con la IA del servidor. Se hace una sola vez por episodio:
+    /// si ya se hizo, el servidor devuelve lo mismo (sin volver a gastar). Espera hasta ~5 minutos.
+    func aiMoments(ref: String, text: String, language: String = "es") async throws -> [String: Any] {
+        let d = try await send("POST", "/api/ai/mac/analyze", json: ["ref": ref, "text": text, "language": language])
+        var o = (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
+        let path = "/api/ai/mac/" + (ref.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ref)
+        for _ in 0..<75 {
+            switch o["status"] as? String {
+            case "done":
+                return (o["result"] as? [String: Any]) ?? [:]
+            case "error":
+                throw Failure(message: "La IA no pudo leer el episodio. Prueba de nuevo en un rato.")
+            default:
+                try await Task.sleep(nanoseconds: 4_000_000_000)
+                let r = try await send("GET", path)
+                o = (try? JSONSerialization.jsonObject(with: r) as? [String: Any]) ?? [:]
+            }
+        }
+        throw Failure(message: "La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo.")
+    }
+
     func projects() async throws -> [WebProject] {
         let data = try await send("GET", "/api/projects")
         guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {

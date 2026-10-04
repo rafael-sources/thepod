@@ -63,6 +63,7 @@ struct Project: Codable, Identifiable, Equatable {
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
     var reels: [Reel] = []
     var aiSummary: String?
+    var aiAnalyzedAt: Date?             // la IA ya buscó notas y momentos de este episodio (se hace una sola vez)
 
     var logoFile: String?               // relative to project folder
     var backgroundFile: String?
@@ -891,6 +892,7 @@ extension Project {
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
+        aiAnalyzedAt = try c.decodeIfPresent(Date.self, forKey: .aiAnalyzedAt)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
         postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)

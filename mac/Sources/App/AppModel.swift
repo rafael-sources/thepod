@@ -629,6 +629,52 @@ final class ProjectSession: ObservableObject {
         run("Buscando los mejores momentos") { [self] in try await performSuggest() }
     }
 
+    // MARK: Notas y momentos con IA (una vez por episodio)
+
+    @Published var askAIConsent = false
+    @Published var aiNote: String?
+
+    /// Botón «Buscar momentos con IA». La primera vez pide permiso para mandar la transcripción.
+    func findMomentsWithAI(confirmed: Bool = false) {
+        if !confirmed && !UserDefaults.standard.bool(forKey: "aiConsentTranscript") {
+            askAIConsent = true
+            return
+        }
+        UserDefaults.standard.set(true, forKey: "aiConsentTranscript")
+        run("Buscando los mejores momentos con IA") { [self] in try await performAIMoments() }
+    }
+
+    func performAIMoments() async throws {
+        if project.words.isEmpty { try await transcribeMissing() }
+        report("Buscando los mejores momentos con IA", "La IA está leyendo el episodio: tarda uno o dos minutos", nil)
+        let result = try await PostPodWebClient.shared.aiMoments(ref: "mac:\(project.id)", text: EditEngine.transcriptForAI(project))
+        var p = project
+        // Notas: resumen y puntos destacados (van a la descripción al publicar)
+        if let notes = result["notes"] as? [String: Any] {
+            var text = (notes["summary"] as? String) ?? ""
+            let highlights = (notes["highlights"] as? [String]) ?? []
+            if !highlights.isEmpty { text += "\n\n" + highlights.map { "• " + $0 }.joined(separator: "\n") }
+            if !text.isEmpty { p.aiSummary = text }
+        }
+        // Momentos: un reel por cada uno (sin repetir los que ya están)
+        var added = 0
+        for c in (result["clips"] as? [[String: Any]]) ?? [] {
+            guard let s = (c["start"] as? String).flatMap(ClipSuggester.parseClock),
+                  let e = (c["end"] as? String).flatMap(ClipSuggester.parseClock), e > s else { continue }
+            let sug = ClipSuggester.snap(.init(title: (c["title"] as? String) ?? "Momento", reason: (c["reason"] as? String) ?? "",
+                                               start: s, end: e), words: p.words, duration: p.duration)
+            if p.reels.contains(where: { abs($0.start - sug.start) < 3 }) { continue }
+            p.reels.append(Reel(title: sug.title, reason: sug.reason, start: sug.start, end: sug.end))
+            added += 1
+        }
+        let first = p.aiAnalyzedAt == nil
+        p.aiAnalyzedAt = p.aiAnalyzedAt ?? Date()
+        project = p
+        aiNote = added > 0
+            ? "La IA encontró \(added) \(added == 1 ? "momento" : "momentos") y escribió las notas del episodio."
+            : (first ? "La IA escribió las notas; no encontró momentos claros." : "Ya estaban todos los momentos de la IA.")
+    }
+
     func performSuggest() async throws {
             if project.words.isEmpty { try await transcribeMissing() }
             try await ensureEnergy()

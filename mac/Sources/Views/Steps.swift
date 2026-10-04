@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - 1. Overview
 
@@ -639,6 +640,7 @@ struct ReelsStep: View {
                             removeReel(reel.id)
                         }, export: { session.exportReel(reel) }, busy: session.isBusy)
                     }
+                    AIMomentsCard(session: session)
                     Card {
                         Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
                         Text("Mira el episodio y, cuando pase algo bueno, toca “Marcar momento” debajo del video. Se crea un reel de 60 segundos desde ahí; luego ajustas inicio y fin.")
@@ -1803,5 +1805,54 @@ struct ExportReviewCard: View {
             }
         }
         .disabled(session.isBusy)
+    }
+}
+
+
+/// Notas y momentos con la IA de thePod. Se hace una sola vez por episodio (ahorra: si se vuelve a tocar,
+/// trae lo mismo sin volver a gastar). La primera vez pide permiso para mandar la transcripción.
+struct AIMomentsCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var showNotes = false
+
+    var body: some View {
+        Card {
+            Label("Momentos y notas con IA", systemImage: "sparkles").font(.headline)
+            if !PrePodClient.isConfigured {
+                Text("Conecta tu cuenta de thePod en Ajustes para que la IA busque los mejores momentos y escriba las notas del episodio.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            } else if let done = session.project.aiAnalyzedAt {
+                Text("La IA ya leyó este episodio el \(done.formatted(date: .abbreviated, time: .shortened)). Se hace una sola vez por episodio; los reels y las notas se editan a mano.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Button("Traer de nuevo sus momentos") { session.findMomentsWithAI(confirmed: true) }
+                    .controlSize(.small).disabled(session.isBusy)
+                    .help("Vuelve a poner los momentos que borraste (no se gasta de nuevo)")
+            } else {
+                Text("La IA lee la transcripción, propone los momentos con más potencial para reels y escribe el resumen y los puntos destacados. Se hace una sola vez por episodio.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Button { session.findMomentsWithAI() } label: { Label("Buscar momentos con IA", systemImage: "sparkles") }
+                    .buttonStyle(.borderedProminent).disabled(session.isBusy)
+            }
+            if let note = session.aiNote {
+                Label(note, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.good)
+            }
+            if let notes = session.project.aiSummary, !notes.isEmpty {
+                DisclosureGroup("Notas del episodio", isExpanded: $showNotes) {
+                    Text(notes).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Copiar notas") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(notes, forType: .string)
+                    }
+                    .controlSize(.small)
+                }
+                .font(.callout)
+            }
+        }
+        .alert("¿Mandar la transcripción a la IA?", isPresented: $session.askAIConsent) {
+            Button("Mandar y buscar") { session.findMomentsWithAI(confirmed: true) }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad.")
+        }
     }
 }
