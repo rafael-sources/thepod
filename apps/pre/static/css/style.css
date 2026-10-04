@@ -2450,3 +2450,15 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .episode-detail .side { overflow-y: auto; border-top: 0; border-left: 1px solid var(--ink-line); }
   .cal-cell { min-height: 80px; }
 }
+
+/* Publicar desde la web */
+.publish-section .pub-block { padding: 12px 0; border-top: 1px solid var(--ink-line); display: flex; flex-direction: column; gap: 8px; }
+.publish-section .pub-block:first-of-type { border-top: 0; }
+.publish-section .pub-title { font-weight: 600; font-size: 14px; }
+.publish-section .pub-help { font-size: 12.5px; color: var(--paper-dim); margin: 0; }
+.publish-section .pub-file { font-size: 12px; color: var(--paper-soft); }
+.publish-section .pub-input { width: 100%; }
+.publish-section .pub-progress small { font-size: 11.5px; color: var(--paper-dim); }
+.publish-section .pub-bar { height: 6px; border-radius: 3px; background: var(--ink-raised); overflow: hidden; margin-bottom: 3px; }
+.publish-section .pub-bar span { display: block; height: 100%; background: var(--signal); transition: width .3s ease; }
+.publish-section .publish-btn { align-self: flex-start; }

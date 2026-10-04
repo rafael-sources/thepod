@@ -2508,8 +2508,159 @@ var ShowNotesModal = {
    Episode detail (Plan 2)
    ========================================================================== */
 
+/* ==========================================================================
+   Publicar desde la web: subir el archivo (por partes, con avance) y publicarlo
+   - Audio → feed para Spotify y Apple Podcasts
+   - Video → YouTube (canal conectado del podcast)
+   Usa los mismos endpoints que la app de Mac (/api/mac/uploads y /api/mac/publish/*).
+   ========================================================================== */
+
+async function uploadInChunks(file, onProgress) {
+  const CHUNK = 8 * 1024 * 1024;
+  const start = await api("/api/mac/uploads", { method: "POST", body: { filename: file.name, size: file.size } });
+  const id = start.upload_id;
+  let index = 0;
+  for (let off = 0; off < file.size; off += CHUNK, index++) {
+    const part = file.slice(off, Math.min(file.size, off + CHUNK));
+    let tries = 0;
+    while (true) {
+      const res = await fetch("/api/mac/uploads/" + id + "/chunk?index=" + index, {
+        method: "PUT", credentials: "same-origin", body: part,
+        headers: { "Content-Type": "application/octet-stream" } });
+      if (res.ok) break;
+      if (++tries >= 3) {
+        let msg = "La subida se cortó"; try { msg = (await res.json()).error || msg; } catch (_) {}
+        throw new Error(msg);
+      }
+      await new Promise(r => setTimeout(r, 1500 * tries));
+    }
+    onProgress(Math.min(1, (off + part.size) / file.size));
+  }
+  await api("/api/mac/uploads/" + id + "/finish", { method: "POST" });
+  return id;
+}
+
+async function waitJob(jobId, onProgress) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2000));
+    const j = await api("/api/mac/jobs/" + jobId);
+    if (j.progress != null && onProgress) onProgress(j.progress);
+    if (j.status === "done") return j.result || {};
+    if (j.status === "error") throw new Error(j.error || "No se pudo publicar");
+  }
+}
+
+var PublishPanel = {
+  props: { slug: String, ep: Object },
+  emits: ["published"],
+  setup(props, { emit }) {
+    const audio = reactive({ file: null, stage: "", pct: 0, error: "", busy: false });
+    const video = reactive({ file: null, stage: "", pct: 0, error: "", busy: false, url: "",
+                             title: "", privacy: "public" });
+    const yt = ref(null);       // null = cargando · {connected, channel_name}
+
+    onMounted(async function () {
+      video.title = props.ep.title || "";
+      try { yt.value = await api("/api/youtube/status?slug=" + props.slug); }
+      catch (_) { yt.value = { connected: false }; }
+    });
+
+    function pick(target, ev) { target.file = ev.target.files[0] || null; target.error = ""; target.stage = ""; }
+    function mb(n) { return (n / 1048576).toFixed(n > 104857600 ? 0 : 1) + " MB"; }
+
+    async function publishAudio() {
+      if (!audio.file) return;
+      audio.busy = true; audio.error = "";
+      try {
+        audio.stage = "Subiendo"; audio.pct = 0;
+        const id = await uploadInChunks(audio.file, p => audio.pct = p);
+        audio.stage = "Publicando en el feed"; audio.pct = 0;
+        const job = await api("/api/mac/publish/audio", { method: "POST",
+          body: { slug: props.slug, episode_id: props.ep.id, upload_id: id } });
+        const r = await waitJob(job.job_id);
+        audio.stage = "Listo";
+        emit("published", r.media_url);
+      } catch (e) { audio.error = e.message; audio.stage = ""; }
+      finally { audio.busy = false; }
+    }
+
+    async function publishVideo() {
+      if (!video.file || !video.title.trim()) return;
+      video.busy = true; video.error = ""; video.url = "";
+      try {
+        video.stage = "Subiendo a thePod"; video.pct = 0;
+        const id = await uploadInChunks(video.file, p => video.pct = p);
+        video.stage = "Subiendo a YouTube"; video.pct = 0;
+        const job = await api("/api/mac/publish/youtube", { method: "POST",
+          body: { slug: props.slug, episode_id: props.ep.id, upload_id: id, title: video.title.trim(),
+                  description: props.ep.ai_summary || "", privacy: video.privacy } });
+        const r = await waitJob(job.job_id, p => video.pct = p);
+        video.stage = "Listo"; video.url = r.video_url || "";
+      } catch (e) { video.error = e.message; video.stage = ""; }
+      finally { video.busy = false; }
+    }
+
+    async function connectYouTube() {
+      try { const r = await api("/api/youtube/auth-url?slug=" + props.slug); window.location.href = r.auth_url; }
+      catch (e) { video.error = e.message; }
+    }
+
+    return { audio, video, yt, pick, mb, publishAudio, publishVideo, connectYouTube };
+  },
+  template: `
+    <div class="publish-section">
+      <h4>Publicar</h4>
+
+      <div class="pub-block">
+        <div class="pub-title">Audio para Spotify y Apple Podcasts</div>
+        <div v-if="ep.media_url" class="publish-status">Publicado: <a :href="ep.media_url" target="_blank" rel="noopener">{{ ep.media_url }}</a></div>
+        <p class="pub-help">Sube el MP3 o M4A final. Queda en el feed del podcast y Spotify y Apple lo toman solos.</p>
+        <input type="file" accept="audio/*,.mp3,.m4a" @change="pick(audio, $event)" :disabled="audio.busy">
+        <div v-if="audio.file" class="pub-file">{{ audio.file.name }} · {{ mb(audio.file.size) }}</div>
+        <div v-if="audio.stage" class="pub-progress">
+          <div class="pub-bar"><span :style="{ width: (audio.pct * 100) + '%' }"></span></div>
+          <small>{{ audio.stage }}<template v-if="audio.stage !== 'Listo'"> · {{ Math.round(audio.pct * 100) }} %</template></small>
+        </div>
+        <div v-if="audio.error" class="error">{{ audio.error }}</div>
+        <button class="publish-btn" @click="publishAudio" :disabled="!audio.file || audio.busy">
+          {{ audio.busy ? 'Publicando…' : (ep.media_url ? 'Reemplazar el audio' : 'Subir y publicar') }}
+        </button>
+      </div>
+
+      <div class="pub-block">
+        <div class="pub-title">Video para YouTube</div>
+        <template v-if="yt && !yt.connected">
+          <p class="pub-help">Conecta el canal de YouTube del podcast una vez y después subes los episodios desde aquí.</p>
+          <button class="publish-btn" @click="connectYouTube">Conectar YouTube</button>
+        </template>
+        <template v-else-if="yt">
+          <p class="pub-help">Se sube al canal <strong>{{ yt.channel_name || 'conectado' }}</strong> con las notas del episodio como descripción.</p>
+          <input type="text" v-model="video.title" placeholder="Título del video" :disabled="video.busy" class="pub-input">
+          <select v-model="video.privacy" :disabled="video.busy" class="pub-input">
+            <option value="public">Público</option>
+            <option value="unlisted">Oculto (solo con el enlace)</option>
+            <option value="private">Privado</option>
+          </select>
+          <input type="file" accept="video/*,.mp4,.mov" @change="pick(video, $event)" :disabled="video.busy">
+          <div v-if="video.file" class="pub-file">{{ video.file.name }} · {{ mb(video.file.size) }}</div>
+          <div v-if="video.stage" class="pub-progress">
+            <div class="pub-bar"><span :style="{ width: (video.pct * 100) + '%' }"></span></div>
+            <small>{{ video.stage }}<template v-if="video.stage !== 'Listo'"> · {{ Math.round(video.pct * 100) }} %</template></small>
+          </div>
+          <div v-if="video.url" class="publish-status">En YouTube: <a :href="video.url" target="_blank" rel="noopener">{{ video.url }}</a></div>
+          <div v-if="video.error" class="error">{{ video.error }}</div>
+          <button class="publish-btn" @click="publishVideo" :disabled="!video.file || !video.title.trim() || video.busy">
+            {{ video.busy ? 'Subiendo…' : 'Subir a YouTube' }}
+          </button>
+        </template>
+      </div>
+    </div>
+  `,
+};
+
+
 var EpisodeDetail = {
-  components: { IdeasPanel, ScriptEditor, EpisodeLinks, EpisodeIntegrationBar, GuestsPanel, RundownEditor, ShowNotesModal },
+  components: { IdeasPanel, ScriptEditor, EpisodeLinks, EpisodeIntegrationBar, GuestsPanel, RundownEditor, ShowNotesModal, PublishPanel },
   props: { slug: String, episodeId: Number },
   emits: ["back", "updated"],
   setup(props, { emit }) {
@@ -2705,25 +2856,7 @@ var EpisodeDetail = {
           </div>
         </div>
 
-        <div class="publish-section" v-if="ep.status !== 'published' && ep.media_url === null">
-          <h4>Publicar episodio</h4>
-          <p style="font-size:0.8rem;color:var(--text-3);">
-            Sube el audio/video final a VPS y actualiza el feed RSS.
-          </p>
-          <input v-model="publishPath" placeholder="Ruta al archivo exportado" style="width:100%;margin-bottom:0.5rem;padding:6px;border-radius:4px;border:1px solid var(--border,#dee2e6);font-size:0.8rem;" />
-          <button class="publish-btn" @click="doPublish" :disabled="publishing || !publishPath">
-            {{ publishing ? 'Publicando...' : 'Publicar' }}
-          </button>
-          <div class="publish-status" v-if="ep.media_url">
-            Publicado: <a :href="ep.media_url" target="_blank">{{ ep.media_url }}</a>
-          </div>
-        </div>
-        <div class="publish-section" v-else-if="ep.media_url">
-          <h4>Publicado</h4>
-          <div class="publish-status">
-            <a :href="ep.media_url" target="_blank">{{ ep.media_url }}</a>
-          </div>
-        </div>
+        <PublishPanel :slug="slug" :ep="ep" @published="(u) => { ep.media_url = u; ep.status = 'published'; }" />
 
         <EpisodeIntegrationBar :slug="slug" :episode-id="ep.id" />
 
@@ -4761,6 +4894,7 @@ function timeAgo(iso) {
   if (days < 30) return "hace " + days + " días";
   return d.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
 }
+
 
 var UsersAdminModal = {
   props: { thepodUrl: { type: String, default: "" } },
