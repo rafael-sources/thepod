@@ -92,8 +92,17 @@ EXPORT_PRESETS = [
     {"id": "instagram_sq", "name": "Instagram cuadrado",        "width": 1080, "height": 1080, "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac",        "crf": "22", "x264_preset": "veryfast", "platform": "Instagram"},
     {"id": "whatsapp",     "name": "WhatsApp",                  "width": 1280, "height": 720,  "fps": 30, "format": "mp4",  "vcodec": "libx264", "acodec": "aac", "bitrate": "2M", "x264_preset": "veryfast", "platform": "WhatsApp"},
     {"id": "podcast_mp3",  "name": "Podcast MP3",               "width": None, "height": None, "fps": None, "format": "mp3", "vcodec": None,     "acodec": "libmp3lame", "platform": "Podcast"},
+    # Versiones a 720p para el plan Gratis (no se listan: el servidor las usa en lugar de las grandes)
+    {"id": "yt_720p_30",       "name": "YouTube 720p 30fps",            "width": 1280, "height": 720,  "fps": 30, "format": "mp4", "vcodec": "libx264", "acodec": "aac", "crf": "22", "x264_preset": "fast",     "platform": "YouTube",        "hidden": True},
+    {"id": "tiktok_v_720",     "name": "TikTok / Reels vertical 720p",  "width": 720,  "height": 1280, "fps": 30, "format": "mp4", "vcodec": "libx264", "acodec": "aac", "crf": "22", "x264_preset": "veryfast", "platform": "TikTok / Reels", "hidden": True},
+    {"id": "instagram_sq_720", "name": "Instagram cuadrado 720p",       "width": 720,  "height": 720,  "fps": 30, "format": "mp4", "vcodec": "libx264", "acodec": "aac", "crf": "22", "x264_preset": "veryfast", "platform": "Instagram",      "hidden": True},
     {"id": "podcast_m4a",  "name": "Podcast M4A (AAC)",         "width": None, "height": None, "fps": None, "format": "m4a", "vcodec": None,     "acodec": "aac",        "platform": "Podcast"},
 ]
+
+
+# Plan Gratis (hasta 720p): qué preset se usa en lugar de cada uno más grande
+PLAN_720_PRESET = {"yt_1080p_30": "yt_720p_30", "yt_1080p_60": "yt_720p_30", "yt_4k_30": "yt_720p_30",
+                   "yt_4k_60": "yt_720p_30", "tiktok_v": "tiktok_v_720", "instagram_sq": "instagram_sq_720"}
 
 
 def find_preset(preset_id):

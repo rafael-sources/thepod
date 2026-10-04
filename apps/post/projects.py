@@ -128,7 +128,14 @@ def create_project():
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"error": "nombre requerido"}), 400
+    from plans import limits_for
+    lim = limits_for(current_user())
+    if lim["episodes_left"] == 0:
+        return jsonify({"error": f"El plan {lim['name']} incluye {lim['max_episodes']} episodios y ya los usaste. "
+                                 "Pásate al plan Completo para seguir.", "code": "plan_limit"}), 403
     meta = _create_project_internal(name, owner_username=current_user())
+    from plans import claim_episode
+    claim_episode(current_user(), f"post:{meta.get('slug')}")
     return jsonify(meta), 201
 
 
@@ -236,6 +243,11 @@ def bundle_download(slug):
 @bp.post("/import")
 @require_auth
 def import_project_endpoint():
+    from plans import limits_for
+    lim = limits_for(current_user())
+    if lim["episodes_left"] == 0:
+        return jsonify({"error": f"El plan {lim['name']} incluye {lim['max_episodes']} episodios y ya los usaste. "
+                                 "Pásate al plan Completo para seguir.", "code": "plan_limit"}), 403
     if "file" not in request.files:
         return jsonify({"error": "archivo requerido"}), 400
     f = request.files["file"]
@@ -286,6 +298,8 @@ def _import_zip(f):
                 "warning": f"{len(result['missing_files'])} archivos referenciados no encontrados en el zip",
                 "missing": result["missing_files"][:10],
             }), 201
+        from plans import claim_episode
+        claim_episode(current_user(), f"post:{slug}")
         return jsonify({"slug": slug, "meta": result["meta"]}), 201
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -333,6 +347,8 @@ def _import_media_file(f, ext, file_type):
     finally:
         db.close()
 
+    from plans import claim_episode
+    claim_episode(current_user(), f"post:{slug}")
     return jsonify({"slug": slug, "meta": meta}), 201
 
 

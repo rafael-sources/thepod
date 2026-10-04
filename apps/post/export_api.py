@@ -5,6 +5,7 @@ REST endpoints for exports.
 from flask import Blueprint, abort, jsonify, request, send_file
 
 from auth import require_auth
+from auth import current_user
 from config import EXPORT_PRESETS, PROJECTS_DIR, find_preset
 from db import get_db
 from exporter import cancel_export, start_export_thread
@@ -50,8 +51,8 @@ def _serialize_job(row):
 @bp.get("/api/export/presets")
 @require_auth
 def list_presets():
-    # Group by platform for the UI
-    return jsonify(EXPORT_PRESETS)
+    # Group by platform for the UI (las versiones 720p del plan Gratis no se listan)
+    return jsonify([p for p in EXPORT_PRESETS if not p.get("hidden")])
 
 
 @bp.post("/api/projects/<slug>/export")
@@ -62,6 +63,17 @@ def create_export(slug):
     preset_id = data.get("preset_id")
     if not preset_id or not find_preset(preset_id):
         return jsonify({"error": "preset_id inválido"}), 400
+    # Plan Gratis: el video sale a 720p (se cambia solo el tamaño, el resto igual)
+    plan_note = None
+    try:
+        from plans import limits_for
+        from config import PLAN_720_PRESET
+        lim = limits_for(current_user())
+        if lim["max_height"] and preset_id in PLAN_720_PRESET:
+            preset_id = PLAN_720_PRESET[preset_id]
+            plan_note = f"El plan {lim['name']} exporta hasta 720p."
+    except Exception:
+        pass
 
     burn = data.get("burn_captions") or None
     burn_json = None
@@ -143,7 +155,7 @@ def create_export(slug):
         db.close()
 
     start_export_thread(slug, job_id)
-    return jsonify({"job_id": job_id, "status": "pending"}), 202
+    return jsonify({"job_id": job_id, "status": "pending", "plan_note": plan_note}), 202
 
 
 @bp.get("/api/projects/<slug>/export/<int:job_id>")
