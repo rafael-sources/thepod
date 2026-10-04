@@ -33,8 +33,15 @@ def create_app():
 
     @app.get("/")
     def index():
+        from perfil import avatar_url as _av
+        from shared_users import get_user
+        u = session.get("username")
+        row = get_user(u) if u else None
         return render_template("landing.html",
-                               username=session.get("username"),
+                               username=u,
+                               display_name=(row or {}).get("display_name") or u,
+                               avatar=_av(u) if u else None,
+                               avatar_color=(row or {}).get("avatar_color") or "#e8c47a",
                                is_admin=bool(policy_for(session.get("username")).get("see_all")))
 
     @app.post("/api/login")
@@ -72,8 +79,13 @@ def create_app():
         if not u:
             return jsonify({"error": "no autenticado"}), 401
         from plans import limits_for
+        from perfil import avatar_url as _av
+        from shared_users import get_user
+        row = get_user(u) or {}
         return jsonify({
             "username": u,
+            "display_name": row.get("display_name") or u,
+            "avatar_url": _av(u),
             "is_admin": bool(policy_for(u).get("see_all")),
             "plan": limits_for(u),
         })
@@ -168,6 +180,9 @@ def create_app():
 
     from billing import PRICES, bp as billing_bp, _db as _billing_db
     app.register_blueprint(billing_bp)
+
+    from perfil import bp as perfil_bp
+    app.register_blueprint(perfil_bp)
 
     @app.get("/planes")
     def planes():

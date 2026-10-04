@@ -37,7 +37,7 @@
         <a class="ghost" href="{{ app_urls[app_key] }}" target="_blank" rel="noopener">↗ Abrir {{ app_cfg.name }}</a>
       {% endif %}
       {% if username %}
-        <span class="tiny" style="color: var(--paper-dim);">{{ username }}</span>
+        <a class="tiny" href="/perfil" style="color: var(--paper-dim);" title="Mi perfil">{{ username }}</a>
       {% endif %}
     </div>
   </header>

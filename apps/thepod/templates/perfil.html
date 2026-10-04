@@ -1,0 +1,183 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}Mi perfil · thePod{% endblock %}
+{% block description %}Tu nombre, tu foto, tu correo y tu contraseña en thePod.{% endblock %}
+
+{% block body %}
+<style>
+  .pf-wrap { max-width: 760px; margin: 0 auto; padding-top: 24px; }
+  .pf-card { background: var(--ink-panel); border:1px solid var(--ink-line); border-radius:14px; padding:22px; margin: 18px 0; }
+  .pf-card h3 { margin:0 0 4px; font-family: var(--font-display); font-size: 20px; }
+  .pf-card .hint { color: var(--paper-dim); font-size: 13px; margin: 0 0 14px; }
+  .pf-row { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+  .pf-avatar { width:112px; height:112px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+               font-size:44px; font-weight:700; color:#1A1510; background-size:cover; background-position:center; border:2px solid var(--ink-line); }
+  .pf-field { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  .pf-field label { font-size: 12px; letter-spacing:.08em; text-transform: uppercase; color: var(--paper-dim); }
+  .pf-field input { background: rgba(0,0,0,.25); border:1px solid var(--ink-line); border-radius:10px; padding:10px 12px; color: var(--paper); font-size:15px; }
+  .pf-field input:focus { outline:none; border-color: var(--accent); }
+  .pf-btn { display:inline-block; padding: 10px 16px; border-radius: 10px; font-weight: 700; border:0; cursor:pointer; font-size: 14px; text-decoration:none; }
+  .pf-btn.main { background: var(--accent); color: #1A1510; }
+  .pf-btn.ghost { background: transparent; color: var(--paper-soft); border: 1px solid var(--ink-line); }
+  .pf-btn:disabled { opacity:.5; cursor:default; }
+  .pf-msg { font-size: 14px; margin-left: 10px; }
+  .pf-msg.ok { color: #8db36a; } .pf-msg.err { color: #e85a4f; }
+  .pf-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .pf-email-pass { display:none; }
+  @media (max-width: 640px) { .pf-grid { grid-template-columns: 1fr; } }
+</style>
+<div class="pf-wrap">
+  <header class="docs-header">
+    <div class="eyebrow">MI PERFIL</div>
+    <h1>Tu cuenta</h1>
+    <p class="lede">Lo que cambies aquí vale para todas las apps de thePod, en la web y en la Mac.</p>
+  </header>
+
+  {% if not username %}
+  <div class="callout"><div class="ctag">ENTRA PRIMERO</div><div class="cbody"><p>Inicia sesión para ver y cambiar tu perfil. <a href="/">Entrar</a></p></div></div>
+  {% else %}
+
+  <div class="pf-card">
+    <h3>Tu foto</h3>
+    <p class="hint">Se ve junto a tu nombre en thePod. Elige una imagen y la recortamos cuadrada.</p>
+    <div class="pf-row">
+      <div class="pf-avatar" id="pf-avatar"></div>
+      <div>
+        <input type="file" id="pf-file" accept="image/*" hidden>
+        <button class="pf-btn main" id="pf-pick">Subir foto</button>
+        <button class="pf-btn ghost" id="pf-remove" style="display:none">Quitar foto</button>
+        <span class="pf-msg" id="pf-avatar-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pf-card">
+    <h3>Tus datos</h3>
+    <p class="hint">Tu usuario es <strong id="pf-user">{{ username }}</strong> y no cambia. Puedes entrar con el usuario o con el correo.</p>
+    <div class="pf-grid">
+      <div class="pf-field"><label for="pf-name">Nombre que se muestra</label><input id="pf-name" maxlength="60"></div>
+      <div class="pf-field"><label for="pf-email">Correo</label><input id="pf-email" type="email" autocomplete="email"></div>
+    </div>
+    <div class="pf-field pf-email-pass" id="pf-email-pass-box">
+      <label for="pf-email-pass">Tu contraseña actual (para cambiar el correo)</label>
+      <input id="pf-email-pass" type="password" autocomplete="current-password">
+    </div>
+    <button class="pf-btn main" id="pf-save">Guardar</button><span class="pf-msg" id="pf-data-msg"></span>
+  </div>
+
+  <div class="pf-card">
+    <h3>Cambiar contraseña</h3>
+    <p class="hint">Mínimo 8 caracteres. Si la olvidaste, sal y usa «¿Olvidaste tu contraseña?» al entrar.</p>
+    <div class="pf-field"><label for="pf-cur">Contraseña actual</label><input id="pf-cur" type="password" autocomplete="current-password"></div>
+    <div class="pf-grid">
+      <div class="pf-field"><label for="pf-new">Nueva contraseña</label><input id="pf-new" type="password" autocomplete="new-password"></div>
+      <div class="pf-field"><label for="pf-new2">Repite la nueva</label><input id="pf-new2" type="password" autocomplete="new-password"></div>
+    </div>
+    <button class="pf-btn main" id="pf-pass">Cambiar contraseña</button><span class="pf-msg" id="pf-pass-msg"></span>
+  </div>
+
+  <div class="pf-card">
+    <h3>Tu plan</h3>
+    <p class="hint" id="pf-plan">…</p>
+    <a class="pf-btn ghost" href="/planes">Ver planes</a>
+  </div>
+
+  <script>
+  (function () {
+    var me = null;
+    function $(id) { return document.getElementById(id); }
+    function say(id, text, ok) { var m = $(id); m.textContent = text || ""; m.className = "pf-msg " + (ok ? "ok" : "err"); }
+    async function call(url, opts) {
+      var r = await fetch(url, Object.assign({ credentials: "same-origin" }, opts || {}));
+      var d = {}; try { d = await r.json(); } catch (e) {}
+      if (!r.ok) throw new Error(d.error || "No se pudo guardar. Intenta de nuevo.");
+      return d;
+    }
+    function jsonOpts(method, body) {
+      return { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+    }
+    function paintAvatar() {
+      var a = $("pf-avatar");
+      if (me.avatar_url) { a.style.backgroundImage = "url('" + me.avatar_url + "')"; a.textContent = ""; }
+      else { a.style.backgroundImage = ""; a.style.backgroundColor = me.avatar_color || "#e8c47a";
+             a.textContent = (me.display_name || me.username || "?").trim().charAt(0).toUpperCase(); }
+      $("pf-remove").style.display = me.avatar_url ? "" : "none";
+    }
+    function paint() {
+      $("pf-name").value = me.display_name || "";
+      $("pf-email").value = me.email || "";
+      $("pf-email-pass-box").style.display = "none";
+      $("pf-email-pass").value = "";
+      var p = me.plan || {};
+      var names = { gratis: "Gratis", web: "Web", mac: "Mac", completo: "Completo" };
+      var t = "Tienes el plan " + (names[p.plan] || p.name || "—") + ".";
+      if (p.plan === "gratis" && p.episodes_left != null) t += " Te quedan " + p.episodes_left + " episodio(s).";
+      $("pf-plan").textContent = t;
+      paintAvatar();
+    }
+    $("pf-email").addEventListener("input", function () {
+      var changed = $("pf-email").value.trim().toLowerCase() !== (me.email || "").toLowerCase();
+      $("pf-email-pass-box").style.display = changed ? "flex" : "none";
+    });
+
+    $("pf-save").addEventListener("click", async function () {
+      var b = this; b.disabled = true; say("pf-data-msg", "");
+      try {
+        var body = { display_name: $("pf-name").value, email: $("pf-email").value, password: $("pf-email-pass").value };
+        me = await call("/api/perfil", jsonOpts("POST", body));
+        paint(); say("pf-data-msg", "Guardado.", true);
+      } catch (e) { say("pf-data-msg", e.message); }
+      b.disabled = false;
+    });
+
+    $("pf-pass").addEventListener("click", async function () {
+      var b = this; say("pf-pass-msg", "");
+      if ($("pf-new").value !== $("pf-new2").value) { say("pf-pass-msg", "Las dos contraseñas nuevas no son iguales."); return; }
+      b.disabled = true;
+      try {
+        await call("/api/perfil/clave", jsonOpts("POST", { current: $("pf-cur").value, new: $("pf-new").value }));
+        $("pf-cur").value = $("pf-new").value = $("pf-new2").value = "";
+        say("pf-pass-msg", "Listo, tu contraseña cambió. Úsala la próxima vez que entres.", true);
+      } catch (e) { say("pf-pass-msg", e.message); }
+      b.disabled = false;
+    });
+
+    // Foto: se recorta cuadrada y se achica a 256 px en el navegador antes de subirla.
+    $("pf-pick").addEventListener("click", function () { $("pf-file").click(); });
+    $("pf-file").addEventListener("change", function () {
+      var f = this.files && this.files[0]; this.value = "";
+      if (!f) return;
+      say("pf-avatar-msg", "Subiendo…", true);
+      var url = URL.createObjectURL(f), img = new Image();
+      img.onerror = function () { URL.revokeObjectURL(url); say("pf-avatar-msg", "No pudimos abrir esa imagen. Prueba con una JPG o PNG."); };
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var side = Math.min(img.naturalWidth, img.naturalHeight), size = 256;
+        var c = document.createElement("canvas"); c.width = c.height = size;
+        var ctx = c.getContext("2d");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, size, size);
+        ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+        c.toBlob(async function (blob) {
+          try {
+            var fd = new FormData(); fd.append("foto", blob, "avatar.jpg");
+            var d = await call("/api/perfil/avatar", { method: "POST", body: fd });
+            me.avatar_url = d.avatar_url; paintAvatar(); say("pf-avatar-msg", "Foto actualizada.", true);
+          } catch (e) { say("pf-avatar-msg", e.message); }
+        }, "image/jpeg", 0.88);
+      };
+      img.src = url;
+    });
+    $("pf-remove").addEventListener("click", async function () {
+      try {
+        await call("/api/perfil/avatar", { method: "DELETE" });
+        me.avatar_url = null; paintAvatar(); say("pf-avatar-msg", "Foto quitada.", true);
+      } catch (e) { say("pf-avatar-msg", e.message); }
+    });
+
+    call("/api/perfil").then(function (d) { me = d; paint(); })
+      .catch(function (e) { say("pf-data-msg", e.message); });
+  })();
+  </script>
+  {% endif %}
+</div>
+{% endblock %}
