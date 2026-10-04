@@ -846,6 +846,21 @@ enum SelfTest {
                     if Updater.shared.state != .checking { break }
                 }
                 print("instalada=\(Updater.currentVersion) (\(Updater.currentBuild)) servidor=\(Updater.shared.state)")
+                // --download: baja lo publicado (sin instalar) y muestra cómo avanza la barra
+                if args.contains("--download") {
+                    let rel = Updater.Release(version: "0", build: "0", size: nil, sha256: nil)
+                    Updater.shared.download(rel)
+                    var seen: [Int] = []
+                    for _ in 0..<1200 {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        if case .downloading(let f) = Updater.shared.state, let f {
+                            let pct = Int(f * 100)
+                            if seen.last != pct { seen.append(pct) }
+                        } else if case .downloading = Updater.shared.state {
+                        } else { break }
+                    }
+                    print("avance visto:", seen.map(String.init).joined(separator: " "), "→", Updater.shared.state)
+                }
                 fflush(stdout); exit(0)
             }
             return
