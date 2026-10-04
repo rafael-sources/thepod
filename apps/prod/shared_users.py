@@ -71,6 +71,14 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.executescript(_SCHEMA)
+    _migrate_columns(conn)
+    return conn
+
+
+def _migrate_columns(conn: sqlite3.Connection):
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+    if "email" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
     return conn
 
 
@@ -126,21 +134,32 @@ def _import_from_legacy_json(conn: sqlite3.Connection):
         pass
 
 
+_initialized = False
+
+
 def _ensure_initialized():
-    """Create DB + bootstrap admin if it's empty. Safe to call repeatedly."""
-    conn = _connect()
+    """Create DB + bootstrap admin if it's empty. Safe to call repeatedly.
+    Lazy: only runs the first time a real query is needed, and any failure
+    is logged but never raised — so module import never crashes the app."""
+    global _initialized
+    if _initialized:
+        return
     try:
-        n = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
-        if n == 0:
-            _import_from_legacy_json(conn)
+        conn = _connect()
+        try:
             n = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
-        if n == 0:
-            _bootstrap_defaults(conn)
-    finally:
-        conn.close()
-
-
-_ensure_initialized()
+            if n == 0:
+                _import_from_legacy_json(conn)
+                n = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+            if n == 0:
+                _bootstrap_defaults(conn)
+            _initialized = True
+        finally:
+            conn.close()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("shared_users init failed: %s", e)
+        # Don't set _initialized — we'll retry next time.
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +171,7 @@ def _row_to_dict(r) -> dict:
         "username": r["username"],
         "password_md5": r["password_md5"],
         "display_name": r["display_name"] or r["username"].title(),
+        "email": r["email"] or "",
         "avatar_color": r["avatar_color"] or _DEFAULT_PALETTE[hash(r["username"]) % len(_DEFAULT_PALETTE)],
         "is_admin": bool(r["is_admin"]),
         "max_podcasts": r["max_podcasts"],
@@ -184,8 +204,8 @@ def get_user(username: str) -> dict | None:
 
 
 def create_user(username: str, password: str, *, display_name: str = None,
-                avatar_color: str = None, is_admin: bool = False,
-                max_podcasts: int | None = None):
+                email: str = None, avatar_color: str = None,
+                is_admin: bool = False, max_podcasts: int | None = None):
     """Insert a new user. Raises ValueError if it already exists."""
     if not password or len(password) < 6:
         raise ValueError("la contraseña debe tener al menos 6 caracteres")
@@ -194,10 +214,11 @@ def create_user(username: str, password: str, *, display_name: str = None,
         with _lock, conn:
             try:
                 conn.execute(
-                    "INSERT INTO users (username, password_md5, display_name, avatar_color, "
-                    "is_admin, max_podcasts) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO users (username, password_md5, display_name, email, avatar_color, "
+                    "is_admin, max_podcasts) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (username, md5(password),
                      (display_name or username).strip().title(),
+                     (email or "").strip() or None,
                      (avatar_color or "").strip() or None,
                      1 if is_admin else 0,
                      None if is_admin else max_podcasts),
@@ -214,7 +235,7 @@ def update_user_fields(username: str, fields: dict):
     """Partial update: only the keys present in `fields` are applied."""
     if not username:
         raise ValueError("username requerido")
-    allowed = {"password_md5", "display_name", "avatar_color", "is_admin", "max_podcasts"}
+    allowed = {"password_md5", "display_name", "email", "avatar_color", "is_admin", "max_podcasts"}
     use = {k: v for k, v in fields.items() if k in allowed}
     if not use:
         return get_user(username)
