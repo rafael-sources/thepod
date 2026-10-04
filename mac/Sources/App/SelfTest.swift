@@ -582,14 +582,27 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--filler-test"), args.count > i + 1 {
             // Solo lectura: compara las muletillas de antes (todas las palabras de la lista) con las nuevas
             Task { @MainActor in
-                guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
-                let words = p.words
+                // --words <json>: palabras de un archivo (las que deja --sync-test) en vez de las del proyecto
+                var words: [Word] = []
+                var energy: EnergyMap?
+                if let j = args.firstIndex(of: "--words"), args.count > j + 1,
+                   let d = try? Data(contentsOf: URL(fileURLWithPath: args[j + 1])),
+                   let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] {
+                    words = arr.compactMap { o in
+                        guard let w = o["w"] as? String, let s = o["s"] as? Double, let e = o["e"] as? Double else { return nil }
+                        return Word(w: w, s: s, e: e, lane: Int((o["lane"] as? Double) ?? 1))
+                    }
+                } else {
+                    guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
+                    words = p.words
+                    energy = AudioAnalysis.loadEnergy(p.id)
+                }
                 let oldCount = words.filter { EditEngine.soundFillers.contains(EditEngine.normalize($0.w)) || EditEngine.wordFillers.contains(EditEngine.normalize($0.w)) }.count
                 let t0 = Date()
                 let f = EditEngine.fillerCuts(words: words, includeWordFillers: true)
                 let r = EditEngine.repeatCuts(words: words)
                 var snd: [Cut] = []
-                if let energy = AudioAnalysis.loadEnergy(p.id) {
+                if let energy {
                     snd = EditEngine.soundOnlyCuts(words: words, energy: energy).filter { c in !(f + r).contains { $0.start < c.end && $0.end > c.start } }
                 }
                 print(String(format: "palabras %d · antes %d muletillas cortadas · %.2f s", words.count, oldCount, Date().timeIntervalSince(t0)))
