@@ -891,8 +891,8 @@ final class ProjectSession: ObservableObject {
             self.energy = nil
             guard self.project.lanes.count > 1 else { return }
             self.run("Analizando quién habla") { [self] in
-                try await ensureEnergy()
-                schedulePreview(immediate: true)
+                try await self.ensureEnergy()
+                self.schedulePreview(immediate: true)
             }
         }
     }
