@@ -139,10 +139,12 @@ final class Updater: ObservableObject {
     private func fetchDMG(_ rel: Release) async throws -> URL {
         var req = try request("GET", "/descargas/thepod-mac")
         req.timeoutInterval = 600
-        let progress = UpdateProgress { [weak self] f in Task { @MainActor in self?.state = .downloading(f) } }
-        let (tmp, resp) = try await session.download(for: req, delegate: progress)
+        // Descarga con una sesión propia y su delegado: con la descarga «async» de URLSession el avance no
+        // llegaba y la barra saltaba de 0 a 100. Si el servidor no dice el tamaño, se usa el de la ficha.
+        let progress = UpdateProgress(expected: rel.size ?? 0) { [weak self] f in Task { @MainActor in self?.state = .downloading(f) } }
+        let (tmp, resp) = try await progress.run(req, configuration: session.configuration)
         absorb(resp)
-        let file = FileManager.default.fileExists(atPath: tmp.path) ? tmp : (progress.saved ?? tmp)
+        let file = tmp
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             try? FileManager.default.removeItem(at: file)
             throw PrePodClient.Failure(message: "No se pudo bajar la actualización")
@@ -236,17 +238,47 @@ final class Updater: ObservableObject {
 
 private final class UpdateProgress: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let report: @Sendable (Double?) -> Void
-    var saved: URL?
+    let expected: Int64
     private var last = Date.distantPast
-    init(_ report: @escaping @Sendable (Double?) -> Void) { self.report = report }
+    private var file: URL?
+    private var cont: CheckedContinuation<(URL, URLResponse), Error>?
+
+    init(expected: Int64, _ report: @escaping @Sendable (Double?) -> Void) {
+        self.expected = expected
+        self.report = report
+    }
+
+    /// Baja `req` y devuelve el archivo (ya movido a un lugar propio) y la respuesta.
+    func run(_ req: URLRequest, configuration: URLSessionConfiguration) async throws -> (URL, URLResponse) {
+        let s = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        defer { s.finishTasksAndInvalidate() }
+        return try await withCheckedThrowingContinuation { c in
+            cont = c
+            s.downloadTask(with: req).resume()
+        }
+    }
+
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
                     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard Date().timeIntervalSince(last) > 0.2 else { return }
+        guard Date().timeIntervalSince(last) > 0.15 else { return }
         last = Date()
-        report(totalBytesExpectedToWrite > 0 ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite) : nil)
+        let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : expected
+        report(total > 0 ? min(1, Double(totalBytesWritten) / Double(total)) : nil)
     }
+
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-dl-\(UUID().uuidString).part")
-        if (try? FileManager.default.moveItem(at: location, to: dest)) != nil { saved = dest }
+        if (try? FileManager.default.moveItem(at: location, to: dest)) != nil { file = dest }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        defer { cont = nil }
+        if let error { cont?.resume(throwing: error); return }
+        guard let file, let resp = task.response else {
+            cont?.resume(throwing: PrePodClient.Failure(message: "No se pudo bajar la actualización"))
+            return
+        }
+        report(1)
+        cont?.resume(returning: (file, resp))
     }
 }
