@@ -46,7 +46,40 @@ def _cfg() -> dict:
 
 def configured() -> bool:
     c = _cfg()
-    return bool(c.get("api_key") and c.get("store_id") and (c.get("variants") or {}).get("web"))
+    return bool(c.get("api_key") and c.get("store_id") and _variants().get("web") and _variants().get("mac"))
+
+
+def _variants() -> dict:
+    """Las variantes de cada plan. Si no están en la config, se buscan una vez en la tienda: la suscripción
+    mensual de 9 USD es Web y la de 19 USD es Mac (o productos llamados «Web» / «Mac»), y se guardan."""
+    c = _cfg()
+    v = c.get("variants") or {}
+    if v.get("web") and v.get("mac") or not c.get("api_key"):
+        return v
+    try:
+        data = _api("GET", f"/variants?filter[status]=published&page[size]=50").get("data") or []
+        prods = {p["id"]: (p["attributes"].get("name") or "").lower()
+                 for p in (_api("GET", f"/products?filter[store_id]={c.get('store_id')}").get("data") or [])}
+        found = {}
+        for item in data:
+            a = item["attributes"]
+            if not a.get("is_subscription"):
+                continue
+            pname = prods.get(str(a.get("product_id")), "")
+            if pname not in [n for n in prods.values()]:
+                continue
+            if a.get("price") == PRICES["web"] * 100 or "web" in pname:
+                found.setdefault("web", item["id"])
+            if a.get("price") == PRICES["mac"] * 100 or "mac" in pname:
+                found.setdefault("mac", item["id"])
+        if found.get("web") and found.get("mac"):
+            from shared_config import update_shared_config
+            c["variants"] = found
+            update_shared_config({"lemonsqueezy": c})
+            return found
+    except Exception:
+        pass
+    return v
 
 
 def _db():
@@ -103,7 +136,7 @@ def billing_checkout():
         },
         "relationships": {
             "store": {"data": {"type": "stores", "id": str(cfg["store_id"])}},
-            "variant": {"data": {"type": "variants", "id": str(cfg["variants"][plan])}},
+            "variant": {"data": {"type": "variants", "id": str(_variants()[plan])}},
         },
     }}
     try:
@@ -114,7 +147,7 @@ def billing_checkout():
 
 
 def _plan_for_variant(variant_id) -> str | None:
-    for plan, vid in (_cfg().get("variants") or {}).items():
+    for plan, vid in _variants().items():
         if str(vid) == str(variant_id):
             return plan
     return None
