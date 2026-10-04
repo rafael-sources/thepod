@@ -714,3 +714,64 @@ def send_password_reset_email(
         text_body=text_body,
         html_body=html_body,
     )
+
+
+def send_signup_confirm_email(
+    *,
+    to_email: str,
+    display_name: str,
+    confirm_url: str,
+) -> dict:
+    smtp = _smtp_config()
+    if not smtp:
+        return {"ok": False, "reason": "no_smtp"}
+
+    text_body = (
+        f"Hola {display_name},\n\n"
+        f"Gracias por registrarte en thePod.\n\n"
+        f"Abre este enlace para activar tu cuenta:\n"
+        f"  {confirm_url}\n\n"
+        f"El enlace vence en 24 horas.\n\n"
+        f"Si no te registraste, puedes ignorar este mensaje.\n\n"
+        f"— thePod\n"
+    )
+
+    inner = f"""\
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding:40px 48px 16px 48px;font-family:Georgia, 'Times New Roman', serif;">
+                    <p style="margin:0 0 24px 0;font-family:'Courier New', Courier, monospace;font-size:11px;color:#8a7d65;letter-spacing:0.12em;text-transform:uppercase;">
+                      Activa tu cuenta
+                    </p>
+                    <p style="margin:0 0 8px 0;font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:1.5;color:#554632;">
+                      Hola {_esc(display_name)},
+                    </p>
+                    <h1 style="margin:0 0 16px 0;font-family:Georgia, 'Times New Roman', serif;font-size:28px;line-height:1.2;font-weight:400;color:#1a1511;letter-spacing:-0.01em;">
+                      <span style="font-style:italic;color:#8a7d65;">Ya casi:</span><br />
+                      <span style="font-weight:700;">confirma tu correo.</span>
+                    </h1>
+                    <p style="margin:0 0 32px 0;font-family:Arial, Helvetica, sans-serif;font-size:15px;line-height:1.55;color:#554632;">
+                      Toca el botón para activar tu cuenta de thePod. El enlace vence en <strong style="color:#1a1511;">24 horas</strong>.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+{_cta_button(confirm_url, "Activar mi cuenta")}"""
+
+    html_body = _base_html(
+        preheader="Activa tu cuenta de thePod",
+        meta_label="Bienvenida",
+        accent_color="#5a8bff",
+        body_html=inner,
+        footer_extra="Recibiste este correo porque alguien se registró en thePod con esta dirección. Si no fuiste tú, ignora este mensaje: sin confirmar no se crea ninguna cuenta.",
+    )
+
+    return _build_and_send(
+        smtp=smtp,
+        subject="thePod · Activa tu cuenta",
+        to_email=to_email,
+        to_name=display_name,
+        text_body=text_body,
+        html_body=html_body,
+    )

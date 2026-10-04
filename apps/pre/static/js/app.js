@@ -85,7 +85,8 @@ var LoginView = {
     const error = ref("");
     const success = ref("");
     const busy = ref(false);
-    const mode = ref("login"); // "login" | "forgot" | "reset"
+    const mode = ref("login"); // "login" | "forgot" | "reset" | "signup" | "signup-sent" | "confirm"
+    const su = reactive({ clave: "", display_name: "", email: "", password: "", password2: "" });
     const forgotId = ref("");
     const resetToken = ref("");
     const newPassword = ref("");
@@ -99,7 +100,33 @@ var LoginView = {
         mode.value = "reset";
         resetToken.value = token;
       }
+      // Registro escondido: solo con el enlace que trae la clave
+      if (window.location.pathname === "/registro" && params.get("clave")) {
+        api("/api/auth/signup/open?clave=" + encodeURIComponent(params.get("clave"))).then(function (r) {
+          if (r && r.open) { su.clave = params.get("clave"); mode.value = "signup"; }
+        }).catch(function () {});
+      }
+      if (window.location.pathname === "/registro/confirmar" && token) {
+        mode.value = "confirm";
+        api("/api/auth/signup/confirm", { method: "POST", body: { token: token } }).then(function (r) {
+          window.history.replaceState({}, "", "/");
+          props.onLoggedIn(r.username);
+        }).catch(function (e) { error.value = e.message; });
+      }
     });
+
+    async function submitSignup() {
+      error.value = ""; success.value = "";
+      if (su.password.length < 8) { error.value = "La contraseña debe tener al menos 8 caracteres."; return; }
+      if (su.password !== su.password2) { error.value = "Las contraseñas no coinciden."; return; }
+      busy.value = true;
+      try {
+        var r = await api("/api/auth/signup", { method: "POST",
+          body: { clave: su.clave, display_name: su.display_name, email: su.email, password: su.password } });
+        success.value = r.message; mode.value = "signup-sent";
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
+    }
 
     async function submit() {
       error.value = ""; busy.value = true;
@@ -142,8 +169,8 @@ var LoginView = {
     }
 
     return { username, password, error, success, busy, mode,
-             forgotId, resetToken, newPassword, newPassword2,
-             submit, submitForgot, submitReset };
+             forgotId, resetToken, newPassword, newPassword2, su,
+             submit, submitForgot, submitReset, submitSignup };
   },
   template: `
     <div class="login-wrapper">
@@ -156,7 +183,7 @@ var LoginView = {
           <div class="subtitle">Branding, episodios y planificación previos a la grabación.</div>
           <form @submit.prevent="submit">
             <div class="form-row">
-              <label>Operador</label>
+              <label>Usuario o correo</label>
               <input type="text" v-model="username" autofocus autocomplete="username">
             </div>
             <div class="form-row" style="margin-top:14px;">
@@ -172,6 +199,48 @@ var LoginView = {
             <a href="#" @click.prevent="mode = 'forgot'; error = ''; success = ''" style="font-size:12px;color:var(--paper-dim,#8a7d65);">
               Olvidé mi contraseña
             </a>
+          </div>
+        </template>
+
+        <!-- REGISTRO (escondido: solo con enlace) -->
+        <template v-if="mode === 'signup'">
+          <div class="subtitle">Crea tu cuenta de thePod. Te mandamos un correo para confirmarla.</div>
+          <form @submit.prevent="submitSignup">
+            <div class="form-row">
+              <label>Tu nombre</label>
+              <input type="text" v-model="su.display_name" autofocus autocomplete="name" placeholder="ej: María García">
+            </div>
+            <div class="form-row" style="margin-top:14px;">
+              <label>Correo</label>
+              <input type="email" v-model="su.email" autocomplete="email" placeholder="correo@ejemplo.com">
+            </div>
+            <div class="form-row" style="margin-top:14px;">
+              <label>Contraseña</label>
+              <input type="password" v-model="su.password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+            </div>
+            <div class="form-row" style="margin-top:14px;">
+              <label>Repite la contraseña</label>
+              <input type="password" v-model="su.password2" autocomplete="new-password">
+            </div>
+            <div v-if="error" class="error">{{ error }}</div>
+            <button type="submit" class="primary" :disabled="busy || !su.display_name.trim() || !su.email.trim() || !su.password">
+              {{ busy ? "Creando…" : "Crear mi cuenta" }}
+            </button>
+          </form>
+          <div style="text-align:center;margin-top:14px;">
+            <a href="/" style="font-size:12px;color:var(--paper-dim,#8a7d65);">Ya tengo cuenta</a>
+          </div>
+        </template>
+        <template v-if="mode === 'signup-sent'">
+          <div class="subtitle">Revisa tu correo</div>
+          <div class="success" style="color:#5a8bff;font-size:14px;margin:10px 0;line-height:1.5;">{{ success }}</div>
+          <div class="muted" style="font-size:12px;">Si no llega en unos minutos, mira en spam o promociones.</div>
+        </template>
+        <template v-if="mode === 'confirm'">
+          <div class="subtitle">{{ error ? "No pudimos activar tu cuenta" : "Activando tu cuenta…" }}</div>
+          <div v-if="error" class="error">{{ error }}</div>
+          <div v-if="error" style="text-align:center;margin-top:14px;">
+            <a href="/" style="font-size:12px;color:var(--paper-dim,#8a7d65);">Ir a entrar</a>
           </div>
         </template>
 

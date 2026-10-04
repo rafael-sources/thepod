@@ -37,6 +37,10 @@ def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip().lower()
     password = data.get("password") or ""
+    if "@" in username:   # también se puede entrar con el correo
+        from shared_users import list_user_rows
+        username = next((r["username"] for r in list_user_rows()
+                         if (r.get("email") or "").strip().lower() == username), username)
     expected = USERS.get(username)
     if not expected or md5(password) != expected:
         return jsonify({"error": "usuario o contraseña inválidos"}), 401

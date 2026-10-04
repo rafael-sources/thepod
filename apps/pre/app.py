@@ -18,6 +18,7 @@ import sounds as sounds_bp
 import sponsors_api
 import templates_api
 import users_admin
+import signup as signup_bp
 import distribution as distribution_bp
 import youtube_publish as youtube_bp
 import mac_publish
@@ -112,6 +113,7 @@ def create_app():
     app.register_blueprint(sponsors_api.bp)
     app.register_blueprint(rsvp_bp.bp)
     app.register_blueprint(users_admin.bp)
+    app.register_blueprint(signup_bp.bp)
     app.register_blueprint(distribution_bp.bp)
     app.register_blueprint(youtube_bp.bp)
     app.register_blueprint(mac_publish.bp)
