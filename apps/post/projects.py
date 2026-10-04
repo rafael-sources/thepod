@@ -132,7 +132,7 @@ def create_project():
     lim = limits_for(current_user())
     if lim["episodes_left"] == 0:
         return jsonify({"error": f"El plan {lim['name']} incluye {lim['max_episodes']} episodios y ya los usaste. "
-                                 "Pásate al plan Completo para seguir.", "code": "plan_limit"}), 403
+                                 "Mejora tu plan para seguir.", "code": "plan_limit"}), 403
     meta = _create_project_internal(name, owner_username=current_user())
     from plans import claim_episode
     claim_episode(current_user(), f"post:{meta.get('slug')}")
@@ -247,7 +247,7 @@ def import_project_endpoint():
     lim = limits_for(current_user())
     if lim["episodes_left"] == 0:
         return jsonify({"error": f"El plan {lim['name']} incluye {lim['max_episodes']} episodios y ya los usaste. "
-                                 "Pásate al plan Completo para seguir.", "code": "plan_limit"}), 403
+                                 "Mejora tu plan para seguir.", "code": "plan_limit"}), 403
     if "file" not in request.files:
         return jsonify({"error": "archivo requerido"}), 400
     f = request.files["file"]
