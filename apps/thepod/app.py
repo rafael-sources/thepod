@@ -166,6 +166,23 @@ def create_app():
             username=session.get("username"),
         )
 
+    from billing import PRICES, bp as billing_bp, _db as _billing_db
+    app.register_blueprint(billing_bp)
+
+    @app.get("/planes")
+    def planes():
+        u = session.get("username")
+        portal = None
+        if u:
+            with _billing_db() as c:
+                row = c.execute("SELECT portal_url FROM subscriptions WHERE username = ?", (u,)).fetchone()
+            portal = row["portal_url"] if row else None
+        from plans import plan_of
+        return render_template("planes.html", username=u, current=plan_of(u) if u else None,
+                               prices=PRICES, portal=portal, done=bool(request.args.get("listo")),
+                               app_key=None, app_cfg=None, section=None, section_labels=None,
+                               prev_section=None, next_section=None, app_urls={})
+
     @app.get("/privacidad")
     def privacidad():
         return render_template("privacidad.html", username=session.get("username"),

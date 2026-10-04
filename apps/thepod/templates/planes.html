@@ -1,0 +1,104 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}Planes · thePod{% endblock %}
+{% block description %}Planes de thePod: Gratis, Web y Mac.{% endblock %}
+
+{% block body %}
+<style>
+  .plans { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; margin: 26px 0 30px; }
+  .plan { background: var(--ink-panel); border:1px solid var(--ink-line); border-radius:14px; padding:22px; display:flex; flex-direction:column; }
+  .plan.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .plan h3 { margin:0 0 4px; font-family: var(--font-display); font-size: 22px; }
+  .plan .price { font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
+  .plan .price small { font-size: 13px; font-weight: 400; color: var(--paper-dim); }
+  .plan ul { padding-left: 18px; margin: 12px 0 18px; flex: 1; color: var(--paper-soft); font-size: 14px; line-height: 1.55; }
+  .plan .btn { display:block; text-align:center; padding: 11px 14px; border-radius: 10px; font-weight: 700; text-decoration:none; border:0; cursor:pointer; font-size: 14px; }
+  .plan .btn.main { background: var(--accent); color: #1A1510; }
+  .plan .btn.ghost { background: transparent; color: var(--paper-soft); border: 1px solid var(--ink-line); }
+  .plan .tag { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; min-height: 14px; }
+  .plan-msg { padding: 12px 16px; border-radius: 10px; margin-top: 12px; display:none; }
+  .plan-msg.show { display:block; background: var(--ink-panel); border:1px solid var(--ink-line); }
+  @media (max-width: 760px) { .plans { grid-template-columns: 1fr; } }
+</style>
+<div style="max-width: 980px; margin: 0 auto; padding-top: 24px;">
+  <header class="docs-header">
+    <div class="eyebrow">PLANES</div>
+    <h1>Elige cómo usar thePod</h1>
+    <p class="lede">Prepara, graba, edita y publica tu podcast. Empieza gratis y paga solo cuando lo necesites. Puedes cancelar cuando quieras.</p>
+  </header>
+
+  {% if done %}
+  <div class="callout"><div class="ctag">LISTO</div><div class="cbody"><p>¡Gracias! Tu pago se está confirmando: en un minuto tu plan nuevo queda activo en la web y en la app.</p></div></div>
+  {% endif %}
+
+  <div class="plans">
+    <div class="plan {% if current == 'gratis' %}current{% endif %}">
+      <div class="tag">{% if current == 'gratis' %}Tu plan{% endif %}</div>
+      <h3>Gratis</h3>
+      <div class="price">0 <small>USD</small></div>
+      <ul>
+        <li>2 episodios para probar todo</li>
+        <li>Grabaciones de hasta 15 minutos</li>
+        <li>Video hasta 720p</li>
+        <li>La app de Mac, para probarla con esos mismos límites</li>
+      </ul>
+      {% if not username %}<a class="btn ghost" href="/">Entrar</a>{% elif current == 'gratis' %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>{% endif %}
+    </div>
+
+    <div class="plan {% if current == 'web' %}current{% endif %}">
+      <div class="tag">{% if current == 'web' %}Tu plan{% endif %}</div>
+      <h3>Web</h3>
+      <div class="price">{{ prices.web }} <small>USD al mes</small></div>
+      <ul>
+        <li>Episodios sin límite</li>
+        <li>Grabaciones sin límite de tiempo</li>
+        <li>Video hasta 1080p y 4K</li>
+        <li>Todo en el navegador: preparar, grabar, editar, publicar y amaPod</li>
+      </ul>
+      {% if current == 'web' %}{% if portal %}<a class="btn ghost" href="{{ portal }}" target="_blank" rel="noopener">Administrar mi suscripción</a>{% else %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>{% endif %}
+      {% elif current in ('mac', 'completo') %}<span class="btn ghost" style="opacity:.6; cursor:default;">Incluido en tu plan</span>
+      {% else %}<button class="btn main" data-plan="web">{{ 'Elegir Web' if username else 'Entrar para elegir' }}</button>{% endif %}
+    </div>
+
+    <div class="plan {% if current in ('mac', 'completo') %}current{% endif %}">
+      <div class="tag">{% if current in ('mac', 'completo') %}Tu plan{% else %}Recomendado{% endif %}</div>
+      <h3>Mac</h3>
+      <div class="price">{{ prices.mac }} <small>USD al mes</small></div>
+      <ul>
+        <li>Todo lo del plan Web</li>
+        <li>La app thePod para Mac, sin límites</li>
+        <li>Edición fina: mezcla, fondo virtual, reels con diseño, b-roll y cintillos</li>
+        <li>Edita sin internet una vez que trajiste el episodio</li>
+      </ul>
+      {% if current == 'mac' and portal %}<a class="btn ghost" href="{{ portal }}" target="_blank" rel="noopener">Administrar mi suscripción</a>
+      {% elif current in ('mac', 'completo') %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>
+      {% else %}<button class="btn main" data-plan="mac">{{ ('Pasar a Mac' if current == 'web' else 'Elegir Mac') if username else 'Entrar para elegir' }}</button>{% endif %}
+    </div>
+  </div>
+  <div class="plan-msg" id="plan-msg"></div>
+
+  <section>
+    <h2><span class="num">01</span> Preguntas</h2>
+    <p><strong>¿Cómo pago?</strong> Con tarjeta, en una página segura de Lemon Squeezy, que también emite tu factura. thePod nunca ve tu tarjeta.</p>
+    <p><strong>¿Puedo cambiar o cancelar?</strong> Sí, cuando quieras, desde «Administrar mi suscripción». Si cancelas, tu plan sigue hasta el final del mes que ya pagaste y después vuelve a Gratis. Lo que ya hiciste no se borra.</p>
+    <p><strong>¿Qué cuenta como episodio en Gratis?</strong> Cada sala grabada, cada proyecto nuevo en postPod web y cada grabación importada en la Mac. Lo que ya contó se puede seguir usando siempre.</p>
+  </section>
+</div>
+<script>
+  document.querySelectorAll("button[data-plan]").forEach(function (b) {
+    b.addEventListener("click", async function () {
+      {% if not username %}location.href = "/"; return;{% endif %}
+      var msg = document.getElementById("plan-msg");
+      b.disabled = true; b.textContent = "Abriendo el pago…";
+      try {
+        var r = await fetch("/api/billing/checkout", { method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: b.dataset.plan }) });
+        var d = await r.json();
+        if (d.url) { location.href = d.url; return; }
+        msg.textContent = d.error || "No se pudo abrir el pago."; msg.classList.add("show");
+      } catch (e) { msg.textContent = "No se pudo abrir el pago. Revisa tu conexión."; msg.classList.add("show"); }
+      b.disabled = false; b.textContent = "Intentar de nuevo";
+    });
+  });
+</script>
+{% endblock %}

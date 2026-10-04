@@ -2,6 +2,8 @@
 Planes de thePod — el mismo archivo en prePod, prodPod, postPod y thePod.
 
 - Completo: sin límites (todas las cuentas que ya existían y las que un admin marque así).
+- Web (de pago): sin límites en la web; en la app de Mac, lo del plan Gratis.
+- Mac (de pago): sin límites en la web y en la app.
 - Gratis: 2 episodios en total (una vez hechos, no se pueden hacer más), grabaciones de hasta
   15 minutos y video hasta 720p.
 
@@ -17,9 +19,15 @@ from pathlib import Path
 USERS_DB = Path.home() / ".podpod" / "users.db"
 
 PLANS = {
-    "gratis": {"name": "Gratis", "max_episodes": 2, "max_record_seconds": 15 * 60, "max_height": 720},
-    "completo": {"name": "Completo", "max_episodes": None, "max_record_seconds": None, "max_height": None},
+    "gratis":   {"name": "Gratis",   "max_episodes": 2,    "max_record_seconds": 15 * 60, "max_height": 720,  "mac": False},
+    # De pago (Lemon Squeezy): Web = todo en el navegador; Mac = web + la app de Mac
+    "web":      {"name": "Web",      "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": False},
+    "mac":      {"name": "Mac",      "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": True},
+    # Cuentas de antes y las que marca un admin: todo, sin cobro
+    "completo": {"name": "Completo", "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": True},
 }
+# Sin la app incluida (Gratis y Web), en la Mac rige lo del plan Gratis
+MAC_FREE = {"max_episodes": 2, "max_height": 720}
 
 
 def _connect():
@@ -80,8 +88,17 @@ def claim_episode(username: str, ref: str):
     with _connect() as c:
         if c.execute("SELECT 1 FROM plan_usage WHERE username = ? AND ref = ?", (username, ref)).fetchone():
             return True, None
+        if ref.startswith("mac:") and not lim["mac"] and lim["plan"] != "gratis":
+            # Plan Web: la app de Mac funciona como Gratis (cuentan solo los episodios hechos en la Mac)
+            used_mac = c.execute("SELECT COUNT(*) FROM plan_usage WHERE username = ? AND ref LIKE 'mac:%'",
+                                 (username,)).fetchone()[0]
+            if used_mac >= MAC_FREE["max_episodes"]:
+                return False, (f"El plan {lim['name']} no incluye la app de Mac: ahí se pueden hacer "
+                               f"{MAC_FREE['max_episodes']} episodios de prueba y ya los usaste. Pásate al plan Mac para seguir.")
+            c.execute("INSERT OR IGNORE INTO plan_usage (username, ref) VALUES (?, ?)", (username, ref))
+            return True, None
         if lim["max_episodes"] is not None and lim["episodes_used"] >= lim["max_episodes"]:
             return False, (f"El plan {lim['name']} incluye {lim['max_episodes']} episodios y ya los usaste. "
-                           "Pásate al plan Completo para seguir.")
+                           "Mejora tu plan para seguir.")
         c.execute("INSERT OR IGNORE INTO plan_usage (username, ref) VALUES (?, ?)", (username, ref))
     return True, None
