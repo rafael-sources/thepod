@@ -1832,6 +1832,7 @@
 
   </div>
 
+<script src="{{ url_for('static', filename='intro/thepod-intro.js') }}"></script>
 <script>
 var isLoggedIn = {{ 'true' if username else 'false' }};
 
@@ -1870,9 +1871,12 @@ form.addEventListener("submit", async function(e) {
   var password = document.getElementById("inp-pass").value;
   var btn = document.getElementById("loginBtn");
   btn.disabled = true; btn.textContent = "Entrando…";
+  if (window.ThePodIntro) ThePodIntro.unlock();   // habilita el sonido mientras dura el clic
   try {
     await jsonFetch("/api/login", { method: "POST", body: { username: username, password: password } });
-    window.location.reload();
+    // La misma entrada que la app de Mac: animación con el sonido del cuatro, y después la página
+    if (window.ThePodIntro) { closeLogin(); ThePodIntro.play(function () { window.location.reload(); }); }
+    else window.location.reload();
   } catch (ex) {
     err.textContent = ex.message;
     err.style.display = "block";
