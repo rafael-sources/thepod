@@ -4920,8 +4920,9 @@ var UsersAdminModal = {
     }
 
     function planLabel(u) {
-      if (u.is_admin || u.plan !== "gratis") return "";
-      return "Gratis · " + u.episodes_used + " de " + u.max_episodes + " episodios";
+      if (u.is_admin || !u.plan || u.plan === "completo") return "";
+      if (u.plan === "gratis") return "Gratis · " + u.episodes_used + " de " + u.max_episodes + " episodios";
+      return "Plan " + (u.plan === "web" ? "Web" : "Mac");
     }
 
     function limitLabel(u) {
@@ -4997,9 +4998,13 @@ var UsersAdminModal = {
               <span>Plan</span>
               <div class="ua-choice">
                 <label :class="{ on: nu.plan === 'completo' }"><input type="radio" value="completo" v-model="nu.plan">
-                  <b>Completo</b><small>Sin límites</small></label>
+                  <b>Completo</b><small>Todo, sin cobro (cortesía)</small></label>
                 <label :class="{ on: nu.plan === 'gratis' }"><input type="radio" value="gratis" v-model="nu.plan">
                   <b>Gratis</b><small>2 episodios, grabaciones de 15 min, 720p</small></label>
+                <label :class="{ on: nu.plan === 'web' }"><input type="radio" value="web" v-model="nu.plan">
+                  <b>Web</b><small>Sin límites en la web (normalmente lo pone el pago)</small></label>
+                <label :class="{ on: nu.plan === 'mac' }"><input type="radio" value="mac" v-model="nu.plan">
+                  <b>Mac</b><small>Web y app sin límites (normalmente lo pone el pago)</small></label>
               </div>
             </div>
             <label v-if="nu.role === 'user'" class="ua-field ua-inline">
@@ -5087,8 +5092,10 @@ var UsersAdminModal = {
                   <div v-if="!editForm.is_admin" class="ua-field ua-wide">
                     <span>Plan</span>
                     <div class="ua-choice">
-                      <label :class="{ on: editForm.plan === 'completo' }"><input type="radio" value="completo" v-model="editForm.plan"><b>Completo</b><small>Sin límites</small></label>
+                      <label :class="{ on: editForm.plan === 'completo' }"><input type="radio" value="completo" v-model="editForm.plan"><b>Completo</b><small>Todo, sin cobro</small></label>
                       <label :class="{ on: editForm.plan === 'gratis' }"><input type="radio" value="gratis" v-model="editForm.plan"><b>Gratis</b><small>2 episodios · 15 min · 720p ({{ u.episodes_used }} usados)</small></label>
+                      <label :class="{ on: editForm.plan === 'web' }"><input type="radio" value="web" v-model="editForm.plan"><b>Web</b><small>Sin límites en la web</small></label>
+                      <label :class="{ on: editForm.plan === 'mac' }"><input type="radio" value="mac" v-model="editForm.plan"><b>Mac</b><small>Web y app sin límites</small></label>
                     </div>
                   </div>
                   <label v-if="!editForm.is_admin" class="ua-field ua-inline">
