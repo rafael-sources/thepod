@@ -157,25 +157,210 @@ enum EditEngine {
             .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
     }
 
+    /// Antes de estas palabras, «bueno»/«tipo» son palabra de verdad («es bueno», «un tipo»), no muletilla.
+    static let buenoNotFillerAfter: Set<String> = ["es", "muy", "tan", "lo", "mas", "que", "esta", "estuvo", "estaba", "era",
+                                                   "fue", "sea", "un", "algo", "super", "re", "menos", "seria", "sera",
+                                                   "ser", "estar", "bien", "nada", "tambien", "igual", "tiene", "tenia", "parece"]
+    static let tipoNotFillerAfter: Set<String> = ["un", "el", "ese", "este", "esa", "que", "otro", "mismo", "cada", "ningun",
+                                                  "algun", "del", "al", "de", "cualquier", "mi", "tu", "su", "buen", "gran"]
+
+    /// Muletillas, con cuidado de no cortar palabras válidas.
+    ///
+    /// - Sonidos («eh», «mmm»…): se cortan siempre.
+    /// - «este», «o sea», «tipo»: se cortan cuando están solos entre pausas, repetidos («este este») o
+    ///   pegados a un sonido («este… eh»). Si no, quedan como sugerencia apagada.
+    /// - «bueno», «pues», «digamos»: casi siempre son válidos al empezar una frase; nunca se cortan solos,
+    ///   quedan como sugerencia apagada para que la persona decida.
+    /// - Si por el contexto son palabra de verdad («es bueno», «este tema», «tipo de», «un tipo») no se marcan.
+    /// Se mira a la misma persona (las palabras del otro no cuentan como pausa ni como contexto), y no se
+    /// toca nada que se pise con la voz de otra persona.
     static func fillerCuts(words: [Word], includeWordFillers: Bool) -> [Cut] {
+        let all = words.sorted { $0.s < $1.s }
         var cuts: [Cut] = []
-        for (i, w) in words.enumerated() {
-            let n = normalize(w.w)
-            var hit = soundFillers.contains(n)
-            var end = w.e
-            if !hit, includeWordFillers {
-                if wordFillers.contains(n) { hit = true }
-                if n == "o", i + 1 < words.count, normalize(words[i + 1].w) == "sea" { hit = true; end = words[i + 1].e }
-            }
-            guard hit else { continue }
-            let prevEnd = i > 0 ? words[i - 1].e : 0
-            let nextStart = i + 1 < words.count ? words[i + 1].s : end + 0.2
+        var byLane: [Int: [Int]] = [:]                  // índices en `all`, por persona
+        for (i, w) in all.enumerated() { byLane[w.lane, default: []].append(i) }
+
+        func othersOverlap(_ a: Double, _ b: Double, lane: Int) -> Bool {
+            all.contains { $0.lane != lane && $0.s < b - 0.05 && $0.e > a + 0.05 }
+        }
+        func bounds(_ gi: Int, end: Double) -> (Double, Double)? {
+            let w = all[gi]
+            let prevEnd = gi > 0 ? all[..<gi].map(\.e).max() ?? 0 : 0
+            let nextStart = gi + 1 < all.count ? all[(gi + 1)...].map(\.s).min() ?? end + 0.2 : end + 0.2
             let a = max(prevEnd, w.s - 0.04), b = min(nextStart, end + 0.04)
-            if b > a {
-                cuts.append(Cut(start: a, end: b, kind: .filler, label: "“\(w.w.trimmingCharacters(in: .whitespaces))”"))
+            return b > a ? (a, b) : nil
+        }
+        func trailingPunct(_ raw: String) -> Bool {
+            guard let last = raw.trimmingCharacters(in: .whitespaces).last else { return false }
+            return ",.;:?!…".contains(last)
+        }
+
+        for (_, idx) in byLane {
+            var skipNext = false
+            for (k, gi) in idx.enumerated() {
+                if skipNext { skipNext = false; continue }
+                let w = all[gi]
+                let n = normalize(w.w)
+                let prev = k > 0 ? all[idx[k - 1]] : nil
+                let next = k + 1 < idx.count ? all[idx[k + 1]] : nil
+                let pn = prev.map { normalize($0.w) } ?? ""
+                let nn = next.map { normalize($0.w) } ?? ""
+                let gapBefore = prev.map { w.s - $0.e } ?? 9
+                var end = w.e
+                var shown = w.w.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                var sure = false
+                var doubtful = false
+                if soundFillers.contains(n) {
+                    sure = true
+                } else if includeWordFillers {
+                    var key = n
+                    var after = next
+                    var rawLast = w.w
+                    if n == "o", nn == "sea", let nx = next {
+                        key = "o sea"; end = nx.e; skipNext = true
+                        after = k + 2 < idx.count ? all[idx[k + 2]] : nil
+                        rawLast = nx.w; shown = "o sea"
+                    }
+                    let an = after.map { normalize($0.w) } ?? ""
+                    let gapAfter = after.map { $0.s - end } ?? 9
+                    let isolated = gapBefore >= 0.25 && gapAfter >= 0.25
+                    let nextIsSound = soundFillers.contains(an)
+                    let prevIsSound = soundFillers.contains(pn)
+                    switch key {
+                    case "este":
+                        // «este tema», «en este caso»: demostrativo pegado a la palabra que sigue
+                        if !trailingPunct(rawLast), gapAfter < 0.15, !nextIsSound, an != "este" { break }
+                        if an == "este" || pn == "este" || nextIsSound || prevIsSound || isolated { sure = true } else { doubtful = true }
+                    case "tipo":
+                        if an == "de" || tipoNotFillerAfter.contains(pn) { break }
+                        if isolated || nextIsSound || prevIsSound { sure = true } else { doubtful = true }
+                    case "o sea", "osea", "o_sea":
+                        if isolated || nextIsSound || prevIsSound || an == "o" { sure = true } else { doubtful = true }
+                    case "bueno":
+                        if buenoNotFillerAfter.contains(pn) || an == "para" { break }
+                        doubtful = true
+                    case "pues", "digamos":
+                        doubtful = true
+                    default:
+                        break
+                    }
+                }
+                guard sure || doubtful else { continue }
+                if othersOverlap(w.s, end, lane: w.lane) { continue }
+                guard let (a, b) = bounds(gi, end: end) else { continue }
+                if sure {
+                    cuts.append(Cut(start: a, end: b, kind: .filler, label: "“\(shown)”"))
+                } else {
+                    cuts.append(Cut(start: a, end: b, kind: .filler, enabled: false,
+                                    label: "¿Muletilla? «\(shown.trimmingCharacters(in: CharacterSet(charactersIn: ",.;:?!…")))»",
+                                    suggested: true))
+                }
             }
         }
-        return cuts
+        return cuts.sorted { $0.start < $1.start }
+    }
+
+    /// Arranques en falso y frases repetidas («es que, es que el…», «de la de la»): sugiere cortar el primer
+    /// intento (desde que empieza hasta que empieza el segundo). Siempre apagado: decide la persona.
+    static func repeatCuts(words: [Word]) -> [Cut] {
+        let all = words.sorted { $0.s < $1.s }
+        var cuts: [Cut] = []
+        let lanes = Set(all.map(\.lane))
+        let neverAlone: Set<String> = ["no", "si", "ya", "muy", "bien", "mas", "nada", "chao", "jaja", "ja"]
+        for lane in lanes {
+            let lw = all.filter { $0.lane == lane }
+            let toks = lw.map { normalize($0.w) }
+            var i = 0
+            while i < lw.count {
+                var found: (n: Int, j: Int)?
+                search: for n in stride(from: 4, through: 1, by: -1) where i + n <= lw.count {
+                    let a = Array(toks[i..<(i + n)])
+                    if a.contains(where: { $0.isEmpty || soundFillers.contains($0) }) { continue }
+                    if n == 1, neverAlone.contains(a[0]) { continue }
+                    let maxGap = n >= 3 ? 2 : 1                 // palabras en el medio permitidas (con 1-2 palabras: solo una muletilla)
+                    for gap in 0...maxGap {
+                        let j = i + n + gap
+                        guard j + n <= lw.count else { break }
+                        // lo que hay en el medio tiene que ser muletilla o sonido («es que, eh, es que»)
+                        let middle = toks[(i + n)..<j]
+                        if gap > 0, !middle.allSatisfy({ soundFillers.contains($0) || wordFillers.contains($0) }) && n < 3 { continue }
+                        if Array(toks[j..<(j + n)]) == a {
+                            let pause = lw[j].s - lw[i + n - 1].e
+                            let span = lw[j].s - lw[i].s
+                            if pause < (n == 1 ? 0.6 : 1.5), span < 4 { found = (n, j); break search }
+                        }
+                    }
+                }
+                guard let f = found else { i += 1; continue }
+                let first = lw[i], second = lw[f.j]
+                let start = max(all.filter { $0.e <= first.s + 0.001 && $0.s < first.s }.map(\.e).max() ?? 0, first.s - 0.04)
+                let end = second.s - 0.02
+                if end - start >= 0.12, !all.contains(where: { $0.lane != lane && $0.s < end - 0.05 && $0.e > start + 0.05 }) {
+                    let phrase = lw[i..<(i + f.n)].map { $0.w.trimmingCharacters(in: CharacterSet.alphanumerics.inverted) }.joined(separator: " ")
+                    cuts.append(Cut(start: start, end: end, kind: .repeated, enabled: false,
+                                    label: "¿Repetido? «\(phrase)»", suggested: true))
+                }
+                i = f.j
+            }
+        }
+        return cuts.sorted { $0.start < $1.start }
+    }
+
+    /// Sonidos sin palabras («eeeh» o «mmm» que la transcripción no escribió): tramos de 0,3 a 1,2 s en los que
+    /// el micrófono de una persona suena fuerte (y más que los demás) pero nadie dice ninguna palabra.
+    /// Pueden ser también risas o toses: por eso solo se sugieren, apagados.
+    static func soundOnlyCuts(words: [Word], energy: EnergyMap) -> [Cut] {
+        let hop = EnergyMap.hop
+        let all = words.sorted { $0.s < $1.s }
+        guard !all.isEmpty else { return [] }
+        var cuts: [Cut] = []
+        for (lane, env) in energy.lanes {
+            let lw = all.filter { $0.lane == lane }
+            guard lw.count > 20 else { continue }
+            // nivel típico de su voz: mediana de la energía donde habla
+            var speech: [Float] = []
+            for w in lw { let a = Int(w.s / hop), b = Int(w.e / hop); if a < b, b <= env.count { speech += env[a..<b] } }
+            guard speech.count > 50 else { continue }
+            let voice = speech.sorted()[speech.count / 2]
+            let threshold = voice - 9
+            // huecos sin palabras de nadie, de al menos 0,6 s
+            var holes: [(Double, Double)] = []
+            var lastEnd = 0.0
+            for w in all {
+                if w.s - lastEnd >= 0.6 { holes.append((lastEnd + 0.12, w.s - 0.12)) }
+                lastEnd = max(lastEnd, w.e)
+            }
+            for (h0, h1) in holes {
+                var k = Int(h0 / hop)
+                let kEnd = min(env.count, Int(h1 / hop))
+                while k < kEnd {
+                    guard env[k] >= threshold else { k += 1; continue }
+                    var e = k
+                    while e < kEnd, env[e] >= threshold - 3 { e += 1 }
+                    let dur = Double(e - k) * hop
+                    let louder = (k..<e).allSatisfy { i in energy.lanes.allSatisfy { $0.key == lane || i >= $0.value.count || $0.value[i] < env[i] - 6 } }
+                    if dur >= 0.3, dur <= 1.2, louder {
+                        cuts.append(Cut(start: Double(k) * hop - 0.05, end: Double(e) * hop + 0.05, kind: .filler, enabled: false,
+                                        label: "¿Sonido sin palabras?", suggested: true))
+                    }
+                    k = e + 1
+                }
+            }
+        }
+        return cuts.sorted { $0.start < $1.start }
+    }
+
+    /// Al volver a calcular los cortes automáticos, conserva lo que la persona ya decidió (prendido o apagado)
+    /// en los que caen en el mismo lugar.
+    static func carryDecisions(from old: [Cut], into new: [Cut]) -> [Cut] {
+        let decided = old.filter { $0.reviewed == true }
+        guard !decided.isEmpty else { return new }
+        return new.map { c in
+            guard let o = decided.first(where: { $0.kind == c.kind && abs($0.start - c.start) < 0.15 && abs($0.end - c.end) < 0.15 }) else { return c }
+            var c = c; c.enabled = o.enabled; c.reviewed = true
+            return c
+        }
     }
 
     // MARK: Captions

@@ -353,6 +353,13 @@ final class ProjectSession: ObservableObject {
     }
 
     func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil, look: ReelLook? = nil, reel: Reel? = nil) {
+        var reel = reel
+        if reel != nil {
+            reel?.seen = true       // mirado (revisión antes de exportar); igual en la copia para no reconstruir dos veces
+            if let i = project.reels.firstIndex(where: { $0.id == reel?.id }), project.reels[i].seen != true {
+                project.reels[i].seen = true
+            }
+        }
         let changed = format != previewFormat || layout != previewLayout || look != previewLook || reel != previewReel
             || window?.start != previewWindow?.start || window?.end != previewWindow?.end
         previewFormat = format
@@ -385,6 +392,28 @@ final class ProjectSession: ObservableObject {
             built = nil
             player.replaceCurrentItem(with: nil)
         }
+    }
+
+    /// Sugerencias que la persona todavía no miró (muletillas dudosas, frases repetidas, sonidos sin palabras).
+    var pendingSuggestions: [Cut] {
+        project.cuts.filter { $0.suggested == true && $0.reviewed != true }.sorted { $0.start < $1.start }
+    }
+
+    /// Decide una sugerencia: quitarla (se corta) o dejarla (queda como está).
+    func decide(_ id: UUID, remove: Bool) {
+        guard let i = project.cuts.firstIndex(where: { $0.id == id }) else { return }
+        project.cuts[i].enabled = remove
+        project.cuts[i].reviewed = true
+    }
+
+    /// Todas las sugerencias pendientes de una vez.
+    func decideAllPending(remove: Bool) {
+        var p = project
+        for i in p.cuts.indices where p.cuts[i].suggested == true && p.cuts[i].reviewed != true {
+            p.cuts[i].enabled = remove
+            p.cuts[i].reviewed = true
+        }
+        project = p
     }
 
     /// Corta a mano un trozo marcado en la línea de tiempo (tiempo del episodio). Se puede deshacer en la lista de cortes.
@@ -462,18 +491,24 @@ final class ProjectSession: ObservableObject {
             if energy == nil || settings.removeSilences { try await ensureEnergy() }
 
             var p = project
-            p.cuts.removeAll { $0.kind == .silence || $0.kind == .filler }
+            let old = p.cuts.filter { Self.isAutoCut($0) }
+            p.cuts.removeAll { Self.isAutoCut($0) }
             let (silences, fillers) = autoCuts(p)
-            p.cuts += silences + fillers
+            let fresh = EditEngine.carryDecisions(from: old, into: silences + fillers)
+            p.cuts += fresh
             p.fix.lastRun = Date()
             project = p
 
-            let saved = silences.reduce(0) { $0 + $1.length } + fillers.reduce(0) { $0 + $1.length }
+            let on = fresh.filter(\.enabled)
+            let saved = on.reduce(0) { $0 + $1.length }
+            let removedFillers = on.filter { $0.kind == .filler }.count
+            let pending = fresh.filter { $0.suggested == true && $0.reviewed != true }.count
             var parts: [String] = []
-            if settings.removeSilences { parts.append("\(silences.count) silencios") }
-            if settings.removeFillers { parts.append("\(fillers.count) muletillas") }
+            if settings.removeSilences { parts.append("\(on.filter { $0.kind == .silence }.count) silencios") }
+            if settings.removeFillers { parts.append("\(removedFillers) muletillas") }
             fixSummary = "Listo. Quitamos \(parts.joined(separator: " y ")) — tu episodio ahora dura \(EditEngine.clock(p.duration - saved)) (antes \(EditEngine.clock(p.duration)))."
                 + (settings.enhanceAudio ? " El audio quedó con sonido de estudio." : "")
+                + (pending > 0 ? " Te dejamos \(pending) \(pending == 1 ? "sugerencia" : "sugerencias") para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques." : "")
     }
 
     /// Silencios y muletillas que quita "Arreglar", con los ajustes del proyecto (no los agrega).
@@ -493,12 +528,23 @@ final class ProjectSession: ObservableObject {
         }
         if settings.removeFillers, !p.words.isEmpty {
             fillers = EditEngine.fillerCuts(words: p.words, includeWordFillers: settings.removeWordFillers)
+            fillers += EditEngine.repeatCuts(words: p.words)
+            if let energy {
+                // sonidos sin palabras que no se pisen con lo que ya se marcó
+                let marked = fillers
+                fillers += EditEngine.soundOnlyCuts(words: p.words, energy: energy)
+                    .filter { c in !marked.contains { $0.start < c.end && $0.end > c.start } }
+            }
+            fillers.sort { $0.start < $1.start }
         }
         return (silences, fillers)
     }
 
+    /// Cortes que pone «Arreglar» (se recalculan); los manuales e importados no se tocan.
+    static func isAutoCut(_ c: Cut) -> Bool { c.kind == .silence || c.kind == .filler || c.kind == .repeated }
+
     func undoFix() {
-        project.cuts.removeAll { $0.kind == .silence || $0.kind == .filler }
+        project.cuts.removeAll { Self.isAutoCut($0) }
         project.fix.lastRun = nil
         fixSummary = nil
     }
@@ -1430,9 +1476,10 @@ final class ProjectSession: ObservableObject {
         if project.fix.lastRun != nil {
             try await ensureEnergy()
             var p = project
-            p.cuts.removeAll { $0.kind == .silence || $0.kind == .filler }
+            let old = p.cuts.filter { Self.isAutoCut($0) }
+            p.cuts.removeAll { Self.isAutoCut($0) }
             let (silences, fillers) = autoCuts(p)
-            p.cuts += silences + fillers
+            p.cuts += EditEngine.carryDecisions(from: old, into: silences + fillers)
             project = p
             changed = true
         }

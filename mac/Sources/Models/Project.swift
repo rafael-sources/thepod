@@ -336,13 +336,18 @@ struct Word: Codable, Equatable, Hashable {
 }
 
 struct Cut: Codable, Identifiable, Equatable, Hashable {
-    enum Kind: String, Codable { case silence, filler, manual, imported }
+    enum Kind: String, Codable { case silence, filler, manual, imported, repeated }
     var id = UUID()
     var start: Double
     var end: Double
     var kind: Kind
     var enabled: Bool = true
     var label: String = ""
+    /// Sugerencia dudosa (muletilla que puede ser palabra válida, frase repetida, sonido sin palabras):
+    /// nace apagada y no se quita hasta que la persona la marque.
+    var suggested: Bool? = nil
+    /// La persona ya la miró (la prendió o la apagó a mano). Se conserva al volver a arreglar.
+    var reviewed: Bool? = nil
     var length: Double { max(0, end - start) }
 }
 
@@ -385,6 +390,7 @@ struct Reel: Codable, Identifiable, Equatable {
     var music: [AudioLaneClip] = []     // música propia del reel (se usa cuando el reel no lleva la del episodio)
     var cintillos: [DirectorCintillo] = []   // cintillos solo de este reel
     var words: [Word]?                  // texto propio del reel (se volvió a escuchar solo este reel); nil = el del episodio
+    var seen: Bool?                     // la persona ya lo miró en la vista previa (para la revisión antes de exportar)
     var length: Double { max(0, end - start) }
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
@@ -400,6 +406,7 @@ struct Reel: Codable, Identifiable, Equatable {
         end = try c.decodeIfPresent(Double.self, forKey: .end) ?? start
         selected = try c.decodeIfPresent(Bool.self, forKey: .selected) ?? true
         exportedFile = try c.decodeIfPresent(String.self, forKey: .exportedFile)
+        seen = try c.decodeIfPresent(Bool.self, forKey: .seen)
         look = try c.decodeIfPresent(ReelLook.self, forKey: .look)
         cuts = try c.decodeIfPresent([Cut].self, forKey: .cuts) ?? []
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []

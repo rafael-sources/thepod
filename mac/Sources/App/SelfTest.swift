@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -575,6 +575,35 @@ enum SelfTest {
                     let a = try await measure(1.0), b = try await measure(0.25)
                     print(String(format: "medidor persona 1: normal %.1f dB, al 25%% %.1f dB, diferencia %.1f dB", a, b, b - a))
                 } catch { print("FAIL \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if let i = args.firstIndex(of: "--filler-test"), args.count > i + 1 {
+            // Solo lectura: compara las muletillas de antes (todas las palabras de la lista) con las nuevas
+            Task { @MainActor in
+                guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
+                let words = p.words
+                let oldCount = words.filter { EditEngine.soundFillers.contains(EditEngine.normalize($0.w)) || EditEngine.wordFillers.contains(EditEngine.normalize($0.w)) }.count
+                let t0 = Date()
+                let f = EditEngine.fillerCuts(words: words, includeWordFillers: true)
+                let r = EditEngine.repeatCuts(words: words)
+                var snd: [Cut] = []
+                if let energy = AudioAnalysis.loadEnergy(p.id) {
+                    snd = EditEngine.soundOnlyCuts(words: words, energy: energy).filter { c in !(f + r).contains { $0.start < c.end && $0.end > c.start } }
+                }
+                print(String(format: "palabras %d · antes %d muletillas cortadas · %.2f s", words.count, oldCount, Date().timeIntervalSince(t0)))
+                print("ahora: \(f.filter(\.enabled).count) seguras, \(f.filter { !$0.enabled }.count) dudosas, \(r.count) repetidas, \(snd.count) sonidos sin palabras")
+                // contexto de cada «bueno»
+                let sorted = words.sorted { $0.s < $1.s }
+                for (k, w) in sorted.enumerated() where EditEngine.normalize(w.w) == "bueno" {
+                    let ctx = sorted[max(0, k - 3)...min(sorted.count - 1, k + 3)].filter { $0.lane == w.lane }.map(\.w).joined(separator: " ")
+                    let c = f.first { $0.start <= w.s + 0.05 && $0.end >= w.e - 0.05 }
+                    print("  bueno @\(EditEngine.clock(w.s)) → \(c == nil ? "NO se marca" : (c!.enabled ? "SE CORTA" : "sugerencia")) · …\(ctx)…")
+                }
+                for c in (f.filter { !$0.enabled } + r + snd).sorted(by: { $0.start < $1.start }).prefix(40) {
+                    print("  \(EditEngine.clock(c.start)) \(String(format: "%.2f", c.length))s \(c.label)")
+                }
                 fflush(stdout); exit(0)
             }
             return

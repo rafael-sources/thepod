@@ -223,8 +223,15 @@ struct FixStep: View {
                             }
                         }
                         if session.project.fix.removeFillers {
-                            Toggle("También “este”, “o sea”, “pues”, “bueno” (revisa el resultado)", isOn: $session.project.fix.removeWordFillers)
-                                .font(.caption)
+                            Toggle(isOn: $session.project.fix.removeWordFillers) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("También “este”, “o sea”, “bueno”, “pues”…").font(.caption)
+                                    Text("Solo quitamos las que suenan a muletilla (sueltas entre pausas o repetidas). Las dudosas te las dejamos para que decidas.")
+                                        .font(.caption2).foregroundStyle(Theme.secondary)
+                                }
+                            }
+                            Text("Las frases repetidas («es que, es que…») y los sonidos sin palabras también quedan como sugerencia.")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
                         }
                     }
                     BigButton(title: session.project.fix.lastRun == nil ? "Arreglar todo" : "Volver a arreglar",
@@ -243,6 +250,9 @@ struct FixStep: View {
                                 Button("Deshacer cortes") { session.undoFix() }
                             }
                         }
+                    }
+                    if !session.pendingSuggestions.isEmpty {
+                        SuggestionsCard(session: session)
                     }
                     Text("Para quitar un trozo a mano: arrástralo en la línea de tiempo de abajo y pulsa “Cortar este trozo”. Lo ves en la lista de cortes y puedes desactivarlo. Para el volumen, los fades o el desfase de una persona, toca su nombre en el timeline.")
                         .font(.caption).foregroundStyle(Theme.secondary)
@@ -270,7 +280,7 @@ struct CutList: View {
             ForEach(session.project.cuts.sorted { $0.start < $1.start }) { cut in
                 HStack {
                     Toggle("", isOn: binding(cut.id)).labelsHidden()
-                    Image(systemName: icon(cut.kind)).foregroundStyle(Theme.secondary).frame(width: 18)
+                    Image(systemName: icon(cut.kind)).foregroundStyle(cut.suggested == true && cut.reviewed != true ? Color.orange : Theme.secondary).frame(width: 18)
                     Button(EditEngine.clock(cut.start)) { session.seek(timeline: max(0, cut.start - 2)) }
                         .buttonStyle(.link).monospacedDigit()
                     Text(cut.label.isEmpty ? String(format: "%.1f s", cut.length) : cut.label)
@@ -288,11 +298,55 @@ struct CutList: View {
         case .filler: return "text.bubble"
         case .manual: return "scissors"
         case .imported: return "arrow.down.doc"
+        case .repeated: return "arrow.uturn.backward"
         }
     }
     private func binding(_ id: UUID) -> Binding<Bool> {
         Binding(get: { session.project.cuts.first { $0.id == id }?.enabled ?? false },
-                set: { v in if let i = session.project.cuts.firstIndex(where: { $0.id == id }) { session.project.cuts[i].enabled = v } })
+                set: { v in if let i = session.project.cuts.firstIndex(where: { $0.id == id }) {
+                    session.project.cuts[i].enabled = v
+                    session.project.cuts[i].reviewed = true
+                } })
+    }
+}
+
+/// Lo que «Arreglar» no se animó a quitar solo: muletillas dudosas, frases repetidas y sonidos sin palabras.
+/// Cada una se escucha y se decide; nada se quita hasta que la persona lo marque.
+struct SuggestionsCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var showAll = false
+
+    var body: some View {
+        let pending = session.pendingSuggestions
+        Card {
+            HStack {
+                Label("Para revisar (\(pending.count))", systemImage: "questionmark.bubble").font(.headline)
+                Spacer()
+            }
+            Text("No estamos seguros de que sean muletillas o repeticiones. Escúchalas y decide; las que no toques se quedan en el episodio.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(showAll ? pending : Array(pending.prefix(8))) { cut in
+                    HStack(spacing: 8) {
+                        Button { session.seek(timeline: max(0, cut.start - 1.5)) } label: { Image(systemName: "play.circle") }
+                            .buttonStyle(.borderless).help("Escuchar desde un poco antes")
+                        Text(EditEngine.clock(cut.start)).font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                        Text(cut.label).lineLimit(1)
+                        Spacer()
+                        Button("Quitar") { session.decide(cut.id, remove: true) }.controlSize(.small)
+                        Button("Dejar") { session.decide(cut.id, remove: false) }.controlSize(.small)
+                    }
+                }
+                if pending.count > 8 {
+                    Button(showAll ? "Ver menos" : "Ver las \(pending.count)") { showAll.toggle() }.buttonStyle(.link).font(.caption)
+                }
+            }
+            HStack {
+                Button("Quitar todas") { session.decideAllPending(remove: true) }
+                Button("Dejar todas como están") { session.decideAllPending(remove: false) }
+            }
+            .controlSize(.small)
+        }
     }
 }
 
@@ -1352,6 +1406,7 @@ struct ExportStep: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     StepHeader(title: "Exportar", subtitle: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto.", step: .export)
+                    ExportReviewCard(session: session)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(ExportFormat.allCases) { f in
                             Button { select(f) } label: {
@@ -1678,5 +1733,75 @@ struct ReelCintilloCard: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+}
+
+
+/// Revisión rápida antes de exportar: lo que conviene mirar, cada cosa con su botón para arreglarla ahí mismo.
+struct ExportReviewCard: View {
+    @ObservedObject var session: ProjectSession
+
+    private struct Item: Identifiable {
+        let id: String
+        let text: String
+        let optional: Bool
+        let actions: [(String, () -> Void)]
+    }
+
+    private var items: [Item] {
+        let p = session.project
+        var out: [Item] = []
+        if p.fix.lastRun == nil {
+            out.append(Item(id: "fix", text: "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)", optional: false,
+                            actions: [("Limpiar", { session.step = .fix })]))
+        }
+        if !p.isTranscribed {
+            out.append(Item(id: "words", text: "No hay transcripción: el video sale sin subtítulos", optional: true,
+                            actions: [("Ir a subtítulos", { session.step = .captions })]))
+        } else if !p.wordsSynced {
+            out.append(Item(id: "sync", text: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche", optional: false,
+                            actions: [("Ajustar", { session.syncSubtitles() })]))
+        }
+        let pending = session.pendingSuggestions.count
+        if pending > 0 {
+            out.append(Item(id: "sugg", text: "\(pending) \(pending == 1 ? "sugerencia" : "sugerencias") sin revisar (muletillas dudosas o frases repetidas)", optional: false,
+                            actions: [("Ver", { session.step = .fix }), ("Dejar como están", { session.decideAllPending(remove: false) })]))
+        }
+        if p.isTranscribed, !p.sensitiveScanned {
+            out.append(Item(id: "sens", text: "No se buscaron palabras sensibles (groserías, marcas, datos personales)", optional: true,
+                            actions: [("Revisar", { session.step = .sensitive })]))
+        }
+        let unseen = p.reels.filter { $0.selected && $0.seen != true }.count
+        if unseen > 0 {
+            out.append(Item(id: "reels", text: "\(unseen) \(unseen == 1 ? "reel elegido que no miraste" : "reels elegidos que no miraste")", optional: true,
+                            actions: [("Ver reels", { session.step = .reels })]))
+        }
+        return out
+    }
+
+    var body: some View {
+        let list = items
+        Card {
+            if list.isEmpty {
+                Label("Todo listo: sonido limpio, subtítulos ajustados y nada pendiente de revisar.", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(Theme.good)
+            } else {
+                Text("Antes de exportar").font(.headline)
+                ForEach(list) { it in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: it.optional ? "circle" : "exclamationmark.circle.fill")
+                            .foregroundStyle(it.optional ? Theme.secondary : Color.orange)
+                        Text(it.text + (it.optional ? " (opcional)" : "")).font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 6)
+                        ForEach(Array(it.actions.enumerated()), id: \.offset) { _, a in
+                            Button(a.0, action: a.1).controlSize(.small)
+                        }
+                    }
+                }
+                Text("Puedes exportar igual; esto es solo para que no se escape nada.").font(.caption).foregroundStyle(Theme.secondary)
+            }
+        }
+        .disabled(session.isBusy)
     }
 }
