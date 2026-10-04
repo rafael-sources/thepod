@@ -407,9 +407,11 @@ def stop_recording(sid):
         body = _serialize_session(row)
     finally:
         db.close()
-    # Si todas las subidas ya terminaron antes de detener, envía a postPod ya.
+    # Cierra los respaldos grabados por el servidor y, si todas las subidas
+    # ya terminaron antes de detener, envía a postPod ya.
     try:
-        from recordings_api import maybe_auto_export
+        from recordings_api import maybe_auto_export, stop_session_backups
+        stop_session_backups(sid)
         maybe_auto_export(sid)
     except Exception:
         pass

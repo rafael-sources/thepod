@@ -201,6 +201,17 @@ def get_db() -> sqlite3.Connection:
     _ensure_column(conn, "sessions", "podcast_name", "podcast_name TEXT")
     _ensure_column(conn, "sessions", "podcast_logo_url", "podcast_logo_url TEXT")
     _ensure_column(conn, "sessions", "sponsors_json", "sponsors_json TEXT")
+    # Respaldo grabado por el servidor (LiveKit egress por participante)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS backup_egress ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,"
+        " participant_id INTEGER NOT NULL,"
+        " egress_id TEXT,"
+        " file_path TEXT NOT NULL,"
+        " started_at TEXT DEFAULT (datetime('now')),"
+        " stopped_at TEXT)"
+    )
     _migrate_participants_check(conn)
     return conn
 

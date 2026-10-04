@@ -149,6 +149,57 @@ def start_rtmp_egress(room_name: str, rtmp_urls: list, layout: str = "grid"):
         return None
 
 
+def start_participant_backup(room_name: str, identity: str, filepath: str):
+    """Respaldo grabado por el servidor: graba cámara + micrófono de UN
+    participante tal como llega a la sala (720p30 H.264) en un MP4.
+    El contenedor de egress debe ver `filepath` en la misma ruta (bind
+    mount de ~/prodpod/sessions). Devuelve EgressInfo o None."""
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                req = api.ParticipantEgressRequest(
+                    room_name=room_name,
+                    identity=identity,
+                    screen_share=False,
+                    preset=api.EncodingOptionsPreset.H264_720P_30,
+                    file_outputs=[api.EncodedFileOutput(
+                        file_type=api.EncodedFileType.MP4,
+                        filepath=filepath,
+                    )],
+                )
+                return await lk.egress.start_participant_egress(req)
+            finally:
+                await lk.aclose()
+        return _run(_do())
+    except Exception as e:
+        log.warning("LiveKit start_participant_backup failed for %s/%s: %s", room_name, identity, e)
+        return None
+
+
+def egress_status(egress_id: str):
+    """Nombre del estado del egress ('EGRESS_COMPLETE', 'EGRESS_ACTIVE', …)
+    o None si no se pudo consultar."""
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                return await lk.egress.list_egress(api.ListEgressRequest(egress_id=egress_id))
+            finally:
+                await lk.aclose()
+        res = _run(_do())
+        items = list(getattr(res, "items", []) or [])
+        if not items:
+            return None
+        from livekit import api as _api
+        return _api.EgressStatus.Name(items[0].status)
+    except Exception as e:
+        log.warning("LiveKit egress_status failed for %s: %s", egress_id, e)
+        return None
+
+
 def stop_egress(egress_id: str):
     try:
         from livekit import api

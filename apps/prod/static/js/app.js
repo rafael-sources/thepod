@@ -587,6 +587,16 @@ function _idbDelete(ids) {
    - si la cola crece (red lenta), sube MÁS LENTO durante la llamada para no
      pelearle ancho de banda a la sala, y termina de subir al final
    - guarda lo pendiente en IndexedDB por si se cierra la pestaña */
+/* Respaldo grabado por el servidor: cada participante lo pide para sí al
+   empezar a grabar. Si el servidor no lo tiene encendido, no pasa nada. */
+function _requestServerBackup(sid, token) {
+  var qs = token ? ("?token=" + encodeURIComponent(token)) : "";
+  fetch("/api/sessions/" + sid + "/backup/start" + qs, {
+    method: "POST", credentials: "same-origin",
+    headers: { "Content-Type": "application/json" }, body: "{}",
+  }).catch(function () {});
+}
+
 /* "unos 12 minutos", "menos de un minuto"… para los avisos de subida. */
 function etaText(secs) {
   if (secs == null) return "";
@@ -2664,6 +2674,7 @@ var StudioView = {
       if (practiceMode.value && window.toast) {
         window.toast({ type: "warn", text: "Modo ensayo: nada se subirá al servidor." });
       }
+      if (!practiceMode.value) _requestServerBackup(props.session.id, null);
     }
 
     var _hostRecStream = null;
@@ -4168,6 +4179,7 @@ var GuestStudioView = {
         // nada se sube al servidor.
         if (!practiceMode.value) {
           _startChunkStreaming(recorder._ext ? ("." + recorder._ext) : ".webm");
+          _requestServerBackup(props.joinData.session_id, props.inviteToken);
         }
         if (!hasCam && window.toast) {
           window.toast({ type: "warn", text: "⚠ Grabando SOLO AUDIO — tu cámara no está disponible" });

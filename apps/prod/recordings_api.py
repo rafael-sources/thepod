@@ -457,6 +457,82 @@ def _resolve_participant(db, sid, token):
     return p
 
 
+def backup_enabled() -> bool:
+    """Respaldo por servidor: solo cuando el contenedor de egress ya monta
+    ~/prodpod/sessions (si no, escribiría el MP4 dentro del contenedor).
+    Se enciende con "egress_backup": true en ~/.podpod/config.json."""
+    from shared_config import load_shared_config
+    return bool(load_shared_config().get("egress_backup"))
+
+
+@bp.post("/api/sessions/<int:sid>/backup/start")
+def start_backup(sid):
+    """Cada participante pide su propio respaldo al empezar a grabar (así
+    también quedan cubiertos los que entran tarde). El servidor graba su
+    señal de la sala en 720p mientras siga conectado."""
+    if not backup_enabled():
+        return jsonify({"enabled": False})
+    db = get_db()
+    try:
+        sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not sess:
+            return jsonify({"error": "sesión no encontrada"}), 404
+        body = request.get_json(silent=True) or {}
+        p = _resolve_participant(db, sid, request.args.get("token") or body.get("token"))
+        if not p:
+            return jsonify({"error": "no autorizado"}), 401
+        pid = p["id"]
+        role = db.execute("SELECT role FROM participants WHERE id=?", (pid,)).fetchone()["role"]
+        if role == "director":
+            return jsonify({"enabled": True, "skipped": "director"})
+        active = db.execute(
+            "SELECT egress_id FROM backup_egress WHERE session_id=? AND participant_id=? AND stopped_at IS NULL",
+            (sid, pid),
+        ).fetchone()
+        if active:
+            return jsonify({"enabled": True, "egress_id": active["egress_id"], "already": True})
+        room = sess["livekit_room_name"]
+    finally:
+        db.close()
+
+    from livekit_service import start_participant_backup
+    bdir = session_dir(sid) / "backups"
+    bdir.mkdir(parents=True, exist_ok=True)
+    fpath = str(bdir / f"p{pid}_respaldo_{datetime.now(timezone.utc):%Y%m%dT%H%M%S}.mp4")
+    info = start_participant_backup(room, f"participant_{pid}", fpath)
+    egress_id = getattr(info, "egress_id", None) if info else None
+    if not egress_id:
+        return jsonify({"enabled": True, "error": "no se pudo iniciar el respaldo"}), 502
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO backup_egress (session_id, participant_id, egress_id, file_path) VALUES (?, ?, ?, ?)",
+            (sid, pid, egress_id, fpath),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return jsonify({"enabled": True, "egress_id": egress_id})
+
+
+def stop_session_backups(sid):
+    """Cierra todos los respaldos activos de la sala (al detener la grabación)."""
+    from livekit_service import stop_egress
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT id, egress_id FROM backup_egress WHERE session_id=? AND stopped_at IS NULL", (sid,)
+        ).fetchall()
+        for r in rows:
+            if r["egress_id"]:
+                stop_egress(r["egress_id"])
+            db.execute("UPDATE backup_egress SET stopped_at=datetime('now') WHERE id=?", (r["id"],))
+        db.commit()
+        return len(rows)
+    finally:
+        db.close()
+
+
 @bp.post("/api/net-test")
 def net_test():
     """Recibe un blob de prueba y lo descarta: el cliente mide Mbps de subida
@@ -742,11 +818,66 @@ def maybe_auto_export(sid):
     return True
 
 
+def adopt_backups(sid):
+    """Quien no tiene grabación principal (cerró la pestaña, su subida quedó
+    abandonada) pero sí un respaldo terminado en el servidor: registra el
+    respaldo como su grabación para que llegue a postPod. Devuelve cuántos."""
+    import time
+    from livekit_service import egress_status
+    adopted = 0
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT b.* FROM backup_egress b WHERE b.session_id=? AND b.stopped_at IS NOT NULL "
+            "AND NOT EXISTS (SELECT 1 FROM recordings r WHERE r.session_id=b.session_id "
+            "                AND r.participant_id=b.participant_id AND r.track_type='video') "
+            "ORDER BY b.id DESC",
+            (sid,),
+        ).fetchall()
+        seen = set()
+        for b in rows:
+            if b["participant_id"] in seen:
+                continue
+            path = Path(b["file_path"])
+            if not path.is_file() or path.stat().st_size == 0:
+                continue
+            st = egress_status(b["egress_id"]) if b["egress_id"] else None
+            if st not in ("EGRESS_COMPLETE", None):
+                continue   # todavía cerrándose o falló
+            if st is None and time.time() - path.stat().st_mtime < 120:
+                continue   # sin estado: esperar a que el archivo deje de crecer
+            dur = 0.0
+            try:
+                out = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                     "-of", "default=nw=1:nk=1", str(path)],
+                    capture_output=True, text=True, timeout=60)
+                dur = float(out.stdout.strip() or 0)
+            except (subprocess.SubprocessError, ValueError, OSError):
+                pass
+            db.execute(
+                "INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, "
+                "duration_seconds, size_bytes, mime_type, take_id) VALUES (?, ?, 'video', ?, ?, ?, ?, 'video/mp4', ?)",
+                (sid, b["participant_id"], path.name, str(path), dur, path.stat().st_size, f"respaldo-{b['id']}"),
+            )
+            seen.add(b["participant_id"])
+            adopted += 1
+        db.commit()
+    finally:
+        db.close()
+    return adopted
+
+
 def export_session_to_postpod(sid):
     """Envía a postPod todas las grabaciones de la sesión que aún no se
     enviaron. Sin chequeo de permisos: lo usan el botón (que ya los revisó)
     y el envío automático al registrarse la última grabación.
     Devuelve (dict, status_http)."""
+    try:
+        adopt_backups(sid)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("no se pudieron adoptar respaldos de la sesión %s", sid)
     db = get_db()
     try:
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
