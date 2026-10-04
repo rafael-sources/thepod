@@ -414,6 +414,18 @@ function recProfileById(id) {
   return REC_PROFILES.find(function (p) { return p.id === id; }) || REC_PROFILES[2];
 }
 
+/* Plan de quien creó la sala. Gratis: grabaciones de hasta 15 min y hasta 720p.
+   Lo fija la sala (host) o la invitación (invitado) al cargarse. */
+var PLAN = { maxHeight: null, maxSeconds: null, name: "" };
+function setPlanLimits(lim) {
+  PLAN.maxHeight = (lim && lim.max_height) || null;
+  PLAN.maxSeconds = (lim && lim.max_record_seconds) || null;
+  PLAN.name = (lim && lim.plan_name) || "";
+}
+function capProfileToPlan(id) {
+  return (PLAN.maxHeight && recProfileById(id).height > PLAN.maxHeight) ? "720p25" : id;
+}
+
 /* Decisión de la prueba: nunca por debajo de 720p, y "equipo justo" fuerza
    720p aunque la subida alcance para más. */
 function decideRecProfile(upMbps, device) {
@@ -518,6 +530,7 @@ async function runRecordingPreflight(previewStream, token, opts) {
   }
   var profileId = decideRecProfile(effectiveUp, device);
   if (opts.guest && recProfileById(profileId).quality === "1080p") profileId = "720p25";
+  profileId = capProfileToPlan(profileId);
   return { profileId: profileId, upMbps: upMbps, device: device };
 }
 
@@ -1012,6 +1025,8 @@ async function recoverPendingUpload(sid, token, trackType) {
 var StudioView = {
   props: { session: Object, user: Object, onBack: Function },
   setup: function (props) {
+    setPlanLimits(props.session.limits);
+    var planWarned = false, planStopped = false;
     var participants = ref([]);
     var remoteMap = reactive({});   // identity -> { name, speaking, meter, mutedIndicator }
     var error = ref("");
@@ -1351,7 +1366,7 @@ var StudioView = {
       choiceId: null,    // elección final (nunca por encima del techo)
     });
     var recProfileChoices = computed(function () {
-      if (!recPreflight.profileId) return REC_PROFILES;
+      if (!recPreflight.profileId) return REC_PROFILES.filter(function (p) { return !PLAN.maxHeight || p.height <= PLAN.maxHeight; });
       var idx = REC_PROFILES.findIndex(function (p) { return p.id === recPreflight.profileId; });
       return REC_PROFILES.slice(Math.max(idx, 0));
     });
@@ -2674,9 +2689,19 @@ var StudioView = {
       // Host hits /start for DB status; guests just record locally
       // (in practice mode no /start so the DB status doesn't change either).
       if (!practiceMode.value && props.user.username === props.session.created_by) {
-        try { await api("/api/sessions/" + props.session.id + "/start", { method: "POST" }); } catch (_) {}
+        try { await api("/api/sessions/" + props.session.id + "/start", { method: "POST" }); }
+        catch (e) {
+          // Plan Gratis sin episodios: no se graba (y se avisa a los demás para que tampoco)
+          if (e && e.data && e.data.code === "plan_limit") {
+            sendData({ type: "recording_stop" });
+            error.value = e.message;
+            if (window.toast) window.toast({ type: "error", text: e.message, ms: 12000 });
+            return;
+          }
+        }
       }
       recording.value = true;
+      planWarned = false; planStopped = false;
       recordingStart.value = Date.now();
       recordingStartedAtMs = Date.now();
       triggerLog = [];
@@ -2684,6 +2709,18 @@ var StudioView = {
       if (timerHandle) clearInterval(timerHandle);
       timerHandle = setInterval(function () {
         timecode.value = (Date.now() - recordingStart.value) / 1000;
+        // Plan Gratis: aviso un minuto antes y corte a los 15 minutos (lo detiene quien creó la sala)
+        if (PLAN.maxSeconds && !practiceMode.value) {
+          if (!planWarned && timecode.value >= PLAN.maxSeconds - 60) {
+            planWarned = true;
+            if (window.toast) window.toast({ type: "warn", text: "Queda 1 minuto: el plan " + PLAN.name + " graba hasta " + Math.round(PLAN.maxSeconds / 60) + " minutos.", ms: 10000 });
+          }
+          if (!planStopped && timecode.value >= PLAN.maxSeconds && props.user.username === props.session.created_by) {
+            planStopped = true;
+            if (window.toast) window.toast({ type: "warn", text: "Llegaste a los " + Math.round(PLAN.maxSeconds / 60) + " minutos del plan " + PLAN.name + ". La grabación se detuvo.", ms: 12000 });
+            stopRecording();
+          }
+        }
         // Title bar timer so the user sees the elapsed time even from
         // another tab.
         document.title = (practiceMode.value ? "🟡 ENSAYO " : "● REC ") +
@@ -3785,6 +3822,7 @@ var InviteView = {
     async function load() {
       try {
         invite.value = await api("/api/invite/" + props.token);
+        setPlanLimits(invite.value.limits);
         name.value = invite.value.display_name;
         if (invite.value.expired) return;
         if (invite.value.role === "guest" && !invite.value.host_present) {
@@ -3891,7 +3929,7 @@ var GuestStudioView = {
     var preMeter = ref(0);
     var recPreflight = reactive({ state: "idle", upMbps: null, fps: 0, profileId: null, choiceId: null });
     var recProfileChoices = computed(function () {
-      if (!recPreflight.profileId) return REC_PROFILES;
+      if (!recPreflight.profileId) return REC_PROFILES.filter(function (p) { return !PLAN.maxHeight || p.height <= PLAN.maxHeight; });
       var idx = REC_PROFILES.findIndex(function (p) { return p.id === recPreflight.profileId; });
       return REC_PROFILES.slice(Math.max(idx, 0));
     });
@@ -5289,7 +5327,15 @@ var DirectorView = {
         if (rem <= 0) {
           countdown.value = 0;
           recording.value = true;
-          try { api("/api/sessions/" + props.session.id + "/start", { method: "POST" }); } catch (_) {}
+          api("/api/sessions/" + props.session.id + "/start", { method: "POST" }).catch(function (e) {
+            // Plan Gratis sin episodios: se corta enseguida y se avisa
+            if (e && e.data && e.data.code === "plan_limit") {
+              recording.value = false;
+              if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+              sendData({ type: "recording_stop" });
+              if (window.toast) window.toast({ type: "error", text: e.message, ms: 12000 });
+            }
+          });
           var started = Date.now();
           if (timerHandle) clearInterval(timerHandle);
           timerHandle = setInterval(function () {

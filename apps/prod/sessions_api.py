@@ -95,6 +95,15 @@ def _serialize_session(row):
         d["source_slug"] = row["source_slug"]
     if "source_episode_id" in keys:
         d["source_episode_id"] = row["source_episode_id"]
+    # Plan de quien creó la sala: lo que pueden durar las grabaciones y la resolución máxima
+    try:
+        from plans import limits_for
+        lim = limits_for(row["created_by"])
+        d["limits"] = {"plan": lim["plan"], "plan_name": lim["name"],
+                       "max_record_seconds": lim["max_record_seconds"], "max_height": lim["max_height"],
+                       "episodes_left": lim["episodes_left"]}
+    except Exception:
+        d["limits"] = None
     return d
 
 
@@ -379,6 +388,12 @@ def start_recording(sid):
         username = current_user()
         if not _is_host(db, sid, username) and not _is_director(db, sid, username):
             return jsonify({"error": "solo el host o director puede iniciar la grabación"}), 403
+        # Plan Gratis: cada sala grabada cuenta como un episodio (la misma sala se puede volver a grabar)
+        owner = db.execute("SELECT created_by FROM sessions WHERE id=?", (sid,)).fetchone()
+        from plans import claim_episode
+        ok, msg = claim_episode(owner["created_by"] if owner else username, f"prod:{sid}")
+        if not ok:
+            return jsonify({"error": msg, "code": "plan_limit"}), 403
         db.execute(
             "UPDATE sessions SET status='recording', started_at=datetime('now'), updated_at=datetime('now') "
             "WHERE id=?",
@@ -1021,7 +1036,16 @@ def get_invite_details(token):
             ).fetchone()
             host_present = host_row is not None
 
+        try:
+            from plans import limits_for
+            owner = db.execute("SELECT created_by FROM sessions WHERE id=?", (p["session_id"],)).fetchone()
+            lim = limits_for(owner["created_by"]) if owner else None
+            plan_limits = {"max_record_seconds": lim["max_record_seconds"], "max_height": lim["max_height"],
+                           "plan_name": lim["name"]} if lim else None
+        except Exception:
+            plan_limits = None
         return jsonify({
+            "limits": plan_limits,
             "participant_id": p["id"],
             "session_id": p["session_id"],
             "display_name": p["display_name"],
