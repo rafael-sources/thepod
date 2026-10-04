@@ -23,7 +23,7 @@ struct ProdHomeView: View {
             }
         }
         .tint(.prodPod)
-        .onAppear { load(); Task { await ChunkUploader.shared.resumeAll() } }
+        .onAppear { load(); AccountRole.shared.refresh(); Task { await ChunkUploader.shared.resumeAll() } }
         .onChange(of: app.prodRequest) { _, _ in load() }
     }
 
@@ -118,6 +118,7 @@ struct ProdHomeView: View {
 }
 
 private struct SessionCard: View {
+    @ObservedObject private var role = AccountRole.shared
     let session: ProdPodClient.Session
     var canDirect = false
     var direct: () -> Void = {}
@@ -163,7 +164,8 @@ private struct SessionCard: View {
             if let r = result { Text(r).font(.caption).foregroundStyle(Theme.good) }
             HStack {
                 Spacer()
-                if session.status == "finished" && session.created_by == PrePodClient.username {
+                // Solo administradores: el envío a postPod ya es automático al terminar las subidas
+                if session.status == "finished" && role.isAdmin {
                     Button { export() } label: { Label(sending ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill") }
                         .disabled(sending)
                         .help("Manda las pistas de esta grabación a postPod")
@@ -237,6 +239,7 @@ struct LiveSheet: View {
 // MARK: - Estudio: pantalla previa y sala
 
 struct StudioView: View {
+    @ObservedObject private var role = AccountRole.shared
     @EnvironmentObject var app: AppModel
     @ObservedObject var studio: ProdStudio
     @State private var inviteName = ""
@@ -626,7 +629,7 @@ struct StudioView: View {
                 Text("\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))")
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
-            if studio.canExport {
+            if studio.canExport && role.isAdmin {
                 Button { studio.exportToPost() } label: {
                     Label(studio.exporting ? "Enviando…" : "Enviar a post ahora", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
                 }

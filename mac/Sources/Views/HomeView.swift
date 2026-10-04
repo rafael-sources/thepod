@@ -156,17 +156,9 @@ extension NSItemProvider {
 /// "En postPod web": the projects this account can see online, downloadable in one click.
 struct WebProjectsSection: View {
     @EnvironmentObject var app: AppModel
-    @State private var pendingBring: PostPodWebClient.WebProject?
 
     var body: some View {
         list
-            .confirmationDialog("Este episodio todavía se está procesando", isPresented: Binding(get: { pendingBring != nil }, set: { if !$0 { pendingBring = nil } }),
-                                presenting: pendingBring) { w in
-                Button("Traerlo igual") { app.importFromWeb(w); pendingBring = nil }
-                Button("Esperar", role: .cancel) { pendingBring = nil }
-            } message: { w in
-                Text("Todavía están llegando pistas desde prodPod. Si lo traés ahora puede quedar incompleto. Lo mejor es esperar a que desaparezca el aviso rojo (la lista se actualiza sola).")
-            }
             // Mientras haya un episodio en proceso, revisar cada 20 s si ya terminó
             .task(id: app.webProjects.contains { $0.importing != nil }) {
                 guard app.webProjects.contains(where: { $0.importing != nil }) else { return }
@@ -214,9 +206,10 @@ struct WebProjectsSection: View {
         }
     }
 
-    /// Traer a la Mac; si el episodio todavía está llegando desde prodPod, primero pregunta.
+    /// Traer a la Mac. Mientras el episodio todavía está llegando desde prodPod no se puede (quedaría incompleto).
     private func bring(_ w: PostPodWebClient.WebProject) {
-        if w.importing != nil { pendingBring = w } else { app.importFromWeb(w) }
+        guard w.importing == nil else { return }
+        app.importFromWeb(w)
     }
 
     private func row(_ w: PostPodWebClient.WebProject) -> some View {
@@ -232,7 +225,7 @@ struct WebProjectsSection: View {
                     if let o = w.owner { Label(o, systemImage: "person") }
                     if local != nil { Label("Ya está en esta Mac", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good) }
                     if let n = w.importing {
-                        Label(n > 0 ? "Episodio en proceso · llegando \(n) \(n == 1 ? "pista" : "pistas") desde prodPod" : "Episodio en proceso",
+                        Label(n > 0 ? "Episodio en proceso · llegando \(n) \(n == 1 ? "pista" : "pistas") desde prodPod" : "Episodio en proceso en la web",
                               systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                     }
                     if let partial {
@@ -245,6 +238,11 @@ struct WebProjectsSection: View {
             Spacer()
             if busy {
                 ProgressView().controlSize(.small)
+            } else if w.importing != nil {
+                // Todavía llegan pistas desde prodPod: no se puede traer hasta que esté listo en la web
+                Label("Se puede traer cuando esté listo en la web", systemImage: "hourglass")
+                    .font(.callout).foregroundStyle(.red)
+                    .help("La lista se actualiza sola cada 20 segundos")
             } else if partial != nil {
                 Button { bring(w) } label: {
                     Label("Reanudar", systemImage: "arrow.clockwise.circle.fill")

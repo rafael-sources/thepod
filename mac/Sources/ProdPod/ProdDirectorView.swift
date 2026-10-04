@@ -91,6 +91,7 @@ private struct CRField: View {
 // MARK: - Cuarto de control
 
 struct DirectorView: View {
+    @ObservedObject private var role = AccountRole.shared
     @EnvironmentObject var app: AppModel
     @ObservedObject var dir: DirectorStudio
     var preview = false
@@ -421,7 +422,7 @@ struct DirectorView: View {
                     .padding(.horizontal, 12).frame(height: 40)
                     .background(RoundedRectangle(cornerRadius: 9).fill(CR.field))
                 }
-                if !dir.recording && dir.allUploadsDone {
+                if !dir.recording && dir.allUploadsDone && role.isAdmin {
                     CRButton(title: dir.exporting ? "Enviando…" : "Enviar a post", symbol: "paperplane.fill", color: Theme.good,
                               enabled: !dir.exporting) { dir.exportToPost() }
                 }

@@ -121,7 +121,18 @@ actor PrePodClient {
         loggedIn = true
     }
 
-    func resetSession() { loggedIn = false; cookies = [:] }
+    func resetSession() { loggedIn = false; cookies = [:]; adminCache = nil }
+
+    private var adminCache: Bool?
+    /// Si la cuenta es administradora (prePod `/api/auth/me`). Ante cualquier duda, no.
+    func isAdmin() async -> Bool {
+        if let a = adminCache { return a }
+        guard let d = try? await send("GET", "/api/auth/me"),
+              let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return false }
+        let a = (o["is_admin"] as? Bool) ?? false
+        adminCache = a
+        return a
+    }
 
     /// Crea (o encuentra) la sala de grabación de prodPod para un episodio. Devuelve el número de sesión.
     func sendToProdPod(slug: String, episodeId: Int) async throws -> Int {
@@ -219,4 +230,12 @@ actor PrePodClient {
         }
         return id
     }
+}
+
+
+/// Lo que puede hacer la cuenta en la interfaz (por ahora: si es administradora).
+@MainActor final class AccountRole: ObservableObject {
+    static let shared = AccountRole()
+    @Published private(set) var isAdmin = false
+    func refresh() { Task { isAdmin = await PrePodClient.shared.isAdmin() } }
 }
