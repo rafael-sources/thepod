@@ -31,6 +31,10 @@
   <div class="callout"><div class="ctag">LISTO</div><div class="cbody"><p>¡Gracias! Tu pago se está confirmando: en un minuto tu plan nuevo queda activo en la web y en la app.</p></div></div>
   {% endif %}
 
+  {% if current == 'completo' %}
+  <div class="callout"><div class="ctag">TU CUENTA</div><div class="cbody"><p>Tu cuenta tiene el plan <strong>Completo</strong>: todo incluido (web y app), sin cobro. Estos planes son los que ve y paga el resto de la gente.</p></div></div>
+  {% endif %}
+
   <div class="plans">
     <div class="plan {% if current == 'gratis' %}current{% endif %}">
       <div class="tag">{% if current == 'gratis' %}Tu plan{% endif %}</div>
@@ -56,12 +60,13 @@
         <li>Todo en el navegador: preparar, grabar, editar, publicar y amaPod</li>
       </ul>
       {% if current == 'web' %}{% if portal %}<a class="btn ghost" href="{{ portal }}" target="_blank" rel="noopener">Administrar mi suscripción</a>{% else %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>{% endif %}
-      {% elif current in ('mac', 'completo') %}<span class="btn ghost" style="opacity:.6; cursor:default;">Incluido en tu plan</span>
+      {% elif current == 'mac' %}<span class="btn ghost" style="opacity:.6; cursor:default;">Incluido en tu plan</span>
+      {% elif current == 'completo' %}<span class="btn ghost" style="opacity:.6; cursor:default;">Incluido en Completo</span>
       {% else %}<button class="btn main" data-plan="web">{{ 'Elegir Web' if username else 'Entrar para elegir' }}</button>{% endif %}
     </div>
 
-    <div class="plan {% if current in ('mac', 'completo') %}current{% endif %}">
-      <div class="tag">{% if current in ('mac', 'completo') %}Tu plan{% else %}Recomendado{% endif %}</div>
+    <div class="plan {% if current == 'mac' %}current{% endif %}">
+      <div class="tag">{% if current == 'mac' %}Tu plan{% else %}Recomendado{% endif %}</div>
       <h3>Mac</h3>
       <div class="price">{{ prices.mac }} <small>USD al mes</small></div>
       <ul>
@@ -71,7 +76,8 @@
         <li>Edita sin internet una vez que trajiste el episodio</li>
       </ul>
       {% if current == 'mac' and portal %}<a class="btn ghost" href="{{ portal }}" target="_blank" rel="noopener">Administrar mi suscripción</a>
-      {% elif current in ('mac', 'completo') %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>
+      {% elif current == 'mac' %}<span class="btn ghost" style="opacity:.6; cursor:default;">Plan actual</span>
+      {% elif current == 'completo' %}<span class="btn ghost" style="opacity:.6; cursor:default;">Incluido en Completo</span>
       {% else %}<button class="btn main" data-plan="mac">{{ ('Pasar a Mac' if current == 'web' else 'Elegir Mac') if username else 'Entrar para elegir' }}</button>{% endif %}
     </div>
   </div>
