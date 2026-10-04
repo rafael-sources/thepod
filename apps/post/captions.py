@@ -107,10 +107,10 @@ def _words_filename_for(mf_row, language):
 
 
 def _format_srt_timestamp(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int(round((seconds - int(seconds)) * 1000))
+    total_ms = int(round(max(0.0, seconds) * 1000))      # sin «,1000» cuando se redondea hacia arriba
+    h, rem = divmod(total_ms, 3_600_000)
+    m, rem = divmod(rem, 60_000)
+    s, ms = divmod(rem, 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
@@ -255,6 +255,14 @@ def _run_caption_job(slug, job_id, file_id, language, model):
                     _update_job(slug, job_id, progress=pct)
                     last_pct = pct
         _update_job(slug, job_id, progress=90)
+
+        # Las palabras de Whisper salen antes de que suene la voz: se corren a donde realmente se oyen.
+        try:
+            from subtitle_sync import align_segments
+            segments, _moved, _typical = align_segments(segments, wav_path)
+        except Exception:
+            pass   # si algo falla, quedan los tiempos de Whisper
+        _update_job(slug, job_id, progress=95)
 
         srt_content = _segments_to_srt(segments)
         if final_srt.exists():
