@@ -87,3 +87,35 @@ def test_respaldo_reemplaza_solo_a_quien_le_falta_la_grabacion(env):
     conn.close()
     assert [(r["participant_id"], (r["take_id"] or "")[:8]) for r in rows] == [(10, ""), (11, "respaldo")]
     assert ra.adopt_backups(1) == 0                  # no la adopta dos veces
+
+
+def test_envio_avisa_inicio_y_fin_y_manda_el_respaldo(env, monkeypatch):
+    c, ra, db_mod, started, stopped, state = env
+    c.post("/api/sessions/1/backup/start?token=tg")
+    ra.stop_session_backups(1)
+    path = started[0][2]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(b"\x00" * 1000)
+    calls = []
+
+    class _Resp:
+        status_code = 201
+        text = ""
+        def json(self):
+            return {"project": {"slug": "p"}}
+
+    def fake_post(url, **kw):
+        files = kw.get("files") or {}
+        calls.append((url.rsplit("/", 1)[-1], (kw.get("json") or {}).get("state"),
+                      files["file"][0] if "file" in files else None))
+        return _Resp()
+    monkeypatch.setattr(ra.requests, "post", fake_post)
+    monkeypatch.setattr(ra, "notify_source", lambda *a, **k: None)
+    body, status = ra.export_session_to_postpod(1)
+    assert body["exported"] == 1 and body["failed"] == 0, body
+    tipos = [x[0] for x in calls]
+    assert tipos[0] == "import-status" and calls[0][1] == "begin"
+    assert "import-track" in tipos
+    assert ("import-status", "end", None) in calls
+    assert tipos.index("import-track") < tipos.index("import-status", 1)

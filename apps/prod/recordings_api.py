@@ -818,6 +818,37 @@ def maybe_auto_export(sid):
     return True
 
 
+def _postpod_import_status(sess, spid, state, expected=0):
+    """Avisa a postPod que empieza (begin) o termina (end) el envío de pistas
+    de este episodio. Best-effort: si falla, el envío sigue igual."""
+    db = get_db()
+    try:
+        co = db.execute(
+            "SELECT username FROM participants WHERE session_id=? AND role IN ('host','co-host') "
+            "AND username IS NOT NULL AND username != ?",
+            (sess["id"], sess["created_by"]),
+        ).fetchall()
+    finally:
+        db.close()
+    try:
+        requests.post(
+            POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-status",
+            headers={"X-PodPod-Secret": INTEGRATION_SECRET},
+            json={
+                "shared_project_id": spid,
+                "source_episode_id": sess["source_episode_id"],
+                "project_name": sess["title"],
+                "owner_username": sess["created_by"],
+                "extra_hosts": ",".join(sorted({r["username"] for r in co})),
+                "state": state,
+                "expected": expected,
+            },
+            timeout=15,
+        )
+    except requests.RequestException:
+        pass
+
+
 def adopt_backups(sid):
     """Quien no tiene grabación principal (cerró la pestaña, su subida quedó
     abandonada) pero sí un respaldo terminado en el servidor: registra el
@@ -920,7 +951,7 @@ def export_session_to_postpod(sid):
 
     endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-track"
     headers = {"X-PodPod-Secret": INTEGRATION_SECRET}
-    base = (SESSIONS_DIR / str(sid) / "recordings").resolve()
+    base = (session_dir(sid) / "recordings").resolve()
 
     exported = 0
     failed = 0
@@ -933,9 +964,16 @@ def export_session_to_postpod(sid):
     # postPod classifies by extension so both land as 'video'. That's OK for
     # now since .webm isn't in the audio ALLOWED_EXTS; postPod places them as
     # video and the editor can still use them as audio sources.
+    # Avisar a postPod que empieza a llegar este episodio: mientras tanto su
+    # tarjeta queda en rojo ("en proceso, ábrelo bajo tu propio riesgo").
+    _postpod_import_status(sess, spid, "begin", expected=len(pending))
+
+    sess_base = session_dir(sid).resolve()
     for idx, r in enumerate(pending):
-        fpath = (base / r["filename"]).resolve()
-        if not str(fpath).startswith(str(base) + os.sep) or not fpath.is_file():
+        # file_path real (grabaciones en recordings/, respaldos del servidor
+        # en backups/); filas viejas sin file_path caen a recordings/<filename>.
+        fpath = Path(r["file_path"]).resolve() if r.get("file_path") else (base / r["filename"]).resolve()
+        if not str(fpath).startswith(str(sess_base) + os.sep) or not fpath.is_file():
             failed += 1
             errors.append({"recording_id": r["id"], "error": "archivo local no encontrado"})
             continue
@@ -1019,6 +1057,8 @@ def export_session_to_postpod(sid):
                 db.commit()
             finally:
                 db.close()
+
+    _postpod_import_status(sess, spid, "end")
 
     # Dueño y co-hosts: van en cada push para que, si postPod crea el
     # proyecto antes de recibir pistas, nazca visible para ellos (y no solo
