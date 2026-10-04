@@ -11,6 +11,12 @@ final class LiveGate: NSObject, AudioCustomProcessingDelegate, @unchecked Sendab
     private let lock = NSLock()
     private var _on = true
     private var _tap: AudioRenderer?
+    private var _makeup: Float = 1
+    /// Ajuste de la prueba de micrófono, en dB (0 = sin cambio). Solo para lo que oye la sala.
+    var makeupDb: Float {
+        get { lock.withLock { 20 * log10(_makeup) } }
+        set { lock.withLock { _makeup = powf(10, max(-12, min(18, newValue)) / 20) } }
+    }
     var on: Bool {
         get { lock.withLock { _on } }
         set { lock.withLock { _on = newValue } }
@@ -34,11 +40,18 @@ final class LiveGate: NSObject, AudioCustomProcessingDelegate, @unchecked Sendab
     }
 
     func audioProcessingProcess(audioBuffer: LKAudioBuffer) {
-        let (isOn, tap) = lock.withLock { (_on, _tap) }
+        let (isOn, tap, makeup) = lock.withLock { (_on, _tap, _makeup) }
         if let tap, let pcm = audioBuffer.toAVAudioPCMBuffer() { tap.render(pcmBuffer: pcm) }
 
         let frames = audioBuffer.frames, channels = audioBuffer.channels
         guard frames > 0, channels > 0 else { return }
+        // Primero el ajuste de la prueba de micrófono (con tope para no saturar), después la puerta.
+        if makeup != 1 {
+            for ch in 0..<channels {
+                let buf = audioBuffer.rawBuffer(forChannel: ch)
+                for i in 0..<frames { buf[i] = max(-32767, min(32767, buf[i] * makeup)) }
+            }
+        }
         // Nivel (las muestras vienen en escala de Int16)
         var sum: Float = 0
         let c0 = audioBuffer.rawBuffer(forChannel: 0)

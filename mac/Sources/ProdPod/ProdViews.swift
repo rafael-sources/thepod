@@ -339,6 +339,7 @@ struct StudioView: View {
                         .onChange(of: studio.micId) { _, _ in studio.restartCapture() }
                         LevelMeter(db: studio.micLevel)
                         Text(levelHint).font(.caption).foregroundStyle(levelHintColor)
+                        micCheckBox
                         HStack(spacing: 6) {
                             Image(systemName: studio.headphones ? "headphones" : "speaker.wave.2.fill")
                             Text(studio.headphones ? "Usas audífonos: perfecto." : "Parece que usas parlantes. Con audífonos se graba mejor.")
@@ -383,6 +384,60 @@ struct StudioView: View {
             .frame(width: 380)
             .background(Color.black.opacity(0.25))
         }
+    }
+
+    /// Prueba de micrófono de 10 s, como en la web: mide y sugiere cuánto subir o bajar tu voz para la sala.
+    @ViewBuilder private var micCheckBox: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let left = studio.micCheckLeft {
+                HStack {
+                    ProgressView(value: Double(10 - left), total: 10).frame(maxWidth: .infinity)
+                    Text("\(left) s").font(.caption.monospacedDigit())
+                    Button("Cancelar") { studio.cancelMicCheck() }.controlSize(.small)
+                }
+                Text("Habla como lo harás en el episodio…").font(.caption).foregroundStyle(Theme.secondary)
+            } else {
+                Button { studio.runMicCheck() } label: {
+                    Label("Probar micrófono (10 s)", systemImage: "waveform").frame(maxWidth: .infinity)
+                }
+                .disabled(studio.micId.isEmpty)
+            }
+            if let r = studio.micCheck, studio.micCheckLeft == nil {
+                HStack(spacing: 18) {
+                    VStack(alignment: .leading) { Text("Pico").font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(String(format: "%.1f dB", r.peak)).font(.caption.monospacedDigit().bold()) }
+                    VStack(alignment: .leading) { Text("Promedio").font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(String(format: "%.1f dB", r.avg)).font(.caption.monospacedDigit().bold()) }
+                }
+                if let db = r.suggested {
+                    if db == 0 {
+                        Label("Tu micrófono ya está bien nivelado.", systemImage: "checkmark.circle.fill")
+                            .font(.caption).foregroundStyle(Theme.good)
+                    } else {
+                        Text(db > 0 ? "Tu voz llega baja: te sugerimos subirla \(db) dB." : "Tu voz llega muy fuerte: te sugerimos bajarla \(-db) dB.")
+                            .font(.caption)
+                        HStack {
+                            Button(studio.micGainDb == db ? "Aplicado" : "Aplicar") { studio.applyMicGain() }
+                                .buttonStyle(.borderedProminent).controlSize(.small)
+                                .disabled(studio.micGainDb == db)
+                            Button("Repetir") { studio.runMicCheck() }.controlSize(.small)
+                        }
+                    }
+                } else {
+                    Text("Casi no se oye nada. Revisa que el micrófono no esté en silencio o muy lejos.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+            if studio.micGainDb != 0 {
+                HStack {
+                    Text("La sala te oye \(studio.micGainDb > 0 ? "+" : "")\(studio.micGainDb) dB con este micrófono. Tu grabación no cambia.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                    Spacer()
+                    Button("Quitar") { studio.setMicGain(0) }.controlSize(.small)
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 
     private var levelHint: String {

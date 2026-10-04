@@ -53,6 +53,11 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         guard let c = audioConnection, let ch = c.audioChannels.first else { return nil }
         return ch.averagePowerLevel
     }
+    /// Pico reciente del micrófono en dB; nil si no hay micrófono.
+    var micPeak: Float? {
+        guard let c = audioConnection, let ch = c.audioChannels.first else { return nil }
+        return ch.peakHoldLevel
+    }
 
     func start(device: AVCaptureDevice, mic micDevice: AVCaptureDevice? = AVCaptureDevice.default(for: .audio)) throws -> Size {
         session.beginConfiguration()

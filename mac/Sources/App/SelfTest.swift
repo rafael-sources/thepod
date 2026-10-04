@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -578,6 +578,25 @@ enum SelfTest {
                     }
                     print("OK \(args[i + 4])")
                 } catch { print("FAIL \(error.localizedDescription)") }
+                fflush(stdout); exit(0)
+            }
+            return
+        }
+        if args.contains("--miccheck-test") {
+            // La cuenta de la prueba de micrófono, con voces simuladas (energía de 100 lecturas en dB)
+            Task { @MainActor in
+                func run(_ name: String, _ levels: [Float], expect: Int?) {
+                    let r = ProdStudio.evaluate(power: levels.map { powf(10, $0 / 10) }, peak: levels.max() ?? -160)
+                    print(r.suggested == expect ? "OK" : "FAIL", name, "avg", r.avg, "peak", r.peak, "sugerido", r.suggested.map(String.init) ?? "nada")
+                }
+                run("voz baja", Array(repeating: -36, count: 100), expect: 18)
+                run("voz normal", Array(repeating: -18, count: 100), expect: 0)
+                run("voz fuerte", Array(repeating: -4, count: 100), expect: -12)
+                run("pausas", Array(repeating: -24, count: 50) + Array(repeating: -70, count: 50), expect: 9)
+                run("silencio", Array(repeating: -80, count: 100), expect: nil)
+                LiveGate.shared.makeupDb = 6
+                print(abs(LiveGate.shared.makeupDb - 6) < 0.01 ? "OK" : "FAIL", "ganancia 6 dB =", LiveGate.shared.makeupDb)
+                LiveGate.shared.makeupDb = 0
                 fflush(stdout); exit(0)
             }
             return

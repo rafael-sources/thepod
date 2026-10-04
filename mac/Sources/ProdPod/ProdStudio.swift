@@ -57,8 +57,22 @@ final class ProdStudio: NSObject, ObservableObject {
         didSet { UserDefaults.standard.set(cameraId, forKey: "prodCamara") }
     }
     @Published var micId = UserDefaults.standard.string(forKey: "prodMicro") ?? "" {
-        didSet { UserDefaults.standard.set(micId, forKey: "prodMicro") }
+        didSet {
+            UserDefaults.standard.set(micId, forKey: "prodMicro")
+            if micId != oldValue { cancelMicCheck(); micCheck = nil; micGainDb = Self.savedGain(micId) }
+        }
     }
+    /// Prueba de micrófono (10 s): mide tu voz y sugiere cuánto subirla o bajarla para la sala.
+    /// El ajuste se guarda por micrófono y solo cambia lo que oye la sala; la grabación queda intacta.
+    struct MicCheck: Equatable { var peak: Float; var avg: Float; var suggested: Int? }
+    @Published var micCheck: MicCheck?
+    @Published var micCheckLeft: Int?          // segundos que faltan; nil = no está corriendo
+    @Published var micGainDb = 0 {
+        didSet { LiveGate.shared.makeupDb = Float(micGainDb) }
+    }
+    private var micCheckStart: Date?
+    private var micCheckPower: [Float] = []
+    private var micCheckPeak: Float = -160
     @Published var quality = RoomQuality.saved { didSet { RoomQuality.saved = quality; pipe.target = quality.size } }
     @Published var layout = Layout(rawValue: UserDefaults.standard.string(forKey: "prodVista") ?? "") ?? .speaker {
         didSet { UserDefaults.standard.set(layout.rawValue, forKey: "prodVista") }
@@ -181,6 +195,7 @@ final class ProdStudio: NSObject, ObservableObject {
     // MARK: Pantalla previa
 
     func prepare() {
+        micGainDb = Self.savedGain(micId)
         cameras = AVDevices.cameras
         mics = AVDevices.microphones
         if !cameras.contains(where: { $0.uniqueID == cameraId }) { cameraId = cameras.first?.uniqueID ?? "" }
@@ -328,6 +343,59 @@ final class ProdStudio: NSObject, ObservableObject {
         Task { try? await Task.sleep(nanoseconds: 2_500_000_000); if note == s { note = nil } }
     }
 
+    // MARK: Prueba de micrófono
+
+    static func savedGain(_ micId: String) -> Int {
+        UserDefaults.standard.integer(forKey: "prodpod.micGainDb." + (micId.isEmpty ? "default" : micId))
+    }
+
+    func runMicCheck() {
+        guard pipe.micLevel != nil else { error = "No hay micrófono activo."; return }
+        micCheck = nil
+        micCheckPower = []
+        micCheckPeak = -160
+        micCheckStart = Date()
+        micCheckLeft = 10
+    }
+
+    func cancelMicCheck() {
+        micCheckStart = nil
+        micCheckLeft = nil
+    }
+
+    func applyMicGain() {
+        guard let db = micCheck?.suggested else { return }
+        setMicGain(db)
+    }
+
+    func setMicGain(_ db: Int) {
+        UserDefaults.standard.set(db, forKey: "prodpod.micGainDb." + (micId.isEmpty ? "default" : micId))
+        micGainDb = db
+    }
+
+    private func tickMicCheck() {
+        guard let start = micCheckStart else { return }
+        let level = pipe.micLevel ?? -160
+        micCheckPower.append(powf(10, max(-90, level) / 10))
+        micCheckPeak = max(micCheckPeak, pipe.micPeak ?? level)
+        let t = Date().timeIntervalSince(start)
+        micCheckLeft = max(0, 10 - Int(t))
+        guard t >= 10 else { return }
+        micCheckStart = nil
+        micCheckLeft = nil
+        micCheck = Self.evaluate(power: micCheckPower, peak: micCheckPeak)
+    }
+
+    /// Promedio de energía a dBFS y sugerencia hacia −18 dBFS, igual que la web:
+    /// entre −12 y +18 dB; si casi no hubo señal (< −55) no se sugiere nada.
+    static func evaluate(power: [Float], peak: Float) -> MicCheck {
+        let mean = power.isEmpty ? 0 : power.reduce(0, +) / Float(power.count)
+        let avg = mean > 0 ? max(-90, 10 * log10f(mean)) : -90
+        let pk = max(-90, min(0, peak))
+        let suggested: Int? = avg < -55 ? nil : Int(max(-12, min(18, (-18 - avg).rounded())))
+        return MicCheck(peak: (pk * 10).rounded() / 10, avg: (avg * 10).rounded() / 10, suggested: suggested)
+    }
+
     // MARK: Personas
 
     private func startTicker() {
@@ -341,6 +409,7 @@ final class ProdStudio: NSObject, ObservableObject {
     private func tick() {
         ticks += 1
         micLevel = pipe.micLevel ?? -160
+        tickMicCheck()
         tickRecording()
         if ticks % 10 == 0 {
             headphones = AVDevices.headphonesLikely
