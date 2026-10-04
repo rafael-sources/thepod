@@ -278,7 +278,22 @@ enum SelfTest {
         Task { @MainActor in
             do {
                 let app = AppModel()
-                let p = try ProjectStore.load(slug: slug)
+                var p = try ProjectStore.load(slug: slug)
+                // --words <json>: pone esas palabras y los cortes automáticos (para ver sugerencias y revisión)
+                let args = CommandLine.arguments
+                if let j = args.firstIndex(of: "--words"), args.count > j + 1,
+                   let d = try? Data(contentsOf: URL(fileURLWithPath: args[j + 1])),
+                   let arr = try? JSONSerialization.jsonObject(with: d) as? [[String: Any]] {
+                    let lanes = p.lanes.map(\.id)
+                    p.words = arr.compactMap { o in
+                        guard let w = o["w"] as? String, let s = o["s"] as? Double, let e = o["e"] as? Double, s < p.duration else { return nil }
+                        let l = Int((o["lane"] as? Double) ?? 1)
+                        return Word(w: w, s: s, e: e, lane: lanes.contains(l) ? l : (lanes.first ?? 1))
+                    }
+                    p.fix.removeWordFillers = true
+                    p.cuts = EditEngine.fillerCuts(words: p.words, includeWordFillers: true) + EditEngine.repeatCuts(words: p.words)
+                    p.fix.lastRun = Date()
+                }
                 let session = ProjectSession(project: p, app: app)
                 let host = NSHostingView(rootView: ProjectView(session: session)
                     .environmentObject(app)
