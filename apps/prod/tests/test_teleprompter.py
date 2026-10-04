@@ -28,6 +28,10 @@ def tp_db(tmp_path):
     from app import create_app
     app = create_app()
     app.testing = True
+    # En producción la cookie de sesión va atada al dominio compartido
+    # (p. ej. .castmedia.space) y el cliente de pruebas, en localhost, no la
+    # enviaría: los tests que inician sesión recibirían 401.
+    app.config["SESSION_COOKIE_DOMAIN"] = None
     return app
 
 
