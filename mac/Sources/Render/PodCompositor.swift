@@ -146,9 +146,71 @@ final class RenderScene: @unchecked Sendable {
         return mask.cropped(to: extent)
     }
 
+    // MARK: Pantalla verde
+    //
+    // Si la persona grabó con fondo verde, la separación por inteligencia deja un borde verde (el verde rebota
+    // en el pelo y los hombros, y la máscara no corta justo ahí). Con fondo verde se corta por el color, que es
+    // exacto, y se le quita el reflejo verde a la persona.
+
+    private var greenLane: [Int: Bool] = [:]
+    private var greenCheckedAt: [Int: Double] = [:]
+
+    /// «Cuánto más verde que rojo y azul»: 1 = persona, 0 = fondo verde (con transición suave entre lo y hi).
+    private static let keyKernel = CIColorKernel(source: """
+        kernel vec4 thepodKey(__sample s, float lo, float hi) {
+            float k = s.g - max(s.r, s.b);
+            float bg = smoothstep(lo, hi, k);
+            return vec4(1.0 - bg, 1.0 - bg, 1.0 - bg, 1.0);
+        }
+        """)
+    /// Quita el reflejo verde: el verde nunca pasa del mayor entre rojo y azul (no toca piel, amarillos ni grises).
+    private static let despillKernel = CIColorKernel(source: """
+        kernel vec4 thepodDespill(__sample s) {
+            return vec4(s.r, min(s.g, max(s.r, s.b)), s.b, s.a);
+        }
+        """)
+
+    /// ¿El fondo de esta persona es verde? Mira franjas de arriba y de los costados; se revisa cada 2 s.
+    func isGreenScreen(_ frame: CIImage, lane: Int, time: Double) -> Bool {
+        if let t = greenCheckedAt[lane], abs(time - t) < 2, let g = greenLane[lane] { return g }
+        let e = frame.extent
+        let strips = [CGRect(x: e.minX, y: e.maxY - e.height * 0.12, width: e.width, height: e.height * 0.12),
+                      CGRect(x: e.minX, y: e.minY + e.height * 0.3, width: e.width * 0.1, height: e.height * 0.6),
+                      CGRect(x: e.maxX - e.width * 0.1, y: e.minY + e.height * 0.3, width: e.width * 0.1, height: e.height * 0.6)]
+        var votes = 0
+        for r in strips {
+            let avg = frame.cropped(to: r).applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: r)])
+            var px = [Float](repeating: 0, count: 4)
+            Self.maskContext.render(avg, toBitmap: &px, rowBytes: 16, bounds: CGRect(origin: avg.extent.origin, size: CGSize(width: 1, height: 1)),
+                                    format: .RGBAf, colorSpace: nil)
+            if px[1] > 0.06, px[1] > 1.6 * max(px[0], px[2]) { votes += 1 }
+        }
+        let green = votes >= 2
+        greenLane[lane] = green
+        greenCheckedAt[lane] = time
+        return green
+    }
+
+    /// Con fondo verde: la máscara se afina con el color (borde exacto) y la persona pierde el reflejo verde.
+    /// Devuelve el cuadro limpio y la máscara final. Sin fondo verde, los devuelve tal cual.
+    func greenScreen(_ frame: CIImage, mask: CIImage, lane: Int, time: Double) -> (frame: CIImage, mask: CIImage) {
+        guard isGreenScreen(frame, lane: lane, time: time),
+              let key = Self.keyKernel?.apply(extent: frame.extent, arguments: [frame, 0.02, 0.10]),
+              let clean = Self.despillKernel?.apply(extent: frame.extent, arguments: [frame]) else { return (frame, mask) }
+        let e = frame.extent
+        // La máscara por inteligencia, un poco más grande: así el borde lo decide el color y no ella;
+        // sigue sirviendo para sacar lo que no es verde fuera de la tela (paredes, lámparas).
+        let loose = mask.clampedToExtent()
+            .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: max(3, e.width * 0.006)]).cropped(to: e)
+        let byColor = key.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.8]).cropped(to: e)
+        let final = byColor.applyingFilter("CIMultiplyCompositing", parameters: [kCIInputBackgroundImageKey: loose]).cropped(to: e)
+        return (clean, final)
+    }
+
     /// Cambia el fondo real de una persona por el elegido.
     func replacedBackground(_ frame: CIImage, buffer: CVPixelBuffer, lane: Int, time: Double) -> CIImage {
-        guard let vb = virtualBG[lane], let mask = personMask(buffer, extent: frame.extent, lane: lane, time: time) else { return frame }
+        guard let vb = virtualBG[lane], let raw = personMask(buffer, extent: frame.extent, lane: lane, time: time) else { return frame }
+        let (frame, mask) = greenScreen(frame, mask: raw, lane: lane, time: time)
         let e = frame.extent
         let behind: CIImage
         switch vb.mode {
@@ -301,6 +363,11 @@ final class RenderScene: @unchecked Sendable {
                 if let vb = virtualBG[lane], let pb = buffers[lane] {
                     if vb.mode == .podcast, background != nil {
                         cutout = personMask(pb, extent: frame.extent, lane: lane, time: time)
+                        if let m = cutout {
+                            let g = greenScreen(frame, mask: m, lane: lane, time: time)
+                            frame = g.frame
+                            cutout = g.mask
+                        }
                     } else {
                         frame = replacedBackground(frame, buffer: pb, lane: lane, time: time)
                     }

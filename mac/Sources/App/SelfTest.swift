@@ -516,8 +516,28 @@ enum SelfTest {
             // Solo lectura: un cuadro de un reel en 9:16 a PNG. Con --crowd le suma (en memoria) un cintillo y un texto
             // abajo en ese momento, para ver que lo automático se acomoda sin pisarse.
             Task { @MainActor in
-                guard var p = try? ProjectStore.load(slug: args[i + 1]), let n = Int(args[i + 2]), n >= 1, n <= p.reels.count,
-                      let off = Double(args[i + 3]) else { print("FAIL args"); exit(1) }
+                // --episode: reel 0 = el episodio en 16:9 y el segundo es tiempo del episodio
+                let episode = args.contains("--episode")
+                guard var p = try? ProjectStore.load(slug: args[i + 1]), let n = Int(args[i + 2]),
+                      episode || (n >= 1 && n <= p.reels.count), let off = Double(args[i + 3]) else { print("FAIL args"); exit(1) }
+                if episode {
+                    if args.contains("--bgpodcast") {
+                        for l in p.lanes { var vb = VirtualBackground(); vb.mode = .podcast; p.laneBackground[l.id] = vb }
+                    }
+                    do {
+                        let built = try await CompositionBuilder.build(project: p, format: .landscape, window: nil,
+                                                                       energy: AudioAnalysis.loadEnergy(p.id))
+                        let gen = AVAssetImageGenerator(asset: built.asset)
+                        gen.videoComposition = built.videoComposition
+                        gen.requestedTimeToleranceBefore = .zero
+                        gen.requestedTimeToleranceAfter = .zero
+                        let outT = (EditEngine.toOutput(off, keep: built.keep) ?? off) + built.introDuration
+                        let (img, _) = try await gen.image(at: CMTime(seconds: outT, preferredTimescale: 600))
+                        try NSBitmapImageRep(cgImage: img).representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 4]))
+                        print("OK \(args[i + 4])")
+                    } catch { print("FAIL \(error.localizedDescription)") }
+                    fflush(stdout); exit(0)
+                }
                 let reel = p.reels[n - 1]
                 let at = reel.start + off
                 if args.contains("--crowd") {
