@@ -4773,11 +4773,11 @@ var UsersAdminModal = {
     const filter = ref("all");          // all | admin | user | never
     const mode = ref("list");           // list | new
     const editing = ref(null);
-    const editForm = reactive({ display_name: "", email: "", avatar_color: "", is_admin: false, limit: "" });
+    const editForm = reactive({ display_name: "", email: "", avatar_color: "", is_admin: false, limit: "", plan: "completo" });
     const credentials = ref(null);      // { username, display_name, email, password, isNew }
     const copied = ref(false);
     const blank = () => ({ display_name: "", username: "", usernameTouched: false, email: "",
-                           role: "user", limit: 1, pwMode: "auto", password: "",
+                           role: "user", plan: "completo", limit: 1, pwMode: "auto", password: "",
                            avatar_color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] });
     const nu = reactive(blank());
 
@@ -4841,6 +4841,7 @@ var UsersAdminModal = {
             email: nu.email.trim() || null,
             avatar_color: nu.avatar_color,
             is_admin: nu.role === "admin",
+            plan: nu.role === "admin" ? "completo" : nu.plan,
             max_podcasts: nu.role === "admin" || nu.limit === "" || nu.limit === null ? null : Math.max(0, parseInt(nu.limit) || 0),
           },
         });
@@ -4879,7 +4880,7 @@ var UsersAdminModal = {
     function startEdit(u) {
       editing.value = u.username; error.value = "";
       Object.assign(editForm, { display_name: u.display_name || "", email: u.email || "", avatar_color: u.avatar_color || USER_COLORS[0],
-                                is_admin: !!u.is_admin, limit: u.max_podcasts === null ? "" : u.max_podcasts });
+                                is_admin: !!u.is_admin, limit: u.max_podcasts === null ? "" : u.max_podcasts, plan: u.plan || "completo" });
     }
     function cancelEdit() { editing.value = null; }
     async function saveEdit(u) {
@@ -4892,6 +4893,7 @@ var UsersAdminModal = {
         };
         if (!!editForm.is_admin !== !!u.is_admin) body.is_admin = !!editForm.is_admin;
         if (!editForm.is_admin) body.max_podcasts = editForm.limit === "" || editForm.limit === null ? null : Math.max(0, parseInt(editForm.limit) || 0);
+        if (!editForm.is_admin && editForm.plan !== (u.plan || "completo")) body.plan = editForm.plan;
         await api("/api/users/" + u.username, { method: "PUT", body });
         editing.value = null;
         await load();
@@ -4917,6 +4919,11 @@ var UsersAdminModal = {
       } catch (e) { error.value = e.message; }
     }
 
+    function planLabel(u) {
+      if (u.is_admin || u.plan !== "gratis") return "";
+      return "Gratis · " + u.episodes_used + " de " + u.max_episodes + " episodios";
+    }
+
     function limitLabel(u) {
       if (u.is_admin) return "Ve y maneja todo";
       if (u.max_podcasts === null) return "Podcasts sin límite";
@@ -4927,7 +4934,7 @@ var UsersAdminModal = {
     return { users, error, busy, query, filter, mode, counts, shown, nu, usernameState, emailState, passwordState, canCreate,
              editing, editForm, credentials, copied, welcomeText, mailtoHref, loginUrl, colors: USER_COLORS,
              openNew, cancelNew, createNew, copyWelcome, startEdit, cancelEdit, saveEdit, resetPassword, removeUser,
-             limitLabel, timeAgo };
+             limitLabel, planLabel, timeAgo };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
@@ -4986,6 +4993,15 @@ var UsersAdminModal = {
                   <b>Admin</b><small>Ve todo, crea usuarios y cambia la configuración</small></label>
               </div>
             </div>
+            <div v-if="nu.role === 'user'" class="ua-field ua-wide">
+              <span>Plan</span>
+              <div class="ua-choice">
+                <label :class="{ on: nu.plan === 'completo' }"><input type="radio" value="completo" v-model="nu.plan">
+                  <b>Completo</b><small>Sin límites</small></label>
+                <label :class="{ on: nu.plan === 'gratis' }"><input type="radio" value="gratis" v-model="nu.plan">
+                  <b>Gratis</b><small>2 episodios, grabaciones de 15 min, 720p</small></label>
+              </div>
+            </div>
             <label v-if="nu.role === 'user'" class="ua-field ua-inline">
               <span>Cuántos podcasts puede crear</span>
               <input type="number" min="0" v-model="nu.limit" placeholder="∞" class="ua-num">
@@ -5041,7 +5057,8 @@ var UsersAdminModal = {
                   <div class="user-avatar" :style="{ background: u.avatar_color }">{{ (u.display_name || u.username)[0] }}</div>
                   <div class="user-info">
                     <div class="user-name">{{ u.display_name }} <span class="muted mono">@{{ u.username }}</span>
-                      <span v-if="u.is_admin" class="ua-badge admin">Admin</span></div>
+                      <span v-if="u.is_admin" class="ua-badge admin">Admin</span>
+                      <span v-if="planLabel(u)" class="ua-badge free">{{ planLabel(u) }}</span></div>
                     <div class="muted ua-meta">
                       <span v-if="u.email">{{ u.email }} · </span>
                       <span>{{ limitLabel(u) }}</span> ·
@@ -5065,6 +5082,13 @@ var UsersAdminModal = {
                     <div class="ua-choice">
                       <label :class="{ on: !editForm.is_admin }"><input type="radio" :value="false" v-model="editForm.is_admin"><b>Usuario</b><small>Solo sus podcasts</small></label>
                       <label :class="{ on: editForm.is_admin }"><input type="radio" :value="true" v-model="editForm.is_admin"><b>Admin</b><small>Ve y maneja todo</small></label>
+                    </div>
+                  </div>
+                  <div v-if="!editForm.is_admin" class="ua-field ua-wide">
+                    <span>Plan</span>
+                    <div class="ua-choice">
+                      <label :class="{ on: editForm.plan === 'completo' }"><input type="radio" value="completo" v-model="editForm.plan"><b>Completo</b><small>Sin límites</small></label>
+                      <label :class="{ on: editForm.plan === 'gratis' }"><input type="radio" value="gratis" v-model="editForm.plan"><b>Gratis</b><small>2 episodios · 15 min · 720p ({{ u.episodes_used }} usados)</small></label>
                     </div>
                   </div>
                   <label v-if="!editForm.is_admin" class="ua-field ua-inline">

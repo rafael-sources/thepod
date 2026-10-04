@@ -1962,6 +1962,7 @@ label.btn.disabled { opacity: 0.6; pointer-events: none; }
 .ua-btns button { font-size: 14px; }
 .ua-badge { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: 1px; }
 .ua-badge.admin { background: var(--signal); color: var(--ink-deep); }
+.ua-badge.free { background: transparent; color: var(--signal-cool); border: 1px solid var(--signal-cool-dim); }
 .ua-edit { border-top: 1px solid var(--ink-line); padding: 12px; }
 .ua-new { padding: 4px 2px; }
 .ua-new h4, .ua-edit h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); margin: 0 0 12px; }

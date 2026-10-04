@@ -156,6 +156,8 @@ def confirm():
         create_user(username, secrets.token_urlsafe(12), display_name=row["display_name"], email=row["email"],
                     is_admin=False, max_podcasts=FREE_MAX_PODCASTS)
         update_user_fields(username, {"password_md5": row["password_md5"]})
+        from plans import set_plan
+        set_plan(username, "gratis")        # quien se registra solo empieza en Gratis
         c.execute("UPDATE pending SET used = 1 WHERE id = ?", (sid,))
 
     session.clear()

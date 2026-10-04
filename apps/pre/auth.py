@@ -69,9 +69,11 @@ def me():
     if not username:
         return jsonify({"error": "no autenticado"}), 401
     from shared_users import policy_for
+    from plans import limits_for
     return jsonify({
         "username": username,
         "is_admin": bool(policy_for(username).get("see_all")),
+        "plan": limits_for(username),
     })
 
 

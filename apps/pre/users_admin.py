@@ -13,6 +13,7 @@ from shared_users import (
     delete_user_by_name, admins_count_excluding,
     md5, random_password, policy_for,
 )
+from plans import PLANS, limits_for, set_plan
 
 
 bp = Blueprint("users_admin", __name__, url_prefix="/api/users")
@@ -35,6 +36,7 @@ def _is_admin() -> bool:
 
 def _serialize(row: dict) -> dict:
     """Public view — never include password hashes."""
+    lim = limits_for(row["username"])
     return {
         "username":      row["username"],
         "display_name":  row["display_name"],
@@ -44,6 +46,9 @@ def _serialize(row: dict) -> dict:
         "max_podcasts":  row["max_podcasts"],
         "created_at":    row.get("created_at"),
         "last_login_at": row.get("last_login_at"),
+        "plan":          lim["plan"],
+        "episodes_used": lim["episodes_used"],
+        "max_episodes":  lim["max_episodes"],
     }
 
 
@@ -93,6 +98,10 @@ def create_user_endpoint():
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+    plan = body.get("plan") or "completo"
+    if plan in PLANS and not is_admin:
+        set_plan(username, plan)
+        row = get_user(username)
 
     out = _serialize(row)
     if auto_password:
@@ -158,8 +167,13 @@ def update_user_endpoint(username):
                     return jsonify({"error": "max_podcasts debe ser entero o null"}), 400
                 fields["max_podcasts"] = v
 
+    if "plan" in body:
+        if body["plan"] not in PLANS:
+            return jsonify({"error": "plan inválido"}), 400
+        set_plan(username, body["plan"])
+
     try:
-        row = update_user_fields(username, fields)
+        row = update_user_fields(username, fields) if fields else get_user(username)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
