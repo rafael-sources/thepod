@@ -355,6 +355,13 @@ def delete_session(sid):
         db.commit()
     finally:
         db.close()
+    # Borrar también los archivos de la sala (grabaciones, respaldos, assets
+    # del director): antes quedaban huérfanos en disco ocupando espacio.
+    import shutil
+    from db import session_dir
+    sdir = session_dir(sid)
+    if sdir.exists():
+        shutil.rmtree(sdir, ignore_errors=True)
     if row["livekit_room_name"]:
         delete_room(row["livekit_room_name"])
     return jsonify({"ok": True})
