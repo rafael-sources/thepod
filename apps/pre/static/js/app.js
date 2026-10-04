@@ -4667,190 +4667,356 @@ var PodcastView = {
    Root
    ========================================================================== */
 
+var USER_COLORS = ["#8DB36A", "#E0A458", "#D9706B", "#6FA8DC", "#B48EAD", "#5FB3A1", "#E6C35C", "#9AA0A6"];
+
+/* «María José García» → «mariajose» (sin tildes ni espacios); el admin lo puede cambiar. */
+function suggestUsername(name) {
+  var parts = (name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  var u = parts.length > 1 ? parts[0] + parts[parts.length - 1] : parts[0];
+  return u.slice(0, 32);
+}
+
+function timeAgo(iso) {
+  if (!iso) return null;
+  var d = new Date(iso.replace(" ", "T") + (/[zZ+]/.test(iso.slice(10)) ? "" : "Z"));
+  if (isNaN(d)) return null;
+  var s = (Date.now() - d.getTime()) / 1000;
+  if (s < 90) return "hace un momento";
+  if (s < 3600) return "hace " + Math.round(s / 60) + " min";
+  if (s < 86400) return "hace " + Math.round(s / 3600) + " h";
+  var days = Math.round(s / 86400);
+  if (days === 1) return "ayer";
+  if (days < 30) return "hace " + days + " días";
+  return d.toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
+}
+
 var UsersAdminModal = {
+  props: { thepodUrl: { type: String, default: "" } },
   emits: ["close"],
-  setup(props, { emit }) {
+  setup(props) {
     const users = ref([]);
     const error = ref("");
     const busy = ref(false);
-    const lastGenerated = reactive({});
+    const query = ref("");
+    const filter = ref("all");          // all | admin | user | never
+    const mode = ref("list");           // list | new
     const editing = ref(null);
-    const editForm = reactive({ display_name: "", email: "", avatar_color: "" });
-    const newUser = reactive({ username: "", password: "", display_name: "", email: "", is_admin: false, max_podcasts: 1 });
+    const editForm = reactive({ display_name: "", email: "", avatar_color: "", is_admin: false, limit: "" });
+    const credentials = ref(null);      // { username, display_name, email, password, isNew }
+    const copied = ref(false);
+    const blank = () => ({ display_name: "", username: "", usernameTouched: false, email: "",
+                           role: "user", limit: 1, pwMode: "auto", password: "",
+                           avatar_color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)] });
+    const nu = reactive(blank());
+
+    const loginUrl = computed(() => props.thepodUrl || (location.protocol + "//" + location.host.replace(/^[^.]+\./, "thepod.")));
 
     async function load() {
       try { users.value = await api("/api/users"); }
       catch (e) { error.value = e.message; }
     }
 
-    function startEdit(u) {
-      editing.value = u.username;
-      editForm.display_name = u.display_name || "";
-      editForm.email = u.email || "";
-      editForm.avatar_color = u.avatar_color || "";
+    const counts = computed(() => ({
+      all: users.value.length,
+      admin: users.value.filter(u => u.is_admin).length,
+      user: users.value.filter(u => !u.is_admin).length,
+      never: users.value.filter(u => !u.last_login_at).length,
+    }));
+
+    const shown = computed(() => {
+      const q = query.value.trim().toLowerCase();
+      return users.value
+        .filter(u => filter.value === "all" || (filter.value === "admin" ? u.is_admin
+                    : filter.value === "user" ? !u.is_admin : !u.last_login_at))
+        .filter(u => !q || [u.username, u.display_name, u.email].some(v => (v || "").toLowerCase().includes(q)))
+        .sort((a, b) => (b.is_admin - a.is_admin) || (a.display_name || "").localeCompare(b.display_name || ""));
+    });
+
+    /* ---- Nuevo usuario ---- */
+    watch(() => nu.display_name, function (v) { if (!nu.usernameTouched) nu.username = suggestUsername(v); });
+
+    const usernameState = computed(() => {
+      const u = nu.username.trim().toLowerCase();
+      if (!u) return { ok: false, msg: "" };
+      if (!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(u)) return { ok: false, msg: "De 3 a 32 caracteres: letras, números, _ o -, sin espacios ni tildes" };
+      if (users.value.some(x => x.username === u)) return { ok: false, msg: "Ese usuario ya existe" };
+      return { ok: true, msg: "Disponible" };
+    });
+    const emailState = computed(() => {
+      const e = nu.email.trim();
+      if (!e) return { ok: true, msg: "" };
+      return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) ? { ok: true, msg: "" } : { ok: false, msg: "El correo no parece válido" };
+    });
+    const passwordState = computed(() => {
+      if (nu.pwMode === "auto") return { ok: true, msg: "" };
+      return nu.password.length >= 6 ? { ok: true, msg: "" } : { ok: false, msg: "Mínimo 6 caracteres" };
+    });
+    const canCreate = computed(() => nu.display_name.trim() && usernameState.value.ok && emailState.value.ok && passwordState.value.ok && !busy.value);
+
+    function openNew() { Object.assign(nu, blank()); error.value = ""; credentials.value = null; editing.value = null; mode.value = "new"; }
+    function cancelNew() { mode.value = "list"; error.value = ""; }
+
+    async function createNew() {
+      if (!canCreate.value) return;
+      busy.value = true; error.value = "";
+      try {
+        const r = await api("/api/users", {
+          method: "POST",
+          body: {
+            username: nu.username.trim().toLowerCase(),
+            password: nu.pwMode === "manual" ? nu.password : null,
+            display_name: nu.display_name.trim(),
+            email: nu.email.trim() || null,
+            avatar_color: nu.avatar_color,
+            is_admin: nu.role === "admin",
+            max_podcasts: nu.role === "admin" || nu.limit === "" || nu.limit === null ? null : Math.max(0, parseInt(nu.limit) || 0),
+          },
+        });
+        credentials.value = { username: r.username, display_name: r.display_name, email: r.email,
+                              password: r.generated_password || nu.password, isNew: true };
+        copied.value = false;
+        mode.value = "list";
+        await load();
+      } catch (e) { error.value = e.message; }
+      finally { busy.value = false; }
     }
 
-    function cancelEdit() { editing.value = null; }
+    /* ---- Mensaje con los datos de acceso ---- */
+    const welcomeText = computed(() => {
+      const c = credentials.value;
+      if (!c) return "";
+      return (c.isNew ? "Hola " + c.display_name + ", ya tienes tu cuenta en thePod.\n\n"
+                      : "Hola " + c.display_name + ", esta es tu nueva contraseña de thePod.\n\n")
+        + "Entra en: " + loginUrl.value + "\n"
+        + "Usuario: " + c.username + "\n"
+        + "Contraseña: " + c.password + "\n";
+    });
+    const mailtoHref = computed(() => {
+      const c = credentials.value;
+      if (!c || !c.email) return "";
+      return "mailto:" + encodeURIComponent(c.email)
+        + "?subject=" + encodeURIComponent(c.isNew ? "Tu cuenta en thePod" : "Tu nueva contraseña de thePod")
+        + "&body=" + encodeURIComponent(welcomeText.value);
+    });
+    async function copyWelcome() {
+      try { await navigator.clipboard.writeText(welcomeText.value); copied.value = true; setTimeout(() => copied.value = false, 2500); }
+      catch (_) { podSwal.toast("No se pudo copiar; selecciona el texto y cópialo a mano", "error"); }
+    }
 
+    /* ---- Editar ---- */
+    function startEdit(u) {
+      editing.value = u.username; error.value = "";
+      Object.assign(editForm, { display_name: u.display_name || "", email: u.email || "", avatar_color: u.avatar_color || USER_COLORS[0],
+                                is_admin: !!u.is_admin, limit: u.max_podcasts === null ? "" : u.max_podcasts });
+    }
+    function cancelEdit() { editing.value = null; }
     async function saveEdit(u) {
       busy.value = true; error.value = "";
       try {
-        await api("/api/users/" + u.username, {
-          method: "PUT",
-          body: {
-            display_name: editForm.display_name.trim() || u.username,
-            email: editForm.email.trim() || null,
-            avatar_color: editForm.avatar_color.trim() || null,
-          },
-        });
+        const body = {
+          display_name: editForm.display_name.trim() || u.username,
+          email: editForm.email.trim() || null,
+          avatar_color: editForm.avatar_color || null,
+        };
+        if (!!editForm.is_admin !== !!u.is_admin) body.is_admin = !!editForm.is_admin;
+        if (!editForm.is_admin) body.max_podcasts = editForm.limit === "" || editForm.limit === null ? null : Math.max(0, parseInt(editForm.limit) || 0);
+        await api("/api/users/" + u.username, { method: "PUT", body });
         editing.value = null;
         await load();
       } catch (e) { error.value = e.message; }
       finally { busy.value = false; }
     }
 
-    async function createNew() {
-      if (!newUser.username.trim()) { error.value = "username requerido"; return; }
-      busy.value = true; error.value = "";
-      try {
-        const r = await api("/api/users", {
-          method: "POST",
-          body: {
-            username: newUser.username.trim(),
-            password: newUser.password.trim() || null,
-            display_name: newUser.display_name.trim() || newUser.username.trim(),
-            email: newUser.email.trim() || null,
-            is_admin: newUser.is_admin,
-            max_podcasts: newUser.is_admin ? null : (parseInt(newUser.max_podcasts) || 0),
-          },
-        });
-        if (r.generated_password) lastGenerated[r.username] = r.generated_password;
-        Object.assign(newUser, { username: "", password: "", display_name: "", email: "", is_admin: false, max_podcasts: 1 });
-        await load();
-      } catch (e) { error.value = e.message; }
-      finally { busy.value = false; }
-    }
-
     async function resetPassword(u) {
-      if (!await podSwal.confirm("¿Generar una contraseña nueva para " + u.username + "? La actual va a dejar de funcionar.")) return;
+      if (!await podSwal.confirm("¿Generar una contraseña nueva para " + u.display_name + "? La actual deja de funcionar.")) return;
       try {
         const r = await api("/api/users/" + u.username, { method: "PUT", body: { password: "" } });
-        if (r.generated_password) lastGenerated[u.username] = r.generated_password;
+        credentials.value = { username: u.username, display_name: u.display_name, email: u.email, password: r.generated_password, isNew: false };
+        copied.value = false;
       } catch (e) { error.value = e.message; }
-    }
-
-    async function setAdmin(u, is_admin) {
-      try {
-        await api("/api/users/" + u.username, { method: "PUT", body: { is_admin } });
-        await load();
-      } catch (e) { error.value = e.message; await load(); }
-    }
-
-    async function setMaxPodcasts(u, v) {
-      try {
-        await api("/api/users/" + u.username, { method: "PUT", body: { max_podcasts: v === "" ? null : parseInt(v) } });
-        await load();
-      } catch (e) { error.value = e.message; await load(); }
     }
 
     async function removeUser(u) {
-      if (!await podSwal.confirm('¿Eliminar al usuario "' + u.username + '"? Sus podcasts NO se eliminan, solo el acceso.')) return;
+      if (!await podSwal.confirm("¿Eliminar a " + u.display_name + " (@" + u.username + ")? Sus podcasts no se borran, solo pierde el acceso.")) return;
       try {
         await api("/api/users/" + u.username, { method: "DELETE" });
+        if (editing.value === u.username) editing.value = null;
         await load();
       } catch (e) { error.value = e.message; }
     }
 
+    function limitLabel(u) {
+      if (u.is_admin) return "Ve y maneja todo";
+      if (u.max_podcasts === null) return "Podcasts sin límite";
+      return u.max_podcasts === 1 ? "Hasta 1 podcast" : "Hasta " + u.max_podcasts + " podcasts";
+    }
+
     onMounted(load);
-    return { users, error, busy, newUser, lastGenerated, editing, editForm,
-             createNew, resetPassword, setAdmin, setMaxPodcasts, removeUser,
-             startEdit, cancelEdit, saveEdit };
+    return { users, error, busy, query, filter, mode, counts, shown, nu, usernameState, emailState, passwordState, canCreate,
+             editing, editForm, credentials, copied, welcomeText, mailtoHref, loginUrl, colors: USER_COLORS,
+             openNew, cancelNew, createNew, copyWelcome, startEdit, cancelEdit, saveEdit, resetPassword, removeUser,
+             limitLabel, timeAgo };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
       <div class="modal users-admin-modal">
         <div class="modal-head">
-          <h3>Usuarios</h3>
+          <h3>Usuarios <span class="ua-count">{{ counts.all }}</span></h3>
           <button class="icon ghost" @click="$emit('close')">✕</button>
         </div>
         <div class="modal-body">
           <div v-if="error" class="error">{{ error }}</div>
 
-          <div class="user-list">
-            <div v-for="u in users" :key="u.username" class="user-row">
-              <div class="user-avatar" :style="{ background: u.avatar_color }">{{ u.display_name[0] }}</div>
-              <div class="user-info" style="flex:1;min-width:0;">
-                <div class="user-name">{{ u.display_name }} <span class="muted mono">@{{ u.username }}</span></div>
-                <div v-if="u.email" class="muted" style="font-size:12px;">{{ u.email }}</div>
-                <div v-if="lastGenerated[u.username]" class="user-pw-flash mono">
-                  nueva clave: <strong>{{ lastGenerated[u.username] }}</strong> (copia ahora, no se guarda en pantalla)
+          <!-- Datos de acceso recién creados / clave nueva -->
+          <div v-if="credentials" class="ua-cred">
+            <div class="ua-cred-head">
+              <strong>{{ credentials.isNew ? 'Listo: ' + credentials.display_name + ' ya tiene cuenta' : 'Contraseña nueva para ' + credentials.display_name }}</strong>
+              <button class="icon ghost" @click="credentials = null" title="Cerrar">✕</button>
+            </div>
+            <div class="ua-cred-grid">
+              <span>Entra en</span><code>{{ loginUrl }}</code>
+              <span>Usuario</span><code>{{ credentials.username }}</code>
+              <span>Contraseña</span><code>{{ credentials.password }}</code>
+            </div>
+            <div class="ua-cred-actions">
+              <button class="primary" @click="copyWelcome">{{ copied ? '✓ Copiado' : 'Copiar mensaje para enviarle' }}</button>
+              <a v-if="mailtoHref" class="button ghost" :href="mailtoHref">Enviar por correo</a>
+            </div>
+            <div class="muted ua-hint">Esta contraseña no se vuelve a mostrar. Si se pierde, genera otra con la llave 🔑.</div>
+          </div>
+
+          <!-- Nuevo usuario -->
+          <div v-if="mode === 'new'" class="ua-new">
+            <h4>Nuevo usuario</h4>
+            <div class="ua-grid">
+              <label class="ua-field">
+                <span>Nombre y apellido</span>
+                <input type="text" v-model="nu.display_name" placeholder="ej: María García" autofocus>
+              </label>
+              <label class="ua-field">
+                <span>Usuario para entrar</span>
+                <input type="text" v-model="nu.username" @input="nu.usernameTouched = true" placeholder="ej: mariagarcia" autocapitalize="off" spellcheck="false">
+                <small :class="usernameState.ok ? 'ok' : 'bad'">{{ usernameState.msg }}</small>
+              </label>
+              <label class="ua-field ua-wide">
+                <span>Correo (opcional, para mandarle sus datos)</span>
+                <input type="email" v-model="nu.email" placeholder="correo@ejemplo.com">
+                <small class="bad">{{ emailState.msg }}</small>
+              </label>
+            </div>
+
+            <div class="ua-field ua-wide">
+              <span>Qué puede hacer</span>
+              <div class="ua-choice">
+                <label :class="{ on: nu.role === 'user' }"><input type="radio" value="user" v-model="nu.role">
+                  <b>Usuario</b><small>Ve y maneja solo sus podcasts</small></label>
+                <label :class="{ on: nu.role === 'admin' }"><input type="radio" value="admin" v-model="nu.role">
+                  <b>Admin</b><small>Ve todo, crea usuarios y cambia la configuración</small></label>
+              </div>
+            </div>
+            <label v-if="nu.role === 'user'" class="ua-field ua-inline">
+              <span>Cuántos podcasts puede crear</span>
+              <input type="number" min="0" v-model="nu.limit" placeholder="∞" class="ua-num">
+              <small class="muted">vacío = sin límite</small>
+            </label>
+
+            <div class="ua-field ua-wide">
+              <span>Contraseña</span>
+              <div class="ua-choice">
+                <label :class="{ on: nu.pwMode === 'auto' }"><input type="radio" value="auto" v-model="nu.pwMode">
+                  <b>Generarla</b><small>Te la mostramos al crear para que se la mandes</small></label>
+                <label :class="{ on: nu.pwMode === 'manual' }"><input type="radio" value="manual" v-model="nu.pwMode">
+                  <b>Escribirla yo</b><small>Mínimo 6 caracteres</small></label>
+              </div>
+              <template v-if="nu.pwMode === 'manual'">
+                <input type="text" v-model="nu.password" placeholder="contraseña" autocomplete="new-password" style="margin-top:8px;">
+                <small class="bad">{{ nu.password ? passwordState.msg : '' }}</small>
+              </template>
+            </div>
+
+            <div class="ua-field ua-wide">
+              <span>Color</span>
+              <div class="ua-swatches">
+                <button v-for="c in colors" :key="c" type="button" :style="{ background: c }" :class="{ on: nu.avatar_color === c }" @click="nu.avatar_color = c"
+                        :title="c"></button>
+                <div class="user-avatar ua-preview" :style="{ background: nu.avatar_color }">{{ (nu.display_name || '?')[0].toUpperCase() }}</div>
+              </div>
+            </div>
+
+            <div class="ua-actions">
+              <button class="primary" :disabled="!canCreate" @click="createNew">{{ busy ? 'Creando…' : 'Crear usuario' }}</button>
+              <button class="ghost" @click="cancelNew">Cancelar</button>
+            </div>
+          </div>
+
+          <!-- Lista -->
+          <template v-else>
+            <div class="ua-toolbar">
+              <input type="search" v-model="query" placeholder="Buscar por nombre, usuario o correo" class="ua-search">
+              <button class="primary" @click="openNew">＋ Nuevo usuario</button>
+            </div>
+            <div class="ua-filters">
+              <button :class="{ on: filter === 'all' }" @click="filter = 'all'">Todos {{ counts.all }}</button>
+              <button :class="{ on: filter === 'admin' }" @click="filter = 'admin'">Admins {{ counts.admin }}</button>
+              <button :class="{ on: filter === 'user' }" @click="filter = 'user'">Usuarios {{ counts.user }}</button>
+              <button v-if="counts.never" :class="{ on: filter === 'never' }" @click="filter = 'never'">Nunca entraron {{ counts.never }}</button>
+            </div>
+
+            <div class="user-list">
+              <div v-if="!shown.length" class="muted" style="padding:14px 4px;">Nadie coincide con la búsqueda.</div>
+              <div v-for="u in shown" :key="u.username" class="ua-row" :class="{ open: editing === u.username }">
+                <div class="ua-main">
+                  <div class="user-avatar" :style="{ background: u.avatar_color }">{{ (u.display_name || u.username)[0] }}</div>
+                  <div class="user-info">
+                    <div class="user-name">{{ u.display_name }} <span class="muted mono">@{{ u.username }}</span>
+                      <span v-if="u.is_admin" class="ua-badge admin">Admin</span></div>
+                    <div class="muted ua-meta">
+                      <span v-if="u.email">{{ u.email }} · </span>
+                      <span>{{ limitLabel(u) }}</span> ·
+                      <span :class="{ 'ua-never': !u.last_login_at }">{{ u.last_login_at ? 'Entró ' + timeAgo(u.last_login_at) : 'Nunca entró' }}</span>
+                    </div>
+                  </div>
+                  <div class="ua-btns">
+                    <button class="ghost" @click="editing === u.username ? cancelEdit() : startEdit(u)" title="Editar">✎</button>
+                    <button class="ghost" @click="resetPassword(u)" title="Generar contraseña nueva">🔑</button>
+                    <button class="icon danger" @click="removeUser(u)" title="Eliminar">✕</button>
+                  </div>
                 </div>
 
-                <div v-if="editing === u.username" class="user-edit-form" style="margin-top:8px;padding:12px;background:#f7f7f9;border-radius:8px;">
-                  <div class="form-row" style="margin-bottom:6px;">
-                    <label style="font-size:11px;color:#888;">Nombre</label>
-                    <input type="text" v-model="editForm.display_name" style="width:100%;">
+                <div v-if="editing === u.username" class="ua-edit">
+                  <div class="ua-grid">
+                    <label class="ua-field"><span>Nombre</span><input type="text" v-model="editForm.display_name"></label>
+                    <label class="ua-field"><span>Correo</span><input type="email" v-model="editForm.email" placeholder="correo@ejemplo.com"></label>
                   </div>
-                  <div class="form-row" style="margin-bottom:6px;">
-                    <label style="font-size:11px;color:#888;">Email</label>
-                    <input type="email" v-model="editForm.email" placeholder="correo@ejemplo.com" style="width:100%;">
+                  <div class="ua-field ua-wide">
+                    <span>Qué puede hacer</span>
+                    <div class="ua-choice">
+                      <label :class="{ on: !editForm.is_admin }"><input type="radio" :value="false" v-model="editForm.is_admin"><b>Usuario</b><small>Solo sus podcasts</small></label>
+                      <label :class="{ on: editForm.is_admin }"><input type="radio" :value="true" v-model="editForm.is_admin"><b>Admin</b><small>Ve y maneja todo</small></label>
+                    </div>
                   </div>
-                  <div class="form-row" style="margin-bottom:8px;">
-                    <label style="font-size:11px;color:#888;">Color avatar</label>
-                    <input type="color" v-model="editForm.avatar_color" style="width:48px;height:28px;padding:0;border:1px solid #ddd;border-radius:4px;cursor:pointer;">
+                  <label v-if="!editForm.is_admin" class="ua-field ua-inline">
+                    <span>Cuántos podcasts puede crear</span>
+                    <input type="number" min="0" v-model="editForm.limit" placeholder="∞" class="ua-num">
+                    <small class="muted">vacío = sin límite</small>
+                  </label>
+                  <div class="ua-field ua-wide">
+                    <span>Color</span>
+                    <div class="ua-swatches">
+                      <button v-for="c in colors" :key="c" type="button" :style="{ background: c }" :class="{ on: editForm.avatar_color === c }" @click="editForm.avatar_color = c"></button>
+                    </div>
                   </div>
-                  <div style="display:flex;gap:8px;">
-                    <button class="primary" :disabled="busy" @click="saveEdit(u)" style="font-size:13px;padding:4px 14px;">Guardar</button>
-                    <button class="ghost" @click="cancelEdit" style="font-size:13px;padding:4px 14px;">Cancelar</button>
+                  <div class="ua-actions">
+                    <button class="primary" :disabled="busy" @click="saveEdit(u)">Guardar</button>
+                    <button class="ghost" @click="cancelEdit">Cancelar</button>
+                    <span class="muted ua-hint" v-if="u.created_at">Creado {{ timeAgo(u.created_at) }}</span>
                   </div>
                 </div>
               </div>
-              <button v-if="editing !== u.username" class="ghost" @click="startEdit(u)" title="Editar usuario" style="font-size:14px;">&#9998;</button>
-              <label class="user-toggle">
-                <input type="checkbox" :checked="u.is_admin" @change="setAdmin(u, $event.target.checked)">
-                admin
-              </label>
-              <input type="number" min="0" class="user-max" placeholder="∞"
-                     :value="u.max_podcasts === null ? '' : u.max_podcasts"
-                     :disabled="u.is_admin"
-                     @change="setMaxPodcasts(u, $event.target.value)" title="Podcasts max">
-              <button class="ghost" @click="resetPassword(u)" title="Generar nueva clave" style="font-size:14px;">&#128273;</button>
-              <button class="icon danger" @click="removeUser(u)" title="Eliminar">✕</button>
             </div>
-          </div>
-
-          <div class="user-add">
-            <h4 style="margin: 16px 0 8px;">Crear usuario</h4>
-            <div class="form-row" style="margin-bottom: 8px;">
-              <label>Username (sin espacios)</label>
-              <input type="text" v-model="newUser.username" placeholder="ej: maria">
-            </div>
-            <div class="form-row" style="margin-bottom: 8px;">
-              <label>Nombre para mostrar (opcional)</label>
-              <input type="text" v-model="newUser.display_name" placeholder="ej: María García">
-            </div>
-            <div class="form-row" style="margin-bottom: 8px;">
-              <label>Email (opcional)</label>
-              <input type="email" v-model="newUser.email" placeholder="correo@ejemplo.com">
-            </div>
-            <div class="form-row" style="margin-bottom: 8px;">
-              <label>Contraseña (vacío = generar aleatoria)</label>
-              <input type="text" v-model="newUser.password" placeholder="dejar vacío para generar">
-            </div>
-            <div class="row" style="gap: 16px;">
-              <label class="user-toggle">
-                <input type="checkbox" v-model="newUser.is_admin">
-                admin (ve y maneja todo)
-              </label>
-              <label v-if="!newUser.is_admin" class="user-toggle">
-                max podcasts:
-                <input type="number" min="0" v-model.number="newUser.max_podcasts" style="width: 60px; margin-left: 6px;">
-              </label>
-            </div>
-            <button class="primary" :disabled="busy || !newUser.username.trim()" @click="createNew" style="margin-top: 12px;">
-              {{ busy ? "Creando…" : "＋ Crear usuario" }}
-            </button>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -4938,7 +5104,7 @@ var App = {
       <PodcastView v-if="state.currentPodcast" :podcast="state.currentPodcast" :on-back="onBack" :on-updated="onUpdated" />
       <PodcastListView v-else :on-open="onOpen" />
       <IntegrationSettingsModal v-if="state.showSettings" @close="state.showSettings = false" />
-      <UsersAdminModal v-if="state.showUsers" @close="state.showUsers = false" />
+      <UsersAdminModal v-if="state.showUsers" :thepod-url="thepodUrl" @close="state.showUsers = false" />
     </template>
   `,
 };

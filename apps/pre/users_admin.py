@@ -3,6 +3,8 @@ Admin-only user management. Reads/writes the shared SQLite users DB at
 `~/.podpod/users.db` so changes propagate to prodPod and postPod.
 """
 
+import re
+
 from flask import Blueprint, jsonify, request
 
 from auth import current_user, require_auth
@@ -14,6 +16,17 @@ from shared_users import (
 
 
 bp = Blueprint("users_admin", __name__, url_prefix="/api/users")
+
+_USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,31}$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _check_email(email):
+    """None si está bien (o vacío); si no, el mensaje de error."""
+    email = (email or "").strip()
+    if email and not _EMAIL_RE.match(email):
+        return "el correo no parece válido"
+    return None
 
 
 def _is_admin() -> bool:
@@ -49,8 +62,13 @@ def create_user_endpoint():
         return jsonify({"error": "solo admins"}), 403
     body = request.get_json(silent=True) or {}
     username = (body.get("username") or "").strip().lower()
-    if not username or not username.replace("_", "").replace("-", "").isalnum():
-        return jsonify({"error": "username inválido (solo letras, números, _ -)"}), 400
+    if not _USERNAME_RE.match(username):
+        return jsonify({"error": "el usuario debe tener de 3 a 32 caracteres: letras, números, _ o -, sin espacios"}), 400
+    if get_user(username):
+        return jsonify({"error": f"el usuario «{username}» ya existe"}), 400
+    bad = _check_email(body.get("email"))
+    if bad:
+        return jsonify({"error": bad}), 400
 
     password = (body.get("password") or "").strip()
     auto_password = None
@@ -110,6 +128,9 @@ def update_user_endpoint(username):
     if "avatar_color" in body:
         fields["avatar_color"] = (body["avatar_color"] or "").strip() or None
     if "email" in body:
+        bad = _check_email(body.get("email"))
+        if bad:
+            return jsonify({"error": bad}), 400
         fields["email"] = (body["email"] or "").strip() or None
 
     if "is_admin" in body:
@@ -123,8 +144,9 @@ def update_user_endpoint(username):
         if wanted:
             fields["max_podcasts"] = None
 
-    if "max_podcasts" in body and "is_admin" not in fields:
-        if existing["is_admin"]:
+    will_be_admin = bool(fields["is_admin"]) if "is_admin" in fields else bool(existing["is_admin"])
+    if "max_podcasts" in body:
+        if will_be_admin:
             pass  # admins ignore the limit
         else:
             v = body["max_podcasts"]
