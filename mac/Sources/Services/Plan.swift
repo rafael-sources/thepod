@@ -10,7 +10,10 @@ enum Plan {
     static var id: String { d.string(forKey: "planId") ?? "" }
     static var name: String { d.string(forKey: "planName") ?? "" }
     static var isFree: Bool { id == "gratis" }
-    static var maxHeight: Int? { positive("planMaxHeight") }
+    /// La app de Mac viene con los planes Mac y Completo. Con Gratis o Web, en la Mac rige lo de Gratis.
+    static var includesApp: Bool { id.isEmpty || d.bool(forKey: "planMac") }
+    /// Tope de video en la Mac: el del plan, o 720p si el plan no incluye la app.
+    static var maxHeight: Int? { includesApp ? positive("planMaxHeight") : 720 }
     static var maxRecordSeconds: Int? { positive("planMaxRecordSeconds") }
     static var maxEpisodes: Int? { positive("planMaxEpisodes") }
     static var episodesUsed: Int { d.integer(forKey: "planEpisodesUsed") }
@@ -30,11 +33,12 @@ enum Plan {
         d.set(o["max_record_seconds"] as? Int ?? 0, forKey: "planMaxRecordSeconds")
         d.set(o["max_episodes"] as? Int ?? 0, forKey: "planMaxEpisodes")
         d.set(o["episodes_used"] as? Int ?? 0, forKey: "planEpisodesUsed")
+        d.set(o["mac"] as? Bool ?? true, forKey: "planMac")
         NotificationCenter.default.post(name: changed, object: nil)
     }
 
     static func clear() {
-        for k in ["planId", "planName", "planMaxHeight", "planMaxRecordSeconds", "planMaxEpisodes", "planEpisodesUsed"] {
+        for k in ["planId", "planName", "planMaxHeight", "planMaxRecordSeconds", "planMaxEpisodes", "planEpisodesUsed", "planMac"] {
             d.removeObject(forKey: k)
         }
         NotificationCenter.default.post(name: changed, object: nil)
@@ -47,11 +51,14 @@ enum Plan {
         if isFree, let max = maxEpisodes {
             return "Plan \(name) · \(episodesUsed) de \(max) episodios · grabaciones de hasta \((maxRecordSeconds ?? 900) / 60) min · video hasta \(maxHeight ?? 720)p"
         }
+        if !name.isEmpty, !includesApp {
+            return "Plan \(name) · no incluye la app: aquí tienes 2 episodios de prueba en 720p"
+        }
         return name.isEmpty ? nil : "Plan \(name)"
     }
 
     /// Mensaje cuando ya no quedan episodios.
     static var noEpisodesMessage: String {
-        "El plan \(name.isEmpty ? "Gratis" : name) incluye \(maxEpisodes ?? 2) episodios y ya los usaste. Pásate al plan Completo para seguir."
+        "El plan \(name.isEmpty ? "Gratis" : name) incluye \(maxEpisodes ?? 2) episodios y ya los usaste. Mejora tu plan para seguir."
     }
 }

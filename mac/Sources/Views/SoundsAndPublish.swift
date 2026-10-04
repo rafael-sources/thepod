@@ -362,8 +362,13 @@ struct PrePodSettingsSection: View {
             }
             .font(.caption)
             if let plan = role.planSummary {
-                Label(plan, systemImage: Plan.isFree ? "gift" : "checkmark.seal")
-                    .font(.caption).foregroundStyle(Plan.isFree ? Theme.accent : Theme.good)
+                HStack {
+                    Label(plan, systemImage: Plan.includesApp ? "checkmark.seal" : "gift")
+                        .font(.caption).foregroundStyle(Plan.includesApp ? Theme.good : Theme.accent)
+                    Spacer()
+                    Button(Plan.includesApp && !Plan.isFree ? "Ver planes" : "Mejorar plan") { Links.open("/planes") }
+                        .controlSize(.small)
+                }
             }
             Text("Es la misma cuenta de la web. La contraseña queda guardada en esta Mac, solo para tu usuario.")
                 .font(.caption).foregroundStyle(.secondary)
