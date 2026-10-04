@@ -504,8 +504,11 @@ async function runRecordingPreflight(previewStream, token) {
   ]);
   var upMbps = results[0];
   var device = results[1];
+  // La llamada también sube video a la sala (~1.7 Mbps + capas de simulcast):
+  // esa parte de la subida no queda para la grabación.
+  var ROOM_UPLOAD_MBPS = 2.5;
   // Sin medida de subida (endpoint caído): decidir solo por el equipo.
-  var effectiveUp = (upMbps == null) ? 4 : upMbps;
+  var effectiveUp = (upMbps == null) ? 4 : Math.max(0, upMbps - ROOM_UPLOAD_MBPS);
   return { profileId: decideRecProfile(effectiveUp, device), upMbps: upMbps, device: device };
 }
 
@@ -743,10 +746,17 @@ function createChunkUploader(opts) {
   var ext = ".webm";
   var timer = null;
   var uploading = false;
-  var lastFlushAt = 0;
+  var nextFlushAt = 0;
   var retries = 0;
   var state = { state: "idle", sentBytes: 0, pendingBytes: 0, retries: 0, error: "" };
-  var BACKLOG_SLOW = 16 * 1024 * 1024;
+  var BACKLOG_CATCHUP = 16 * 1024 * 1024;
+  // Ritmo de producción del video (bytes/s), medido sobre lo que entrega el
+  // MediaRecorder. La subida en vivo se fija como múltiplo de este ritmo.
+  var producedBytes = 0;
+  var producedSince = 0;
+  var PROD_RATE_DEFAULT = 0.6 * 1024 * 1024;   // hasta tener medida real
+  var MIN_UPLOAD_RATE = 256 * 1024;
+  var MAX_BATCH = 8 * 1024 * 1024;
 
   function emit() {
     state.sentBytes = ackedBytes;
@@ -761,6 +771,8 @@ function createChunkUploader(opts) {
     var rec = { idbId: null, offset: nextOffset, blob: blob };
     nextOffset += blob.size;
     pendingBytes += blob.size;
+    if (!producedSince) producedSince = Date.now();
+    producedBytes += blob.size;
     queue.push(rec);
     _idbPut({ skey: skey, offset: rec.offset, ext: ext, take: opts.takeId || null, blob: blob }).then(function (id) { rec.idbId = id; });
     emit();
@@ -853,14 +865,23 @@ function createChunkUploader(opts) {
     emit();
     if (timer) clearInterval(timer);
     timer = setInterval(function () {
-      // Ritmo adaptativo: con la cola corta sube cada 10 s; con la cola larga
-      // (red lenta) sube menos y más espaciado — el resto se va al final.
-      var slow = pendingBytes >= BACKLOG_SLOW;
-      var minGap = slow ? 15000 : 10000;
-      if (Date.now() - lastFlushAt < minGap) return;
-      lastFlushAt = Date.now();
-      _flushOnce(slow ? (1.5 * 1024 * 1024) : (6 * 1024 * 1024));
-    }, 2000);
+      // La subida en vivo va SIEMPRE por encima del ritmo al que se produce
+      // el video (×1.5; ×3 si hay atraso para ponerse al día), así la cola
+      // no crece sin límite. El tope solo existe para no acaparar toda la
+      // conexión que necesita la llamada; si la red da menos, va a lo que dé.
+      if (uploading || !queue.length) return;
+      var now = Date.now();
+      if (now < nextFlushAt) return;
+      var elapsed = producedSince ? (now - producedSince) / 1000 : 0;
+      var prodRate = elapsed >= 5 ? producedBytes / elapsed : PROD_RATE_DEFAULT;
+      var factor = pendingBytes >= BACKLOG_CATCHUP ? 3.0 : 1.5;
+      var rate = Math.max(prodRate * factor, MIN_UPLOAD_RATE);
+      var cap = Math.min(MAX_BATCH, Math.max(rate * 4, 512 * 1024));
+      var batchBytes = 0;
+      for (var i = 0; i < queue.length && batchBytes < cap; i++) batchBytes += queue[i].blob.size;
+      nextFlushAt = now + (batchBytes / rate) * 1000;
+      _flushOnce(cap);
+    }, 1000);
   }
 
   async function finalize(durationSeconds) {
