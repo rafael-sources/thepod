@@ -1636,7 +1636,7 @@ var CaptureMomentModal = {
 var MomentsList = {
   props: { moments: Array, selectedMomentId: Number },
   emits: ["goto", "preview", "update-label", "update-type", "remove", "select",
-          "jump-next", "set-track", "toggle-track", "update-time", "export-moment"],
+          "jump-next", "set-track", "toggle-track", "update-time", "export-moment", "reel-moment"],
   setup(props, { emit }) {
     const sorted = computed(() => [...props.moments].sort((a, b) => a.timeline_seconds - b.timeline_seconds));
 
@@ -1761,6 +1761,7 @@ var MomentsList = {
             <span class="actions" @click.stop>
               <button class="icon" @click="$emit('goto', m.timeline_seconds)" title="Saltar al momento">⇥</button>
               <button class="icon primary-subtle" @click="$emit('preview', m)" title="Reproducir desde un poco antes">▶</button>
+              <button class="icon primary-subtle" @click="$emit('reel-moment', m)" title="Hacer un reel de este momento (vertical, con subtítulos)">🎬</button>
               <button class="icon" @click="$emit('export-moment', m)" title="Exportar este momento">⇪</button>
               <button class="icon danger" @click="$emit('remove', m.id)" title="Eliminar">✕</button>
             </span>
@@ -3416,6 +3417,8 @@ var ExportModal = {
     // user can opt into "exportar sólo este rango" (range_start/range_end).
     selectedRange: { type: Object, default: null },
     hasMultitrack: { type: Boolean, default: false },
+    // Abierto con 🎬 desde un momento: vertical, subtítulos y un diseño simple, en un paso.
+    reel: { type: Boolean, default: false },
   },
   emits: ["close"],
   setup(props, { emit }) {
@@ -3500,7 +3503,22 @@ var ExportModal = {
     async function loadPresets() {
       try { presets.value = await api("/api/export/presets"); }
       catch (e) { error.value = e.message; }
+      if (props.reel && presets.value.some(p => p.id === "tiktok_v")) selectedId.value = "tiktok_v";
     }
+
+    // Diseño del reel: sencillo (solo subtítulos), con el título del momento, o con la marca del podcast.
+    const reelDesign = ref(localStorage.getItem("postpod.reelDesign") || "titulo");
+    const showAllPresets = ref(!props.reel);
+    function applyReelDesign() {
+      if (!props.reel) return;
+      localStorage.setItem("postpod.reelDesign", reelDesign.value);
+      momentBanner.value = reelDesign.value !== "simple";
+      bannerPosition.value = "top";
+      useBackground.value = reelDesign.value === "marca";
+    }
+    watch(reelDesign, applyReelDesign);
+    if (props.reel) applyReelDesign();
+    watch(availableCaptions, (v) => { if (props.reel && v.length) burnCaptions.value = true; });
     async function loadHistory() {
       try { history.value = await api(`/api/projects/${props.slug}/exports`); }
       catch (e) { /* ignore */ }
@@ -3611,7 +3629,7 @@ var ExportModal = {
         : null
     );
 
-    onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); loadReview(); });
+    onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); if (!props.reel) loadReview(); });
     onBeforeUnmount(() => { if (pollHandle) clearTimeout(pollHandle); });
 
     function fmtRangeSec(s) {
@@ -3624,16 +3642,38 @@ var ExportModal = {
     const showAllHistory = ref(false);
 
     return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, notesUrl,
-             start, cancel, reset, loadHistory, showAllHistory, review, reviewBlocked,
+             start, cancel, reset, loadHistory, showAllHistory, review, reviewBlocked, reelDesign, showAllPresets,
              burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions,
              generateNotes, enhanceSpeech, layoutTemplate, pipCorner, pipMainTrack, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
       <div class="modal" style="width: 520px; max-height: calc(100vh - 40px); display: flex; flex-direction: column;">
-        <div class="eyebrow">EXPORTAR</div>
+        <div class="eyebrow">{{ reel ? 'REEL DE ESTE MOMENTO' : 'EXPORTAR' }}</div>
 
         <div v-if="!job" style="margin-top: 10px; overflow-y:auto; flex: 1;">
+          <div v-if="reel" class="reel-box">
+            <div class="muted" style="font-size: 12px; margin-bottom: 8px;">
+              Sale vertical para TikTok, Reels y Shorts{{ availableCaptions.length ? ', con subtítulos que se van pintando palabra por palabra' : '' }}.
+              <span v-if="!availableCaptions.length"> Esta grabación no tiene subtítulos: genéralos en Archivos (🎙) si los quieres.</span>
+            </div>
+            <div class="style-label" style="margin-bottom: 6px;">Diseño</div>
+            <div class="reel-designs">
+              <button v-for="d in [
+                { id: 'simple', name: 'Sencillo', desc: 'Solo el video y los subtítulos' },
+                { id: 'titulo', name: 'Con título', desc: 'Arriba, el nombre del momento' },
+                { id: 'marca',  name: 'Con tu marca', desc: 'Fondo del podcast y título' },
+              ]" :key="d.id" class="reel-design" :class="{ active: reelDesign === d.id }" @click="reelDesign = d.id">
+                <div class="reel-thumb" :class="d.id"><span class="t"></span><span class="v"></span><span class="s"></span></div>
+                <div class="name">{{ d.name }}</div>
+                <div class="muted desc">{{ d.desc }}</div>
+              </button>
+            </div>
+            <div style="margin-top: 8px;">
+              <a href="#" class="muted" style="font-size: 11px;" @click.prevent="showAllPresets = !showAllPresets">{{ showAllPresets ? 'Ocultar formatos' : 'Otro formato u opciones' }}</a>
+            </div>
+          </div>
+          <div v-show="showAllPresets">
           <div v-if="review" class="review-box" :class="{ clean: !review.items.length }">
             <div v-if="!review.items.length" class="review-ok">✓ Todo listo: nada pendiente de revisar.</div>
             <template v-else>
@@ -3758,6 +3798,7 @@ var ExportModal = {
             </div>
           </div>
 
+          </div>
           <!-- History (collapsed) -->
           <div v-if="history.length > 0" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ink-line);">
             <div class="tiny" style="margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
@@ -3821,8 +3862,8 @@ var ExportModal = {
 
         <div class="row right" style="margin-top: 12px; gap: 8px;">
           <button class="ghost" @click="$emit('close')">Cerrar</button>
-          <button v-if="!job" class="primary" :disabled="!selectedId || busy || reviewBlocked" @click="start">
-            {{ busy ? 'Lanzando…' : 'Exportar' }}
+          <button v-if="!job" class="primary" :disabled="!selectedId || busy || reviewBlocked" @click="start" :title="reel ? 'Hacer el reel' : ''">
+            {{ busy ? 'Lanzando…' : (reel ? 'Hacer reel' : 'Exportar') }}
           </button>
         </div>
       </div>
@@ -4686,6 +4727,13 @@ var ProjectView = {
       videoPlayerRef.value?.seek(start, true);
     }
 
+    // Reel de un momento: la misma ventana de exportar, ya armada para un reel.
+    const reelMode = ref(false);
+    function reelMoment(m) {
+      reelMode.value = true;
+      exportMoment(m);
+      if (!showExport.value) reelMode.value = false;
+    }
     function exportMoment(m) {
       const total = playerState.duration || 0;
       const start = m.timeline_seconds || 0;
@@ -4864,7 +4912,7 @@ var ProjectView = {
       captionsEnabled, captionsLanguage, liveCaption, onCaptionsChanged,
       captionsByMedia,
       addOperation, removeOperation,
-      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, exportMoment,
+      onSeek, onZoomTo, onUpdateZoom, onFilesRefresh, previewMoment, exportMoment, reelMoment, reelMode,
       showFiles, showClips, focusMode, selectedRange,
       silenceClip, openSilenceModal, onSilenceApplied,
       showExport, showParticipants,
@@ -4904,6 +4952,7 @@ var ProjectView = {
           @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
           @export-moment="exportMoment"
+          @reel-moment="reelMoment"
         />
       </aside>
 
@@ -5045,6 +5094,7 @@ var ProjectView = {
           @toggle-track="toggleTrackAtMoment"
           @select="(id) => selectedMomentId = id"
           @export-moment="exportMoment"
+          @reel-moment="reelMoment"
         />
 
         <CaptureMomentModal
@@ -5094,7 +5144,7 @@ var ProjectView = {
         />
       </aside>
 
-      <ExportModal v-if="showExport" :slug="project.slug" :selected-range="selectedRange" :has-multitrack="autoMultitrack" @close="showExport = false" />
+      <ExportModal v-if="showExport" :slug="project.slug" :selected-range="selectedRange" :has-multitrack="autoMultitrack" :reel="reelMode" @close="showExport = false; reelMode = false" />
       <TranscriptEditor :show="showTranscript" :slug="project.slug"
                         @close="showTranscript = false"
                         @seek="onSeek"

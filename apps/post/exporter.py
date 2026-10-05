@@ -46,7 +46,112 @@ def _hex_to_ass_color(hex_color):
     return f"&H{b}{g}{r}&"
 
 
-def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label, seek_offset=0.0):
+def _caption_words_in_output(slug, burn_captions, clips, keep_ranges):
+    """Palabras de los subtítulos en el tiempo del video exportado.
+
+    Los subtítulos se guardan en el tiempo de la grabación. El video que sale es otra cosa:
+    el clip puede empezar más adentro del archivo, hay cortes (silencios, transcript, saltos)
+    y, al exportar un momento, empieza en ese momento. Cada palabra se lleva
+    grabación → timeline (por los clips que usan ese archivo) → salida (sumando solo los tramos
+    que quedan). Las palabras que caen en un corte no salen. Devuelve None si no hay palabras.
+    """
+    if not burn_captions:
+        return None
+    from db import get_db as _get_db
+    db_k = _get_db(slug)
+    try:
+        mf = db_k.execute("SELECT filename, file_type FROM media_files WHERE id=?",
+                          (burn_captions.get("media_file_id"),)).fetchone()
+    finally:
+        db_k.close()
+    if not mf:
+        return None
+    media_path = PROJECTS_DIR / slug / "media" / mf["file_type"] / mf["filename"]
+    words_path = media_path.parent / f"{mf['filename']}.{burn_captions.get('language', 'auto')}.words.json"
+    try:
+        words = json.loads(words_path.read_text(encoding="utf-8")).get("words", [])
+    except (OSError, ValueError):
+        return None
+    if not words:
+        return None
+    uses = [c for c in clips if str(c["path"]) == str(media_path)]
+    if not uses:
+        return []
+    uses.sort(key=lambda c: (int(c.get("track", 1)), c["tl_start"]))
+    ranges = sorted(keep_ranges) if keep_ranges else [(0.0, max(c["tl_end"] for c in clips))]
+    starts, acc = [], 0.0
+    for a, b in ranges:
+        starts.append(acc)
+        acc += b - a
+
+    def to_output(tl):
+        for (a, b), base in zip(ranges, starts):
+            if a - 1e-6 <= tl < b:
+                return base + (tl - a), base + (b - a)
+        return None, None
+
+    out, seen = [], set()
+    for w in words:
+        try:
+            s, e = float(w["s"]), float(w["e"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        for c in uses:
+            if not (c["start_offset"] - 1e-6 <= s < c["end_offset"]):
+                continue
+            tl_s = c["tl_start"] + (s - c["start_offset"])
+            tl_e = c["tl_start"] + (min(e, c["end_offset"]) - c["start_offset"])
+            o_s, o_end_range = to_output(tl_s)
+            if o_s is None:
+                break
+            o_e = min(o_s + max(0.05, tl_e - tl_s), o_end_range)
+            key = round(o_s, 2)
+            if key not in seen:
+                seen.add(key)
+                out.append({"w": str(w.get("w", "")).strip(), "s": round(o_s, 3), "e": round(o_e, 3)})
+            break
+    out = [w for w in out if w["w"]]
+    out.sort(key=lambda w: w["s"])
+    return out
+
+
+def _caption_lines(words, max_chars=42, max_words=8, gap=0.7):
+    """Agrupa palabras en renglones de subtítulo (por largo, puntuación o pausa)."""
+    lines, cur = [], []
+    for w in words:
+        if cur and (w["s"] - cur[-1]["e"] > gap
+                    or len(" ".join(x["w"] for x in cur + [w])) > max_chars
+                    or len(cur) >= max_words):
+            lines.append(cur)
+            cur = []
+        cur.append(w)
+        if w["w"].endswith((".", "!", "?")) and len(cur) >= 3:
+            lines.append(cur)
+            cur = []
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _write_output_srt(words, dest):
+    def ts(t):
+        ms = int(round(max(0.0, t) * 1000))
+        h, ms = divmod(ms, 3_600_000)
+        m, ms = divmod(ms, 60_000)
+        sec, ms = divmod(ms, 1000)
+        return f"{h:02d}:{m:02d}:{sec:02d},{ms:03d}"
+    out = []
+    lines = _caption_lines(words)
+    for i, ln in enumerate(lines, 1):
+        end = ln[-1]["e"]
+        if i < len(lines):
+            end = min(max(end, ln[0]["s"] + 0.6), lines[i][0]["s"])
+        out += [str(i), f"{ts(ln[0]['s'])} --> {ts(end)}", " ".join(x["w"] for x in ln), ""]
+    dest.write_text("\n".join(out), encoding="utf-8")
+    return dest
+
+
+def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label, seek_offset=0.0, words=None):
     if not burn_captions or not W or not H:
         return [], video_label
 
@@ -62,30 +167,49 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
     if not mf:
         return [], video_label
 
-    lang = burn_captions.get("language", "auto")
-    words_path = (
-        PROJECTS_DIR / slug / "media" / mf["file_type"]
-        / f"{mf['filename']}.{lang}.words.json"
-    )
-    if not words_path.is_file():
-        return [], video_label
+    if words is None:
+        lang = burn_captions.get("language", "auto")
+        words_path = (
+            PROJECTS_DIR / slug / "media" / mf["file_type"]
+            / f"{mf['filename']}.{lang}.words.json"
+        )
+        if not words_path.is_file():
+            return [], video_label
 
-    try:
-        payload = json.loads(words_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return [], video_label
-    words = payload.get("words", [])
+        try:
+            payload = json.loads(words_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return [], video_label
+        words = payload.get("words", [])
     if not words:
         return [], video_label
 
     st = style or {}
-    font_file = drawtext_fontfile()
-    font_size = max(30, int(H * 0.08))
+    _ff = drawtext_fontfile()
+    font_file = f":fontfile='{_ff}'" if _ff else ""
+    # En vertical el ancho manda: el renglón tiene que entrar en la pantalla del teléfono.
+    font_size = max(30, int(min(H * 0.08, W * 0.075)))
     sz = st.get("font_size", "medium")
     if sz == "small":
-        font_size = max(24, int(H * 0.06))
+        font_size = max(24, int(min(H * 0.06, W * 0.06)))
     elif sz == "large":
-        font_size = max(36, int(H * 0.10))
+        font_size = max(36, int(min(H * 0.10, W * 0.09)))
+    # Ancho real de cada palabra con la fuente que se usa (si no hay Pillow, una estimación holgada).
+    try:
+        from PIL import ImageFont as _IF
+        _pil_font = _IF.truetype(_ff, font_size) if _ff else None
+    except Exception:
+        _pil_font = None
+
+    def text_w(t):
+        if _pil_font is not None:
+            try:
+                return int(_pil_font.getlength(t))
+            except Exception:
+                pass
+        return int(len(t) * font_size * 0.64)
+    space_w = text_w(" ") or int(font_size * 0.3)
+    max_chars = max(8, int((W * 0.9) / (font_size * 0.64)))
 
     text_color = (st.get("text_color") or "#FFFFFF").lstrip("#")
     highlight = (st.get("highlight_color") or "#FFD700").lstrip("#")
@@ -103,6 +227,12 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
     for w in words:
         current_group.append(w)
         is_punct = w["w"].rstrip().endswith((".", ",", "!", "?", ":", ";"))
+        too_long = text_w(" ".join(x["w"] for x in current_group)) > W * 0.9
+        if too_long and len(current_group) > 1:
+            current_group.pop()
+            groups.append(current_group)
+            current_group = [w]
+            continue
         if len(current_group) >= 4 or (len(current_group) >= 3 and is_punct):
             groups.append(current_group)
             current_group = []
@@ -113,14 +243,19 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
     label = video_label
     uid = 0
 
-    for group in groups:
+    for gi, group in enumerate(groups):
         window_start = group[0]["s"] - seek_offset
         window_end = group[-1]["e"] - seek_offset
+        # Si el siguiente renglón empieza enseguida, este se queda hasta entonces (sin parpadeo).
+        if gi + 1 < len(groups):
+            nxt = groups[gi + 1][0]["s"] - seek_offset
+            if 0 <= nxt - window_end < 0.6:
+                window_end = nxt
         if window_end <= window_start + 0.01:
             continue
 
         full_text = " ".join(w["w"] for w in group)
-        approx_total_w = len(full_text) * font_size * 0.55
+        approx_total_w = text_w(full_text)
         start_x = max(10, int((W - approx_total_w) / 2))
 
         if bg_color:
@@ -144,21 +279,27 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
             ws = w["s"] - seek_offset
             we = w["e"] - seek_offset
             escaped = _escape_drawtext(w["w"])
+            # Dos capas: la palabra en blanco mientras se ve el renglón, y encima en color
+            # solo mientras se dice (fontcolor_expr no evalúa fórmulas: no pintaba nada).
+            common = (f"text='{escaped}'{font_file}:fontsize={font_size}"
+                      f":borderw={max(2, font_size // 18)}:bordercolor=black"
+                      f":x={cursor_x}:y={y_expr}+{int(font_size * 0.8)}-ascent")
+            uid += 1
+            base_lbl = f"kw{uid}"
+            parts.append(
+                f"[{label}]drawtext={common}:fontcolor=0x{text_color}"
+                f":enable='between(t,{window_start:.3f},{window_end:.3f})'"
+                f"[{base_lbl}]"
+            )
             uid += 1
             wlbl = f"kw{uid}"
-            fc_expr = (
-                f"if(between(t\\,{ws:.3f}\\,{we:.3f})\\,0x{highlight}\\,0x{text_color})"
-            )
             parts.append(
-                f"[{label}]drawtext=text='{escaped}'"
-                f"{font_file}:fontsize={font_size}"
-                f":fontcolor_expr='{fc_expr}'"
-                f":x={cursor_x}:y={y_expr}"
-                f":enable='between(t,{window_start:.3f},{window_end:.3f})'"
+                f"[{base_lbl}]drawtext={common}:fontcolor=0x{highlight}"
+                f":enable='between(t,{ws:.3f},{we:.3f})'"
                 f"[{wlbl}]"
             )
             label = wlbl
-            cursor_x += int(len(w["w"]) * font_size * 0.55) + int(font_size * 0.25)
+            cursor_x += text_w(w["w"]) + space_w
 
     return parts, label
 
@@ -1976,6 +2117,13 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     clipped.append((cs, ce))
             keep_ranges = clipped if clipped else [(rs, re_)]
 
+    # Subtítulos en el tiempo del video que sale: se calcula AQUÍ, con el timeline original
+    # (más abajo el rango se renumera desde 0 y ya no coincide con los clips).
+    try:
+        caption_words_out = _caption_words_in_output(slug, burn_captions, clips, keep_ranges)
+    except Exception:
+        caption_words_out = None
+
     def _overlaps_keep(t0, t1):
         for kr_s, kr_e in keep_ranges:
             overlap = min(t1, kr_e) - max(t0, kr_s)
@@ -2888,12 +3036,23 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                 PROJECTS_DIR / slug / "media" / mf["file_type"]
                 / f"{mf['filename']}.{burn_captions.get('language')}.srt"
             )
-            if srt_path.is_file():
+            out_words = caption_words_out
+            if out_words is not None:
+                # Tiempos ya llevados al video que sale (cortes, rango, clips): nada de corrimientos.
+                srt_path = None
+                if out_words:
+                    import tempfile as _tf
+                    srt_path = Path(_tf.mkdtemp(prefix="pp_subs_")) / "salida.srt"
+                    _write_output_srt(out_words, srt_path)
+                    seek_offset_subs = 0.0
+            else:
+                seek_offset_subs = seek_offset
+            if srt_path is not None and srt_path.is_file():
                 is_karaoke = H is not None and W is not None and H > W
                 if is_karaoke:
                     karaoke_parts, video_label = _build_karaoke_drawtext_chain(
                         slug, burn_captions, subtitle_style, W, H, video_label,
-                        seek_offset=seek_offset,
+                        seek_offset=seek_offset_subs, words=out_words,
                     )
                     parts.extend(karaoke_parts)
                 else:
