@@ -711,9 +711,14 @@ final class ProjectSession: ObservableObject {
     func performExport(format: ExportFormat) async throws -> URL {
             try await ensureEnergy()
             player.pause()
-            report("Exportando \(format.title)", "", 0)
-            let url = try await Exporter.export(project: project, format: format, energy: energy) { [weak self] f in
-                self?.reportAsync("Exportando \(format.title)", "", f)
+            let uhd = format == .landscape && ExportFormat.uhdAvailable && UserDefaults.standard.bool(forKey: "export.youtube4k")
+            let title = uhd ? "\(format.title) en 4K" : format.title
+            report("Exportando \(title)", "", 0)
+            let project = self.project, energy = self.energy
+            let url = try await ExportFormat.$uhd.withValue(uhd) {
+                try await Exporter.export(project: project, format: format, energy: energy) { [weak self] f in
+                    self?.reportAsync("Exportando \(title)", "", f)
+                }
             }
             refreshExports()
             return url

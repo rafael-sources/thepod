@@ -621,8 +621,14 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     /// Tamaño del video. Con el plan Gratis el lado corto es 720 (1280×720, 720×1280, 720×720).
     private var planNote: String { (Plan.maxHeight ?? 1080) < 1080 ? " (plan \(Plan.name))" : "" }
 
+    /// 4K para YouTube: solo mientras se exporta (la vista previa sigue en 1080) y solo con un plan
+    /// que incluye la app. Se activa con `ExportFormat.$uhd.withValue(true) { … }`.
+    @TaskLocal static var uhd = false
+    static var uhdAvailable: Bool { Plan.maxHeight == nil }
+    var uses4K: Bool { self == .landscape && Self.uhd && Self.uhdAvailable }
+
     var renderSize: CGSize {
-        let short = CGFloat(min(1080, Plan.maxHeight ?? 1080))
+        let short = uses4K ? 2160 : CGFloat(min(1080, Plan.maxHeight ?? 1080))
         let long = (short * 16 / 9 / 2).rounded() * 2
         switch self {
         case .landscape: return CGSize(width: long, height: short)
@@ -634,7 +640,7 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     var isVertical: Bool { self == .vertical }
     var fileSuffix: String {
         switch self {
-        case .landscape: return "youtube"
+        case .landscape: return uses4K ? "youtube4k" : "youtube"
         case .vertical: return "vertical"
         case .square: return "cuadrado"
         case .audio: return "audio"

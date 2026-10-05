@@ -455,8 +455,12 @@ enum SelfTest {
                 if a.count > i + 6, a[i + 5] == "reel", let n = Int(a[i + 6]), n >= 1, n <= p.reels.count {
                     p = p.applying(p.look(for: p.reels[n - 1]), reel: p.reels[n - 1])
                 }
-                let url = try await Exporter.export(project: p, format: fmt, window: window, baseName: "render-test",
-                                                    energy: AudioAnalysis.loadEnergy(p.id)) { _ in }
+                let uhd = a.contains("--uhd")       // "--render … landscape --uhd": en 4K
+                let proj = p
+                let url = try await ExportFormat.$uhd.withValue(uhd) {
+                    try await Exporter.export(project: proj, format: fmt, window: window, baseName: "render-test",
+                                              energy: AudioAnalysis.loadEnergy(proj.id)) { _ in }
+                }
                 print("OK \(url.path)"); fflush(stdout); exit(0)
             } catch {
                 let ns = error as NSError

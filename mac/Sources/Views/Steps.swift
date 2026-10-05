@@ -1402,6 +1402,7 @@ struct LookStep: View {
 struct ExportStep: View {
     @ObservedObject var session: ProjectSession
     @State private var format: ExportFormat = .landscape
+    @AppStorage("export.youtube4k") private var youtube4K = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
@@ -1424,6 +1425,19 @@ struct ExportStep: View {
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(format == f ? Theme.accent : Theme.stroke, lineWidth: format == f ? 2 : 1))
                             }
                             .buttonStyle(.plain)
+                        }
+                    }
+                    if format == .landscape && ExportFormat.uhdAvailable {
+                        Card {
+                            Picker("Calidad", selection: $youtube4K) {
+                                Text("1080p").tag(false)
+                                Text("4K").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            Text(youtube4K
+                                 ? "4K (3840×2160). Aunque hayas grabado en 1080p, YouTube lo muestra más nítido. El archivo pesa unas 4 veces más y tarda más en exportar y subir."
+                                 : "1080p: lo normal para YouTube. Elige 4K si grabaste en 4K o quieres la mejor nitidez en YouTube.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
                         }
                     }
                     if format != .audio {
