@@ -2731,3 +2731,15 @@ a.mark:hover { opacity: 0.8; }
   margin: -6px -6px 10px; padding: 8px 10px; border-radius: 8px;
 }
 .tile-importing span { font-weight: 500; opacity: 0.9; }
+
+/* Revisión antes de exportar */
+.review-box { margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(244,199,112,0.35); background: rgba(244,199,112,0.06); border-radius: var(--r-md, 8px); font-size: 12px; }
+.review-box.clean { border-color: rgba(141,179,106,0.45); background: rgba(141,179,106,0.08); }
+.review-ok { color: #8db36a; font-weight: 600; }
+.review-title { font-weight: 700; margin-bottom: 6px; }
+.review-item { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; line-height: 1.35; }
+.review-icon { width: 16px; flex: none; text-align: center; }
+.review-item.block .review-icon { color: #e85a4f; }
+.review-item.warn .review-icon { color: #f4c770; }
+.review-item.info .review-icon, .review-item.optional .review-icon { color: var(--paper-dim, #999); }
+.review-hint { font-size: 11px; }

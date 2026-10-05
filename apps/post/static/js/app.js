@@ -3489,6 +3489,14 @@ var ExportModal = {
       } catch (_) {}
     }
 
+    // Revisión antes de exportar (como en la app): lo que conviene mirar antes de sacar el video.
+    const review = ref(null);       // {items:[{id, level, text, hint}], ok}
+    async function loadReview() {
+      try { review.value = await api(`/api/projects/${props.slug}/export/review`); }
+      catch (_) { review.value = null; }
+    }
+    const reviewBlocked = computed(() => !!(review.value && review.value.ok === false));
+
     async function loadPresets() {
       try { presets.value = await api("/api/export/presets"); }
       catch (e) { error.value = e.message; }
@@ -3603,7 +3611,7 @@ var ExportModal = {
         : null
     );
 
-    onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); });
+    onMounted(() => { loadPresets(); loadHistory(); loadAvailableCaptions(); loadReview(); });
     onBeforeUnmount(() => { if (pollHandle) clearTimeout(pollHandle); });
 
     function fmtRangeSec(s) {
@@ -3616,7 +3624,7 @@ var ExportModal = {
     const showAllHistory = ref(false);
 
     return { presets, selectedId, job, history, busy, error, grouped, downloadUrl, streamUrl, notesUrl,
-             start, cancel, reset, loadHistory, showAllHistory,
+             start, cancel, reset, loadHistory, showAllHistory, review, reviewBlocked,
              burnCaptions, burnCaptionLang, availableCaptions, loadAvailableCaptions,
              generateNotes, enhanceSpeech, layoutTemplate, pipCorner, pipMainTrack, useBackground, momentBanner, bannerPosition, isVerticalPreset, useSelectedRange, fmtRangeSec };
   },
@@ -3626,6 +3634,22 @@ var ExportModal = {
         <div class="eyebrow">EXPORTAR</div>
 
         <div v-if="!job" style="margin-top: 10px; overflow-y:auto; flex: 1;">
+          <div v-if="review" class="review-box" :class="{ clean: !review.items.length }">
+            <div v-if="!review.items.length" class="review-ok">✓ Todo listo: nada pendiente de revisar.</div>
+            <template v-else>
+              <div class="review-title">Antes de exportar</div>
+              <div v-for="it in review.items" :key="it.id" class="review-item" :class="it.level">
+                <span class="review-icon">{{ it.level === 'block' ? '⛔' : it.level === 'warn' ? '⚠' : it.level === 'info' ? 'ℹ' : '○' }}</span>
+                <div>
+                  <div>{{ it.text }}<span v-if="it.level === 'optional'" class="muted"> (opcional)</span></div>
+                  <div v-if="it.hint" class="muted review-hint">{{ it.hint }}</div>
+                </div>
+              </div>
+              <div class="muted review-hint" style="margin-top: 4px;">
+                {{ reviewBlocked ? 'Arregla lo marcado con ⛔: así la exportación fallaría.' : 'Puedes exportar igual; esto es solo para que no se escape nada.' }}
+              </div>
+            </template>
+          </div>
           <div v-for="(items, plat) in grouped" :key="plat" style="margin-bottom:6px;">
             <div class="tiny" style="margin: 4px 0 2px; color: var(--signal);">{{ plat }}</div>
             <div class="preset-list">
@@ -3797,7 +3821,7 @@ var ExportModal = {
 
         <div class="row right" style="margin-top: 12px; gap: 8px;">
           <button class="ghost" @click="$emit('close')">Cerrar</button>
-          <button v-if="!job" class="primary" :disabled="!selectedId || busy" @click="start">
+          <button v-if="!job" class="primary" :disabled="!selectedId || busy || reviewBlocked" @click="start">
             {{ busy ? 'Lanzando…' : 'Exportar' }}
           </button>
         </div>

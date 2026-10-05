@@ -1005,6 +1005,8 @@ def remove_silences_from_clip(slug, clip_id):
             _normalize_positions(db)
 
         recalc_after_external_change(db, old_clips, old_moments)
+        from export_review import mark_silences_cleaned
+        mark_silences_cleaned(db)
         db.commit()
 
         removed = sum(e - s for s, e in silences)
@@ -1311,6 +1313,8 @@ def apply_silences(slug):
                 "INSERT INTO transcript_cuts (start_seconds, end_seconds, label) VALUES (?, ?, ?)",
                 (s, e, cut.get("label", "")),
             )
+        from export_review import mark_silences_cleaned
+        mark_silences_cleaned(db)
         db.commit()
     finally:
         db.close()

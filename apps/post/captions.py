@@ -257,9 +257,11 @@ def _run_caption_job(slug, job_id, file_id, language, model):
         _update_job(slug, job_id, progress=90)
 
         # Las palabras de Whisper salen antes de que suene la voz: se corren a donde realmente se oyen.
+        _synced = False
         try:
             from subtitle_sync import align_segments
             segments, _moved, _typical = align_segments(segments, wav_path)
+            _synced = True
         except Exception:
             pass   # si algo falla, quedan los tiempos de Whisper
         _update_job(slug, job_id, progress=95)
@@ -278,6 +280,7 @@ def _run_caption_job(slug, job_id, file_id, language, model):
                 segments[-1]["end"] if segments else 0
             )
             payload = {
+                "synced": bool(_synced),
                 "language": (detected_lang or "").lower() or None,
                 "duration": round(duration, 3) if duration else None,
                 "words": word_list,

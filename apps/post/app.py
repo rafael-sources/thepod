@@ -108,6 +108,8 @@ def create_app():
     app.register_blueprint(captions.bp)
     app.register_blueprint(transcript_api.bp)
     app.register_blueprint(ai_api.bp)
+    import export_review
+    app.register_blueprint(export_review.bp)
 
     # Per-project access guard for restricted users.
     import re as _re
