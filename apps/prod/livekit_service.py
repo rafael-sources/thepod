@@ -178,6 +178,30 @@ def start_participant_backup(room_name: str, identity: str, filepath: str):
         return None
 
 
+def egress_info(egress_id: str):
+    """(estado, error, estados de cada destino RTMP) de un egress, o None si no se pudo consultar.
+    Los estados de destino son 'ACTIVE', 'FINISHED' o 'FAILED'."""
+    try:
+        from livekit import api
+        async def _do():
+            lk = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+            try:
+                return await lk.egress.list_egress(api.ListEgressRequest(egress_id=egress_id))
+            finally:
+                await lk.aclose()
+        res = _run(_do())
+        items = list(getattr(res, "items", []) or [])
+        if not items:
+            return None
+        e = items[0]
+        names = {0: "ACTIVE", 1: "FINISHED", 2: "FAILED"}
+        dests = [names.get(int(getattr(s, "status", 0)), "ACTIVE") for s in getattr(e, "stream_results", [])]
+        return api.EgressStatus.Name(e.status), (e.error or ""), dests
+    except Exception as e:
+        log.warning("LiveKit egress_info failed for %s: %s", egress_id, e)
+        return None
+
+
 def egress_status(egress_id: str):
     """Nombre del estado del egress ('EGRESS_COMPLETE', 'EGRESS_ACTIVE', …)
     o None si no se pudo consultar."""

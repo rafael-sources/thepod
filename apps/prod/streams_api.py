@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 from auth import current_user, require_auth
 from config import RTMP_PRESETS
 from db import get_db
-from livekit_service import start_rtmp_egress, stop_egress
+from livekit_service import egress_info, start_rtmp_egress, stop_egress
 
 
 bp = Blueprint("streams_api", __name__)
@@ -45,6 +45,36 @@ def _serialize_stream(row):
     }
 
 
+_FAILED_MSG = ("La transmisión se cortó o la plataforma no la aceptó. Revisa la clave de transmisión "
+               "y que el directo esté habilitado en tu canal, y vuelve a empezar.")
+
+
+def _refresh_live(db, rows):
+    """Las transmisiones marcadas como activas se confirman con LiveKit: si la plataforma la
+    rechazó (clave mala, directo no habilitado) o se cortó, se marca y se dice por qué.
+    Antes quedaban «activas» para siempre y nadie se enteraba."""
+    changed = False
+    for r in rows:
+        if r["status"] not in ("starting", "active") or not r["egress_id"]:
+            continue
+        info = egress_info(r["egress_id"])
+        if info is None:
+            continue
+        status, err, dests = info
+        if status in ("EGRESS_FAILED", "EGRESS_ABORTED", "EGRESS_LIMIT_REACHED") or (dests and all(d == "FAILED" for d in dests)):
+            db.execute("UPDATE live_streams SET status='failed', error=?, stopped_at=datetime('now') WHERE id=?",
+                       (_FAILED_MSG, r["id"]))
+            if status == "EGRESS_ACTIVE":
+                stop_egress(r["egress_id"])
+            changed = True
+        elif status in ("EGRESS_COMPLETE",):
+            db.execute("UPDATE live_streams SET status='stopped', stopped_at=datetime('now') WHERE id=?", (r["id"],))
+            changed = True
+    if changed:
+        db.commit()
+    return changed
+
+
 @bp.get("/api/rtmp-presets")
 @require_auth
 def list_rtmp_presets():
@@ -65,6 +95,10 @@ def list_streams(sid):
         rows = db.execute(
             "SELECT * FROM live_streams WHERE session_id=? ORDER BY id DESC", (sid,)
         ).fetchall()
+        if _refresh_live(db, rows):
+            rows = db.execute(
+                "SELECT * FROM live_streams WHERE session_id=? ORDER BY id DESC", (sid,)
+            ).fetchall()
         return jsonify([_serialize_stream(r) for r in rows])
     finally:
         db.close()

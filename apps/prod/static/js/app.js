@@ -1833,9 +1833,23 @@ var StudioView = {
     }
 
     async function loadStreams() {
+      var before = {};
+      streams.value.forEach(function (x) { before[x.id] = x.status; });
       try { streams.value = await api("/api/sessions/" + props.session.id + "/streams"); }
-      catch (_) {}
+      catch (_) { return; }
+      // Si una transmisión que estaba en vivo se cortó o la plataforma la rechazó, se avisa.
+      streams.value.forEach(function (x) {
+        if (x.status === "failed" && (before[x.id] === "active" || before[x.id] === "starting")) {
+          streamStatus.value = "❌ " + (x.error || "La transmisión se cortó.");
+          try { podSwal.error(x.error || "La transmisión se cortó.", "Se cortó la transmisión"); } catch (_) {}
+        }
+      });
     }
+    // Mientras hay una transmisión en vivo, se revisa cada 10 s que siga saliendo.
+    var streamWatch = setInterval(function () {
+      if (streams.value.some(function (x) { return x.status === "active" || x.status === "starting"; })) loadStreams();
+    }, 10000);
+    onBeforeUnmount(function () { clearInterval(streamWatch); });
     async function loadRtmpPresets() {
       try { rtmpPresets.value = await api("/api/rtmp-presets"); }
       catch (_) {}
