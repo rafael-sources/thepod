@@ -143,13 +143,23 @@ extension ProdStudio {
 
     func loadStreams() async {
         guard isOwner else { return }
-        if let d = try? await ProdPodClient.shared.get("/api/rtmp-presets"),
+        if rtmpPresets.isEmpty, let d = try? await ProdPodClient.shared.get("/api/rtmp-presets"),
            let list = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] {
             rtmpPresets = list.map { $0.compactMapValues { $0 as? String } }
         }
-        if let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/streams"),
-           let list = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] {
-            liveStream = list.first { ["active", "starting"].contains($0["status"] as? String ?? "") }
+        await refreshLive()
+    }
+
+    /// Confirma con el servidor que la transmisión sigue saliendo. Si la plataforma la rechazó
+    /// (clave mala, directo no habilitado) o se cortó, se avisa con el motivo.
+    func refreshLive() async {
+        guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/streams"),
+              let list = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] else { return }
+        let prev = liveStream?["id"] as? Int
+        liveStream = list.first { ["active", "starting"].contains($0["status"] as? String ?? "") }
+        if let prev, liveStream == nil,
+           let row = list.first(where: { ($0["id"] as? Int) == prev }), (row["status"] as? String) == "failed" {
+            error = (row["error"] as? String) ?? "La transmisión se cortó."
         }
     }
 

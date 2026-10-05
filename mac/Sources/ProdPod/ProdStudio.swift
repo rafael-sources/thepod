@@ -411,6 +411,9 @@ final class ProdStudio: NSObject, ObservableObject {
         micLevel = pipe.micLevel ?? -160
         tickMicCheck()
         tickRecording()
+        if ticks % 100 == 0, liveStream != nil {          // en vivo: cada 10 s, que siga saliendo
+            Task { await refreshLive() }
+        }
         if ticks % 10 == 0 {
             headphones = AVDevices.headphonesLikely
             if phase == .inRoom { elapsed = Int(Date().timeIntervalSince(joinedAt)); refresh() }

@@ -197,10 +197,11 @@ private struct SessionCard: View {
 struct LiveSheet: View {
     @ObservedObject var studio: ProdStudio
     @Environment(\.dismiss) private var dismiss
-    @State private var preset = "youtube"
-    @State private var url = ""
+    // Se recuerdan la plataforma, la dirección y la vista; la clave no (es secreta).
+    @AppStorage("prodpod.live.preset") private var preset = "youtube"
+    @AppStorage("prodpod.live.url") private var url = ""
     @State private var key = ""
-    @State private var layout = "speaker"
+    @AppStorage("prodpod.live.layout") private var layout = "speaker"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -209,10 +210,12 @@ struct LiveSheet: View {
                 ForEach(studio.rtmpPresets, id: \.self) { p in Text(p["name"] ?? p["key"] ?? "").tag(p["key"] ?? "") }
                 Text("Otra").tag("custom")
             }
-            .onChange(of: preset) { _, v in url = studio.rtmpPresets.first { $0["key"] == v }?["rtmp_url"] ?? "" }
+            .onChange(of: preset) { _, v in
+                if v != "custom" { url = studio.rtmpPresets.first { $0["key"] == v }?["rtmp_url"] ?? "" }
+            }
             TextField("Dirección (rtmp://…)", text: $url).textFieldStyle(.roundedBorder)
             SecureField("Clave de transmisión", text: $key).textFieldStyle(.roundedBorder)
-            Text("La clave está en YouTube Studio o en el panel de Twitch. No la compartas con nadie.")
+            Text("La clave está en YouTube Studio o en el panel de Twitch. No la compartas con nadie. Si la plataforma la rechaza, thePod te avisa en unos segundos.")
                 .font(.caption).foregroundStyle(Theme.secondary)
             Picker("Vista", selection: $layout) {
                 Text("Quien habla").tag("speaker")
@@ -232,7 +235,11 @@ struct LiveSheet: View {
         }
         .padding(24)
         .frame(width: 460)
-        .onAppear { url = studio.rtmpPresets.first { $0["key"] == preset }?["rtmp_url"] ?? "" }
+        .onAppear {
+            if preset != "custom" || url.isEmpty {
+                url = studio.rtmpPresets.first { $0["key"] == preset }?["rtmp_url"] ?? url
+            }
+        }
     }
 }
 
