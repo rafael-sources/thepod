@@ -204,7 +204,14 @@ enum AudioAnalysis {
                 }
                 cursor += r.end - r.start
             }
-            out[id] = tramos
+            // 4) silencios cortos entre dos tramos (menos de 1,2 s) no cierran la puerta: bajar y volver a subir
+            //    en medio segundo es justo el bombeo que se quiere evitar
+            var unidos: [(start: Double, end: Double)] = []
+            for t in tramos {
+                if let u = unidos.last, t.start - u.end < 1.2 { unidos[unidos.count - 1].end = t.end }
+                else { unidos.append(t) }
+            }
+            out[id] = unidos
         }
         return out
     }
