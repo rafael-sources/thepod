@@ -195,10 +195,18 @@ struct FixStep: View {
                         Toggle(isOn: $session.project.fix.gateOthers) {
                             VStack(alignment: .leading) {
                                 Text("Silenciar a quien no habla").font(.headline)
-                                Text("Baja 18 dB la pista de quien no está hablando: teclas, perro o ruidos del otro desaparecen. Se aplica en la vista previa y al exportar.").font(.caption).foregroundStyle(Theme.secondary)
+                                Text("Baja la pista de quien no está hablando: teclas, perro, sirenas o ruidos del otro quedan al fondo. Espera un momento antes de bajar y lo hace suave, para que las conversaciones rápidas no suenen a bombeo. Se aplica en la vista previa y al exportar.").font(.caption).foregroundStyle(Theme.secondary)
                             }
                         }
                         .disabled(session.project.lanes.count < 2)
+                        if session.project.fix.gateOthers && session.project.lanes.count >= 2 {
+                            Picker("Cuánto baja", selection: $session.project.fix.gateDB) {
+                                Text("Suave").tag(8.0)
+                                Text("Normal").tag(12.0)
+                                Text("Fuerte").tag(18.0)
+                            }
+                            .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
+                        }
                         Divider()
                         Toggle(isOn: $session.project.fix.removeSilences) {
                             VStack(alignment: .leading) {

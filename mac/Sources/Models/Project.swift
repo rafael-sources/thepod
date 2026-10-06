@@ -374,6 +374,7 @@ struct FixSettings: Codable, Equatable {
     var enhanceAudio = true
     var strongNoise = false             // reducción de ruido con red neuronal (perro, teclas) en vez de la suave
     var gateOthers = true               // bajar la pista de quien no está hablando (teclas y ruidos del otro)
+    var gateDB: Double = 12             // cuánto se baja: 8 suave, 12 normal, 18 fuerte
     var minSilence: Double = 0.8        // seconds of silence before we cut
     var keepPad: Double = 0.18          // breathing room kept around speech
     var lastRun: Date?
@@ -386,6 +387,7 @@ struct FixSettings: Codable, Equatable {
         enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? true
         strongNoise = try c.decodeIfPresent(Bool.self, forKey: .strongNoise) ?? false
         gateOthers = try c.decodeIfPresent(Bool.self, forKey: .gateOthers) ?? true
+        gateDB = try c.decodeIfPresent(Double.self, forKey: .gateDB) ?? 12
         minSilence = try c.decodeIfPresent(Double.self, forKey: .minSilence) ?? 0.8
         keepPad = try c.decodeIfPresent(Double.self, forKey: .keepPad) ?? 0.18
         lastRun = try c.decodeIfPresent(Date.self, forKey: .lastRun)

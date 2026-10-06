@@ -157,6 +157,58 @@ enum AudioAnalysis {
         return cleaned.isEmpty ? [SpeakerSwitch(time: 0, lane: first)] : cleaned
     }
 
+    /// «Silenciar a quien no habla», hecho como lo hace una puerta de mezcla de verdad: cada persona queda ABIERTA
+    /// mientras habla y un rato después (`hold`), y también cuando habla encima de quien tiene la palabra (risas,
+    /// interrupciones). Devuelve, por persona, los tramos abiertos en tiempo del video final (sin intro). Fuera de
+    /// esos tramos se baja; quien llama a esto pone las rampas (sube rápido antes de cada tramo, baja suave después).
+    /// Antes se bajaba al instante a la otra persona en cada cambio de turno y en conversaciones rápidas «bombeaba».
+    static func gateOpenings(project: Project, energy: EnergyMap, keep: [EditEngine.Span],
+                             hold: Double = 1.5) -> [Int: [(start: Double, end: Double)]] {
+        let ids = project.lanes.map(\.id)
+        let active = energy.activeLanes(duration: project.duration, laneIds: ids)
+        guard !active.isEmpty else { return [:] }
+        let n = active.count
+        let holdN = Int((hold / EnergyMap.hop).rounded())
+        var out: [Int: [(start: Double, end: Double)]] = [:]
+        for id in ids {
+            // 1) dónde habla esta persona (en la rejilla de 100 ms del tiempo de la línea de tiempo)
+            var habla = [Bool](repeating: false, count: n)
+            for i in 0..<n {
+                if active[i] == id { habla[i] = true; continue }
+                // hablando encima: su voz está a menos de 6 dB de la de quien tiene la palabra
+                let mio = energy.db(lane: id, at: Double(i) * EnergyMap.hop)
+                let suyo = energy.db(lane: active[i], at: Double(i) * EnergyMap.hop)
+                if mio > -42, mio > suyo - 6 { habla[i] = true }
+            }
+            // 2) se mantiene abierta `hold` segundos después de dejar de hablar
+            var abierta = [Bool](repeating: false, count: n)
+            var resto = 0
+            for i in 0..<n {
+                if habla[i] { resto = holdN + 1 }
+                if resto > 0 { abierta[i] = true; resto -= 1 }
+            }
+            // 3) a tiempo del video final, siguiendo los cortes
+            var tramos: [(start: Double, end: Double)] = []
+            var cursor = 0.0
+            for r in keep {
+                var t = r.start
+                while t < r.end {
+                    let i = min(n - 1, max(0, Int(t / EnergyMap.hop)))
+                    if abierta[i] {
+                        let o = cursor + (t - r.start)
+                        let fin = min(o + EnergyMap.hop, cursor + (r.end - r.start))
+                        if let u = tramos.last, o - u.end < 0.001 { tramos[tramos.count - 1].end = fin }
+                        else { tramos.append((o, fin)) }
+                    }
+                    t += EnergyMap.hop
+                }
+                cursor += r.end - r.start
+            }
+            out[id] = tramos
+        }
+        return out
+    }
+
     // MARK: ffmpeg-based jobs
 
     /// "Studio in a box" chain from postPod web, written once per media file.

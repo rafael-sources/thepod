@@ -130,7 +130,27 @@ enum CompositionBuilder {
             for sw in switches { if introDur + sw.time <= t { cur = sw.lane } else { break } }
             return cur
         }
-        let gatePoints: [Double] = switches.dropFirst().flatMap { [introDur + $0.time - 0.05, introDur + $0.time + 0.10] }
+        // La puerta: tramos abiertos por persona; fuera de ellos baja `gateDB`. Sube en 0,1 s ANTES de que hable
+        // (no se come la primera sílaba) y baja en 0,5 s después de la espera (sin cortes bruscos).
+        let gateAttack = 0.1, gateRelease = 0.5
+        let gateLow = pow(10, -project.fix.gateDB / 20)
+        let openings: [Int: [(start: Double, end: Double)]] = (gate && energy != nil)
+            ? AudioAnalysis.gateOpenings(project: project, energy: energy!, keep: keep).mapValues { $0.map { (introDur + $0.start, introDur + $0.end) } }
+            : [:]
+        func gateGain(_ lane: Int, _ t: Double) -> Double {
+            guard let tramos = openings[lane] else { return 1 }
+            var g = gateLow
+            for s in tramos {
+                if t >= s.start && t <= s.end { return 1 }
+                if t < s.start - gateAttack { break }
+                if t < s.start { g = max(g, gateLow + (1 - gateLow) * (1 - (s.start - t) / gateAttack)) }
+                else if t - s.end < gateRelease { g = max(g, 1 - (1 - gateLow) * (t - s.end) / gateRelease) }
+            }
+            return g
+        }
+        func gatePoints(_ lane: Int) -> [Double] {
+            (openings[lane] ?? []).flatMap { [$0.start - gateAttack, $0.start, $0.end, $0.end + gateRelease] }
+        }
 
         // Pitidos (palabras sensibles): la persona se calla en ese tramo y suena un tono encima
         let bleepOut: [(lane: Int, start: Double, end: Double)] = project.bleeps.compactMap { b in
@@ -235,13 +255,13 @@ enum CompositionBuilder {
                 }
                 let factor: (Double) -> Double = { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
-                    if gate, let who = speaker(at: t), who != id { f *= 0.125 }
+                    if gate { f *= gateGain(id, t) }
                     f *= automationGain(lane, t)
                     if inBleep(id, t) { f = 0 }
                     return f
                 }
                 applyEnvelope(p, base: laneBase, span: span,
-                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints : []) + bleepPoints(id) + automationPoints(lane),
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints(id) : []) + bleepPoints(id) + automationPoints(lane),
                               factor: factor)
                 if preview {
                     // El medidor escucha la pista ANTES del volumen de la mezcla (medido): se le suma la misma curva
