@@ -292,8 +292,10 @@ final class ProjectSession: ObservableObject {
         self.project = project
         self.app = app
         self.energy = AudioAnalysis.loadEnergy(project.id)
+        Self.vigilarToques()
         if project.fix.lastRun != nil { step = .captions }
         refreshExports()
+        vigilarPausa()
         schedulePreview(immediate: true)
         // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
         if project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty { fetchBranding() }
@@ -358,7 +360,43 @@ final class ProjectSession: ObservableObject {
         previewTask = Task {
             if !immediate { try? await Task.sleep(nanoseconds: 450_000_000) }
             guard !Task.isCancelled else { return }
+            // Mientras suena, la vista previa NO se cambia por trabajos de fondo (terminar de analizar quién habla,
+            // mejorar el audio, el ecualizador, guardar). Cambiarla a media reproducción reemplaza el audio en marcha
+            // y en Macs más lentos se oía bajar la voz un momento, en sitios distintos cada vez. Si la persona acaba
+            // de tocar algo (un volumen, un corte) sí se aplica ya; lo demás espera a la pausa.
+            if player.rate > 0, !Self.tocoHaceUnMomento {
+                previewPendiente = true
+                return
+            }
+            previewPendiente = false
             await rebuildPreview()
+        }
+    }
+
+    /// Hay una vista previa nueva esperando a que se pause la reproducción.
+    private var previewPendiente = false
+    private var observadorPausa: NSKeyValueObservation?
+
+    /// Al pausar, se aplica la vista previa que quedó esperando.
+    private func vigilarPausa() {
+        observadorPausa = player.observe(\.timeControlStatus) { [weak self] player, _ in
+            Task { @MainActor in
+                guard let self, player.timeControlStatus == .paused, self.previewPendiente else { return }
+                self.schedulePreview(immediate: true)
+            }
+        }
+    }
+
+    /// La última vez que la persona usó el teclado o el ratón dentro de la app.
+    nonisolated(unsafe) private static var ultimoToque: CFTimeInterval = 0
+    nonisolated(unsafe) private static var monitorToques: Any?
+    private static var tocoHaceUnMomento: Bool { CACurrentMediaTime() - ultimoToque < 1.5 }
+    private static func vigilarToques() {
+        guard monitorToques == nil else { return }
+        monitorToques = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .leftMouseUp, .leftMouseDragged,
+                                                                    .rightMouseDown, .scrollWheel]) { ev in
+            ultimoToque = CACurrentMediaTime()
+            return ev
         }
     }
 
