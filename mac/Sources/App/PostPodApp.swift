@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 @main
 struct PostPodApp: App {
@@ -74,6 +75,10 @@ struct RootView: View {
             if !(showIntro && introEnabled), Updater.checkOnLaunch, !SelfTest.isRequested { Updater.shared.check(quiet: true) }
             // El plan de la cuenta (Gratis o Completo), para aplicarlo al exportar, grabar e importar
             if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refresh() }
+        }
+        // Al volver a la app (por ejemplo, después de pagar en el navegador) se vuelve a mirar el plan.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refreshIfStale() }
         }
     }
 

@@ -274,4 +274,12 @@ actor PrePodClient {
         }
     }
     func clear() { isAdmin = false; Plan.clear(); planSummary = nil }
+
+    private var lastRefresh = Date.distantPast
+    /// Como `refresh`, pero no más de una vez por minuto (se llama cada vez que la app vuelve al frente).
+    func refreshIfStale() {
+        guard Date().timeIntervalSince(lastRefresh) > 60 else { return }
+        lastRefresh = Date()
+        refresh()
+    }
 }
