@@ -700,17 +700,30 @@ function _admitOverlay(activeOverlays, msg) {
    title, text, speed: slow|normal|fast, size: quarter|half|full, countdown: seg, event_id}
    Con countdown > 0 TODOS ven el aviso ("Viene X en 3 s · ATENTO PATRICIO") y, al terminar,
    solo el destinatario ve el texto corriendo.
+   Quien lee avisa cuando el texto terminó de correr (pausas incluidas) o lo cerró:
+   {type:"teleprompter_done", event_id}. El host lo usa para soltar el siguiente encadenado.
+   Es otro "type" para que las versiones viejas lo ignoren.
    ========================================================================== */
 
 var TP_WPM = { slow: 95, normal: 135, fast: 180 };
 
-function _tpSetup(myIdentity, nameOf) {
+function _tpSetup(myIdentity, nameOf, opts) {
+  opts = opts || {};
   var tp = reactive({
     notice: null,        // {title, who, remaining}
     active: null,        // {event_id, title, text, speed, size, paused, startedAt, pauseAt, durationMs}
     scrollKey: 0,
   });
   var _noticeTick = null, _showTimer = null, _hideTimer = null;
+  var _doneTick = null, _elapsed = 0, _last = 0, _reported = {};
+
+  function _reportDone(id) {
+    if (!id || _reported[id]) return;
+    _reported[id] = true;
+    var m = { type: "teleprompter_done", event_id: id };
+    if (opts.send) opts.send(m);
+    if (opts.onDone) opts.onDone(id);     // por si quien lee es el mismo host
+  }
 
   function _durationMs(text, speed) {
     var words = Math.max(8, (text || "").trim().split(/\s+/).length);
@@ -724,10 +737,22 @@ function _tpSetup(myIdentity, nameOf) {
       paused: false, durationMs: _durationMs(msg.text, msg.speed || "normal"),
     };
     tp.scrollKey++;
+    // Mide lo que de verdad corrió el texto (sin las pausas) para avisar cuando termina
+    clearInterval(_doneTick);
+    _elapsed = 0; _last = Date.now();
+    var id = msg.event_id;
+    _doneTick = setInterval(function () {
+      if (!tp.active || tp.active.event_id !== id) { clearInterval(_doneTick); return; }
+      var now = Date.now();
+      if (!tp.active.paused) _elapsed += now - _last;
+      _last = now;
+      if (_elapsed >= tp.active.durationMs) { clearInterval(_doneTick); _reportDone(id); }
+    }, 250);
     // Se va solo cuando termina de correr (más 4 s de margen), salvo que lo cierren antes
     _hideTimer = setTimeout(function () { if (tp.active && tp.active.event_id === msg.event_id) tp.active = null; }, tp.active.durationMs + 4000);
   }
   function handle(msg) {
+    if (msg.type === "teleprompter_done") { if (opts.onDone) opts.onDone(msg.event_id); return true; }
     if (msg.type !== "teleprompter") return false;
     if (msg.action === "hide") {
       if (!msg.event_id || (tp.active && tp.active.event_id === msg.event_id)) tp.active = null;
@@ -753,8 +778,11 @@ function _tpSetup(myIdentity, nameOf) {
     return true;
   }
   function pause() { if (tp.active) tp.active.paused = !tp.active.paused; }
-  function restart() { if (tp.active) { tp.active.paused = false; tp.scrollKey++; } }
-  function close() { tp.active = null; clearTimeout(_hideTimer); }
+  function restart() { if (tp.active) { tp.active.paused = false; tp.scrollKey++; _elapsed = 0; _last = Date.now(); } }
+  function close() {
+    if (tp.active) _reportDone(tp.active.event_id);
+    tp.active = null; clearTimeout(_hideTimer); clearInterval(_doneTick);
+  }
   return { tp: tp, tpHandle: handle, tpPause: pause, tpRestart: restart, tpClose: close };
 }
 
@@ -1417,7 +1445,7 @@ var StudioView = {
       var p = participants.value.find(function (x) { return "participant_" + x.id === identity; });
       return p ? p.display_name : "";
     }
-    var _tpH = _tpSetup(myIdentity, _tpNameOf);
+    var _tpH = _tpSetup(myIdentity, _tpNameOf, { send: function (m) { sendData(m); }, onDone: _tpOnDone });
     // Teleprompter del guion (prePod): el host lo dispara a quien le toca cuando la grabación llega al minuto
     var _tpScript = [];
     var _tpFired = {};
@@ -1444,23 +1472,42 @@ var StudioView = {
       });
       return hit ? hit.identity : "all";
     }
+    var _tpDone = {};
+    function _tpOnDone(eid) {
+      var m = /^s(\d+)$/.exec(eid || "");
+      if (!m) return;
+      _tpDone[+m[1]] = true;
+      _checkTeleprompterTimers();
+    }
     function _checkTeleprompterTimers() {
       if (!recording.value || recordingStartedAtMs == null || !_tpScript.length) return;
       var now = (Date.now() - recordingStartedAtMs) / 1000;
-      _tpScript.forEach(function (sec) {
-        var at = +sec.offset_seconds - 3;   // 3 s de aviso antes
-        if (_tpFired[sec.id] || now < at || now > at + 2) return;
-        _tpFired[sec.id] = true;
+      _tpScript.forEach(function (sec, i) {
+        if (_tpFired[sec.id] != null) return;
+        var prev = i > 0 ? _tpScript[i - 1] : null;
+        var countdown = 3;
+        if (sec.after_prev && prev && _tpFired[prev.id] != null) {
+          // «Después del anterior»: sale cuando el anterior terminó de verdad (avisa quien lo lee).
+          // Si nadie avisa (versión vieja, se cayó), sale 15 s después de lo calculado.
+          var run = Math.max(0, (+prev.ends_seconds || 0) - (+prev.offset_seconds || 0));
+          var fallback = _tpFired[prev.id] + 3 + run + 15;
+          if (!_tpDone[prev.id] && now < fallback) return;
+          countdown = Math.max(3, Math.round(+sec.gap_seconds || 0));
+        } else {
+          var at = +sec.offset_seconds - 3;   // 3 s de aviso antes
+          if (now < at || now > at + 2) return;
+        }
+        _tpFired[sec.id] = now;
         var msg = { type: "teleprompter", action: "show", event_id: "s" + sec.id, target: _tpIdentityFor(sec.speaker_key || sec.speaker),
                     title: "Guion · " + (sec.speaker || ""), text: sec.content || "", speed: sec.speed || "normal",
-                    size: sec.size || "half", countdown: 3 };
+                    size: sec.size || "half", countdown: countdown };
         sendData(msg);
         _tpH.tpHandle(msg);   // también para mí (el host)
       });
     }
     var _tpInterval = null;
     watch(recording, function (val) {
-      if (val) { _tpFired = {}; loadTeleprompterScript(); _tpInterval = setInterval(_checkTeleprompterTimers, 500); }
+      if (val) { _tpFired = {}; _tpDone = {}; loadTeleprompterScript(); _tpInterval = setInterval(_checkTeleprompterTimers, 500); }
       else if (_tpInterval) { clearInterval(_tpInterval); _tpInterval = null; }
     });
 
@@ -4071,7 +4118,7 @@ var GuestStudioView = {
       if (identity === myIdentity.value) return props.joinData.display_name || "";
       var r = remoteMap[identity]; return r && r.name ? r.name : "";
     }
-    var _tpH = _tpSetup(myIdentity, _tpNameOf);
+    var _tpH = _tpSetup(myIdentity, _tpNameOf, { send: function (m) { sendData(m); } });
 
     var readyMap = reactive({});
     var ownReady = ref(false);
