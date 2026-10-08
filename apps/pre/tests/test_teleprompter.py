@@ -68,4 +68,4 @@ def test_chained_offsets(client):
                    headers={"X-PodPod-Secret": config.INTEGRATION_SECRET}).get_json()["sections"]
     # 27 palabras a 135 wpm = 12 s + 2,5 = 14,5 s → termina en 19,5; el siguiente a 0,5 s → 20,0
     assert s[0]["offset_seconds"] == 5 and s[0]["ends_seconds"] == 19.5
-    assert s[1]["after_prev"] is True and s[1]["offset_seconds"] == 20.0
+    assert s[1]["after_prev"] is True and s[1]["offset_seconds"] == 20.0 and s[1]["gap_seconds"] == 0.5

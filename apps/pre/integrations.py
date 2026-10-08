@@ -448,9 +448,10 @@ def teleprompter_for_episode():
             content = d.get("content") or ""
             offset = d.get("tp_offset_seconds")
             after_prev = bool(d.get("tp_after_prev"))
+            gap = d.get("tp_gap_seconds")
+            gap = 0.5 if gap is None else float(gap)
             if after_prev and prev_end is not None:
-                gap = d.get("tp_gap_seconds")
-                offset = round(prev_end + (0.5 if gap is None else float(gap)), 1)
+                offset = round(prev_end + gap, 1)
             if offset is None:
                 continue
             run = _tp_run_seconds(content, speed)
@@ -464,6 +465,7 @@ def teleprompter_for_episode():
                 "offset_seconds": offset,
                 "ends_seconds": round(prev_end, 1),
                 "after_prev": after_prev,
+                "gap_seconds": gap,      # pausa tras el anterior; prodPod espera a que el anterior termine de verdad
                 "speed": speed,
                 "size": d.get("tp_size") or "half",
             })
