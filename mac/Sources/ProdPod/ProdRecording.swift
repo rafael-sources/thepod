@@ -130,6 +130,8 @@ extension ProdStudio {
             }
         case "teleprompter":
             handleTeleprompter(m)
+        case "teleprompter_done":
+            tpDoneReceived(m["event_id"] as? String)
         case "ifb_start":
             let t = m["targets"]
             ifbOn = (t as? String) == "all_hosts" || ((t as? [String])?.contains(myIdentity) ?? false)

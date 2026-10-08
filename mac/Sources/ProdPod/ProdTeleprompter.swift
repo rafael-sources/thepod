@@ -5,6 +5,8 @@ import SwiftUI
 // {"type":"teleprompter","action":"show"|"hide","target":"all"|identity,"title","text",
 //  "speed":"slow|normal|fast","size":"quarter|half|full","countdown":3,"event_id"}
 // Todos ven el aviso ("Viene X en 3 s · ATENTO PATRICIO"); el texto solo le aparece a quien le toca.
+// Quien lee avisa cuando el texto terminó de correr (pausas incluidas) o lo cerró:
+// {"type":"teleprompter_done","event_id"}. Quien creó la sala suelta ahí el siguiente encadenado.
 
 struct TPNotice: Equatable {
     var title: String
@@ -48,6 +50,9 @@ struct TPSection {
     let offset: Double
     let speed: String
     let size: String
+    var afterPrev = false        // «después del anterior»: sale cuando el anterior termina de verdad
+    var gap = 0.5
+    var run: Double = 0          // lo que dura corriendo (calculado), para el plan B
 }
 
 extension ProdStudio {
@@ -93,7 +98,7 @@ extension ProdStudio {
     }
 
     private func tpShow(_ m: [String: Any]) {
-        tpHideTask?.cancel()
+        tpHideTask?.cancel(); tpDoneTask?.cancel()
         let text = m["text"] as? String ?? ""
         let speed = m["speed"] as? String ?? "normal"
         let id = (m["event_id"] as? String) ?? (m["event_id"] as? Int).map(String.init) ?? UUID().uuidString
@@ -107,6 +112,28 @@ extension ProdStudio {
             guard !Task.isCancelled, let self, self.tpActive?.id == id, self.tpActive?.paused == false else { return }
             self.tpActive = nil
         }
+        // Avisa cuando el texto terminó de correr (la pausa y «desde el inicio» lo corren).
+        tpDoneTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard let self, !Task.isCancelled, let a = self.tpActive, a.id == id else { return }
+                if a.progress(at: Date()) >= 1 { self.tpReportDone(id); return }
+            }
+        }
+    }
+
+    private func tpReportDone(_ id: String) {
+        guard !tpReported.contains(id) else { return }
+        tpReported.insert(id)
+        send(["type": "teleprompter_done", "event_id": id])
+        tpDoneReceived(id)          // por si quien lee es quien creó la sala
+    }
+
+    /// Alguien terminó de leer un teleprompter del guion: suelta el encadenado que venga.
+    func tpDoneReceived(_ eid: String?) {
+        guard let eid, eid.hasPrefix("s"), let n = Int(eid.dropFirst()) else { return }
+        tpDone.insert(n)
+        if recording { tickTeleprompter(Date().timeIntervalSince(recordStart)) }
     }
 
     func tpPause() {
@@ -127,14 +154,15 @@ extension ProdStudio {
     }
 
     func tpClose() {
+        if let a = tpActive { tpReportDone(a.id) }
         tpActive = nil
-        tpHideTask?.cancel()
+        tpHideTask?.cancel(); tpDoneTask?.cancel()
     }
 
     // MARK: Guion (solo quien creó la sala dispara los del guion)
 
     func loadTeleprompterScript() async {
-        tpScript = []; tpFired = []; tpPeople = [:]
+        tpScript = []; tpFired = [:]; tpDone = []; tpPeople = [:]
         guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/teleprompter"),
               let j = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
         for p in j["participants"] as? [[String: Any]] ?? [] {
@@ -147,9 +175,14 @@ extension ProdStudio {
             guard let id = s["id"] as? Int,
                   let off = (s["offset_seconds"] as? Double) ?? (s["offset_seconds"] as? Int).map(Double.init) else { return nil }
             let label = s["speaker"] as? String ?? ""
-            return TPSection(id: id, speaker: label, speakerKey: (s["speaker_key"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? label,
-                             content: s["content"] as? String ?? "",
-                             offset: off, speed: s["speed"] as? String ?? "normal", size: s["size"] as? String ?? "half")
+            func num(_ k: String) -> Double? { (s[k] as? Double) ?? (s[k] as? Int).map(Double.init) }
+            var sec = TPSection(id: id, speaker: label, speakerKey: (s["speaker_key"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? label,
+                                content: s["content"] as? String ?? "",
+                                offset: off, speed: s["speed"] as? String ?? "normal", size: s["size"] as? String ?? "half")
+            sec.afterPrev = s["after_prev"] as? Bool ?? false
+            sec.gap = num("gap_seconds") ?? 0.5
+            sec.run = max(0, (num("ends_seconds") ?? off) - off)
+            return sec
         }
         if !tpScript.isEmpty { flash("\(tpScript.count) teleprompter del guion listos") }
     }
@@ -170,13 +203,22 @@ extension ProdStudio {
     /// Llamado cada décima mientras se graba, con el segundo actual de la grabación.
     func tickTeleprompter(_ t: Double) {
         guard isOwner, !tpScript.isEmpty else { return }
-        for s in tpScript where !tpFired.contains(s.id) {
-            let at = s.offset - 3            // 3 s de aviso antes
-            guard t >= at, t <= at + 2 else { continue }
-            tpFired.insert(s.id)
+        for (i, s) in tpScript.enumerated() where tpFired[s.id] == nil {
+            var countdown = 3
+            if s.afterPrev, i > 0, let prevAt = tpFired[tpScript[i - 1].id] {
+                // «Después del anterior»: sale cuando quien lo lee avisa que terminó.
+                // Si nadie avisa (versión vieja, se cayó), sale 15 s después de lo calculado.
+                let prev = tpScript[i - 1]
+                guard tpDone.contains(prev.id) || t >= prevAt + 3 + prev.run + 15 else { continue }
+                countdown = max(3, Int(s.gap.rounded()))
+            } else {
+                let at = s.offset - 3            // 3 s de aviso antes
+                guard t >= at, t <= at + 2 else { continue }
+            }
+            tpFired[s.id] = t
             let msg: [String: Any] = ["type": "teleprompter", "action": "show", "event_id": "s\(s.id)",
                                       "target": tpIdentity(for: s.speakerKey), "title": "Guion · \(s.speaker)",
-                                      "text": s.content, "speed": s.speed, "size": s.size, "countdown": 3]
+                                      "text": s.content, "speed": s.speed, "size": s.size, "countdown": countdown]
             send(msg)
             handleTeleprompter(msg)      // también para mí
         }

@@ -109,7 +109,6 @@ Para medir resultados: `ffmpeg -af astats`/`volumedetect` sobre lo exportado (ve
 ## Pendiente / limitaciones conocidas
 
 - Para distribuirla a otras Macs sin avisos de seguridad falta firmarla con un Developer ID y notarizarla.
-- El teleprompter encadenado («después del anterior») sale a la hora calculada; no reacciona al final real del anterior.
 - Acomodo en 9:16 y 1:1 (`RenderScene.arrangement` + `FrameLayout`): lo automático (subtítulos, sponsors, b-roll en ventanita,
   cintillos, nombres) se corre en vertical para no pisar el logo, las capas ni los subtítulos arrastrados (que no se mueven).
   Si no hay lugar libre, queda donde iba. En 16:9 sigue la regla vieja (los subtítulos suben sobre el cintillo).

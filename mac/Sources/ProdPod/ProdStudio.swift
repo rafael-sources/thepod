@@ -145,12 +145,15 @@ final class ProdStudio: NSObject, ObservableObject {
     var triggerLog: [[String: Any]] = []
     var firedSponsors: Set<Int> = []
     var tpScript: [TPSection] = []
-    var tpFired: Set<Int> = []
+    var tpFired: [Int: Double] = [:]         // sección -> segundo de la grabación en que salió
+    var tpDone: Set<Int> = []                // secciones que quien lee ya terminó
+    var tpReported: Set<String> = []         // los que yo avisé que terminé
     var tpPeople: [String: String] = [:]      // identity -> nombre
     var tpUsernames: [String: String] = [:]   // identity -> usuario
     var tpNoticeTask: Task<Void, Never>?
     var tpShowTask: Task<Void, Never>?
     var tpHideTask: Task<Void, Never>?
+    var tpDoneTask: Task<Void, Never>?
     var keyMonitor: Any?
     var ifbOn = false
 
