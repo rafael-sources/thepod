@@ -3152,7 +3152,36 @@ def _fmt_timestamp(seconds: float) -> str:
     return f"{m}:{ss:02d}"
 
 
-def _write_notes_file(slug: str, job_id: int, preset_id: str, exports_dir: Path) -> str:
+def _youtube_chapters(rows, total: float | None, offset: float = 0.0) -> list[tuple[float, str]]:
+    """Capítulos con las reglas de YouTube para que los muestre (igual que la app de Mac): el primero en
+    0:00, al menos 3 y cada uno de 10 s o más. Los que caen a menos de 10 s del anterior o del final se
+    saltan; si no llegan a 3, no hay capítulos. `offset`: inicio del trozo exportado (si es un rango)."""
+    raw = []
+    for t, label in rows:
+        label = (label or "").strip()
+        if not label or t is None:
+            continue
+        t = float(t) - offset
+        if t < 0 or (total and t >= total):
+            continue
+        raw.append((t, label))
+    raw.sort(key=lambda x: x[0])
+    out: list[tuple[float, str]] = []
+    for t, label in raw:
+        if not out:
+            if t >= 10:
+                out.append((0.0, "Inicio"))
+            else:
+                out.append((0.0, label))
+                continue
+        if t - out[-1][0] < 10 or (total and total - t < 10):
+            continue
+        out.append((t, label))
+    return out if len(out) >= 3 else []
+
+
+def _write_notes_file(slug: str, job_id: int, preset_id: str, exports_dir: Path,
+                      total: float | None = None, offset: float = 0.0) -> str:
     """Generate a sidecar `.txt` next to the export with title, description,
     chapters (from `moments`), and credits. Returns the file's basename
     (relative to exports_dir) so it can be stored on the job row.
@@ -3198,16 +3227,12 @@ def _write_notes_file(slug: str, job_id: int, preset_id: str, exports_dir: Path)
         lines.append(description)
         lines.append("")
 
-    if chap_rows:
+    # Sin capítulos válidos para YouTube no se escribe la sección: así lo que se pega queda limpio
+    chapters = _youtube_chapters([(r["timeline_seconds"], r["label"]) for r in chap_rows], total, offset)
+    if chapters:
         lines.append("Capítulos")
-        for r in chap_rows:
-            ts = _fmt_timestamp(r["timeline_seconds"])
-            label = (r["label"] or "").strip() or "—"
-            lines.append(f"{ts} {label}")
-        lines.append("")
-    else:
-        lines.append("Capítulos")
-        lines.append("(No se importaron marcadores de capítulo desde prodPod.)")
+        for t, label in chapters:
+            lines.append(f"{_fmt_timestamp(t)} {label}")
         lines.append("")
 
     credits_lines = []
@@ -3360,7 +3385,8 @@ def run_export(slug: str, job_id: int):
         notes_rel = None
         if job["generate_notes"]:
             try:
-                notes_rel = _write_notes_file(slug, job_id, preset_id, exports_dir)
+                notes_rel = _write_notes_file(slug, job_id, preset_id, exports_dir,
+                                              total=total_duration or None, offset=float(range_start or 0))
             except Exception as e:
                 # Notes are best-effort — never fail the export over them, but
                 # surface the reason in the export log so users can debug.
