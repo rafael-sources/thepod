@@ -166,7 +166,7 @@ enum SelfTest {
             do { let evs = try await AmaClient.shared.events(); print("amaPod OK: \(evs.count) eventos") }
             catch { print("amaPod ERROR: \(error.localizedDescription)") }
             let ev = AmaClient.Event(id: 7, title: "Pregúntanos lo que quieras — Lee La Letra Chica", description: "Contratos, letra chica y todo lo que nunca te explicaron.",
-                                     status: "active", chat_mode: "free", like_count: 128, spectator_count: 342)
+                                     status: "active", chat_mode: "moderated", like_count: 128, spectator_count: 342)
             let s = AmaStudio(event: ev)
             func person(_ id: Int, _ n: String, _ st: String, _ pos: Int?, _ q: [String], pre: Int = 0) -> AmaClient.Person {
                 AmaClient.Person(id: id, display_name: n, status: st, queue_position: pos, is_preconnected: pre, is_censored: 0, questions: q)
@@ -180,7 +180,8 @@ enum SelfTest {
             s.requests = [person(15, "María José", "pending", nil, ["¿Cómo leo la letra chica de un seguro médico?", "¿Qué es una cláusula abusiva?"]),
                           person(16, "Pedro Paz", "pending", nil, [])]
             s.chat = [AmaClient.Message(id: 1, sender_name: "Sofía", is_host: 0, message: "¡Saludos desde Quito!"),
-                      AmaClient.Message(id: 2, sender_name: "host", is_host: 1, message: "Bienvenidos, ya empezamos con las preguntas")]
+                      AmaClient.Message(id: 2, sender_name: "host", is_host: 1, message: "Bienvenidos, ya empezamos con las preguntas"),
+                      AmaClient.Message(id: 3, sender_name: "Lucía", is_host: 0, message: "¿Cómo empezaron el podcast?", is_approved: 0, pending: true, can_block: true)]
             s.likes = 128; s.spectators = 342; s.recording = true
             s.phase = .live
             let host = NSHostingView(rootView: AmaStudioView(studio: s, preview: true)
