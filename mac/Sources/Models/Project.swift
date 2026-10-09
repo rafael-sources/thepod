@@ -512,7 +512,7 @@ extension Project {
                 let at = keep.first?.start ?? reel.start
                 p.overlays.append(VideoLayer(id: (p.overlays.map(\.id).max() ?? 0) + 1000, kind: .text, start: at,
                                              duration: Reel.hookSeconds, text: h, style: .title, color: "#FFFFFF",
-                                             x: 0.5, y: 0.22, scale: 1.35))
+                                             x: 0.5, y: 0.09, scale: 1.15))
             }
         }
         if let o = look.laneOrder { p.laneOrder = o }
