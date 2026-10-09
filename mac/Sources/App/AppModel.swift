@@ -245,6 +245,13 @@ final class ProjectSession: ObservableObject {
     @Published var previewLayout: LayoutTemplate?
     @Published var previewLook: ReelLook?          // viendo un reel: su diseño y marca encima del episodio
     @Published var previewReel: Reel?              // viendo un reel: sus cortes propios
+
+    /// Título de gancho de un reel (nil = sin título).
+    func setReelHook(_ reelId: UUID, _ text: String?) {
+        guard let r = project.reels.firstIndex(where: { $0.id == reelId }) else { return }
+        project.reels[r].hook = text
+        if previewReel?.id == reelId { previewReel = project.reels[r] }
+    }
     /// A quién le cambia la posición de los subtítulos al arrastrarlos sobre el video (nil = no se pueden arrastrar).
     enum CaptionTarget: Equatable { case episode, allReels, reel(UUID) }
     @Published var captionDragTarget: CaptionTarget?

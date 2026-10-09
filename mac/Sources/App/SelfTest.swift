@@ -594,6 +594,7 @@ enum SelfTest {
                 if args.contains("--bgpodcast") {   // fondo virtual «Fondo del podcast» para todas las personas
                     for l in p.lanes { var vb = VirtualBackground(); vb.mode = .podcast; p.laneBackground[l.id] = vb }
                 }
+                if let h = args.firstIndex(of: "--hook"), args.count > h + 1 { p.reels[n - 1].hook = args[h + 1] }   // título de gancho
                 let reelNow = p.reels[n - 1]
                 p = p.applying(p.look(for: reelNow), reel: reelNow)
                 do {

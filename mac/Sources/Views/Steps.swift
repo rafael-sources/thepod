@@ -591,6 +591,42 @@ struct PhraseRow: View {
 
 // MARK: - 4. Reels
 
+/// Título de gancho: una frase grande arriba los primeros segundos, para que quien pasa se quede.
+struct ReelHookCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+    @State private var draft = ""
+
+    var body: some View {
+        Card {
+            Toggle(isOn: Binding(get: { reel.hook != nil }, set: { on in
+                session.setReelHook(reel.id, on ? (draft.isEmpty ? reel.title : draft) : nil)
+                if on, draft.isEmpty { draft = reel.title }
+            })) {
+                Label("Título de gancho", systemImage: "textformat.size.larger").font(.headline)
+            }
+            Text("Una frase grande arriba durante los primeros \(Int(Reel.hookSeconds)) segundos, para que quien pasa por el reel se quede a verlo.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            if reel.hook != nil {
+                TextField("Ej.: «Nadie te cuenta esto del coaching»", text: $draft, axis: .vertical)
+                    .lineLimit(1...3)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { session.setReelHook(reel.id, draft) }
+                    .onChange(of: draft) { _, v in
+                        let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !t.isEmpty { session.setReelHook(reel.id, v) }
+                    }
+                if draft.count > 45 {
+                    Text("Corto se lee mejor: en un celular caben unas 6 palabras por línea.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+        }
+        .onAppear { draft = reel.hook ?? "" }
+        .onChange(of: reel.id) { _, _ in draft = reel.hook ?? "" }
+    }
+}
+
 struct ReelsStep: View {
     enum ReelTab: String, CaseIterable, Identifiable {
         case look, text, sound, broll, cintillos
@@ -681,6 +717,7 @@ struct ReelsStep: View {
                     VStack(alignment: .leading, spacing: 12) {
                         switch tab {
                         case .look:
+                            if let reel = currentReel { ReelHookCard(session: session, reel: reel) }
                             ReelLookCard(session: session, reel: currentReel)
                         case .text:
                             // Arriba cómo se ven los subtítulos; abajo el texto del reel para corregirlo

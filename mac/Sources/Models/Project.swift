@@ -409,7 +409,9 @@ struct Reel: Codable, Identifiable, Equatable {
     var cintillos: [DirectorCintillo] = []   // cintillos solo de este reel
     var words: [Word]?                  // texto propio del reel (se volvió a escuchar solo este reel); nil = el del episodio
     var seen: Bool?                     // la persona ya lo miró en la vista previa (para la revisión antes de exportar)
+    var hook: String?                   // título de gancho: grande los primeros segundos del reel (nil = sin título)
     var length: Double { max(0, end - start) }
+    static let hookSeconds = 3.0
 
     init(id: UUID = UUID(), title: String, reason: String = "", start: Double, end: Double, selected: Bool = true, exportedFile: String? = nil, look: ReelLook? = nil) {
         self.id = id; self.title = title; self.reason = reason; self.start = start; self.end = end
@@ -431,6 +433,7 @@ struct Reel: Codable, Identifiable, Equatable {
         music = try c.decodeIfPresent([AudioLaneClip].self, forKey: .music) ?? []
         cintillos = try c.decodeIfPresent([DirectorCintillo].self, forKey: .cintillos) ?? []
         words = try c.decodeIfPresent([Word].self, forKey: .words)
+        hook = try c.decodeIfPresent(String.self, forKey: .hook)
     }
 }
 
@@ -503,6 +506,14 @@ extension Project {
             p.cuts += reel.cuts
             p.brolls += reel.brolls
             if !reel.cintillos.isEmpty { p.cintillos += reel.cintillos; p.showCintillos = true }
+            // Título de gancho: arriba, grande, desde lo primero que suena del reel
+            if let h = reel.hook?.trimmingCharacters(in: .whitespacesAndNewlines), !h.isEmpty {
+                let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts, window: (reel.start, reel.end))
+                let at = keep.first?.start ?? reel.start
+                p.overlays.append(VideoLayer(id: (p.overlays.map(\.id).max() ?? 0) + 1000, kind: .text, start: at,
+                                             duration: Reel.hookSeconds, text: h, style: .title, color: "#FFFFFF",
+                                             x: 0.5, y: 0.22, scale: 1.35))
+            }
         }
         if let o = look.laneOrder { p.laneOrder = o }
         if let g = look.gateOthers { p.fix.gateOthers = g }
