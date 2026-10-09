@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -442,6 +442,25 @@ enum SelfTest {
 
     /// postPod --render <slug> <start> <end> <landscape|vertical|square>: export a window of an existing project.
     @MainActor
+    /// "--enhance-test <slug> <mediaId> <nivel>": limpia la voz de un archivo como «Sonido de estudio» y dice dónde quedó.
+    static func enhanceTest() {
+        let a = CommandLine.arguments
+        guard let i = a.firstIndex(of: "--enhance-test"), a.count > i + 3, let mid = Int(a[i + 2]), let level = Int(a[i + 3]) else {
+            print("uso: --enhance-test <slug> <mediaId> <nivel>"); exit(2)
+        }
+        Task { @MainActor in
+            do {
+                let p = try ProjectStore.load(slug: a[i + 1])
+                guard let m = p.media.first(where: { $0.id == mid }) else { print("ERROR no existe ese archivo"); exit(1) }
+                print("aislador de Apple: \(VoiceIsolation.isAvailable ? "sí" : "no")")
+                let t0 = Date()
+                let rel = try await AudioAnalysis.enhance(media: m, slug: p.id, level: level) { _ in }
+                print(String(format: "OK %@ en %.0f s", ProjectStore.url(rel, in: p.id).path, Date().timeIntervalSince(t0)))
+                exit(0)
+            } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+        }
+    }
+
     /// "--chapters-test <slug> [intro_s]": los capítulos que saldrían en las notas y en el archivo.
     static func chaptersTest() {
         let a = CommandLine.arguments
@@ -511,6 +530,7 @@ enum SelfTest {
         let args = CommandLine.arguments
         if args.contains("--render") { render(); return }
         if args.contains("--chapters-test") { chaptersTest(); return }
+        if args.contains("--enhance-test") { enhanceTest(); return }
         if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
             // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
             let dir = URL(fileURLWithPath: args[i + 1])
