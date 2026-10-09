@@ -226,6 +226,27 @@ var DashboardView = {
 
 // ── HostView ─────────────────────────────────────────────────────────
 
+// Moderación del chat (anfitrión): aprobar, quitar o bloquear a quien escribió. Después avisa por la
+// sala (si hay) para que el público recargue el chat sin esperar.
+function _chatModeration(eventId, reload, roomRef) {
+  function notify() {
+    var room = roomRef && roomRef.value;
+    if (room) {
+      try { room.localParticipant.publishData(_encodeMsg({ type: "chat_refresh" }), LK.DataPacket_Kind.RELIABLE); } catch (_) {}
+    }
+  }
+  async function act(method, path) {
+    try { await api("/api/events/" + eventId() + "/chat/" + path, { method: method }); }
+    catch (e) { window.toast({ type: "error", text: e.message }); }
+    await reload(); notify();
+  }
+  return {
+    approveMsg: function (m) { return act("POST", m.id + "/approve"); },
+    removeMsg: function (m) { return act("DELETE", String(m.id)); },
+    blockMsg: function (m) { return act("POST", m.id + "/block"); },
+  };
+}
+
 var HostView = {
   props: { event: Object, user: Object, onBack: Function },
   setup: function (props) {
@@ -365,6 +386,8 @@ var HostView = {
           if (msg.type === "chat") {
             chatMessages.value.push(msg);
             scrollChat();
+          } else if (msg.type === "chat_refresh") {
+            loadChat();
           }
         });
 
@@ -584,7 +607,7 @@ var HostView = {
         var sent = await api("/api/events/" + eventData.value.id + "/chat", { method: "POST", body: { message: msg } });
         chatMessages.value.push(sent);
         scrollChat();
-        if (room.value) {
+        if (room.value && sent.is_approved) {
           room.value.localParticipant.publishData(
             _encodeMsg({ type: "chat", sender_name: sent.sender_name, message: sent.message, is_host: sent.is_host }),
             LK.DataPacket_Kind.RELIABLE
@@ -634,7 +657,10 @@ var HostView = {
 
     watch(selectedCamera, function () { if (phase.value === "prejoin") startPreview(); });
 
+    var _mod = _chatModeration(function () { return eventData.value.id; }, loadChat, room);
+
     return {
+      approveMsg: _mod.approveMsg, removeMsg: _mod.removeMsg, blockMsg: _mod.blockMsg,
       eventData: eventData, phase: phase, connected: connected,
       queue: queue, requests: requests, chatMessages: chatMessages, chatInput: chatInput,
       currentParticipant: currentParticipant, isRecording: isRecording, likeCount: likeCount, spectatorCount: spectatorCount,
@@ -780,9 +806,14 @@ var HostView = {
       <div class="queue-section"><h3>Chat</h3></div>\
       <div class="chat-messages">\
         <div v-if="!chatMessages.length" class="muted hs-empty">Todavía no hay mensajes.</div>\
-        <div v-for="m in chatMessages" :key="m.id || m.sender_name + m.message" class="chat-msg">\
+        <div v-for="m in chatMessages" :key="m.id || m.sender_name + m.message" class="chat-msg" :class="{ pending: m.pending }">\
           <span class="sender" :class="{ host: m.is_host }">{{ m.sender_name }}:</span>\
           <span class="text"> {{ m.message }}</span>\
+          <span v-if="m.id && !m.is_host" class="chat-mod">\
+            <button v-if="m.pending" class="primary" @click="approveMsg(m)" title="Lo ven todos">Aprobar</button>\
+            <button class="ghost" @click="removeMsg(m)" :title="m.pending ? \'No se publica\' : \'Quitar del chat\'">Quitar</button>\
+            <button v-if="m.can_block" class="ghost danger" @click="blockMsg(m)" title="No puede escribir más en este evento y se borra todo lo suyo">Bloquear</button>\
+          </span>\
         </div>\
       </div>\
       <div class="chat-input">\
@@ -927,6 +958,111 @@ var JoinView = {
   </div>
 </div>
 <participant-view v-else :participant-data="participantData" :event-id="eventId" />`
+};
+
+// ── AudienceChat ─────────────────────────────────────────────────────
+// Chat para quien mira o está en la cola. Quien no se anotó entra con un nombre (la llave queda
+// guardada en este navegador). En modo moderado, lo que escribe lo ve solo esa persona y el
+// anfitrión hasta que el anfitrión lo aprueba.
+
+var AudienceChat = {
+  props: { eventId: [Number, String], accessToken: String },
+  setup: function (props) {
+    var msgs = ref([]);
+    var input = ref("");
+    var name = ref("");
+    var chatToken = ref("");
+    var mode = ref("");
+    var err = ref("");
+    var sending = ref(false);
+    var listEl = ref(null);
+    var timer = null;
+    var KEY = "amapod.chat." + props.eventId;
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (saved && saved.chat_token) { chatToken.value = saved.chat_token; name.value = saved.name || ""; }
+    } catch (_) {}
+
+    var canWrite = computed(function () { return !!props.accessToken || !!chatToken.value; });
+    function who() {
+      if (props.accessToken) return { token: props.accessToken };
+      if (chatToken.value) return { chat_token: chatToken.value };
+      return {};
+    }
+    function query() {
+      var w = who(), k = Object.keys(w)[0];
+      return k ? "?" + k + "=" + encodeURIComponent(w[k]) : "";
+    }
+    function scroll() {
+      nextTick(function () { var el = listEl.value; if (el) el.scrollTop = el.scrollHeight; });
+    }
+    async function load() {
+      try {
+        var before = msgs.value.length;
+        msgs.value = await api("/api/events/" + props.eventId + "/chat" + query());
+        if (msgs.value.length !== before) scroll();
+      } catch (_) {}
+    }
+    async function join() {
+      err.value = "";
+      var n = name.value.trim();
+      if (!n) { err.value = "Escribe tu nombre"; return; }
+      try {
+        var res = await api("/api/events/" + props.eventId + "/chat/join", { method: "POST", body: { name: n } });
+        chatToken.value = res.chat_token; name.value = res.name;
+        try { localStorage.setItem(KEY, JSON.stringify(res)); } catch (_) {}
+      } catch (e) { err.value = e.message; }
+    }
+    async function send() {
+      var text = input.value.trim();
+      if (!text || sending.value) return;
+      err.value = ""; sending.value = true;
+      try {
+        var body = who(); body.message = text;
+        var m = await api("/api/events/" + props.eventId + "/chat", { method: "POST", body: body });
+        input.value = "";
+        msgs.value.push(m); scroll();
+      } catch (e) { err.value = e.message; }
+      sending.value = false;
+    }
+    function onRefresh() { load(); }
+
+    onMounted(async function () {
+      try { mode.value = (await api("/api/events/" + props.eventId + "/public-info")).chat_mode || "free"; } catch (_) { mode.value = "free"; }
+      if (mode.value === "off") return;
+      await load();
+      timer = setInterval(load, 4000);
+      window.addEventListener("amapod-chat", onRefresh);
+    });
+    onBeforeUnmount(function () {
+      if (timer) clearInterval(timer);
+      window.removeEventListener("amapod-chat", onRefresh);
+    });
+    return { msgs: msgs, input: input, name: name, mode: mode, err: err, sending: sending, listEl: listEl,
+             canWrite: canWrite, join: join, send: send };
+  },
+  template: '\
+<div v-if="mode && mode !== \'off\'" class="ama-chat">\
+  <div class="ama-chat-head">Chat<span v-if="mode === \'moderated\'" class="muted"> · moderado</span></div>\
+  <div class="ama-chat-list" ref="listEl">\
+    <div v-if="!msgs.length" class="muted ama-chat-empty">Todavía no hay mensajes.</div>\
+    <div v-for="m in msgs" :key="m.id" class="chat-msg" :class="{ pending: m.pending, mine: m.mine }">\
+      <span class="sender" :class="{ host: m.is_host }">{{ m.is_host ? \'Anfitrión\' : m.sender_name }}:</span>\
+      <span class="text"> {{ m.message }}</span>\
+      <span v-if="m.pending" class="ama-chat-wait"> · esperando al anfitrión</span>\
+    </div>\
+  </div>\
+  <form v-if="!canWrite" class="chat-input" @submit.prevent="join">\
+    <input type="text" v-model="name" maxlength="40" placeholder="Tu nombre para escribir" autocomplete="nickname">\
+    <button class="primary" type="submit" :disabled="!name.trim()">Entrar</button>\
+  </form>\
+  <form v-else class="chat-input" @submit.prevent="send">\
+    <input type="text" v-model="input" maxlength="300" placeholder="Escribe un mensaje…" enterkeyhint="send">\
+    <button class="primary" type="submit" :disabled="!input.trim() || sending">Enviar</button>\
+  </form>\
+  <p v-if="mode === \'moderated\' && canWrite" class="muted ama-chat-note">El anfitrión lee cada mensaje antes de que lo vean los demás.</p>\
+  <p v-if="err" class="error-text ama-chat-note">{{ err }}</p>\
+</div>'
 };
 
 // ── ParticipantView ──────────────────────────────────────────────────
@@ -1189,6 +1325,8 @@ var ParticipantView = {
       </template>
     </div>
 
+    <audience-chat v-if="pdata && pdata.access_token" :event-id="eventId" :access-token="pdata.access_token" />
+
     <ul v-if="canAskQuestions" class="ama-tips">
       <li>🎧 Con audífonos se escucha mejor y no hay eco.</li>
       <li>📱 No cierres esta página: aquí te avisamos cuando te toque.</li>
@@ -1362,7 +1500,10 @@ var EmbedHostView = {
 
     onBeforeUnmount(stopPolling);
 
+    var _mod = _chatModeration(function () { return props.eventId; }, loadChat, null);
+
     return {
+      approveMsg: _mod.approveMsg, removeMsg: _mod.removeMsg, blockMsg: _mod.blockMsg,
       eventData: eventData, loading: loading,
       queue: queue, requests: requests, chatMessages: chatMessages, chatInput: chatInput,
       currentParticipant: currentParticipant, isRecording: isRecording, inQueueOnly: inQueueOnly,
@@ -1434,9 +1575,14 @@ var EmbedHostView = {
       <div class="chat-panel">\
         <div class="queue-section"><h3>CHAT</h3></div>\
         <div class="chat-messages">\
-          <div v-for="m in chatMessages" :key="m.id" class="chat-msg">\
+          <div v-for="m in chatMessages" :key="m.id" class="chat-msg" :class="{ pending: m.pending }">\
             <span class="sender" :class="{ host: m.is_host }">{{ m.sender_name }}:</span>\
             <span class="text"> {{ m.message }}</span>\
+            <span v-if="m.id && !m.is_host" class="chat-mod">\
+              <button v-if="m.pending" class="primary" @click="approveMsg(m)">Aprobar</button>\
+              <button class="ghost" @click="removeMsg(m)">Quitar</button>\
+              <button v-if="m.can_block" class="ghost danger" @click="blockMsg(m)" title="No puede escribir más en este evento">Bloquear</button>\
+            </span>\
           </div>\
         </div>\
         <div class="chat-input">\
@@ -1514,6 +1660,11 @@ var SpectatorView = {
         var tokenData = await api("/api/events/" + props.eventId + "/spectator-token", { method: "POST" });
         var wsUrl = await getLivekitWsUrl();
         var newRoom = new LK.Room({ adaptiveStream: true, dynacast: true });
+        // El anfitrión avisa por la sala cuando hay mensajes nuevos aprobados: se recarga el chat al toque
+        newRoom.on(LK.RoomEvent.DataReceived, function (payload) {
+          var msg = _decodeMsg(payload);
+          if (msg && (msg.type === "chat" || msg.type === "chat_refresh")) window.dispatchEvent(new Event("amapod-chat"));
+        });
         newRoom.on(LK.RoomEvent.TrackSubscribed, function (track, pub, participant) {
           var id = participant.identity;
           if (track.kind === LK.Track.Kind.Video) {
@@ -1633,6 +1784,7 @@ var SpectatorView = {
       <h3>{{ eventInfo.title }}</h3>
       <p v-if="eventInfo.description" class="muted">{{ eventInfo.description }}</p>
     </div>
+    <audience-chat :event-id="eventId" class="ama-watch-chat" />
     <div class="ama-watch-actions">
       <button class="ama-like" @click="sendLike">❤ <span>{{ likeCount }}</span></button>
       <a class="primary ama-ask" :href="'/join/' + eventId">Quiero preguntar</a>
@@ -1709,4 +1861,5 @@ var App = {
 
 var _app = createApp(App);
 _app.component("participant-view", ParticipantView);
+_app.component("audience-chat", AudienceChat);
 _app.mount("#app");

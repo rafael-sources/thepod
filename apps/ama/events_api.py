@@ -48,6 +48,7 @@ def public_event_info(eid):
             "title": row["title"],
             "description": row["description"],
             "status": row["status"],
+            "chat_mode": row["chat_mode"],
             "host_username": row["host_username"],
             "like_count": row["like_count"],
             "spectator_count": row["spectator_count"],

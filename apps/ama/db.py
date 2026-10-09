@@ -56,6 +56,21 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_event ON chat_messages(event_id);
 
+-- Público que chatea sin anotarse en la cola: nombre y una llave propia por evento
+CREATE TABLE IF NOT EXISTS chat_viewers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    token TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- A quién el anfitrión no deja escribir (por su llave: host:, p:<id>, v:<id>)
+CREATE TABLE IF NOT EXISTS chat_blocks (
+    event_id INTEGER NOT NULL REFERENCES events(id),
+    sender_key TEXT NOT NULL,
+    PRIMARY KEY (event_id, sender_key)
+);
+
 CREATE TABLE IF NOT EXISTS event_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -83,6 +98,11 @@ def _migrate(conn):
     cols = {r[1] for r in cur.fetchall()}
     if "questions" not in cols:
         conn.execute("ALTER TABLE participants ADD COLUMN questions TEXT DEFAULT '[]'")
+        conn.commit()
+
+    ccols = {r[1] for r in conn.execute("PRAGMA table_info(chat_messages)").fetchall()}
+    if "sender_key" not in ccols:
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN sender_key TEXT")
         conn.commit()
 
     cur = conn.execute("PRAGMA table_info(events)")
