@@ -218,20 +218,53 @@ enum AudioAnalysis {
 
     // MARK: ffmpeg-based jobs
 
-    /// "Studio in a box" chain from postPod web, written once per media file.
-    static func enhancedRel(mediaId: Int, strong: Bool) -> String { strong ? "media/enhanced_\(mediaId)_nn.m4a" : "media/enhanced_\(mediaId).m4a" }
+    /// Archivo con la voz limpia de una persona, uno por nivel de limpieza.
+    static func enhancedRel(mediaId: Int, level: Int) -> String { "media/voz_\(mediaId)_n\(level).m4a" }
 
-    static func enhance(media: SourceMedia, slug: String, strong: Bool = false, progress: @escaping (Double) -> Void) async throws -> String {
-        let rel = enhancedRel(mediaId: media.id, strong: strong)
+    /// Cuánto de la voz aislada entra en cada nivel (el resto es el original, para que suene natural).
+    static func isolationWet(_ level: Int) -> Double { [1: 0.7, 2: 0.88, 3: 1.0][level] ?? 0.88 }
+
+    /// Sonido de estudio: separa la voz del ruido (teclas, perro, calle, ventilador) con el aislador de voz de
+    /// Apple —o, si la Mac no lo trae, con la red neuronal de antes—, le da un poco de claridad y la deja a un
+    /// volumen parejo con una sola ganancia fija. Sin compresor ni nivelado automático: esos levantaban el ruido
+    /// que quedaba y le quitaban naturalidad a la voz. El volumen final de la mezcla se ajusta al exportar.
+    static func enhance(media: SourceMedia, slug: String, level: Int, progress: @escaping (Double) -> Void) async throws -> String {
+        let rel = enhancedRel(mediaId: media.id, level: level)
         let dest = ProjectStore.url(rel, in: slug)
         if FileManager.default.fileExists(atPath: dest.path) { return rel }
-        let chain = (strong ? FFmpeg.strongSpeechChain : nil) ?? FFmpeg.speechChain
-        // Unique temp name: two windows/processes working on the same project must never clobber each other.
-        let tmp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("enhancing_\(media.id)_\(UUID().uuidString).m4a")
-        defer { try? FileManager.default.removeItem(at: tmp) }
-        try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn",
-                              "-af", chain, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
-                             duration: media.duration, progress: progress)
+        let cache = ProjectStore.cacheFolder(for: slug)
+        // Nombres únicos: dos ventanas trabajando el mismo proyecto no se pisan
+        let tag = "\(media.id)_\(UUID().uuidString)"
+        let raw = cache.appendingPathComponent("voz_raw_\(tag).wav")
+        let clean = cache.appendingPathComponent("voz_clean_\(tag).wav")
+        let tmp = cache.appendingPathComponent("voz_\(tag).m4a")
+        defer { for u in [raw, clean, tmp] { try? FileManager.default.removeItem(at: u) } }
+        let wet = isolationWet(level)
+        var cleanedInput = clean
+        if VoiceIsolation.isAvailable {
+            try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn", "-ac", "1", "-ar", "48000",
+                                  "-c:a", "pcm_f32le", raw.path], duration: media.duration) { progress($0 * 0.2) }
+            try await VoiceIsolation.process(input: raw, output: clean, wet: wet) { f in progress(0.2 + f * 0.6) }
+        } else if let m = FFmpeg.rnnoiseModel {
+            let path = m.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: "'", with: "\\'")
+            try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn", "-ac", "1", "-ar", "48000",
+                                  "-af", "arnndn=m='\(path)':mix=\(String(format: "%.2f", wet))", "-c:a", "pcm_f32le", clean.path],
+                                 duration: media.duration) { progress($0 * 0.8) }
+        } else {
+            cleanedInput = ProjectStore.url(media.file, in: slug)
+        }
+        // Claridad suave y volumen parejo entre personas (−19 LUFS por voz), con una ganancia fija
+        var af = "highpass=f=70,equalizer=f=4000:t=q:w=1:g=2"
+        if let lufs = await loudness(cleanedInput) {
+            af += String(format: ",volume=%.2fdB", max(-15, min(15, -19 - lufs)))
+        }
+        // Entre palabras, lo poco que deja el aislador (una tecla suelta) se baja: más en Máximo, nada en Natural
+        if level >= 2 {
+            af += ",agate=threshold=0.006:ratio=3:attack=10:release=250:range=\(level >= 3 ? "0.06" : "0.18")"
+        }
+        af += ",alimiter=limit=0.89:level=0"
+        try await FFmpeg.run(["-i", cleanedInput.path, "-vn", "-af", af, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
+                             duration: media.duration) { progress(0.8 + $0 * 0.2) }
         if !FileManager.default.fileExists(atPath: dest.path) {
             try FileManager.default.moveItem(at: tmp, to: dest)
         }

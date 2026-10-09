@@ -372,7 +372,8 @@ struct FixSettings: Codable, Equatable {
     var removeFillers = true
     var removeWordFillers = false       // "este", "o sea", "pues"... off by default
     var enhanceAudio = true
-    var strongNoise = false             // reducción de ruido con red neuronal (perro, teclas) en vez de la suave
+    var strongNoise = false             // (versiones viejas) ya no se usa: ver `noiseLevel`
+    var noiseLevel = 2                  // cuánto se limpia la voz: 1 natural · 2 normal · 3 máximo
     var gateOthers = true               // bajar la pista de quien no está hablando (teclas y ruidos del otro)
     var gateDB: Double = 12             // cuánto se baja: 8 suave, 12 normal, 18 fuerte
     var minSilence: Double = 0.8        // seconds of silence before we cut
@@ -386,6 +387,7 @@ struct FixSettings: Codable, Equatable {
         removeWordFillers = try c.decodeIfPresent(Bool.self, forKey: .removeWordFillers) ?? false
         enhanceAudio = try c.decodeIfPresent(Bool.self, forKey: .enhanceAudio) ?? true
         strongNoise = try c.decodeIfPresent(Bool.self, forKey: .strongNoise) ?? false
+        noiseLevel = try c.decodeIfPresent(Int.self, forKey: .noiseLevel) ?? 2
         gateOthers = try c.decodeIfPresent(Bool.self, forKey: .gateOthers) ?? true
         gateDB = try c.decodeIfPresent(Double.self, forKey: .gateDB) ?? 12
         minSilence = try c.decodeIfPresent(Double.self, forKey: .minSilence) ?? 0.8

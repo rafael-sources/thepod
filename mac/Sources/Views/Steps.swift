@@ -178,17 +178,24 @@ struct FixStep: View {
                         Toggle(isOn: $session.project.fix.enhanceAudio) {
                             VStack(alignment: .leading) {
                                 Text("Sonido de estudio").font(.headline)
-                                Text("Quita ruido de fondo, iguala volúmenes y le da presencia a la voz").font(.caption).foregroundStyle(Theme.secondary)
+                                Text("Separa la voz de todo lo demás —teclas, perro, calle, ventilador— y deja a todos a un volumen parejo").font(.caption).foregroundStyle(Theme.secondary)
                             }
                         }
                         if session.project.fix.enhanceAudio {
-                            Picker("Ruido de fondo", selection: $session.project.fix.strongNoise) {
-                                Text("Suave (ventilador, siseo)").tag(false)
-                                Text("Fuerte, con red neuronal (perro, teclas, calle)").tag(true)
+                            Picker("Cuánto limpia", selection: $session.project.fix.noiseLevel) {
+                                Text("Natural").tag(1)
+                                Text("Normal").tag(2)
+                                Text("Máximo").tag(3)
                             }
-                            .pickerStyle(.radioGroup).font(.caption)
-                            if session.project.fix.strongNoise && FFmpeg.strongSpeechChain == nil {
-                                Text("Falta el modelo de ruido en esta instalación; se usará el modo suave.").font(.caption).foregroundStyle(.orange)
+                            .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
+                            Text(session.project.fix.noiseLevel == 3
+                                 ? "Saca todo el ruido; la voz puede sonar un poco menos natural."
+                                 : session.project.fix.noiseLevel == 1
+                                 ? "Deja un poco del ambiente para que la voz suene más natural; algo del ruido queda de fondo."
+                                 : "El punto medio: el ruido casi desaparece y la voz sigue sonando natural.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                            if !VoiceIsolation.isAvailable {
+                                Text("Esta Mac no trae el aislador de voz de Apple: se usará otra limpieza, que saca menos ruido.").font(.caption).foregroundStyle(.orange)
                             }
                         }
                         Divider()

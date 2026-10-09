@@ -617,14 +617,14 @@ final class ProjectSession: ObservableObject {
                 project.media[i].enhancedAudioFile = nil
             }
         }
-        let strong = project.fix.strongNoise
-        // Si se cambió entre suave y fuerte, el archivo esperado es otro: se vuelve a procesar
-        let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile != AudioAnalysis.enhancedRel(mediaId: $0.id, strong: strong) }
+        let level = project.fix.noiseLevel
+        // Si se cambió cuánto limpia, el archivo esperado es otro: se vuelve a procesar
+        let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile != AudioAnalysis.enhancedRel(mediaId: $0.id, level: level) }
         for (i, m) in items.enumerated() {
             let who = project.lanes.first { $0.clips.contains { $0.mediaId == m.id } }.map { project.laneName($0.id) } ?? m.originalName
-            report(strong ? "Separando la voz del ruido" : "Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", 0)
-            let rel = try await AudioAnalysis.enhance(media: m, slug: project.id, strong: strong) { [weak self] f in
-                self?.reportAsync(strong ? "Separando la voz del ruido" : "Mejorando el audio", "Voz de \(who) (\(i + 1) de \(items.count))", f)
+            report("Separando la voz del ruido", "Voz de \(who) (\(i + 1) de \(items.count))", 0)
+            let rel = try await AudioAnalysis.enhance(media: m, slug: project.id, level: level) { [weak self] f in
+                self?.reportAsync("Separando la voz del ruido", "Voz de \(who) (\(i + 1) de \(items.count))", f)
             }
             if let idx = project.media.firstIndex(where: { $0.id == m.id }) { project.media[idx].enhancedAudioFile = rel }
         }
