@@ -447,8 +447,13 @@ enum SelfTest {
         guard let i = a.firstIndex(of: "--chapters-test"), a.count > i + 1 else { print("uso: --chapters-test <slug> [intro]"); exit(2) }
         Task { @MainActor in
             do {
-                let p = try ProjectStore.load(slug: a[i + 1])
+                var p = try ProjectStore.load(slug: a[i + 1])
                 let intro = a.count > i + 2 ? Double(a[i + 2]) ?? 0 : 0
+                if a.contains("--fake") {        // capítulos de mentira (solo en memoria) para probar las reglas
+                    let fake: [(Double, String)] = [(4, "Bienvenida"), (40, "Tema uno"), (44, "Muy cerca"),
+                                                    (900, "Tema dos"), (1800, "Preguntas = respuestas; #1"), (p.duration - 3, "Al final")]
+                    p.moments += fake.enumerated().map { Moment(id: 9000 + $0.offset, time: $0.element.0, duration: nil, label: $0.element.1) }
+                }
                 let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
                 print("marcados: \(p.chapters.count) · cortes: \(p.cuts.count) · dura \(EditEngine.clock(EditEngine.outputDuration(keep)))")
                 for c in p.chapters { print("  bruto \(EditEngine.clock(c.time)) \(c.title)") }
@@ -456,6 +461,12 @@ enum SelfTest {
                                                 total: intro + EditEngine.outputDuration(keep))
                 print("capítulos (intro \(intro) s): \(list.count)")
                 for c in list { print("  \(EditEngine.clock(c.time)) \(c.title)") }
+                if a.contains("--export-audio") {     // MP3 completo con los capítulos adentro
+                    let proj = p
+                    let url = try await Exporter.export(project: proj, format: .audio, baseName: "render-test",
+                                                        energy: AudioAnalysis.loadEnergy(proj.id)) { _ in }
+                    print("OK \(url.path)")
+                }
                 exit(0)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
         }
