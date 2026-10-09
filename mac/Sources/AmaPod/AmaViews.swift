@@ -761,7 +761,8 @@ struct AmaStudioView: View {
             AmaTitle(text: "Chat del evento", trailing: chatModeName(studio.event.chat_mode))
             if studio.event.chat_mode == "moderated" {
                 Text(studio.pendingCount > 0
-                     ? "\(studio.pendingCount) \(studio.pendingCount == 1 ? "mensaje espera" : "mensajes esperan") tu aprobación. El público no los ve hasta que los apruebes."
+                     ? (studio.pendingCount == 1 ? "1 mensaje espera tu aprobación. El público no lo ve hasta que lo apruebes."
+                        : "\(studio.pendingCount) mensajes esperan tu aprobación. El público no los ve hasta que los apruebes.")
                      : "Chat moderado: lo que escribe el público lo ves tú primero y sale cuando lo apruebas.")
                     .font(.caption).foregroundStyle(studio.pendingCount > 0 ? .orange : Theme.secondary)
             }
