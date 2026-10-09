@@ -181,7 +181,8 @@ struct PublishStep: View {
             if ytTitle.isEmpty { ytTitle = Exporter.episodeTitle(session.project) }
             if ytDescription.isEmpty {
                 let keep = EditEngine.keepRanges(duration: session.project.duration, cuts: session.project.cuts)
-                ytDescription = Exporter.notes(project: session.project, keep: keep)
+                let p = session.project
+                ytDescription = Exporter.notes(project: p, keep: keep, introDuration: p.intro.map { max(1, $0.seconds) } ?? 0)
             }
             if !linked && PrePodClient.isConfigured { loadPodcasts() }
         }

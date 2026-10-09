@@ -62,7 +62,12 @@ enum Exporter {
             if project.normalizeLoudness, let lufs = await AudioAnalysis.loudness(m4a), abs(lufs + 16) > 0.7 {
                 af = ["-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs)]
             }
-            try await FFmpeg.run(["-i", m4a.path] + af + ["-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
+            // Capítulos dentro del MP3 (Apple Podcasts y otros los muestran)
+            let chap = window == nil ? chapterFile(chapterList(project: project, keep: built.keep, introDuration: 0,
+                                                               total: built.duration), total: built.duration) : nil
+            defer { if let chap { try? FileManager.default.removeItem(at: chap) } }
+            try await FFmpeg.run(["-i", m4a.path] + (chap.map { ["-i", $0.path, "-map", "0:a", "-map_chapters", "1"] } ?? [])
+                                 + af + ["-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
                                   "-metadata", "title=\(episodeTitle(project))", "-metadata", "artist=\(project.podcastName ?? "")", mp3.path],
                                  duration: built.duration) { progress(0.8 + 0.2 * $0) }
             try? FileManager.default.removeItem(at: m4a)
@@ -87,12 +92,25 @@ enum Exporter {
                 try FileManager.default.moveItem(at: fixed, to: url)
             } catch { try? FileManager.default.removeItem(at: fixed) }
         }
-        progress(1)
         url = url.standardizedFileURL
         if window == nil {
-            try? notes(project: project, keep: built.keep).write(to: url.deletingPathExtension().appendingPathExtension("txt"),
-                                                                 atomically: true, encoding: .utf8)
+            let total = built.introDuration + EditEngine.outputDuration(built.keep)
+            let chapters = chapterList(project: project, keep: built.keep, introDuration: built.introDuration, total: total)
+            // Capítulos dentro del video (QuickTime, VLC y Apple los muestran; YouTube los toma de la descripción)
+            if FFmpeg.isAvailable, let chap = chapterFile(chapters, total: built.duration) {
+                let with = folder.appendingPathComponent(name + "_cap.mp4")
+                do {
+                    try await FFmpeg.run(["-i", url.path, "-i", chap.path, "-map", "0", "-map_metadata", "0",
+                                          "-map_chapters", "1", "-c", "copy", "-movflags", "+faststart", with.path])
+                    try FileManager.default.removeItem(at: url)
+                    try FileManager.default.moveItem(at: with, to: url)
+                } catch { try? FileManager.default.removeItem(at: with) }
+                try? FileManager.default.removeItem(at: chap)
+            }
+            try? notes(project: project, keep: built.keep, introDuration: built.introDuration)
+                .write(to: url.deletingPathExtension().appendingPathExtension("txt"), atomically: true, encoding: .utf8)
         }
+        progress(1)
         return url
     }
 
@@ -117,6 +135,51 @@ enum Exporter {
 }
 
 extension Exporter {
+    /// Capítulos en el tiempo del archivo exportado, con las reglas de YouTube para que los muestre:
+    /// el primero en 00:00, al menos 3, y cada uno de 10 s o más. Los que caen a menos de 10 s del
+    /// anterior (o del final) se saltan; si no llegan a 3, no hay capítulos.
+    static func chapterList(project p: Project, keep: [EditEngine.Span], introDuration: Double,
+                            total: Double) -> [(time: Double, title: String)] {
+        let raw = p.chapters.compactMap { c -> (Double, String)? in
+            let title = c.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty, let o = EditEngine.toOutput(c.time, keep: keep)
+                    ?? keep.firstIndex(where: { $0.start >= c.time }).map({ EditEngine.outputDuration(Array(keep.prefix($0))) })
+            else { return nil }
+            return (introDuration + o, title)
+        }.sorted { $0.0 < $1.0 }
+        var out: [(time: Double, title: String)] = []
+        for (t, title) in raw {
+            if out.isEmpty {
+                if t >= 10 { out.append((0, introDuration > 0 ? "Intro" : "Inicio")) }
+                else { out.append((0, title)); continue }       // el primero se lleva a 00:00
+            }
+            guard t - out.last!.time >= 10, total - t >= 10 else { continue }
+            out.append((t, title))
+        }
+        return out.count >= 3 ? out : []
+    }
+
+    /// Archivo de capítulos para ffmpeg (nil si no hay).
+    static func chapterFile(_ chapters: [(time: Double, title: String)], total: Double) -> URL? {
+        guard !chapters.isEmpty else { return nil }
+        func esc(_ s: String) -> String {
+            var o = ""
+            for ch in s {
+                if ch == "\n" || ch == "\r" { o.append(" "); continue }
+                if "=;#\\".contains(ch) { o.append("\\") }
+                o.append(ch)
+            }
+            return o
+        }
+        var txt = ";FFMETADATA1\n"
+        for (i, c) in chapters.enumerated() {
+            let end = i + 1 < chapters.count ? chapters[i + 1].time : total
+            txt += "[CHAPTER]\nTIMEBASE=1/1000\nSTART=\(Int(c.time * 1000))\nEND=\(Int(end * 1000))\ntitle=\(esc(c.title))\n"
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("capitulos-\(UUID().uuidString).txt")
+        return (try? txt.write(to: url, atomically: true, encoding: .utf8)) != nil ? url : nil
+    }
+
     static func episodeTitle(_ p: Project) -> String {
         if let t = p.episode.title, !t.isEmpty {
             let prefix = p.episode.number.map { "Ep \($0): " } ?? ""
@@ -141,20 +204,16 @@ extension Exporter {
     }
 
     /// Ready-to-paste text for YouTube / Spotify / Apple: title, description, chapters, guests, sponsors.
-    static func notes(project p: Project, keep: [EditEngine.Span]) -> String {
+    /// `introDuration`: lo que dura la intro del video (los capítulos se corren eso). El MP3 no lleva intro.
+    static func notes(project p: Project, keep: [EditEngine.Span], introDuration: Double = 0) -> String {
         var out = episodeTitle(p) + "\n\n"
         if let d = p.episode.description, !d.isEmpty { out += d + "\n\n" }
         else if let s = p.aiSummary { out += s + "\n\n" }
-        let chapters = p.chapters.compactMap { c -> (Double, String)? in
-            guard let o = EditEngine.toOutput(c.time, keep: keep)
-                    ?? keep.firstIndex(where: { $0.start >= c.time }).map({ EditEngine.outputDuration(Array(keep.prefix($0))) })
-            else { return nil }
-            return (o, c.title)
-        }
+        let chapters = chapterList(project: p, keep: keep, introDuration: introDuration,
+                                   total: introDuration + EditEngine.outputDuration(keep))
         if !chapters.isEmpty {
             out += "Capítulos\n"
-            if chapters.first!.0 > 1 { out += "00:00 Inicio\n" }
-            for c in chapters { out += "\(EditEngine.clock(c.0)) \(c.1)\n" }
+            for c in chapters { out += "\(EditEngine.clock(c.time)) \(c.title)\n" }
             out += "\n"
         }
         let people = p.lanes.map { lane -> String in

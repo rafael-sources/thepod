@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test")
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -441,6 +441,26 @@ enum SelfTest {
 
     /// postPod --render <slug> <start> <end> <landscape|vertical|square>: export a window of an existing project.
     @MainActor
+    /// "--chapters-test <slug> [intro_s]": los capítulos que saldrían en las notas y en el archivo.
+    static func chaptersTest() {
+        let a = CommandLine.arguments
+        guard let i = a.firstIndex(of: "--chapters-test"), a.count > i + 1 else { print("uso: --chapters-test <slug> [intro]"); exit(2) }
+        Task { @MainActor in
+            do {
+                let p = try ProjectStore.load(slug: a[i + 1])
+                let intro = a.count > i + 2 ? Double(a[i + 2]) ?? 0 : 0
+                let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
+                print("marcados: \(p.chapters.count) · cortes: \(p.cuts.count) · dura \(EditEngine.clock(EditEngine.outputDuration(keep)))")
+                for c in p.chapters { print("  bruto \(EditEngine.clock(c.time)) \(c.title)") }
+                let list = Exporter.chapterList(project: p, keep: keep, introDuration: intro,
+                                                total: intro + EditEngine.outputDuration(keep))
+                print("capítulos (intro \(intro) s): \(list.count)")
+                for c in list { print("  \(EditEngine.clock(c.time)) \(c.title)") }
+                exit(0)
+            } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+        }
+    }
+
     static func render() {
         let a = CommandLine.arguments
         guard let i = a.firstIndex(of: "--render"), a.count > i + 4,
@@ -478,6 +498,7 @@ enum SelfTest {
         }
         let args = CommandLine.arguments
         if args.contains("--render") { render(); return }
+        if args.contains("--chapters-test") { chaptersTest(); return }
         if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
             // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
             let dir = URL(fileURLWithPath: args[i + 1])
