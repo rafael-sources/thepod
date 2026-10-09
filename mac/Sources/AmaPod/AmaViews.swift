@@ -760,8 +760,10 @@ struct AmaStudioView: View {
         VStack(alignment: .leading, spacing: 10) {
             AmaTitle(text: "Chat del evento", trailing: chatModeName(studio.event.chat_mode))
             if studio.event.chat_mode == "moderated" {
-                Text("Chat moderado: hoy amaPod no muestra los mensajes por aprobar; solo ves los ya publicados.")
-                    .font(.caption).foregroundStyle(.orange)
+                Text(studio.pendingCount > 0
+                     ? "\(studio.pendingCount) \(studio.pendingCount == 1 ? "mensaje espera" : "mensajes esperan") tu aprobación. El público no los ve hasta que los apruebes."
+                     : "Chat moderado: lo que escribe el público lo ves tú primero y sale cuando lo apruebas.")
+                    .font(.caption).foregroundStyle(studio.pendingCount > 0 ? .orange : Theme.secondary)
             }
             ScrollViewReader { proxy in
                 ScrollView {
@@ -778,12 +780,28 @@ struct AmaStudioView: View {
                                         if (m.is_host ?? 0) != 0 { Text("HOST").font(.system(size: 9, weight: .heavy)).foregroundStyle(Color.amaPod) }
                                     }
                                     Text(m.message).font(.callout).fixedSize(horizontal: false, vertical: true)
+                                    if m.isPending {
+                                        HStack(spacing: 6) {
+                                            Button("Aprobar") { studio.approveMessage(m) }
+                                                .buttonStyle(.borderedProminent).tint(Color.amaPod).controlSize(.small)
+                                            Button("Quitar") { studio.deleteMessage(m) }.controlSize(.small)
+                                            if m.can_block == true {
+                                                Button("Bloquear", role: .destructive) { studio.blockSender(m) }.controlSize(.small)
+                                                    .help("No puede escribir más en este evento y se borra todo lo suyo")
+                                            }
+                                        }
+                                        .padding(.top, 3)
+                                    }
                                 }
                                 Spacer(minLength: 0)
                             }
                             .padding(9)
-                            .background(RoundedRectangle(cornerRadius: 9).fill(AS.field))
-                            .contextMenu { Button("Borrar mensaje", role: .destructive) { studio.deleteMessage(m) } }
+                            .background(RoundedRectangle(cornerRadius: 9).fill(m.isPending ? Color.orange.opacity(0.12) : AS.field))
+                            .opacity(m.isPending ? 0.9 : 1)
+                            .contextMenu {
+                                Button("Borrar mensaje", role: .destructive) { studio.deleteMessage(m) }
+                                if m.can_block == true { Button("Bloquear a \(m.sender_name)", role: .destructive) { studio.blockSender(m) } }
+                            }
                             .id(m.id)
                         }
                     }

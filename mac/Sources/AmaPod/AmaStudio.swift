@@ -244,8 +244,33 @@ final class AmaStudio: NSObject, ObservableObject {
         Task {
             try? await AmaClient.shared.deleteMessage(event.id, m.id)
             chat.removeAll { $0.id == m.id }
+            send(["type": "chat_refresh"])
         }
     }
+
+    /// Chat moderado: publica el mensaje para todos y avisa al público para que recargue.
+    func approveMessage(_ m: AmaClient.Message) {
+        Task {
+            do {
+                try await AmaClient.shared.approveMessage(event.id, m.id)
+                await loadChat()
+                send(["type": "chat_refresh"])
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    func blockSender(_ m: AmaClient.Message) {
+        Task {
+            do {
+                try await AmaClient.shared.blockSender(event.id, m.id)
+                await loadChat()
+                send(["type": "chat_refresh"])
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    /// Mensajes que esperan aprobación.
+    var pendingCount: Int { chat.filter(\.isPending).count }
 
     // MARK: Leer el estado
 
@@ -329,7 +354,7 @@ extension AmaStudio: RoomDelegate {
         Task { @MainActor in self.refresh() }
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
-        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], obj["type"] as? String == "chat" else { return }
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], ["chat", "chat_refresh"].contains(obj["type"] as? String ?? "") else { return }
         Task { @MainActor in await self.loadChat() }
     }
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {

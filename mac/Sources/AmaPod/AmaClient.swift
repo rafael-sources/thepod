@@ -53,7 +53,10 @@ actor AmaClient {
         var is_host: Int?
         var message: String
         var is_approved: Int?
+        var pending: Bool?              // espera que el anfitrión lo apruebe (chat moderado)
+        var can_block: Bool?            // es del público: se le puede no dejar escribir más
         var created_at: String?
+        var isPending: Bool { pending ?? ((is_approved ?? 1) == 0) }
     }
 
     struct PublicInfo: Decodable { var like_count: Int?; var spectator_count: Int?; var participant_count: Int? }
@@ -167,6 +170,9 @@ actor AmaClient {
         try await decode(Message.self, "POST", "/api/events/\(id)/chat", json: ["message": text])
     }
     func deleteMessage(_ id: Int, _ mid: Int) async throws { _ = try await send("DELETE", "/api/events/\(id)/chat/\(mid)") }
+    func approveMessage(_ id: Int, _ mid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/chat/\(mid)/approve") }
+    /// No deja escribir más a quien escribió ese mensaje y borra todo lo suyo.
+    func blockSender(_ id: Int, _ mid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/chat/\(mid)/block") }
 
     // MARK: Grabación (en el servidor)
 
