@@ -350,6 +350,97 @@ def instagram_callback():
                        "Puedes cerrar esta ventana y volver a thePod.", True)
 
 
+# ---------------------------------------------------------------------------
+# Meta: quitar el permiso y pedir borrado de datos (obligatorio para la revisión)
+# ---------------------------------------------------------------------------
+
+def _parse_signed_request(signed: str, secret: str):
+    """Valida el signed_request de Meta (HMAC-SHA256 con la clave de la app)."""
+    import base64
+    import hashlib
+    import hmac
+
+    def b64(x):
+        return base64.urlsafe_b64decode(x + "=" * (-len(x) % 4))
+    try:
+        sig, payload = signed.split(".", 1)
+        expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
+        if not hmac.compare_digest(b64(sig), expected):
+            return None
+        return json.loads(b64(payload))
+    except (ValueError, TypeError):
+        return None
+
+
+def _forget_instagram_user(ig_user_id: str) -> int:
+    """Borra la conexión de esa cuenta de Instagram en todos los podcasts y cancela lo pendiente."""
+    removed = 0
+    for d in PODCASTS_DIR.glob("*/"):
+        if not (d / "proyecto.sqlite").exists():
+            continue
+        try:
+            conn = _db(d.name)
+        except Exception:  # noqa: BLE001
+            continue
+        try:
+            cur = conn.execute("DELETE FROM pub_accounts WHERE platform='instagram' AND account_id=?",
+                               (str(ig_user_id),))
+            if cur.rowcount:
+                removed += cur.rowcount
+                conn.execute("UPDATE pub_posts SET status='cancelled', updated_at=datetime('now') "
+                             "WHERE platform='instagram' AND status IN ('scheduled','error')")
+            conn.commit()
+        finally:
+            conn.close()
+        if removed:
+            _cleanup_media(d.name)
+    return removed
+
+
+def _meta_user_from_request():
+    cfg = _ig_config()
+    data = _parse_signed_request(request.form.get("signed_request") or "", cfg["app_secret"]) if cfg else None
+    return (data or {}).get("user_id")
+
+
+@bp.post("/api/pubpod/instagram/deauthorize")
+def instagram_deauthorize():
+    """Meta avisa que la persona le quitó el permiso a thePod."""
+    uid = _meta_user_from_request()
+    if not uid:
+        return jsonify({"error": "solicitud inválida"}), 400
+    _forget_instagram_user(uid)
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/pubpod/instagram/data-deletion")
+def instagram_data_deletion():
+    """Meta pide borrar los datos de esa persona. Responde con un enlace para ver el estado."""
+    uid = _meta_user_from_request()
+    if not uid:
+        return jsonify({"error": "solicitud inválida"}), 400
+    _forget_instagram_user(uid)
+    code = uuid.uuid4().hex[:12]
+    base = (load_shared_config().get("prepod_url") or "").rstrip("/")
+    return jsonify({"url": f"{base}/pub/borrado?codigo={code}", "confirmation_code": code})
+
+
+@bp.get("/pub/borrado")
+def deletion_status():
+    from html import escape
+    code = escape((request.args.get("codigo") or "")[:20])
+    return (
+        "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>"
+        "<body style='font-family:system-ui;max-width:560px;margin:60px auto;padding:0 16px;line-height:1.5'>"
+        "<h2>Tus datos de Instagram fueron borrados de thePod</h2>"
+        "<p>Borramos el permiso para publicar en tu cuenta y cancelamos las publicaciones pendientes. "
+        "Los reels ya publicados siguen en Instagram: bórralos desde la app si quieres.</p>"
+        f"<p style='color:#666'>Código de confirmación: <code>{code}</code></p>"
+        "<p>¿Dudas? Escríbenos a <a href='mailto:thepod@castmedia.space'>thepod@castmedia.space</a>.</p>"
+        "</body></html>"
+    )
+
+
 @bp.post("/api/pubpod/podcasts/<slug>/accounts/<net>/disconnect")
 @require_auth
 def disconnect(slug, net):

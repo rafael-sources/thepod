@@ -318,3 +318,35 @@ def test_migration_from_first_version(client):
     assert conn.execute("SELECT title FROM pub_posts").fetchone()[0] == "viejo"
     assert conn.execute("SELECT name FROM sqlite_master WHERE name='idx_pub_posts_due'").fetchone()
     conn.close()
+
+
+def _signed(payload, secret="s"):
+    import base64, hashlib, hmac, json as _j
+    enc = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
+    body = enc(_j.dumps(payload).encode())
+    sig = enc(hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest())
+    return f"{sig}.{body}"
+
+
+def test_meta_data_deletion_removes_connection(client):
+    _connect_ig()
+    _reel(client, scheduled_at="2099-01-01T00:00:00Z")
+    r = client.post("/api/pubpod/instagram/data-deletion",
+                    data={"signed_request": _signed({"user_id": "17841", "algorithm": "HMAC-SHA256"})})
+    out = r.get_json()
+    assert r.status_code == 200 and out["confirmation_code"] and "/pub/borrado?codigo=" in out["url"]
+    assert pubpod._get_account(SLUG, "instagram") is None
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert post["status"] == "cancelled"
+    assert client.get(out["url"].split("prepod.example")[1]).status_code == 200
+
+
+def test_meta_deauthorize_rejects_forged_signature(client):
+    _connect_ig()
+    r = client.post("/api/pubpod/instagram/deauthorize",
+                    data={"signed_request": _signed({"user_id": "17841"}, secret="otra")})
+    assert r.status_code == 400
+    assert pubpod._get_account(SLUG, "instagram") is not None
+    r = client.post("/api/pubpod/instagram/deauthorize",
+                    data={"signed_request": _signed({"user_id": "17841"})})
+    assert r.status_code == 200 and pubpod._get_account(SLUG, "instagram") is None
