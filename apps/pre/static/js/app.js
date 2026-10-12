@@ -4785,6 +4785,7 @@ var DistributionPanel = {
 var PUB_NETS = [
   { key: "instagram", name: "Instagram", ico: "📸" },
   { key: "youtube", name: "YouTube Shorts", ico: "▶️" },
+  { key: "tiktok", name: "TikTok", ico: "🎵" },
 ];
 
 var PUB_STATUS = {
@@ -4792,6 +4793,7 @@ var PUB_STATUS = {
   publishing: "Publicando…",
   published: "Publicado",
   private: "Subido en privado",
+  inbox: "En tu bandeja de TikTok",
   error: "No se publicó",
   cancelled: "Cancelado",
 };
@@ -4842,11 +4844,11 @@ var RedesPanel = {
     const connected = computed(() => PUB_NETS.filter(n => (accounts.value[n.key] || {}).connected));
     const chosen = computed(() => connected.value.filter(n => form.pick[n.key]));
 
-    async function connectInstagram() {
+    async function connectNet(net) {
       error.value = "";
       try {
-        const res = await api(`/api/pubpod/instagram/auth-url?slug=${props.slug}`);
-        const popup = window.open(res.auth_url, "pubpod-ig", "width=600,height=760");
+        const res = await api(`/api/pubpod/${net}/auth-url?slug=${props.slug}`);
+        const popup = window.open(res.auth_url, "pubpod-" + net, "width=600,height=760");
         const done = () => { window.removeEventListener("message", onMsg); clearInterval(iv); loadAccounts(); };
         const onMsg = (ev) => { if (ev.data === "pubpod-connected" || ev.data === "pubpod-error") done(); };
         window.addEventListener("message", onMsg);
@@ -4907,6 +4909,7 @@ var RedesPanel = {
       } catch (e) { error.value = e.message; }
     }
 
+    function copy(text) { navigator.clipboard.writeText(text || ""); }
     function netOf(key) { return PUB_NETS.find(n => n.key === key) || { name: key, ico: "•" }; }
     function statusText(p) {
       if (p.status === "scheduled" && new Date(p.scheduled_at) <= new Date()) return "En cola";
@@ -4925,7 +4928,7 @@ var RedesPanel = {
     onBeforeUnmount(() => clearInterval(timer));
 
     return { PUB_NETS, nets, accounts, posts, error, busy, progress, form, connected, chosen,
-             connectInstagram, disconnect, onFile, submit, act, netOf, statusText, when };
+             connectNet, disconnect, copy, onFile, submit, act, netOf, statusText, when };
   },
   template: `
     <div style="padding: 20px; max-width: 760px;">
@@ -4949,7 +4952,7 @@ var RedesPanel = {
             </template>
             <template v-else-if="nets.instagram">
               <p style="color: var(--paper-dim); margin: 6px 0 10px;">Necesitas una cuenta profesional de Instagram (creador o empresa).</p>
-              <button class="publish-btn" @click="connectInstagram">Conectar Instagram</button>
+              <button class="publish-btn" @click="connectNet('instagram')">Conectar Instagram</button>
             </template>
             <p v-else style="color: var(--paper-dim); margin: 6px 0 0;">Muy pronto.</p>
           </div>
@@ -4966,9 +4969,25 @@ var RedesPanel = {
             <button class="ghost" style="font-size: 12px;" @click="$emit('go-distribution')">Conectar en Distribución</button>
           </div>
         </div>
+        <div class="dist-card">
+          <div class="dist-card-header">
+            <span class="dist-platform-icon">🎵</span><strong>TikTok</strong>
+            <span class="dist-badge" :class="accounts.tiktok && accounts.tiktok.connected ? 'dist-badge--connected' : 'dist-badge--not_configured'">
+              {{ accounts.tiktok && accounts.tiktok.connected ? (accounts.tiktok.username || 'Conectado') : 'Sin conectar' }}
+            </span>
+          </div>
+          <div class="dist-card-body" style="font-size: 13px;">
+            <p style="color: var(--paper-dim); margin: 6px 0 10px;">El reel llega a tu bandeja de TikTok y lo terminas de publicar desde el teléfono.</p>
+            <template v-if="accounts.tiktok && accounts.tiktok.connected">
+              <button class="ghost" style="font-size: 12px;" @click="disconnect('tiktok')">Desconectar</button>
+            </template>
+            <button v-else-if="nets.tiktok" class="publish-btn" @click="connectNet('tiktok')">Conectar TikTok</button>
+            <p v-else style="color: var(--paper-dim); margin: 0;">Muy pronto.</p>
+          </div>
+        </div>
         <div class="dist-card" style="opacity: .6;">
           <div class="dist-card-header">
-            <span class="dist-platform-icon">🎵</span><strong>TikTok y Facebook</strong>
+            <span class="dist-platform-icon">📘</span><strong>Facebook</strong>
             <span class="dist-badge dist-badge--not_configured">Muy pronto</span>
           </div>
         </div>
@@ -4987,7 +5006,7 @@ var RedesPanel = {
               <input type="checkbox" v-model="form.pick[n.key]" :disabled="busy" /> {{ n.ico }} {{ n.name }}
             </label>
             <textarea v-if="form.pick[n.key]" v-model="form.captions[n.key]" rows="3" :disabled="busy"
-              :placeholder="n.key === 'youtube' ? 'Descripción del Short' : 'Texto del reel, con tus hashtags'"
+              :placeholder="n.key === 'youtube' ? 'Descripción del Short' : n.key === 'tiktok' ? 'Texto para pegar en TikTok al publicarlo' : 'Texto del reel, con tus hashtags'"
               style="width: 100%; font-size: 13px;"></textarea>
           </div>
           <div style="display:flex; gap: 14px; align-items:center; flex-wrap: wrap; margin: 6px 0 14px; font-size: 13px;">
@@ -5007,7 +5026,7 @@ var RedesPanel = {
         <div class="dist-card-header">
           <span class="dist-platform-icon">{{ netOf(p.platform).ico }}</span>
           <strong style="font-size: 13px;">{{ p.title }}</strong>
-          <span class="dist-badge" :class="p.status === 'published' ? 'dist-badge--connected' : (p.status === 'error' ? '' : 'dist-badge--pending')"
+          <span class="dist-badge" :class="(p.status === 'published' || p.status === 'inbox') ? 'dist-badge--connected' : (p.status === 'error' ? '' : 'dist-badge--pending')"
                 :style="p.status === 'error' ? 'background: rgba(220,53,69,.15); color: #e05563;' : ''">{{ statusText(p) }}</span>
         </div>
         <div style="font-size: 12px; color: var(--paper-dim); margin-top: 6px; display:flex; gap: 12px; flex-wrap: wrap; align-items:center;">
@@ -5015,6 +5034,10 @@ var RedesPanel = {
           <a v-if="p.result_url" :href="p.result_url" target="_blank" rel="noopener" style="color: var(--accent);">Ver publicación</a>
           <button v-if="p.status === 'scheduled'" class="ghost" style="font-size: 11px;" @click="act(p, 'cancel')">Cancelar</button>
           <button v-if="p.status === 'error'" class="ghost" style="font-size: 11px;" @click="act(p, 'retry')">Reintentar</button>
+        </div>
+        <div v-if="p.status === 'inbox'" style="font-size: 12px; margin-top: 6px; color: var(--signal);">
+          Abre TikTok en tu teléfono: te llegó una notificación para terminar de publicarlo.
+          <button v-if="p.caption" class="ghost" style="font-size: 11px;" @click="copy(p.caption)">Copiar el texto</button>
         </div>
         <div v-if="p.status === 'private'" style="font-size: 12px; margin-top: 6px; color: var(--signal);">
           YouTube lo dejó en privado mientras thePod espera su aprobación. Ábrelo y cámbialo a «Público».

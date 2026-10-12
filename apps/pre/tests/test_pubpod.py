@@ -16,7 +16,8 @@ import mac_publish
 import pubpod
 
 SLUG = "mi-podcast"
-CFG = {"prepod_url": "https://prepod.example", "instagram": {"app_id": "1", "app_secret": "s"}}
+CFG = {"prepod_url": "https://prepod.example", "instagram": {"app_id": "1", "app_secret": "s"},
+       "tiktok": {"client_key": "ck", "client_secret": "cs"}}
 
 
 @pytest.fixture
@@ -42,7 +43,9 @@ def client(tmp_path, monkeypatch):
 def _upload(client, data=b"fakevideo"):
     r = client.post("/api/mac/uploads", json={"filename": "reel.mp4", "size": len(data)})
     uid = r.get_json()["upload_id"]
-    client.put(f"/api/mac/uploads/{uid}/chunk?index=0", data=data)
+    step = 16 * 1024 * 1024
+    for i in range(0, max(1, len(data)), step):
+        client.put(f"/api/mac/uploads/{uid}/chunk?index={i // step}", data=data[i:i + step])
     assert client.post(f"/api/mac/uploads/{uid}/finish").status_code == 200
     return uid
 
@@ -217,3 +220,101 @@ def test_interrupted_posts_become_errors(client):
     pubpod._recover_interrupted()
     post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
     assert post["status"] == "error"
+
+
+def _connect_tt(expires_in=86400):
+    pubpod._tt_save_tokens(SLUG, {"open_id": "OID", "access_token": "TT", "refresh_token": "RT",
+                                  "expires_in": expires_in, "refresh_expires_in": 31536000},
+                           "tester", "Mi Podcast")
+
+
+def test_tiktok_needs_connection_then_shows_account(client):
+    r = _reel(client, targets=[{"platform": "tiktok", "caption": "hola"}])
+    assert "TikTok" in r.get_json()["error"]
+    _connect_tt()
+    acc = client.get(f"/api/pubpod/podcasts/{SLUG}/accounts").get_json()
+    assert acc["tiktok"] == {"connected": True, "username": "Mi Podcast"}
+    assert client.get("/api/pubpod/networks").get_json()["tiktok"] is True
+
+
+def test_tiktok_sends_to_inbox_in_chunks(client, monkeypatch):
+    _connect_tt()
+    big = b"x" * (70 * 1024 * 1024 + 123)          # > 64 MB → trozos de 10 MB, el último con el resto
+    uid = _upload(client, big)
+    r = client.post("/api/pubpod/reels", json={"slug": SLUG, "upload_id": uid, "title": "T",
+                                                "targets": [{"platform": "tiktok", "caption": "c"}]})
+    assert r.status_code == 201
+    puts, posts = [], []
+
+    def fake_post(url, headers=None, json=None, data=None, timeout=None):
+        posts.append(url)
+        if url.endswith("/inbox/video/init/"):
+            si = json["source_info"]
+            assert si["source"] == "FILE_UPLOAD" and si["video_size"] == len(big)
+            assert si["chunk_size"] == 10 * 1024 * 1024 and si["total_chunk_count"] == 7
+            assert headers["Authorization"] == "Bearer TT"
+            return _resp(200, {"data": {"publish_id": "P1", "upload_url": "https://up.tiktok/x"}})
+        if url.endswith("/status/fetch/"):
+            return _resp(200, {"data": {"status": "SEND_TO_USER_INBOX"}})
+        raise AssertionError(url)
+
+    def fake_put(url, data=None, headers=None, timeout=None):
+        puts.append((headers["Content-Range"], len(data)))
+        return _resp(206 if len(puts) < 7 else 201)
+
+    monkeypatch.setattr(pubpod.requests, "post", fake_post)
+    monkeypatch.setattr(pubpod.requests, "put", fake_put)
+    pubpod.run_due(SLUG)
+    assert len(puts) == 7
+    assert puts[0][0] == f"bytes 0-{10*1024*1024-1}/{len(big)}"
+    assert puts[-1][0].endswith(f"-{len(big)-1}/{len(big)}")
+    assert sum(n for _, n in puts) == len(big)
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert post["status"] == "inbox"
+
+
+def test_tiktok_pending_limit_message(client, monkeypatch):
+    _connect_tt()
+    _reel(client, targets=[{"platform": "tiktok", "caption": ""}])
+    monkeypatch.setattr(pubpod.requests, "post", lambda *a, **k: _resp(403, {
+        "error": {"code": "spam_risk_too_many_pending_share", "message": "x"}}))
+    pubpod.run_due(SLUG)
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert post["status"] == "error" and "5 videos" in post["error"]
+
+
+def test_tiktok_token_refresh(client, monkeypatch):
+    _connect_tt(expires_in=60)                     # vence en 1 minuto → se renueva
+    calls = []
+
+    def fake_post(url, data=None, timeout=None, **k):
+        calls.append(data)
+        return _resp(200, {"access_token": "NEW", "refresh_token": "RT2", "expires_in": 86400,
+                           "refresh_expires_in": 31536000})
+
+    monkeypatch.setattr(pubpod.requests, "post", fake_post)
+    assert pubpod._tt_token(SLUG) == "NEW"
+    assert calls[0]["grant_type"] == "refresh_token" and calls[0]["refresh_token"] == "RT"
+    assert pubpod._get_account(SLUG, "tiktok")["refresh_token"] == "RT2"
+
+
+def test_tiktok_state_cannot_be_used_for_instagram(client):
+    st = pubpod._state.dumps({"slug": SLUG, "user": "tester", "net": "tiktok"})
+    assert client.get(f"/api/pubpod/instagram/callback?code=x&state={st}").status_code == 400
+
+
+def test_migration_from_first_version(client):
+    """Una base creada con la primera versión (sin 'inbox' ni refresh) se actualiza sin perder nada."""
+    import sqlite3
+    conn = db_mod.get_db(SLUG)
+    old = pubpod.SCHEMA.replace("'private','inbox','error'", "'private','error'")
+    conn.executescript(old)
+    conn.execute("INSERT INTO pub_posts (title, platform, media_token, scheduled_at) VALUES ('viejo','instagram','t',1)")
+    conn.commit()
+    conn.close()
+    conn = pubpod._db(SLUG)
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='pub_posts'").fetchone()[0]
+    assert "'inbox'" in sql
+    assert conn.execute("SELECT title FROM pub_posts").fetchone()[0] == "viejo"
+    assert conn.execute("SELECT name FROM sqlite_master WHERE name='idx_pub_posts_due'").fetchone()
+    conn.close()

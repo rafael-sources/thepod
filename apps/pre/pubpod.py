@@ -1,10 +1,11 @@
 """
 pubPod — publicar y programar reels en las redes del podcast.
 
-Primera versión: Instagram (API con inicio de sesión de Instagram) y YouTube
-Shorts (reusa la conexión de YouTube que ya tiene prePod). TikTok y Facebook
-se agregan cuando existan sus apps; cada red vive en su propio "publicador"
-para pasar del modo limitado al completo red por red.
+Redes: Instagram (API con inicio de sesión de Instagram), YouTube Shorts
+(reusa la conexión de YouTube que ya tiene prePod) y TikTok (el reel llega a
+la bandeja del usuario y él lo publica desde la app; la publicación directa
+exige la auditoría de TikTok). Cada red vive en su propio "publicador" para
+pasar del modo limitado al completo red por red.
 
 Endpoints (sesión de thePod):
     GET  /api/pubpod/networks                         redes disponibles en el servidor
@@ -21,7 +22,8 @@ Endpoints (sesión de thePod):
 
 Config en ~/.podpod/config.json:
     "instagram": {"app_id": "...", "app_secret": "..."}
-La redirección es <prepod_url>/api/pubpod/instagram/callback.
+    "tiktok":    {"client_key": "...", "client_secret": "..."}
+Redirecciones: <prepod_url>/api/pubpod/instagram/callback y .../tiktok/callback.
 """
 
 from __future__ import annotations
@@ -50,8 +52,10 @@ bp = Blueprint("pubpod", __name__)
 
 IG_GRAPH = "https://graph.instagram.com/v23.0"
 IG_SCOPES = "instagram_business_basic,instagram_business_content_publish"
-NETWORKS = ("instagram", "youtube")
-CAPTION_MAX = {"instagram": 2200, "youtube": 5000}
+NETWORKS = ("instagram", "youtube", "tiktok")
+CAPTION_MAX = {"instagram": 2200, "youtube": 5000, "tiktok": 2200}
+TT_API = "https://open.tiktokapis.com/v2"
+TT_SCOPES = "user.info.basic,video.upload"
 MEDIA_KEEP_SECONDS = 7 * 24 * 3600
 _TOKEN_RE = re.compile(r"[0-9a-f]{32}\Z")
 _state = URLSafeTimedSerializer(SECRET_KEY, salt="pubpod-oauth")
@@ -74,7 +78,7 @@ CREATE TABLE IF NOT EXISTS pub_posts (
     caption       TEXT NOT NULL DEFAULT '',
     media_token   TEXT NOT NULL,
     status        TEXT NOT NULL DEFAULT 'scheduled'
-        CHECK(status IN ('scheduled','publishing','published','private','error','cancelled')),
+        CHECK(status IN ('scheduled','publishing','published','private','inbox','error','cancelled')),
     scheduled_at  REAL NOT NULL,
     result_url    TEXT,
     error         TEXT,
@@ -94,7 +98,26 @@ CREATE INDEX IF NOT EXISTS idx_pub_posts_due ON pub_posts(status, scheduled_at);
 def _db(slug: str):
     conn = get_db(slug)
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn):
+    """Cambios de esquema posteriores a la primera versión."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(pub_accounts)")}
+    if "refresh_token" not in cols:
+        conn.execute("ALTER TABLE pub_accounts ADD COLUMN refresh_token TEXT")
+        conn.execute("ALTER TABLE pub_accounts ADD COLUMN refresh_expires_at REAL")
+        conn.commit()
+    sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='pub_posts'").fetchone()[0]
+    if "'inbox'" not in sql:   # TikTok deja el reel en la bandeja del usuario: estado nuevo
+        conn.execute("DROP INDEX IF EXISTS idx_pub_posts_due")
+        conn.execute("ALTER TABLE pub_posts RENAME TO pub_posts_old")
+        conn.executescript(SCHEMA)
+        cols = ", ".join(r[1] for r in conn.execute("PRAGMA table_info(pub_posts_old)"))
+        conn.execute(f"INSERT INTO pub_posts ({cols}) SELECT {cols} FROM pub_posts_old")
+        conn.execute("DROP TABLE pub_posts_old")
+        conn.commit()
 
 
 def _media_dir(slug: str) -> Path:
@@ -162,17 +185,20 @@ def _ig_redirect_uri():
     return f"{base}/api/pubpod/instagram/callback"
 
 
-def _save_account(slug, platform, account_id, username, token, expires_at, user):
+def _save_account(slug, platform, account_id, username, token, expires_at, user,
+                  refresh_token=None, refresh_expires_at=None):
     conn = _db(slug)
     try:
         conn.execute(
-            """INSERT INTO pub_accounts (platform, account_id, username, access_token, expires_at, connected_by)
-               VALUES (?,?,?,?,?,?)
+            """INSERT INTO pub_accounts (platform, account_id, username, access_token, expires_at, connected_by,
+                                         refresh_token, refresh_expires_at)
+               VALUES (?,?,?,?,?,?,?,?)
                ON CONFLICT(platform) DO UPDATE SET account_id=excluded.account_id,
                  username=excluded.username, access_token=excluded.access_token,
                  expires_at=excluded.expires_at, connected_by=excluded.connected_by,
+                 refresh_token=excluded.refresh_token, refresh_expires_at=excluded.refresh_expires_at,
                  connected_at=datetime('now')""",
-            (platform, str(account_id), username, token, expires_at, user),
+            (platform, str(account_id), username, token, expires_at, user, refresh_token, refresh_expires_at),
         )
         conn.commit()
     finally:
@@ -217,7 +243,7 @@ def networks():
     return jsonify({
         "instagram": bool(_ig_config()),
         "youtube": bool(_get_youtube_config()),
-        "tiktok": False,
+        "tiktok": bool(_tt_config()),
         "facebook": False,
     })
 
@@ -240,6 +266,10 @@ def accounts(slug):
         yt = None
     out["youtube"] = ({"connected": True, "username": yt.get("channel_name") or "YouTube"}
                       if yt else {"connected": False})
+    tt = _get_account(slug, "tiktok")
+    if tt and (tt.get("refresh_expires_at") or 0) < _now():
+        tt = None   # la conexión de TikTok venció (dura un año): hay que volver a conectar
+    out["tiktok"] = ({"connected": True, "username": tt.get("username")} if tt else {"connected": False})
     return jsonify(out)
 
 
@@ -288,7 +318,7 @@ def instagram_callback():
         return _popup_page("El enlace venció", "Vuelve a pulsar «Conectar Instagram».", False)
     cfg = _ig_config()
     code = (request.args.get("code") or "").removesuffix("#_")
-    if not cfg or not code:
+    if not cfg or not code or st.get("net", "instagram") != "instagram":
         return _popup_page("Instagram no está disponible", "Inténtalo más tarde.", False)
     try:
         r = requests.post("https://api.instagram.com/oauth/access_token", data={
@@ -326,7 +356,7 @@ def disconnect(slug, net):
     denied = _access_error(slug)
     if denied:
         return denied
-    if net != "instagram":
+    if net not in ("instagram", "tiktok"):
         return jsonify({"error": "esa red se desconecta desde Distribución"}), 400
     conn = _db(slug)
     try:
@@ -335,6 +365,110 @@ def disconnect(slug, net):
     finally:
         conn.close()
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# TikTok: conexión (Login Kit) — el reel llega a la bandeja del usuario
+# ---------------------------------------------------------------------------
+
+def _tt_config():
+    cfg = (load_shared_config().get("tiktok") or {})
+    if not cfg.get("client_key") or not cfg.get("client_secret"):
+        return None
+    return cfg
+
+
+def _tt_redirect_uri():
+    base = (load_shared_config().get("prepod_url") or "").rstrip("/")
+    return f"{base}/api/pubpod/tiktok/callback"
+
+
+@bp.get("/api/pubpod/tiktok/auth-url")
+@require_auth
+def tiktok_auth_url():
+    slug = (request.args.get("slug") or "").strip()
+    denied = _access_error(slug)
+    if denied:
+        return denied
+    cfg = _tt_config()
+    if not cfg:
+        return jsonify({"error": "TikTok todavía no está habilitado en thePod"}), 503
+    from urllib.parse import urlencode
+    url = "https://www.tiktok.com/v2/auth/authorize/?" + urlencode({
+        "client_key": cfg["client_key"],
+        "scope": TT_SCOPES,
+        "response_type": "code",
+        "redirect_uri": _tt_redirect_uri(),
+        "state": _state.dumps({"slug": slug, "user": session.get("username"), "net": "tiktok"}),
+    })
+    return jsonify({"auth_url": url})
+
+
+def _tt_save_tokens(slug, data, user, username=None):
+    _save_account(slug, "tiktok", data["open_id"], username, data["access_token"],
+                  _now() + int(data.get("expires_in") or 86400), user,
+                  refresh_token=data.get("refresh_token"),
+                  refresh_expires_at=_now() + int(data.get("refresh_expires_in") or 31536000))
+
+
+@bp.get("/api/pubpod/tiktok/callback")
+def tiktok_callback():
+    from html import escape
+    if request.args.get("error"):
+        return _popup_page("No se conectó TikTok",
+                           "Cancelaste el permiso o TikTok lo rechazó. Puedes cerrar esta ventana.", False)
+    try:
+        st = _state.loads(request.args.get("state") or "", max_age=900)
+    except (BadSignature, SignatureExpired):
+        return _popup_page("El enlace venció", "Vuelve a pulsar «Conectar TikTok».", False)
+    cfg = _tt_config()
+    code = request.args.get("code") or ""
+    if not cfg or not code or st.get("net") != "tiktok":
+        return _popup_page("TikTok no está disponible", "Inténtalo más tarde.", False)
+    try:
+        r = requests.post(f"{TT_API}/oauth/token/", data={
+            "client_key": cfg["client_key"], "client_secret": cfg["client_secret"],
+            "code": code, "grant_type": "authorization_code",
+            "redirect_uri": _tt_redirect_uri()}, timeout=30)
+        data = r.json()
+        if not data.get("access_token"):
+            raise RuntimeError(data.get("error_description") or data.get("error") or "sin token")
+        name = None
+        try:
+            r = requests.get(f"{TT_API}/user/info/", params={"fields": "open_id,display_name"},
+                             headers={"Authorization": f"Bearer {data['access_token']}"}, timeout=30)
+            name = ((r.json().get("data") or {}).get("user") or {}).get("display_name")
+        except (requests.RequestException, ValueError):
+            pass
+    except (requests.RequestException, ValueError, RuntimeError) as e:
+        return _popup_page("No se pudo conectar TikTok", escape(str(e)[:200]), False)
+    _tt_save_tokens(st["slug"], data, st.get("user"), name)
+    return _popup_page(f"TikTok conectado{': ' + escape(name) if name else ''}",
+                       "Puedes cerrar esta ventana y volver a thePod.", True)
+
+
+def _tt_token(slug):
+    """Token vigente de TikTok (dura 24 h); lo renueva con el de refresco (dura un año)."""
+    acc = _get_account(slug, "tiktok")
+    if not acc:
+        return None
+    if (acc.get("expires_at") or 0) - _now() > 600:
+        return acc["access_token"]
+    cfg = _tt_config()
+    if not cfg or not acc.get("refresh_token"):
+        return None
+    try:
+        r = requests.post(f"{TT_API}/oauth/token/", data={
+            "client_key": cfg["client_key"], "client_secret": cfg["client_secret"],
+            "grant_type": "refresh_token", "refresh_token": acc["refresh_token"]}, timeout=30)
+        data = r.json()
+    except (requests.RequestException, ValueError):
+        return None
+    if not data.get("access_token"):
+        return None
+    data.setdefault("open_id", acc["account_id"])
+    _tt_save_tokens(slug, data, acc.get("connected_by"), acc.get("username"))
+    return data["access_token"]
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +519,8 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
         from youtube_publish import _get_stored_tokens
         if not _get_stored_tokens(slug):
             missing.append("YouTube")
+    if any(t["platform"] == "tiktok" for t in targets) and not _get_account(slug, "tiktok"):
+        missing.append("TikTok")
     if missing:
         return None, "conecta primero: " + ", ".join(missing)
 
@@ -631,6 +767,70 @@ def publish_youtube(slug, post, media_path):
     return status, f"https://youtube.com/shorts/{res['video_id']}"
 
 
+TT_CHUNK = 10 * 1024 * 1024
+TT_ERRORS = {
+    "spam_risk_too_many_pending_share": "TikTok permite como máximo 5 videos esperando en tu bandeja por día. Publica o descarta los que tienes y reintenta.",
+    "access_token_invalid": "La conexión con TikTok venció. Vuelve a conectar TikTok en Redes.",
+    "scope_not_authorized": "Falta el permiso para subir videos. Vuelve a conectar TikTok en Redes.",
+    "rate_limit_exceeded": "TikTok pidió esperar un momento. Reintenta en unos minutos.",
+}
+
+
+def _tt_fail(data, fallback):
+    err = (data or {}).get("error") or {}
+    code = err.get("code") if isinstance(err, dict) else None
+    return TT_ERRORS.get(code) or (err.get("message") if isinstance(err, dict) else None) or fallback
+
+
+def publish_tiktok(slug, post, media_path):
+    """Envía el reel a la bandeja de TikTok del usuario; él lo termina de publicar en la app.
+    (La publicación directa exige la auditoría de TikTok.)"""
+    token = _tt_token(slug)
+    if not token:
+        raise PublishError("La conexión con TikTok venció. Vuelve a conectar TikTok en Redes.")
+    size = Path(media_path).stat().st_size
+    # Reglas de TikTok: trozos de 5 a 64 MB; si el video es chico va entero; el último absorbe el resto
+    if size <= 64 * 1024 * 1024:
+        chunk, count = size, 1
+    else:
+        chunk, count = TT_CHUNK, size // TT_CHUNK
+    auth = {"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"}
+    r = requests.post(f"{TT_API}/post/publish/inbox/video/init/", headers=auth, json={
+        "source_info": {"source": "FILE_UPLOAD", "video_size": size,
+                        "chunk_size": chunk, "total_chunk_count": count}}, timeout=60)
+    data = r.json() if r.content else {}
+    if not r.ok or not (data.get("data") or {}).get("upload_url"):
+        raise PublishError(_tt_fail(data, "TikTok no aceptó el video"))
+    publish_id = data["data"]["publish_id"]
+    upload_url = data["data"]["upload_url"]
+    with open(media_path, "rb") as f:
+        for i in range(count):
+            start = i * chunk
+            end = size - 1 if i == count - 1 else start + chunk - 1
+            f.seek(start)
+            body = f.read(end - start + 1)
+            r = requests.put(upload_url, data=body, timeout=300, headers={
+                "Content-Type": "video/mp4", "Content-Length": str(len(body)),
+                "Content-Range": f"bytes {start}-{end}/{size}"})
+            if r.status_code not in (200, 201, 206):
+                raise PublishError("Se cortó la subida a TikTok. Reintenta.")
+    deadline = _now() + 10 * 60
+    while _now() < deadline:
+        time.sleep(10)
+        r = requests.post(f"{TT_API}/post/publish/status/fetch/", headers=auth,
+                          json={"publish_id": publish_id}, timeout=30)
+        d = (r.json() or {}).get("data") or {} if r.content else {}
+        st = d.get("status")
+        if st == "SEND_TO_USER_INBOX":
+            return "inbox", None
+        if st == "PUBLISH_COMPLETE":
+            return "published", "https://www.tiktok.com/"
+        if st == "FAILED":
+            raise PublishError(f"TikTok no pudo procesar el video ({d.get('fail_reason') or 'sin motivo'})")
+    # Sigue procesando: lo más probable es que llegue igual a la bandeja
+    return "inbox", None
+
+
 def _publish_one(slug, post):
     path = _media_path(slug, post["media_token"])
     if not path.is_file():
@@ -640,6 +840,8 @@ def _publish_one(slug, post):
         return publish_instagram(slug, post, f"{base}/pub/m/{slug}/{post['media_token']}.mp4")
     if post["platform"] == "youtube":
         return publish_youtube(slug, post, path)
+    if post["platform"] == "tiktok":
+        return publish_tiktok(slug, post, path)
     raise PublishError("red no disponible")
 
 
