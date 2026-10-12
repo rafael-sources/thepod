@@ -655,6 +655,7 @@ struct ReelsStep: View {
     }
     @ObservedObject var session: ProjectSession
     @State private var previewing: UUID?
+    @State private var publishing: Reel?
 
     /// El reel que se está viendo (si sigue existiendo).
     private var currentReel: Reel? { previewing.flatMap { id in session.project.reels.first { $0.id == id } } }
@@ -689,7 +690,7 @@ struct ReelsStep: View {
                             show(reel)
                         }, remove: {
                             removeReel(reel.id)
-                        }, export: { session.exportReel(reel) }, busy: session.isBusy)
+                        }, export: { session.exportReel(reel) }, publish: { publishing = reel }, busy: session.isBusy)
                     }
                     AIMomentsCard(session: session)
                     Card {
@@ -766,6 +767,7 @@ struct ReelsStep: View {
             else { session.setPreview(format: .vertical, window: nil, look: session.project.reelLook); session.captionDragTarget = .allReels }
         }
         .onDisappear { session.setPreview(format: .landscape); session.captionDragTarget = nil }
+        .sheet(item: $publishing) { reel in PublishReelSheet(session: session, reel: reel) }
         // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
         .onChange(of: session.project.reelLook) { _, _ in refresh() }
         .onChange(of: currentReel?.look) { _, _ in refresh() }
@@ -1053,6 +1055,7 @@ struct ReelCard: View {
     let preview: () -> Void
     let remove: () -> Void
     var export: (() -> Void)? = nil
+    var publish: (() -> Void)? = nil
     var busy = false
 
     var body: some View {
@@ -1088,6 +1091,10 @@ struct ReelCard: View {
                 if let export {
                     Button(action: export) { Image(systemName: "square.and.arrow.down").font(.title3) }
                         .buttonStyle(.borderless).disabled(busy).help("Exportar solo este reel")
+                }
+                if let publish {
+                    Button(action: publish) { Image(systemName: "paperplane").font(.title3) }
+                        .buttonStyle(.borderless).disabled(busy).help("Publicar en redes")
                 }
                 Button(action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless).foregroundStyle(Theme.secondary)
             }

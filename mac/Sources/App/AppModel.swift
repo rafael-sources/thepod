@@ -1470,6 +1470,28 @@ final class ProjectSession: ObservableObject {
         }
     }
 
+    // MARK: pubPod: reels a redes
+
+    @Published var reelPosts: [PrePodClient.PubPost]?
+
+    /// Exporta el reel tal como está ahora, lo sube a prePod y crea una publicación por red.
+    func publishReel(_ reel: Reel, targets: [(platform: String, caption: String)], at: Date?) {
+        guard let slug = project.episode.prepodSlug else { return }
+        let episodeId = project.episode.prepodEpisodeId
+        reelPosts = nil
+        run("Publicando en redes") { [self] in
+            let urls = try await performExportReels(only: reel)
+            guard let file = urls.first else { return }
+            report("Publicando en redes", "Subiendo el reel a thePod…", 0)
+            let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
+                self?.reportAsync("Publicando en redes", "Subiendo el reel a thePod…", f)
+            }
+            report("Publicando en redes", "Enviándolo a tus redes…", nil)
+            reelPosts = try await PrePodClient.shared.createReelPosts(
+                slug: slug, episodeId: episodeId, uploadId: upload, title: reel.title, targets: targets, at: at)
+        }
+    }
+
     // MARK: Transcript editing
 
     struct Phrase: Identifiable, Equatable {

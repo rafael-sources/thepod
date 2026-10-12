@@ -236,6 +236,37 @@ actor PrePodClient {
                                     "privacy": privacy]))
     }
 
+    // MARK: pubPod (reels a redes)
+
+    struct PubAccount: Decodable, Hashable { let connected: Bool; let username: String? }
+    struct PubPost: Decodable, Identifiable, Hashable {
+        let id: Int
+        let title: String
+        let platform: String
+        let status: String
+        let scheduled_at: String?
+        let result_url: String?
+        let error: String?
+    }
+
+    func pubAccounts(slug: String) async throws -> [String: PubAccount] {
+        try JSONDecoder().decode([String: PubAccount].self,
+                                 from: await send("GET", "/api/pubpod/podcasts/\(slug)/accounts"))
+    }
+
+    /// Crea una publicación por red para un reel ya subido. `at` nil = ahora.
+    func createReelPosts(slug: String, episodeId: Int?, uploadId: String, title: String,
+                         targets: [(platform: String, caption: String)], at: Date?) async throws -> [PubPost] {
+        var json: [String: Any] = [
+            "slug": slug, "upload_id": uploadId, "title": String(title.prefix(200)),
+            "targets": targets.map { ["platform": $0.platform, "caption": $0.caption] },
+        ]
+        if let episodeId { json["episode_id"] = episodeId }
+        if let at { json["scheduled_at"] = ISO8601DateFormatter().string(from: at) }
+        struct Out: Decodable { let posts: [PubPost] }
+        return try JSONDecoder().decode(Out.self, from: await send("POST", "/api/pubpod/reels", json: json)).posts
+    }
+
     /// Polls a job until done. Returns the result dictionary.
     func wait(job: String, progress: @Sendable (Double) -> Void) async throws -> [String: String] {
         while true {
