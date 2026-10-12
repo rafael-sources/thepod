@@ -8,7 +8,8 @@ struct PublishReelSheet: View {
 
     private struct Net: Identifiable { let id: String; let name: String; let symbol: String }
     private let nets = [Net(id: "instagram", name: "Instagram", symbol: "camera"),
-                        Net(id: "youtube", name: "YouTube Shorts", symbol: "play.rectangle")]
+                        Net(id: "youtube", name: "YouTube Shorts", symbol: "play.rectangle"),
+                        Net(id: "tiktok", name: "TikTok", symbol: "music.note")]
 
     @State private var accounts: [String: PrePodClient.PubAccount]?
     @State private var loadError: String?
@@ -117,7 +118,11 @@ struct PublishReelSheet: View {
                     }
                 }
             }
-            Text("TikTok y Facebook: muy pronto.").font(.caption).foregroundStyle(Theme.secondary)
+            if pick["tiktok"] == true {
+                Text("TikTok: el reel llega a tu bandeja y lo terminas de publicar desde el teléfono, pegando el texto.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            Text("Facebook: muy pronto.").font(.caption).foregroundStyle(Theme.secondary)
             Picker("", selection: $later) {
                 Text("Publicar ahora").tag(false)
                 Text("Programar").tag(true)
@@ -145,7 +150,8 @@ struct PublishReelSheet: View {
             ForEach(posts) { p in
                 HStack {
                     Text(nets.first { $0.id == p.platform }?.name ?? p.platform).bold()
-                    Text(later ? "para el \(when.formatted(date: .abbreviated, time: .shortened))" : "en cola, sale en uno o dos minutos")
+                    Text(later ? "para el \(when.formatted(date: .abbreviated, time: .shortened))"
+                         : p.platform == "tiktok" ? "llegará a tu bandeja de TikTok en unos minutos" : "en cola, sale en uno o dos minutos")
                         .foregroundStyle(Theme.secondary)
                 }
             }
