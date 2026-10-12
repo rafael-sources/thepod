@@ -119,3 +119,37 @@ def test_envio_avisa_inicio_y_fin_y_manda_el_respaldo(env, monkeypatch):
     assert "import-track" in tipos
     assert ("import-status", "end", None) in calls
     assert tipos.index("import-track") < tipos.index("import-status", 1)
+
+
+def test_envio_interno_y_pista_fija_por_persona(env, monkeypatch):
+    """La pista enviada tarde no cae sobre la de otra persona, y el envío va
+    a la dirección interna de postPod (no al proxy público)."""
+    c, ra, db_mod, started, stopped, state = env
+    rec = db_mod.session_dir(1) / "recordings"
+    rec.mkdir(parents=True, exist_ok=True)
+    conn = db_mod.get_db()
+    for pid in (10, 11):
+        f = rec / f"p{pid}.webm"
+        f.write_bytes(b"x" * 10)
+        conn.execute("INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, size_bytes, exported_to_postpod_at) "
+                     "VALUES (1, ?, 'video', ?, ?, 10, ?)", (pid, f.name, str(f), "2026-10-12T00:00:00" if pid == 10 else None))
+    conn.commit(); conn.close()
+    sent = []
+
+    class _Resp:
+        status_code = 201
+        text = ""
+        def json(self):
+            return {"project": {"slug": "p"}}
+
+    def fake_post(url, **kw):
+        if url.endswith("/import-track"):
+            sent.append((url, kw["data"]["track_number"], kw["data"]["original_name"]))
+        return _Resp()
+    monkeypatch.setattr(ra.requests, "post", fake_post)
+    monkeypatch.setattr(ra, "notify_source", lambda *a, **k: None)
+    body, status = ra.export_session_to_postpod(1)
+    assert body["exported"] == 1, body
+    url, track, name = sent[0]
+    assert url.startswith(ra.POSTPOD_INTERNAL_URL)
+    assert name.startswith("Invitada") and track == "2"   # la 1 es del host, aunque ya se envió antes

@@ -21,7 +21,7 @@ import requests
 from flask import Blueprint, Response, abort, jsonify, request
 
 from auth import current_user, require_auth
-from config import INTEGRATION_SECRET, POSTPOD_URL, SESSIONS_DIR
+from config import INTEGRATION_SECRET, POSTPOD_INTERNAL_URL, POSTPOD_URL, SESSIONS_DIR
 from db import get_db, session_dir
 from integrations import notify_source
 
@@ -832,7 +832,7 @@ def _postpod_import_status(sess, spid, state, expected=0):
         db.close()
     try:
         requests.post(
-            POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-status",
+            POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-status",
             headers={"X-PodPod-Secret": INTEGRATION_SECRET},
             json={
                 "shared_project_id": spid,
@@ -949,7 +949,20 @@ def export_session_to_postpod(sid):
     if not pending:
         return {"exported": 0, "failed": 0, "project": None, "message": "sin pistas nuevas"}, 200
 
-    endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-track"
+    endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-track"
+    # Pista fija por persona y tipo (cámara/pantalla) según el orden de la
+    # sala, no según la tanda de envío: si una pista llega en un envío aparte
+    # no debe caer encima de otra.
+    db = get_db()
+    try:
+        keys = db.execute(
+            "SELECT DISTINCT participant_id, track_type FROM recordings WHERE session_id=? "
+            "ORDER BY participant_id, CASE track_type WHEN 'video' THEN 0 ELSE 1 END, track_type",
+            (sid,),
+        ).fetchall()
+    finally:
+        db.close()
+    track_numbers = {(k["participant_id"], k["track_type"]): i + 1 for i, k in enumerate(keys)}
     headers = {"X-PodPod-Secret": INTEGRATION_SECRET}
     base = (session_dir(sid) / "recordings").resolve()
 
@@ -1017,12 +1030,13 @@ def export_session_to_postpod(sid):
                         "project_name": sess["title"],
                         "owner_username": session_owner,
                         "extra_hosts": extra_hosts,
-                        "track_number": str(idx + 1),
+                        "track_number": str(track_numbers.get((r["participant_id"], r["track_type"]), idx + 1)),
                     },
                     files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
-                    # (conexión, respuesta): con pistas de varios GB postPod tarda
-                    # minutos en generar miniatura y forma de onda antes de responder.
-                    timeout=(30, 3600),
+                    # (conexión y cada tramo de la subida, respuesta). Ojo: en requests
+                    # el primer valor también limita cada escritura del cuerpo; con
+                    # pistas de varios GB postPod tarda minutos en responder.
+                    timeout=(300, 7200),
                 )
             if resp.status_code not in (200, 201):
                 failed += 1
@@ -1079,7 +1093,7 @@ def export_session_to_postpod(sid):
 
     # Ship chapter markers as postPod moments
     chapters_sent = 0
-    chapters_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-chapters"
+    chapters_endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-chapters"
     db = get_db()
     try:
         ch_rows = db.execute(
@@ -1120,7 +1134,7 @@ def export_session_to_postpod(sid):
     # audio lane at the exact session offset (vs the legacy "record audio
     # stream" approach).
     triggers_sent = 0
-    triggers_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-sound-triggers"
+    triggers_endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-sound-triggers"
     db = get_db()
     try:
         trig_rows = db.execute(
@@ -1157,7 +1171,7 @@ def export_session_to_postpod(sid):
 
     # Ship director events (overlay timeline) so postPod can render them
     director_events_sent = 0
-    director_events_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-director-events"
+    director_events_endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-director-events"
     db = get_db()
     try:
         dev_rows = db.execute(
@@ -1204,7 +1218,7 @@ def export_session_to_postpod(sid):
     director_assets_sent = 0
     assets_dir = session_dir(sid) / "director_assets"
     if assets_dir.exists():
-        asset_endpoint = POSTPOD_URL.rstrip("/") + "/api/integrations/prodpod/import-director-asset"
+        asset_endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-director-asset"
         for f in sorted(assets_dir.iterdir()):
             if not f.is_file():
                 continue

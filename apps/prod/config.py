@@ -61,6 +61,10 @@ PARTICIPANT_STATUSES = ("invited", "connected", "active", "disconnected", "left"
 
 # ----- Integration with prePod / postPod -----
 POSTPOD_URL = _shared.get("postpod_url", "http://127.0.0.1:5000")
+# Llamadas servidor a servidor (envío de pistas, capítulos…): directo a
+# postPod dentro de la misma máquina, sin pasar por el proxy público, que
+# corta subidas de varios GB y responde 502 si postPod tarda en contestar.
+POSTPOD_INTERNAL_URL = (_shared.get("postpod_internal_url") or "http://127.0.0.1:5000").rstrip("/")
 PREPOD_URL  = _shared.get("prepod_url",  "http://127.0.0.1:5001")
 
 # ----- RTMP streaming defaults -----
