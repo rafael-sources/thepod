@@ -1,19 +1,20 @@
 import SwiftUI
 
-/// prePod → Configurar podcast → Redes: SOLO conectar Instagram, YouTube y TikTok.
-/// Publicar (reels y episodio, al momento o programado) se hace en pubPod.
+/// prePod → Configurar podcast → Redes: SOLO conectar las cuentas del podcast.
+/// Cada cuenta enciende sus estrellas en pubPod (se muestran al lado). Publicar se hace en pubPod.
 struct RedesTab: View {
     let slug: String
     @EnvironmentObject var app: AppModel
 
-    private struct Net: Identifiable { let id: String; let name: String; let symbol: String; let note: String }
-    private let nets = [
-        Net(id: "instagram", name: "Instagram", symbol: "camera",
-            note: "Necesitas una cuenta profesional de Instagram (creador o empresa)."),
-        Net(id: "youtube", name: "YouTube", symbol: "play.rectangle",
-            note: "Para tus Shorts y el episodio completo. Es el mismo canal de Distribución."),
-        Net(id: "tiktok", name: "TikTok", symbol: "music.note",
-            note: "El reel llega a tu bandeja de TikTok y lo terminas de publicar desde el teléfono."),
+    private struct Row: Identifiable {
+        let id: String; let name: String; let note: String; let stars: [String]; let connectable: Bool
+    }
+    private let rows = [
+        Row(id: "feed", name: "Feed del podcast", note: "Spotify y Apple Podcasts lo leen solos", stars: ["spotify", "apple"], connectable: false),
+        Row(id: "youtube", name: "YouTube", note: "Tu canal: los episodios y los Shorts", stars: ["youtube", "shorts"], connectable: true),
+        Row(id: "instagram", name: "Instagram", note: "Cuenta profesional: la portada y los Reels", stars: ["instagram", "reels"], connectable: true),
+        Row(id: "tiktok", name: "TikTok", note: "Los reels llegan a tu bandeja y los publicas desde el teléfono", stars: ["tiktok"], connectable: true),
+        Row(id: "facebook", name: "Facebook", note: "", stars: ["facebook"], connectable: true),
     ]
 
     @State private var accounts: [String: PrePodClient.PubAccount] = [:]
@@ -23,78 +24,88 @@ struct RedesTab: View {
     @State private var error: String?
     @State private var watcher: Task<Void, Never>?
 
+    private enum RowState { case on, off, soon, feedOff }
+    private func state(_ r: Row) -> RowState {
+        if accounts[r.id]?.connected == true { return .on }
+        if r.id == "feed" { return .feedOff }
+        return available[r.id] == true ? .off : .soon
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Conecta aquí las redes del podcast, una sola vez. Para publicar, ve a pubPod.")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Conecta aquí las cuentas del podcast, una sola vez. Cada cuenta enciende sus estrellas en pubPod.")
                 .foregroundStyle(Theme.secondary)
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if !loaded { ProgressView() }
-            ForEach(nets) { n in netCard(n) }
-            Card {
-                HStack {
-                    Image(systemName: "f.square").foregroundStyle(Theme.secondary)
-                    Text("Facebook").font(.headline).foregroundStyle(Theme.secondary)
-                    Spacer()
-                    Text("muy pronto").font(.caption).foregroundStyle(Theme.secondary)
-                }
+            ForEach(rows) { r in rowView(r) }
+            HStack {
+                Text("Para publicar reels y episodios, abre pubPod.").foregroundStyle(Theme.secondary)
+                Button { app.section = .pub } label: { Label("Ir a pubPod", systemImage: "star.fill") }.buttonStyle(.bordered)
             }
-            Button { app.section = .pub } label: { Label("Ir a pubPod para publicar", systemImage: "star.fill") }
-                .buttonStyle(.bordered)
+            .padding(.top, 6)
         }
         .task { await load() }
         .onDisappear { watcher?.cancel() }
     }
 
-    // MARK: Redes
-
-    private func netCard(_ n: Net) -> some View {
-        let acc = accounts[n.id]
-        let on = acc?.connected == true
-        return Card {
-            HStack(spacing: 8) {
-                Image(systemName: n.symbol)
-                Text(n.name).font(.headline)
-                Spacer()
-                if on {
-                    Label(display(n.id, acc?.username), systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(Theme.good).lineLimit(1)
-                } else if available[n.id] == false {
-                    Text("muy pronto").font(.caption).foregroundStyle(Theme.secondary)
-                } else {
-                    Text("Sin conectar").font(.caption).foregroundStyle(Theme.secondary)
-                }
+    private func rowView(_ r: Row) -> some View {
+        let st = state(r)
+        return HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(r.name).font(.headline)
+                if !r.note.isEmpty { Text(r.note).font(.caption).foregroundStyle(Theme.secondary) }
             }
-            Text(n.note).font(.caption).foregroundStyle(Theme.secondary)
-            if available[n.id] != false || on {
-                HStack {
-                    if on {
-                        Button("Desconectar", role: .destructive) { disconnect(n.id) }
-                    } else if connecting == n.id {
-                        ProgressView().controlSize(.small)
-                        Text("Termina de dar el permiso en el navegador…").font(.caption).foregroundStyle(Theme.secondary)
-                        Button("Cancelar") { watcher?.cancel(); connecting = nil }.buttonStyle(.borderless)
-                    } else {
-                        Button("Conectar \(n.name)") { connect(n.id) }.buttonStyle(.borderedProminent)
-                            .disabled(connecting != nil)
+            .frame(width: 190, alignment: .leading)
+            HStack(spacing: 14) {
+                ForEach(r.stars, id: \.self) { id in
+                    let s = PubStar.all.first { $0.id == id }
+                    HStack(spacing: 6) {
+                        ZStack {
+                            if st == .on { StarShape().fill(Color.white) }
+                            else { StarShape().stroke(st == .soon ? Color(white: 0.36) : Color(white: 0.6), style: StrokeStyle(lineWidth: 1.3, lineJoin: .round, dash: st == .soon ? [3, 3] : [])) }
+                        }
+                        .frame(width: 16, height: 16)
+                        Text(s?.name ?? id).font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(st == .on ? .white : st == .soon ? Color(white: 0.36) : Theme.secondary)
                     }
                 }
             }
+            Spacer()
+            switch st {
+            case .on:
+                Text(who(r)).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.good)
+                if r.connectable { Button("Desconectar") { disconnect(r.id) }.controlSize(.small) }
+            case .off:
+                if connecting == r.id {
+                    ProgressView().controlSize(.small)
+                    Text("Termina en el navegador…").font(.caption).foregroundStyle(Theme.secondary)
+                    Button("Cancelar") { watcher?.cancel(); connecting = nil }.buttonStyle(.borderless)
+                } else {
+                    Button("Conectar") { connect(r.id) }.buttonStyle(.borderedProminent).disabled(connecting != nil)
+                }
+            case .feedOff:
+                Text("Configúralo en Distribución").font(.caption).foregroundStyle(Theme.secondary)
+            case .soon:
+                Text("muy pronto").font(.caption).foregroundStyle(Color(white: 0.45))
+            }
         }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.stroke))
+        .opacity(st == .soon ? 0.6 : 1)
     }
 
-    private func display(_ net: String, _ user: String?) -> String {
-        guard let user, !user.isEmpty else { return "Conectado" }
-        return net == "instagram" ? "@\(user)" : user
+    private func who(_ r: Row) -> String {
+        let a = accounts[r.id]
+        if r.id == "feed" { return "Listo" }
+        if r.id == "instagram", let u = a?.username, !u.isEmpty { return "@\(u)" }
+        return a?.username ?? "Conectado"
     }
-
-    // MARK: Acciones
 
     private func load() async {
         available = await PrePodClient.shared.pubNetworks()
-        do {
-            accounts = try await PrePodClient.shared.pubAccounts(slug: slug)
-            error = nil
-        } catch { self.error = error.localizedDescription }
+        do { accounts = try await PrePodClient.shared.pubAccounts(slug: slug); error = nil }
+        catch { self.error = error.localizedDescription }
         loaded = true
     }
 
@@ -110,14 +121,10 @@ struct RedesTab: View {
                 for _ in 0..<100 {
                     try await Task.sleep(nanoseconds: 3_000_000_000)
                     let acc = try await PrePodClient.shared.pubAccounts(slug: slug)
-                    if acc[net]?.connected == true {
-                        accounts = acc
-                        connecting = nil
-                        return
-                    }
+                    if acc[net]?.connected == true { accounts = acc; connecting = nil; return }
                 }
                 connecting = nil
-                error = "No vimos la conexión. Si ya diste el permiso, toca actualizar."
+                error = "No vimos la conexión. Si ya diste el permiso, vuelve a entrar a Redes."
             } catch is CancellationError {
             } catch {
                 connecting = nil

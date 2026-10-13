@@ -115,6 +115,7 @@ private struct StarButton: View {
     let done: Bool
     let toggle: () -> Void
     let connect: () -> Void
+    let open: () -> Void
     @State private var beat = false
 
     var body: some View {
@@ -133,14 +134,21 @@ private struct StarButton: View {
                 }
                 .frame(width: 64, height: 64)
                 .shadow(color: .white.opacity(on ? (done ? 0.85 : 0.5) : 0), radius: on ? (done ? 18 : 11) : 0)
-                .scaleEffect(pulsing && beat ? 1.12 : 1)
-                .animation(pulsing ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true) : .default, value: beat)
+                .scaleEffect(pulsing && beat ? 1.12 : (done ? 1.06 : 1))
+                .animation(pulsing ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true) : .spring(response: 0.35, dampingFraction: 0.6), value: beat)
+                .animation(.spring(response: 0.35, dampingFraction: 0.6), value: on)
+                .animation(.easeOut(duration: 0.6), value: done)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!(online && eligible))
             .accessibilityLabel(star.name + (on ? ", elegida" : ""))
-            Text(star.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(labelColor).lineLimit(1)
+            .contextMenu { Button("Ver detalles…", action: open) }
+            .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in open() })
+            Button(action: open) {
+                Text(star.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(labelColor).lineLimit(1)
+            }
+            .buttonStyle(.plain).help("Ver esta red")
             if !online {
                 Button("Conectar", action: connect).buttonStyle(.plain).font(.caption).foregroundStyle(Theme.secondary)
             }
@@ -178,6 +186,9 @@ struct PubHomeView: View {
     @State private var phase: Phase = .choose
     @State private var progress = 0.0
     @State private var postsVersion = 0
+    @State private var panel: PubStar?                  // panel de una estrella (al tocar su nombre o mantener)
+    @State private var signatures: [String: String] = [:]
+    @State private var posts: [PrePodClient.PubPost] = []
 
     private var project: Project? {
         guard let projectId else { return nil }
@@ -220,13 +231,15 @@ struct PubHomeView: View {
                             unlinked(project)
                         } else if let project {
                             constellation(project)
+                                .overlay(alignment: .top) { if let st = panel { starPanel(st) } }
+                                .zIndex(1)
                             chooser(project)
                             composer
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let slug {
-                        PubPostsList(slug: slug).id("\(slug)-\(postsVersion)").frame(width: 300)
+                        PubPostsList(slug: slug, onLoaded: { posts = $0 }).id("\(slug)-\(postsVersion)").frame(width: 300)
                     }
                 }
             }
@@ -310,11 +323,12 @@ struct PubHomeView: View {
                     let y = 40 + 120 * (1 - sqrt(max(0, 1 - u * u * 0.82)))
                     StarButton(star: s, online: online(s), eligible: eligible(s), on: isOn(s),
                                pulsing: phase == .sending && isOn(s), done: phase == .done && isOn(s),
-                               toggle: { toggle(s) }, connect: { app.section = .pre })
+                               toggle: { toggle(s) }, connect: { app.section = .pre },
+                               open: { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { panel = panel?.id == s.id ? nil : s } })
                         .position(x: x, y: y + 58 - 32)     // el centro de la estrella cae en (x, y)
                 }
                 VStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.15))
+                    centerThumb(p)
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(white: 0.22)))
                         .overlay(alignment: isEpisode ? .bottomTrailing : .bottom) {
                             Text(currentDuration(p)).font(.system(size: 12, weight: .bold))
@@ -334,6 +348,15 @@ struct PubHomeView: View {
         .padding(.horizontal, 12).padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 22).fill(Color(white: 0.105)))
         .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color(white: 0.16)))
+    }
+
+    @ViewBuilder
+    private func centerThumb(_ p: Project) -> some View {
+        switch choice {
+        case .episode: PubThumb(project: p, size: CGSize(width: 220, height: 124), radius: 12)
+        case .reel(let id): PubThumb(project: p, reel: p.reels.first { $0.id == id }, size: CGSize(width: 74, height: 132), radius: 12)
+        case .file: RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.15)).frame(width: 220, height: 124)
+        }
     }
 
     private func toggle(_ s: PubStar) {
@@ -358,6 +381,114 @@ struct PubHomeView: View {
         }
     }
 
+    // MARK: Panel de una estrella
+
+    private func starPanel(_ s: PubStar) -> some View {
+        let acc = accounts[s.account]
+        let mine = posts.filter { PubStar.of(platform: $0.platform, kind: $0.kind)?.id == s.id || ($0.platform == "feed" && s.platform == "feed") }
+        let ownAccount = s.platform != "feed"
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                ZStack {
+                    StarShape().fill(online(s) ? Color.white : .clear)
+                    if !online(s) { StarShape().stroke(Color(white: 0.4), style: StrokeStyle(lineWidth: 1.4, dash: [3, 3])) }
+                    PubGlyph(id: s.id).frame(width: 12, height: 12).foregroundStyle(online(s) ? Color(white: 0.07) : Color(white: 0.5)).offset(y: 2)
+                }
+                .frame(width: 30, height: 30)
+                Text(s.name).font(.system(size: 20, weight: .heavy))
+                Spacer()
+                if let u = profileURL(s) { Link("Ver perfil ↗", destination: u).font(.system(size: 13, weight: .semibold)) }
+                Button { withAnimation { panel = nil } } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+            }
+            HStack(spacing: 12) {
+                Circle().fill(Color(white: 0.17)).frame(width: 36, height: 36)
+                    .overlay(Text(String((acc?.username ?? s.name).prefix(1)).uppercased()).font(.system(size: 14, weight: .heavy)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(online(s) ? (s.account == "instagram" ? "@\(acc?.username ?? "")" : (acc?.username ?? "Conectado")) : "Sin conectar")
+                        .font(.system(size: 15, weight: .bold))
+                    Text(accountNote(s)).font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                if ownAccount {
+                    Button(online(s) ? "Cambiar" : "Conectar") { app.section = .pre }.controlSize(.small)
+                } else if !online(s) {
+                    Button("Configurar") { app.section = .pre }.controlSize(.small)
+                }
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color(red: 0.07, green: 0.07, blue: 0.09)))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(white: 0.16)))
+            if s.platform != "feed" || true {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SIEMPRE AL FINAL").font(.system(size: 11, weight: .bold)).kerning(1.2).foregroundStyle(Theme.secondary)
+                    TextEditor(text: Binding(get: { signatures[s.platform] ?? "" }, set: { signatures[s.platform] = $0 }))
+                        .font(.system(size: 14)).scrollContentBackground(.hidden).padding(8).frame(height: 64)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.07, green: 0.07, blue: 0.09)))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(white: 0.2)))
+                    Text(s.platform == "feed" ? "Se agrega a las notas de cada episodio." : "Hashtags o firma que van en cada publicación de \(s.name).")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+            if !mine.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LO ÚLTIMO").font(.system(size: 11, weight: .bold)).kerning(1.2).foregroundStyle(Theme.secondary)
+                    ForEach(mine.prefix(3)) { p in
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(p.title).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                                Text(PubPostsList.when(p)).font(.system(size: 12)).foregroundStyle(p.status == "scheduled" ? Color(red: 0.957, green: 0.780, blue: 0.439) : Theme.secondary)
+                            }
+                            Spacer()
+                            if let u = p.result_url.flatMap(URL.init), p.platform != "feed" { Link("Ver", destination: u).font(.caption) }
+                        }
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button(isOn(s) ? "Quitar de esta publicación" : "Incluir en esta publicación") { toggle(s); withAnimation { panel = nil } }
+                    .buttonStyle(.borderedProminent).disabled(!(online(s) && eligible(s)) || phase != .choose)
+                    .foregroundStyle(.black)
+            }
+        }
+        .padding(20)
+        .frame(width: 440)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Color(white: 0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color(white: 0.2)))
+        .shadow(color: .black.opacity(0.5), radius: 30, y: 16)
+        .padding(.top, 60)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .onDisappear { saveSignatures() }
+    }
+
+    private func accountNote(_ s: PubStar) -> String {
+        switch s.id {
+        case "spotify", "apple": return "Lee el feed del podcast"
+        case "youtube": return "Tu canal · también publica los Shorts"
+        case "shorts": return "Tu canal · también publica el episodio"
+        case "instagram": return "Cuenta profesional · también publica los Reels"
+        case "reels": return "Cuenta profesional · también publica la portada"
+        case "tiktok": return "Los reels llegan a tu bandeja"
+        default: return ""
+        }
+    }
+
+    private func profileURL(_ s: PubStar) -> URL? {
+        guard let u = accounts[s.account]?.username, online(s) else { return nil }
+        switch s.account {
+        case "instagram": return URL(string: "https://www.instagram.com/\(u)/")
+        case "tiktok": return URL(string: "https://www.tiktok.com/")
+        case "youtube": return URL(string: "https://studio.youtube.com/")
+        default: return nil
+        }
+    }
+
+    private func saveSignatures() {
+        guard let slug else { return }
+        let sigs = signatures
+        Task { try? await PrePodClient.shared.setPubSignatures(slug: slug, sigs) }
+    }
+
     // MARK: Qué publicas
 
     private func chooser(_ p: Project) -> some View {
@@ -365,9 +496,13 @@ struct PubHomeView: View {
             Text("QUÉ PUBLICAS").font(.system(size: 12, weight: .bold)).kerning(1.4).foregroundStyle(Theme.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    tile(.episode, "Episodio completo", "16:9 · \(EditEngine.clock(p.duration))", wide: true)
+                    tile(.episode, "Episodio completo", "16:9 · \(EditEngine.clock(p.duration))", wide: true) {
+                        PubThumb(project: p, size: CGSize(width: 180, height: 101))
+                    }
                     ForEach(p.reels) { r in
-                        tile(.reel(r.id), r.title.isEmpty ? "Reel" : r.title, "Reel · \(EditEngine.clock(r.length))", wide: false)
+                        tile(.reel(r.id), r.title.isEmpty ? "Reel" : r.title, "Reel · \(EditEngine.clock(r.length))", wide: false) {
+                            PubThumb(project: p, reel: r, size: CGSize(width: 57, height: 101))
+                        }
                     }
                     Button { chooseFile() } label: {
                         VStack(spacing: 8) {
@@ -387,10 +522,10 @@ struct PubHomeView: View {
         }
     }
 
-    private func tile(_ c: Choice, _ name: String, _ meta: String, wide: Bool) -> some View {
+    private func tile<T: View>(_ c: Choice, _ name: String, _ meta: String, wide: Bool, @ViewBuilder thumb: () -> T) -> some View {
         Button { pick(c) } label: {
             VStack(alignment: .leading, spacing: 0) {
-                RoundedRectangle(cornerRadius: 9).fill(Color(white: 0.17)).frame(width: wide ? 180 : 57, height: 101)
+                thumb()
                 Text(name).font(.system(size: 14, weight: .bold)).lineLimit(2).multilineTextAlignment(.leading).padding(.top, 8)
                 Text(meta).font(.system(size: 12)).foregroundStyle(Theme.secondary).padding(.top, 2)
             }
@@ -404,7 +539,7 @@ struct PubHomeView: View {
     }
 
     private func pick(_ c: Choice) {
-        choice = c
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { choice = c }
         reset()
     }
 
@@ -576,6 +711,7 @@ struct PubHomeView: View {
             do {
                 accounts = try await PrePodClient.shared.pubAccounts(slug: slug)
                 if phase == .choose { picked = Set(PubStar.all.filter { online($0) && eligible($0) }.map(\.id)) }
+                signatures = (try? await PrePodClient.shared.pubSignatures(slug: slug)) ?? [:]
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -585,6 +721,7 @@ struct PubHomeView: View {
 
 struct PubPostsList: View {
     let slug: String
+    var onLoaded: (([PrePodClient.PubPost]) -> Void)? = nil
     @State private var posts: [PrePodClient.PubPost] = []
     @State private var loaded = false
     @State private var error: String?
@@ -599,8 +736,9 @@ struct PubPostsList: View {
             }
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
             if loaded && posts.isEmpty { Text("Todavía no hay publicaciones.").foregroundStyle(Theme.secondary) }
-            ForEach(posts) { p in row(p) }
+            ForEach(posts) { p in row(p).transition(.opacity.combined(with: .move(edge: .top))) }
         }
+        .animation(.easeOut(duration: 0.4), value: posts.map(\.id))
         .task { await load() }
         .task {
             while !Task.isCancelled {
@@ -663,11 +801,13 @@ struct PubPostsList: View {
         default: return Color(red: 0.957, green: 0.780, blue: 0.439)
         }
     }
-    private func date(_ p: PrePodClient.PubPost) -> Date? { p.scheduled_at.flatMap { ISO8601DateFormatter().date(from: $0) } }
-    private func when(_ p: PrePodClient.PubPost) -> String { date(p)?.formatted(date: .abbreviated, time: .shortened) ?? "" }
+    private func date(_ p: PrePodClient.PubPost) -> Date? { Self.date(p) }
+    private func when(_ p: PrePodClient.PubPost) -> String { Self.when(p) }
+    static func date(_ p: PrePodClient.PubPost) -> Date? { p.scheduled_at.flatMap { ISO8601DateFormatter().date(from: $0) } }
+    static func when(_ p: PrePodClient.PubPost) -> String { date(p)?.formatted(date: .abbreviated, time: .shortened) ?? "" }
 
     private func load() async {
-        do { posts = try await PrePodClient.shared.pubPosts(slug: slug); error = nil }
+        do { posts = try await PrePodClient.shared.pubPosts(slug: slug); error = nil; onLoaded?(posts) }
         catch { self.error = error.localizedDescription }
         loaded = true
     }

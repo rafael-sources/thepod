@@ -261,6 +261,15 @@ actor PrePodClient {
         _ = try await send("POST", "/api/pubpod/podcasts/\(slug)/posts/\(id)/\(action)")
     }
 
+    /// Texto fijo por destino (hashtags, firma) que el servidor agrega al final de cada publicación.
+    func pubSignatures(slug: String) async throws -> [String: String] {
+        struct Out: Decodable { let signatures: [String: String] }
+        return try JSONDecoder().decode(Out.self, from: await send("GET", "/api/pubpod/podcasts/\(slug)/prefs")).signatures
+    }
+    func setPubSignatures(slug: String, _ sigs: [String: String]) async throws {
+        _ = try await send("POST", "/api/pubpod/podcasts/\(slug)/prefs", json: ["signatures": sigs])
+    }
+
     func pubDisconnect(slug: String, network: String) async throws {
         if network == "youtube" {
             _ = try await send("POST", "/api/youtube/disconnect", json: ["slug": slug])
