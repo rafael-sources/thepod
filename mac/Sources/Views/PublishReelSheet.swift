@@ -12,6 +12,9 @@ struct PublishReelSheet: View {
                         Net(id: "tiktok", name: "TikTok", symbol: "music.note")]
 
     @State private var accounts: [String: PrePodClient.PubAccount]?
+    @State private var available: [String: Bool] = [:]
+    @State private var connecting: String?
+    @State private var watcher: Task<Void, Never>?
     @State private var loadError: String?
     @State private var pick: [String: Bool] = [:]
     @State private var captions: [String: String] = [:]
@@ -75,6 +78,7 @@ struct PublishReelSheet: View {
         .padding(22)
         .frame(width: 520)
         .onAppear(perform: load)
+        .onDisappear { watcher?.cancel() }
         .onChange(of: session.isBusy) { _, busy in
             // Si falló, el error queda aquí en la ventana y no detrás de ella
             if sent, !busy, session.reelPosts == nil, let msg = session.errorMessage {
@@ -88,7 +92,7 @@ struct PublishReelSheet: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
             if connected.isEmpty {
-                Text("Este podcast todavía no tiene redes conectadas. Conéctalas una vez en prePod → tu podcast → Redes.")
+                Text("Conecta tus redes una sola vez: se abre el navegador para que des el permiso y vuelves aquí.")
                     .foregroundStyle(Theme.secondary)
             }
             ForEach(nets) { n in
@@ -114,7 +118,19 @@ struct PublishReelSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: n.symbol).foregroundStyle(Theme.secondary)
                         Text(n.name).foregroundStyle(Theme.secondary)
-                        Text("· sin conectar").font(.caption).foregroundStyle(Theme.secondary)
+                        Spacer()
+                        if available[n.id] == false {
+                            Text("muy pronto").font(.caption).foregroundStyle(Theme.secondary)
+                        } else if connecting == n.id {
+                            ProgressView().controlSize(.small)
+                            Text("Termina en el navegador…").font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            Button("Conectar") { connect(n.id) }.controlSize(.small)
+                        }
+                    }
+                    if connecting == n.id && n.id == "instagram" {
+                        Text("Usa una cuenta profesional de Instagram (creador o empresa).")
+                            .font(.caption).foregroundStyle(Theme.secondary)
                     }
                 }
             }
@@ -173,6 +189,7 @@ struct PublishReelSheet: View {
         let suggested = reel.hook?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? reel.title
         Task {
             do {
+                available = await PrePodClient.shared.pubNetworks()
                 let acc = try await PrePodClient.shared.pubAccounts(slug: slug)
                 accounts = acc
                 for n in nets {
@@ -181,6 +198,36 @@ struct PublishReelSheet: View {
                 }
             } catch {
                 loadError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Abre la página de la red en el navegador y espera a que la conexión aparezca (hasta 5 minutos).
+    private func connect(_ net: String) {
+        guard let slug else { return }
+        failure = nil
+        connecting = net
+        watcher?.cancel()
+        watcher = Task {
+            do {
+                let url = try await PrePodClient.shared.connectURL(network: net, slug: slug)
+                NSWorkspace.shared.open(url)
+                for _ in 0..<100 {
+                    try await Task.sleep(nanoseconds: 3_000_000_000)
+                    let acc = try await PrePodClient.shared.pubAccounts(slug: slug)
+                    if acc[net]?.connected == true {
+                        accounts = acc
+                        pick[net] = true
+                        connecting = nil
+                        return
+                    }
+                }
+                connecting = nil
+                failure = "No vimos la conexión. Si ya diste el permiso, cierra y vuelve a abrir esta ventana."
+            } catch is CancellationError {
+            } catch {
+                connecting = nil
+                failure = error.localizedDescription
             }
         }
     }

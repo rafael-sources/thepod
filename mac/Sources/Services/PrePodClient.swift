@@ -247,6 +247,41 @@ actor PrePodClient {
         let scheduled_at: String?
         let result_url: String?
         let error: String?
+        var caption: String? = nil
+    }
+
+    func pubPosts(slug: String) async throws -> [PubPost] {
+        struct Out: Decodable { let posts: [PubPost] }
+        return try JSONDecoder().decode(Out.self, from: await send("GET", "/api/pubpod/podcasts/\(slug)/posts")).posts
+    }
+
+    /// action: "cancel" (programado) o "retry" (falló).
+    func pubPostAction(slug: String, id: Int, action: String) async throws {
+        _ = try await send("POST", "/api/pubpod/podcasts/\(slug)/posts/\(id)/\(action)")
+    }
+
+    func pubDisconnect(slug: String, network: String) async throws {
+        if network == "youtube" {
+            _ = try await send("POST", "/api/youtube/disconnect", json: ["slug": slug])
+        } else {
+            _ = try await send("POST", "/api/pubpod/podcasts/\(slug)/accounts/\(network)/disconnect")
+        }
+    }
+
+    /// Qué redes tiene habilitadas thePod en el servidor (las que aún no, se muestran como «muy pronto»).
+    func pubNetworks() async -> [String: Bool] {
+        guard let d = try? await send("GET", "/api/pubpod/networks") else { return [:] }
+        return (try? JSONDecoder().decode([String: Bool].self, from: d)) ?? [:]
+    }
+
+    /// Página de la red para dar el permiso a thePod (se abre en el navegador).
+    func connectURL(network: String, slug: String) async throws -> URL {
+        let path = network == "youtube" ? "/api/youtube/auth-url?slug=\(slug)" : "/api/pubpod/\(network)/auth-url?slug=\(slug)"
+        let obj = try JSONSerialization.jsonObject(with: await send("GET", path)) as? [String: Any]
+        guard let s = obj?["auth_url"] as? String, let u = URL(string: s) else {
+            throw Failure(message: "No se pudo abrir la conexión con esa red")
+        }
+        return u
     }
 
     func pubAccounts(slug: String) async throws -> [String: PubAccount] {

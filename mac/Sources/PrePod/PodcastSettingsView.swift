@@ -22,6 +22,7 @@ struct PodcastSettingsView: View {
                 Text("Plantillas").tag(6)
                 Text("Página").tag(7)
                 Text("Distribución").tag(5)
+                Text("Redes").tag(8)
             }
             .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 860)
             ScrollView {
@@ -34,6 +35,7 @@ struct PodcastSettingsView: View {
                     case 4: SoundboardTab(slug: slug)
                     case 6: TemplatesTab(slug: slug)
                     case 7: LandingTab(slug: slug)
+                    case 8: RedesTab(slug: slug)
                     default: DistributionTab(slug: slug)
                     }
                 }
