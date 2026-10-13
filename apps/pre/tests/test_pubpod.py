@@ -451,3 +451,14 @@ def test_reel_cannot_go_to_feed(client):
     body = {"slug": SLUG, "upload_id": _upload_named(client, "r.mp4"), "title": "R",
             "targets": [{"platform": "feed", "caption": ""}]}
     assert "un reel va a" in client.post("/api/pubpod/reels", json=body).get_json()["error"]
+
+
+def test_signature_is_appended_once(client):
+    _connect_ig()
+    r = client.post(f"/api/pubpod/podcasts/{SLUG}/prefs", json={"signatures": {"instagram": "#podcast #letrachica"}})
+    assert r.get_json()["signatures"]["instagram"] == "#podcast #letrachica"
+    _reel(client, targets=[{"platform": "instagram", "caption": "Hola"}])
+    _reel(client, targets=[{"platform": "instagram", "caption": "Ya trae #podcast #letrachica"}])
+    caps = [r[0] for r in pubpod._db(SLUG).execute("SELECT caption FROM pub_posts ORDER BY id")]
+    assert caps[0] == "Hola\n\n#podcast #letrachica"
+    assert caps[1] == "Ya trae #podcast #letrachica"

@@ -4779,40 +4779,18 @@ var DistributionPanel = {
 
 
 /* ==========================================================================
-   pubPod — Redes: publicar y programar reels
+   prePod — Redes: conectar las cuentas del podcast (publicar se hace en pubPod)
    ========================================================================== */
 
-var PUB_NETS = [
-  { key: "instagram", name: "Instagram", ico: "📸" },
-  { key: "youtube", name: "YouTube Shorts", ico: "▶️" },
-  { key: "tiktok", name: "TikTok", ico: "🎵" },
+var PUB_STAR = '<svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" style="flex:0 0 auto"><polygon points="24,2.5 29.8,17.4 45.5,18.1 33.2,28 37.5,43.5 24,34.7 10.5,43.5 14.8,28 2.5,18.1 18.2,17.4" fill="FILL" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-dasharray="DASH"></polygon></svg>';
+
+var REDES_ROWS = [
+  { key: "feed", name: "Feed del podcast", note: "Spotify y Apple Podcasts lo leen solos", stars: ["Spotify", "Apple Podcasts"], connectable: false },
+  { key: "youtube", name: "YouTube", note: "Tu canal: los episodios y los Shorts", stars: ["YouTube", "Shorts"], connectable: true },
+  { key: "instagram", name: "Instagram", note: "Cuenta profesional: la portada y los Reels", stars: ["Instagram", "Reels"], connectable: true },
+  { key: "tiktok", name: "TikTok", note: "Los reels llegan a tu bandeja y los publicas desde el teléfono", stars: ["TikTok"], connectable: true },
+  { key: "facebook", name: "Facebook", note: "", stars: ["Facebook"], connectable: true },
 ];
-
-var PUB_STATUS = {
-  scheduled: "Programado",
-  publishing: "Publicando…",
-  published: "Publicado",
-  private: "Subido en privado",
-  inbox: "En tu bandeja de TikTok",
-  error: "No se publicó",
-  cancelled: "Cancelado",
-};
-
-async function pubUploadChunked(file, onProgress) {
-  const CHUNK = 8 * 1024 * 1024;
-  const init = await api("/api/mac/uploads", { method: "POST", body: { filename: file.name, size: file.size } });
-  const id = init.upload_id;
-  for (let i = 0, off = 0; off < file.size; i++, off += CHUNK) {
-    const res = await fetch(`/api/mac/uploads/${id}/chunk?index=${i}`, {
-      method: "PUT", credentials: "same-origin", body: file.slice(off, off + CHUNK),
-    });
-    if (!res.ok) throw new Error("se cortó la subida, intenta de nuevo");
-    onProgress(Math.min(99, Math.round(((off + CHUNK) / file.size) * 100)));
-  }
-  await api(`/api/mac/uploads/${id}/finish`, { method: "POST" });
-  onProgress(100);
-  return id;
-}
 
 var RedesPanel = {
   props: { slug: String },
@@ -4820,232 +4798,76 @@ var RedesPanel = {
   setup(props) {
     const nets = ref({});
     const accounts = ref({});
-    const posts = ref([]);
     const error = ref("");
-    const busy = ref(false);
-    const progress = ref(0);
-    const form = reactive({ file: null, title: "", when: "now", date: "", pick: {}, captions: {} });
-    let timer = null;
+    const connecting = ref("");
 
-    async function loadAccounts() {
+    async function load() {
       try {
         nets.value = await api("/api/pubpod/networks");
         accounts.value = await api(`/api/pubpod/podcasts/${props.slug}/accounts`);
-        for (const n of PUB_NETS) {
-          if (form.pick[n.key] === undefined) form.pick[n.key] = !!(accounts.value[n.key] || {}).connected;
-          if (form.captions[n.key] === undefined) form.captions[n.key] = "";
-        }
       } catch (e) { error.value = e.message; }
     }
-    async function loadPosts() {
-      try { posts.value = (await api(`/api/pubpod/podcasts/${props.slug}/posts`)).posts; }
-      catch (e) { error.value = e.message; }
+    function state(r) {
+      const a = accounts.value[r.key] || {};
+      if (a.connected) return "on";
+      if (r.key === "feed") return "feed-off";
+      return nets.value[r.key] ? "off" : "soon";
     }
-    const connected = computed(() => PUB_NETS.filter(n => (accounts.value[n.key] || {}).connected));
-    const chosen = computed(() => connected.value.filter(n => form.pick[n.key]));
-
+    function star(r, name) {
+      const st = state(r);
+      const svg = PUB_STAR.replace("FILL", st === "on" ? "#FFFFFF" : "none").replace("DASH", st === "soon" ? "4 4" : "none");
+      const color = st === "on" ? "#FFFFFF" : st === "soon" ? "#5A5A64" : "var(--paper-dim)";
+      return `<span style="display:inline-flex;align-items:center;gap:6px;color:${color};font-size:13px;font-weight:600;margin-right:14px">${svg}${name}</span>`;
+    }
+    function who(r) {
+      const a = accounts.value[r.key] || {};
+      if (r.key === "feed") return "Listo";
+      return r.key === "instagram" && a.username ? "@" + a.username : (a.username || "Conectado");
+    }
     async function connectNet(net) {
-      error.value = "";
+      error.value = ""; connecting.value = net;
       try {
         const res = await api(net === "youtube" ? `/api/youtube/auth-url?slug=${props.slug}` : `/api/pubpod/${net}/auth-url?slug=${props.slug}`);
         const popup = window.open(res.auth_url, "pubpod-" + net, "width=600,height=760");
-        const done = () => { window.removeEventListener("message", onMsg); clearInterval(iv); loadAccounts(); };
-        const onMsg = (ev) => { if (ev.data === "pubpod-connected" || ev.data === "pubpod-error" || ev.data === "youtube-connected") done(); };
+        const done = () => { window.removeEventListener("message", onMsg); clearInterval(iv); connecting.value = ""; load(); };
+        const onMsg = (ev) => { if (["pubpod-connected", "pubpod-error", "youtube-connected"].includes(ev.data)) done(); };
         window.addEventListener("message", onMsg);
         const iv = setInterval(() => { if (!popup || popup.closed) done(); }, 1000);
-      } catch (e) { error.value = e.message; }
+      } catch (e) { error.value = e.message; connecting.value = ""; }
     }
     async function disconnect(net) {
       if (!confirm("¿Desconectar esta cuenta de thePod?")) return;
-      try {
-        await api(`/api/pubpod/podcasts/${props.slug}/accounts/${net}/disconnect`, { method: "POST" });
-        form.pick[net] = false;
-        loadAccounts();
-      } catch (e) { error.value = e.message; }
+      try { await api(`/api/pubpod/podcasts/${props.slug}/accounts/${net}/disconnect`, { method: "POST" }); load(); }
+      catch (e) { error.value = e.message; }
     }
-
-    function onFile(ev) {
-      const f = ev.target.files && ev.target.files[0];
-      form.file = f || null;
-      if (f && !form.title) form.title = f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
-    }
-
-    async function submit() {
-      error.value = "";
-      if (!form.file) { error.value = "Elige el video del reel."; return; }
-      if (!form.title.trim()) { error.value = "Ponle un título al reel."; return; }
-      if (!chosen.value.length) { error.value = "Marca al menos una red."; return; }
-      let scheduled_at = null;
-      if (form.when === "later") {
-        if (!form.date) { error.value = "Elige fecha y hora."; return; }
-        const d = new Date(form.date);
-        if (isNaN(d) || d < new Date()) { error.value = "Esa fecha ya pasó."; return; }
-        scheduled_at = d.toISOString();
-      }
-      busy.value = true; progress.value = 0;
-      try {
-        const upload_id = await pubUploadChunked(form.file, p => (progress.value = p));
-        await api("/api/pubpod/reels", {
-          method: "POST",
-          body: {
-            slug: props.slug, upload_id, title: form.title.trim(), scheduled_at,
-            targets: chosen.value.map(n => ({ platform: n.key, caption: form.captions[n.key] || "" })),
-          },
-        });
-        form.file = null; form.title = ""; form.when = "now"; form.date = "";
-        for (const n of PUB_NETS) form.captions[n.key] = "";
-        const input = document.getElementById("pub-file");
-        if (input) input.value = "";
-        await loadPosts();
-      } catch (e) { error.value = e.message; }
-      finally { busy.value = false; }
-    }
-
-    async function act(p, what) {
-      if (what === "cancel" && !confirm("¿Cancelar esta publicación?")) return;
-      try {
-        await api(`/api/pubpod/podcasts/${props.slug}/posts/${p.id}/${what}`, { method: "POST" });
-        loadPosts();
-      } catch (e) { error.value = e.message; }
-    }
-
-    function copy(text) { navigator.clipboard.writeText(text || ""); }
-    function netOf(key) { return PUB_NETS.find(n => n.key === key) || { name: key, ico: "•" }; }
-    function statusText(p) {
-      if (p.status === "scheduled" && new Date(p.scheduled_at) <= new Date()) return "En cola";
-      return PUB_STATUS[p.status] || p.status;
-    }
-    function when(p) {
-      return new Date(p.scheduled_at).toLocaleString("es", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-    }
-
-    onMounted(() => {
-      loadAccounts(); loadPosts();
-      timer = setInterval(() => {
-        if (posts.value.some(p => p.status === "publishing" || (p.status === "scheduled" && new Date(p.scheduled_at) <= new Date(Date.now() + 60000)))) loadPosts();
-      }, 10000);
-    });
-    onBeforeUnmount(() => clearInterval(timer));
-
-    return { PUB_NETS, nets, accounts, posts, error, busy, progress, form, connected, chosen,
-             connectNet, disconnect, copy, onFile, submit, act, netOf, statusText, when };
+    onMounted(load);
+    return { REDES_ROWS, accounts, error, connecting, state, star, who, connectNet, disconnect };
   },
   template: `
-    <div style="padding: 20px; max-width: 760px;">
+    <div style="padding: 20px; max-width: 820px;">
       <h3 style="margin: 0 0 6px 0;">Redes</h3>
       <p style="color: var(--paper-dim); font-size: 13px; margin: 0 0 16px 0;">
-        Publica tus reels en tus redes, al momento o programados.
+        Conecta aquí las cuentas del podcast, una sola vez. Cada cuenta enciende sus estrellas en pubPod.
       </p>
       <div v-if="error" class="error" style="margin-bottom: 12px; font-size: 13px;">{{ error }}</div>
-
-      <div class="dist-platforms" style="margin-bottom: 22px;">
-        <div class="dist-card">
-          <div class="dist-card-header">
-            <span class="dist-platform-icon">📸</span><strong>Instagram</strong>
-            <span class="dist-badge" :class="accounts.instagram && accounts.instagram.connected ? 'dist-badge--connected' : 'dist-badge--not_configured'">
-              {{ accounts.instagram && accounts.instagram.connected ? '@' + accounts.instagram.username : 'Sin conectar' }}
-            </span>
+      <div class="dist-platforms">
+        <div v-for="r in REDES_ROWS" :key="r.key" class="dist-card" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;" :style="state(r) === 'soon' ? 'opacity:.6' : ''">
+          <div style="flex: 0 0 170px;">
+            <strong style="font-size:15px">{{ r.name }}</strong>
+            <div v-if="r.note" style="font-size:12px;color:var(--paper-dim);margin-top:2px">{{ r.note }}</div>
           </div>
-          <div class="dist-card-body" style="font-size: 13px;">
-            <template v-if="accounts.instagram && accounts.instagram.connected">
-              <button class="ghost" style="font-size: 12px;" @click="disconnect('instagram')">Desconectar</button>
-            </template>
-            <template v-else-if="nets.instagram">
-              <p style="color: var(--paper-dim); margin: 6px 0 10px;">Necesitas una cuenta profesional de Instagram (creador o empresa).</p>
-              <button class="publish-btn" @click="connectNet('instagram')">Conectar Instagram</button>
-            </template>
-            <p v-else style="color: var(--paper-dim); margin: 6px 0 0;">Muy pronto.</p>
-          </div>
-        </div>
-        <div class="dist-card">
-          <div class="dist-card-header">
-            <span class="dist-platform-icon">▶️</span><strong>YouTube Shorts</strong>
-            <span class="dist-badge" :class="accounts.youtube && accounts.youtube.connected ? 'dist-badge--connected' : 'dist-badge--not_configured'">
-              {{ accounts.youtube && accounts.youtube.connected ? accounts.youtube.username : 'Sin conectar' }}
-            </span>
-          </div>
-          <div class="dist-card-body" style="font-size: 13px;">
-            <p style="color: var(--paper-dim); margin: 6px 0 10px;">Es el mismo canal que usas para los episodios.</p>
-            <button v-if="accounts.youtube && accounts.youtube.connected" class="ghost" style="font-size: 12px;" @click="disconnect('youtube')">Desconectar</button>
-            <button v-else-if="nets.youtube" class="publish-btn" @click="connectNet('youtube')">Conectar YouTube</button>
-            <p v-else style="color: var(--paper-dim); margin: 0;">Muy pronto.</p>
-          </div>
-        </div>
-        <div class="dist-card">
-          <div class="dist-card-header">
-            <span class="dist-platform-icon">🎵</span><strong>TikTok</strong>
-            <span class="dist-badge" :class="accounts.tiktok && accounts.tiktok.connected ? 'dist-badge--connected' : 'dist-badge--not_configured'">
-              {{ accounts.tiktok && accounts.tiktok.connected ? (accounts.tiktok.username || 'Conectado') : 'Sin conectar' }}
-            </span>
-          </div>
-          <div class="dist-card-body" style="font-size: 13px;">
-            <p style="color: var(--paper-dim); margin: 6px 0 10px;">El reel llega a tu bandeja de TikTok y lo terminas de publicar desde el teléfono.</p>
-            <template v-if="accounts.tiktok && accounts.tiktok.connected">
-              <button class="ghost" style="font-size: 12px;" @click="disconnect('tiktok')">Desconectar</button>
-            </template>
-            <button v-else-if="nets.tiktok" class="publish-btn" @click="connectNet('tiktok')">Conectar TikTok</button>
-            <p v-else style="color: var(--paper-dim); margin: 0;">Muy pronto.</p>
-          </div>
-        </div>
-        <div class="dist-card" style="opacity: .6;">
-          <div class="dist-card-header">
-            <span class="dist-platform-icon">📘</span><strong>Facebook</strong>
-            <span class="dist-badge dist-badge--not_configured">Muy pronto</span>
-          </div>
+          <div style="flex-grow:1;display:flex;flex-wrap:wrap;" v-html="r.stars.map(n => star(r, n)).join('')"></div>
+          <template v-if="state(r) === 'on'">
+            <span style="font-size:13px;font-weight:600;color:#28a745">{{ who(r) }}</span>
+            <button v-if="r.connectable" class="ghost" style="font-size: 12px;" @click="disconnect(r.key)">Desconectar</button>
+          </template>
+          <button v-else-if="state(r) === 'off' && connecting !== r.key" class="publish-btn" @click="connectNet(r.key)">Conectar</button>
+          <span v-else-if="connecting === r.key" style="font-size:12px;color:var(--paper-dim)">Termina en la otra ventana…</span>
+          <button v-else-if="state(r) === 'feed-off'" class="ghost" style="font-size: 12px;" @click="$emit('go-distribution')">Configurar en Distribución</button>
+          <span v-else style="font-size:13px;color:#6E6E78">muy pronto</span>
         </div>
       </div>
-
-      <div class="dist-card" style="margin-bottom: 22px;">
-        <h4 style="margin: 0 0 12px; font-size: 14px;">Nuevo reel</h4>
-        <div v-if="!connected.length" style="color: var(--paper-dim); font-size: 13px;">Conecta al menos una red para publicar.</div>
-        <template v-else>
-          <label style="display:block; font-size: 12px; color: var(--paper-dim); margin-bottom: 4px;">Video (vertical)</label>
-          <input id="pub-file" type="file" accept="video/mp4,video/quicktime" @change="onFile" :disabled="busy" style="margin-bottom: 12px;" />
-          <label style="display:block; font-size: 12px; color: var(--paper-dim); margin-bottom: 4px;">Título</label>
-          <input v-model="form.title" maxlength="100" :disabled="busy" style="width: 100%; margin-bottom: 12px;" />
-          <div v-for="n in connected" :key="n.key" style="margin-bottom: 10px;">
-            <label style="display:flex; gap: 8px; align-items:center; font-size: 13px; margin-bottom: 4px;">
-              <input type="checkbox" v-model="form.pick[n.key]" :disabled="busy" /> {{ n.ico }} {{ n.name }}
-            </label>
-            <textarea v-if="form.pick[n.key]" v-model="form.captions[n.key]" rows="3" :disabled="busy"
-              :placeholder="n.key === 'youtube' ? 'Descripción del Short' : n.key === 'tiktok' ? 'Texto para pegar en TikTok al publicarlo' : 'Texto del reel, con tus hashtags'"
-              style="width: 100%; font-size: 13px;"></textarea>
-          </div>
-          <div style="display:flex; gap: 14px; align-items:center; flex-wrap: wrap; margin: 6px 0 14px; font-size: 13px;">
-            <label><input type="radio" value="now" v-model="form.when" :disabled="busy" /> Publicar ahora</label>
-            <label><input type="radio" value="later" v-model="form.when" :disabled="busy" /> Programar</label>
-            <input v-if="form.when === 'later'" type="datetime-local" v-model="form.date" :disabled="busy" />
-          </div>
-          <button class="publish-btn" :disabled="busy" @click="submit">
-            {{ busy ? 'Subiendo ' + progress + ' %' : (form.when === 'later' ? 'Programar' : 'Publicar') }}
-          </button>
-        </template>
-      </div>
-
-      <h4 style="margin: 0 0 10px; font-size: 14px;">Publicaciones</h4>
-      <div v-if="!posts.length" style="color: var(--paper-dim); font-size: 13px;">Todavía no hay publicaciones.</div>
-      <div v-for="p in posts" :key="p.id" class="dist-card" style="padding: 12px 14px; margin-bottom: 8px;">
-        <div class="dist-card-header">
-          <span class="dist-platform-icon">{{ netOf(p.platform).ico }}</span>
-          <strong style="font-size: 13px;">{{ p.title }}</strong>
-          <span class="dist-badge" :class="(p.status === 'published' || p.status === 'inbox') ? 'dist-badge--connected' : (p.status === 'error' ? '' : 'dist-badge--pending')"
-                :style="p.status === 'error' ? 'background: rgba(220,53,69,.15); color: #e05563;' : ''">{{ statusText(p) }}</span>
-        </div>
-        <div style="font-size: 12px; color: var(--paper-dim); margin-top: 6px; display:flex; gap: 12px; flex-wrap: wrap; align-items:center;">
-          <span>{{ netOf(p.platform).name }} · {{ when(p) }}</span>
-          <a v-if="p.result_url" :href="p.result_url" target="_blank" rel="noopener" style="color: var(--accent);">Ver publicación</a>
-          <button v-if="p.status === 'scheduled'" class="ghost" style="font-size: 11px;" @click="act(p, 'cancel')">Cancelar</button>
-          <button v-if="p.status === 'error'" class="ghost" style="font-size: 11px;" @click="act(p, 'retry')">Reintentar</button>
-        </div>
-        <div v-if="p.status === 'inbox'" style="font-size: 12px; margin-top: 6px; color: var(--signal);">
-          Abre TikTok en tu teléfono: te llegó una notificación para terminar de publicarlo.
-          <button v-if="p.caption" class="ghost" style="font-size: 11px;" @click="copy(p.caption)">Copiar el texto</button>
-        </div>
-        <div v-if="p.status === 'private'" style="font-size: 12px; margin-top: 6px; color: var(--signal);">
-          YouTube lo dejó en privado mientras thePod espera su aprobación. Ábrelo y cámbialo a «Público».
-        </div>
-        <div v-if="p.error" style="font-size: 12px; margin-top: 6px; color: #e05563;">{{ p.error }}</div>
-      </div>
+      <p style="color: var(--paper-dim); font-size: 13px; margin: 18px 0 0;">Para publicar reels y episodios, abre pubPod.</p>
     </div>
   `,
 };

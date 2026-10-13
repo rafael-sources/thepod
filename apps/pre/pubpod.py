@@ -125,6 +125,8 @@ def _migrate(conn):
         conn.execute(f"INSERT INTO pub_posts ({cols}) SELECT {cols} FROM pub_posts_old")
         conn.execute("DROP TABLE pub_posts_old")
         conn.commit()
+    conn.execute("""CREATE TABLE IF NOT EXISTS pub_prefs (
+        platform TEXT PRIMARY KEY, signature TEXT NOT NULL DEFAULT '')""")
     if "kind" not in {r[1] for r in conn.execute("PRAGMA table_info(pub_posts)")}:
         # «reel» (vertical, Shorts) o «episode» (el episodio completo a YouTube)
         conn.execute("ALTER TABLE pub_posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'reel'")
@@ -465,6 +467,46 @@ def deletion_status():
     )
 
 
+@bp.get("/api/pubpod/podcasts/<slug>/prefs")
+@require_auth
+def get_prefs(slug):
+    """Texto que va siempre al final en cada destino (hashtags, firma)."""
+    denied = _access_error(slug)
+    if denied:
+        return denied
+    conn = _db(slug)
+    try:
+        rows = conn.execute("SELECT platform, signature FROM pub_prefs").fetchall()
+    finally:
+        conn.close()
+    return jsonify({"signatures": {r["platform"]: r["signature"] for r in rows}})
+
+
+@bp.post("/api/pubpod/podcasts/<slug>/prefs")
+@require_auth
+def set_prefs(slug):
+    denied = _access_error(slug)
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    sigs = data.get("signatures")
+    if not isinstance(sigs, dict):
+        return jsonify({"error": "signatures requerido"}), 400
+    conn = _db(slug)
+    try:
+        for net, text in sigs.items():
+            if net not in NETWORKS or not isinstance(text, str):
+                continue
+            conn.execute("INSERT INTO pub_prefs (platform, signature) VALUES (?, ?) "
+                         "ON CONFLICT(platform) DO UPDATE SET signature=excluded.signature",
+                         (net, text.strip()[:1000]))
+        conn.commit()
+        rows = conn.execute("SELECT platform, signature FROM pub_prefs").fetchall()
+    finally:
+        conn.close()
+    return jsonify({"signatures": {r["platform"]: r["signature"] for r in rows}})
+
+
 @bp.post("/api/pubpod/podcasts/<slug>/accounts/<net>/disconnect")
 @require_auth
 def disconnect(slug, net):
@@ -666,6 +708,11 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
 
     conn = _db(slug)
     try:
+        sigs = {r["platform"]: r["signature"] for r in conn.execute("SELECT platform, signature FROM pub_prefs")}
+        for t in targets:
+            sig = (sigs.get(t["platform"]) or "").strip()
+            if sig and sig not in t["caption"]:
+                t["caption"] = (t["caption"].rstrip() + "\n\n" + sig).strip()[:CAPTION_MAX[t["platform"]]]
         ids = []
         for t in targets:
             cur = conn.execute(
