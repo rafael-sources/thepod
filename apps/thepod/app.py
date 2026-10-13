@@ -204,6 +204,11 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
+    # Comprobación de dominio para TikTok (pubPod): el archivo que su portal pide ver en la raíz del sitio.
+    @app.get("/tiktoklpMHvlWrFRFcAi0P0OydreIGEFoQkj3B.txt")
+    def tiktok_site_verification():
+        return Response("tiktok-developers-site-verification=lpMHvlWrFRFcAi0P0OydreIGEFoQkj3B", mimetype="text/plain")
+
     @app.get("/terminos")
     def terminos():
         return render_template("terminos.html", username=session.get("username"),
