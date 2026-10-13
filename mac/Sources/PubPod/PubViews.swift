@@ -145,7 +145,7 @@ private struct StarButton: View {
                 Button("Conectar", action: connect).buttonStyle(.plain).font(.caption).foregroundStyle(Theme.secondary)
             }
         }
-        .frame(width: 104)
+        .frame(width: 112, height: 116, alignment: .top)
         .opacity(online && !eligible ? 0.55 : 1)
         .onChange(of: pulsing) { _, v in beat = v }
         .onAppear { beat = pulsing }
@@ -240,7 +240,11 @@ struct PubHomeView: View {
             if Self.snapshotReel, let r = project?.reels.first { choice = .reel(r.id) }
             reset(); loadAccounts()
         }
-        .onChange(of: projectId) { _, _ in choice = .episode; reset(); loadAccounts() }
+        .onChange(of: projectId) { _, _ in
+            choice = .episode
+            if Self.snapshotReel, let r = project?.reels.first { choice = .reel(r.id) }
+            reset(); loadAccounts()
+        }
         .onChange(of: session?.isBusy ?? false) { _, busy in
             guard !busy, phase == .sending, let s = session else { return }
             if s.reelPosts != nil { phase = .done; postsVersion += 1 }
@@ -299,14 +303,15 @@ struct PubHomeView: View {
             let n = PubStar.all.count
             ZStack(alignment: .topLeading) {
                 ForEach(Array(PubStar.all.enumerated()), id: \.element.id) { i, s in
-                    let deg = 162 - Double(i) * (144 / Double(n - 1))
-                    let rad = deg * .pi / 180
-                    let x = g.size.width * (0.5 + 0.44 * cos(rad))
-                    let y = 14 + (1 - sin(rad)) * 150
+                    // Arco de la bandera: separación pareja a lo ancho y las puntas más abajo
+                    let u = Double(i) / Double(n - 1) * 2 - 1            // -1 … 1
+                    let margin = 64.0
+                    let x = margin + (g.size.width - 2 * margin) * (u + 1) / 2
+                    let y = 40 + 120 * (1 - sqrt(max(0, 1 - u * u * 0.82)))
                     StarButton(star: s, online: online(s), eligible: eligible(s), on: isOn(s),
                                pulsing: phase == .sending && isOn(s), done: phase == .done && isOn(s),
                                toggle: { toggle(s) }, connect: { app.section = .pre })
-                        .position(x: x, y: y + 52)
+                        .position(x: x, y: y + 58 - 32)     // el centro de la estrella cae en (x, y)
                 }
                 VStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.15))
@@ -320,7 +325,7 @@ struct PubHomeView: View {
                         .frame(width: isEpisode ? 220 : 74, height: isEpisode ? 124 : 132)
                     Text(currentTitle(p)).font(.system(size: 16, weight: .bold)).lineLimit(2).multilineTextAlignment(.center).frame(maxWidth: 320)
                 }
-                .position(x: g.size.width / 2, y: 138 + 90)
+                .position(x: g.size.width / 2, y: 210)
             }
         }
         .frame(height: 320)
