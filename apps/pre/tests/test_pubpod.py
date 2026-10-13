@@ -350,3 +350,31 @@ def test_meta_deauthorize_rejects_forged_signature(client):
     r = client.post("/api/pubpod/instagram/deauthorize",
                     data={"signed_request": _signed({"user_id": "17841"})})
     assert r.status_code == 200 and pubpod._get_account(SLUG, "instagram") is None
+
+
+def test_full_episode_to_youtube_without_shorts_tag(client, monkeypatch):
+    import youtube_publish
+    monkeypatch.setattr(youtube_publish, "_get_stored_tokens", lambda slug: {"access_token": "a"})
+    seen = {}
+
+    def fake_upload(slug, path, title, desc, privacy, category):
+        seen["title"] = title
+        return {"ok": True, "video_id": "EP", "url": "https://www.youtube.com/watch?v=EP"}
+
+    monkeypatch.setattr(youtube_publish, "_upload_video", fake_upload)
+    _connect_ig()
+    r = _reel(client, kind="episode", title="Episodio 16",
+              targets=[{"platform": "youtube", "caption": "notas"}, {"platform": "instagram", "caption": ""}])
+    assert "solo se publica en YouTube" in r.get_json()["error"]
+    r = _reel(client, kind="episode", title="Episodio 16", scheduled_at="2099-01-01T00:00:00Z",
+              targets=[{"platform": "youtube", "caption": "notas"}])
+    post = r.get_json()["posts"][0]
+    assert post["kind"] == "episode" and post["status"] == "scheduled"
+    conn = pubpod._db(SLUG)
+    conn.execute("UPDATE pub_posts SET scheduled_at=1")
+    conn.commit()
+    conn.close()
+    pubpod.run_due(SLUG)
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert seen["title"] == "Episodio 16"
+    assert post["result_url"] == "https://www.youtube.com/watch?v=EP"

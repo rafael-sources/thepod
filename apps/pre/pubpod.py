@@ -118,6 +118,10 @@ def _migrate(conn):
         conn.execute(f"INSERT INTO pub_posts ({cols}) SELECT {cols} FROM pub_posts_old")
         conn.execute("DROP TABLE pub_posts_old")
         conn.commit()
+    if "kind" not in {r[1] for r in conn.execute("PRAGMA table_info(pub_posts)")}:
+        # «reel» (vertical, Shorts) o «episode» (el episodio completo a YouTube)
+        conn.execute("ALTER TABLE pub_posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'reel'")
+        conn.commit()
 
 
 def _media_dir(slug: str) -> Path:
@@ -605,6 +609,11 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
     episode_id = payload.get("episode_id")
     if episode_id is not None and not isinstance(episode_id, int):
         return None, "episodio inválido"
+    kind = payload.get("kind") or "reel"
+    if kind not in ("reel", "episode"):
+        return None, "tipo inválido"
+    if kind == "episode" and any(t["platform"] != "youtube" for t in targets):
+        return None, "el episodio completo solo se publica en YouTube"
 
     missing = []
     ig = any(t["platform"] == "instagram" for t in targets)
@@ -632,8 +641,8 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
         for t in targets:
             cur = conn.execute(
                 """INSERT INTO pub_posts (episode_id, title, platform, caption, media_token,
-                                          scheduled_at, created_by) VALUES (?,?,?,?,?,?,?)""",
-                (episode_id, title, t["platform"], t["caption"], token, when, user))
+                                          scheduled_at, created_by, kind) VALUES (?,?,?,?,?,?,?,?)""",
+                (episode_id, title, t["platform"], t["caption"], token, when, user, kind))
             ids.append(cur.lastrowid)
         conn.commit()
         rows = conn.execute(
@@ -679,7 +688,7 @@ def _post_json(r):
         "id": d["id"], "episode_id": d["episode_id"], "title": d["title"],
         "platform": d["platform"], "caption": d["caption"], "status": d["status"],
         "scheduled_at": _iso(d["scheduled_at"]), "result_url": d["result_url"],
-        "error": d["error"], "created_at": d["created_at"],
+        "error": d["error"], "created_at": d["created_at"], "kind": d.get("kind") or "reel",
     }
 
 
@@ -840,8 +849,8 @@ def publish_instagram(slug, post, media_url):
 
 def publish_youtube(slug, post, media_path):
     import youtube_publish
-    title = post["title"]
-    if "#shorts" not in title.lower():
+    title = post["title"][:100]
+    if post.get("kind", "reel") == "reel" and "#shorts" not in title.lower():
         title = (title[:91] + " #Shorts")
     res = youtube_publish._upload_video(slug, media_path, title, post["caption"],
                                         privacy="public", category="22")
@@ -859,6 +868,8 @@ def publish_youtube(slug, post, media_path):
             status = "private"
     except Exception:
         pass
+    if post.get("kind") == "episode":
+        return status, f"https://www.youtube.com/watch?v={res['video_id']}"
     return status, f"https://youtube.com/shorts/{res['video_id']}"
 
 
