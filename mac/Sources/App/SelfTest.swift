@@ -10,7 +10,38 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot")
+    }
+
+    /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
+    @MainActor
+    static func pubSnapshot(dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        func render(_ name: String, reel: Bool, after: Double) {
+            PubHomeView.snapshotReel = reel
+            let host = NSHostingView(rootView: PubHomeView()
+                .environmentObject(AppModel())
+                .frame(width: 1440, height: 900)
+                .preferredColorScheme(.dark))
+            host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+            let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            win.appearance = NSAppearance(named: .darkAqua)
+            win.contentView = host
+            win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+            win.orderFrontRegardless()
+            DispatchQueue.main.asyncAfter(deadline: .now() + after) {
+                host.layoutSubtreeIfNeeded()
+                if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                    print("snapshot \(name)")
+                }
+                win.orderOut(nil)
+            }
+        }
+        render("1-episodio", reel: false, after: 6)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 7) { render("2-reel", reel: true, after: 6) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { fflush(stdout); exit(0) }
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
@@ -885,6 +916,11 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--post-snapshot"), args.count > i + 2 {
             let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { postSnapshot(slug: slug, dir: dir) }
+            return
+        }
+        if let i = args.firstIndex(of: "--pub-snapshot"), args.count > i + 1 {
+            let dir = URL(fileURLWithPath: args[i + 1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { pubSnapshot(dir: dir) }
             return
         }
         if let i = args.firstIndex(of: "--ama-snapshot"), args.count > i + 1 {

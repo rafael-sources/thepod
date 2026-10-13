@@ -1474,22 +1474,55 @@ final class ProjectSession: ObservableObject {
 
     @Published var reelPosts: [PrePodClient.PubPost]?
 
-    /// pubPod: exporta el episodio completo (16:9) y lo deja publicado o programado en YouTube.
-    func publishEpisode(title: String, description: String, at: Date?) {
+    /// pubPod: el episodio completo a sus destinos (ahora o programado). Cada destino lleva su archivo:
+    /// youtube = video 16:9, feed = el audio (Spotify y Apple Podcasts), instagram_image = la portada.
+    func publishEpisode(title: String, targets: [(platform: String, caption: String)], at: Date?) {
         guard let slug = project.episode.prepodSlug else { return }
         let episodeId = project.episode.prepodEpisodeId
         reelPosts = nil
         run("Publicando el episodio") { [self] in
-            let file = try await performExport(format: .landscape)
-            report("Publicando el episodio", "Subiendo el video a thePod…", 0)
-            let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
-                self?.reportAsync("Publicando el episodio", "Subiendo el video a thePod…", f)
+            var all: [PrePodClient.PubPost] = []
+            for t in targets {
+                let (label, file): (String, URL)
+                switch t.platform {
+                case "feed":
+                    report("Publicando el episodio", "Exportando el audio…", nil)
+                    (label, file) = ("el audio", latestExport(suffix: "audio", ext: "mp3") ?? (try await performExport(format: .audio)))
+                case "instagram_image":
+                    report("Publicando el episodio", "Preparando la portada…", nil)
+                    (label, file) = ("la portada", try await exportCover())
+                default:
+                    (label, file) = ("el video", try await performExport(format: .landscape))
+                }
+                report("Publicando el episodio", "Subiendo \(label) a thePod…", 0)
+                let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
+                    self?.reportAsync("Publicando el episodio", "Subiendo \(label) a thePod…", f)
+                }
+                all += try await PrePodClient.shared.createReelPosts(
+                    slug: slug, episodeId: episodeId, uploadId: upload, title: title,
+                    targets: [t], at: at, kind: "episode")
             }
-            report("Publicando el episodio", "Dejándolo listo para YouTube…", nil)
-            reelPosts = try await PrePodClient.shared.createReelPosts(
-                slug: slug, episodeId: episodeId, uploadId: upload, title: title,
-                targets: [(platform: "youtube", caption: description)], at: at, kind: "episode")
+            reelPosts = all
         }
+    }
+
+    /// Portada del episodio para Instagram: un cuadro del episodio tal como se ve (diseño, logo, fondo),
+    /// en el momento del primer reel o, si no hay, a un cuarto del episodio. JPEG 16:9.
+    func exportCover() async throws -> URL {
+        let built = try await CompositionBuilder.build(project: project, format: .landscape, window: nil, energy: energy)
+        let gen = AVAssetImageGenerator(asset: built.asset)
+        gen.videoComposition = built.videoComposition
+        gen.requestedTimeToleranceBefore = .zero
+        gen.requestedTimeToleranceAfter = .zero
+        let tl = project.reels.first.map { $0.start + 1 } ?? project.duration * 0.25
+        let outT = (EditEngine.toOutput(tl, keep: built.keep) ?? tl) + built.introDuration
+        let (img, _) = try await gen.image(at: CMTime(seconds: outT, preferredTimescale: 600))
+        guard let data = NSBitmapImageRep(cgImage: img).representation(using: .jpeg, properties: [.compressionFactor: 0.9]) else {
+            throw PrePodClient.Failure(message: "No se pudo preparar la portada")
+        }
+        let url = ProjectStore.exportsFolder(for: project.id).appendingPathComponent("portada.jpg")
+        try data.write(to: url, options: .atomic)
+        return url
     }
 
     /// Exporta el reel tal como está ahora, lo sube a prePod y crea una publicación por red.
