@@ -319,7 +319,12 @@ struct TrackInspector: View {
         HStack(spacing: 8) {
             Text("Volumen dibujado").frame(width: 110, alignment: .leading)
             if lane.hasAutomation {
-                Text("\(lane.volumePoints.count) puntos en la línea amarilla del timeline").foregroundStyle(Theme.secondary)
+                if lane.volumePoints.contains(where: { $0.db <= -6 }) {
+                    Label("La línea amarilla le baja la voz en partes del episodio", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("\(lane.volumePoints.count) puntos en la línea amarilla del timeline").foregroundStyle(Theme.secondary)
+                }
                 Button("Quitar la línea") { session.clearVolumePoints(laneId: lane.id) }
             } else {
                 Text("Doble clic sobre esta persona en el timeline para subir o bajar su volumen en un punto").foregroundStyle(Theme.secondary)

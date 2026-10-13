@@ -164,10 +164,14 @@ struct EpisodeTimeline: View {
                                     if dragPoint != nil { dragPoint = nil; dragDB = nil; dragAnchor = nil; return }
                                     if abs(g.translation.width) <= 4 {
                                         selection = nil
-                                        // Doble clic sobre una persona: agrega un punto de volumen ahí
+                                        // Doble clic sobre una persona: agrega un punto de volumen ahí, AL MISMO volumen que ya tenía.
+                                        // Antes tomaba la altura del clic: un doble clic cerca del borde de abajo (al ubicar
+                                        // una cortina, al buscar un instante) dejaba a esa persona casi muda desde ahí.
+                                        // Ahora el punto no cambia nada hasta que se arrastra hacia arriba o abajo.
                                         if let lc = lastClick, Date().timeIntervalSince(lc.at) < 0.4, abs(lc.x - g.location.x) < 6, abs(lc.y - g.location.y) < 6,
-                                           let laneId = laneAt(p, y: g.location.y) {
-                                            _ = session.addVolumePoint(laneId: laneId, t: t, db: dbAt(p, y: g.location.y, laneId: laneId))
+                                           let laneId = laneAt(p, y: g.location.y),
+                                           let lane = p.lanes.first(where: { $0.id == laneId }) {
+                                            _ = session.addVolumePoint(laneId: laneId, t: t, db: lane.automationDB(at: t))
                                             lastClick = nil; dragAnchor = nil
                                             return
                                         }
