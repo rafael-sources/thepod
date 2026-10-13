@@ -39,9 +39,10 @@ enum SelfTest {
                 win.orderOut(nil)
             }
         }
-        render("1-episodio", reel: false, after: 6)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 7) { render("2-reel", reel: true, after: 6) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { fflush(stdout); exit(0) }
+        render("1-episodio", reel: false, after: 14)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { render("2-reel", reel: true, after: 8) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 24) { PubHomeView.snapshotPanel = "reels"; render("3-panel", reel: true, after: 6) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 31) { fflush(stdout); exit(0) }
     }
 
     /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).

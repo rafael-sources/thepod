@@ -169,6 +169,7 @@ struct PubHomeView: View {
     @EnvironmentObject var app: AppModel
     /// Solo para las capturas de prueba: abrir con el primer reel elegido.
     static var snapshotReel = false
+    static var snapshotPanel: String?
 
     enum Choice: Hashable { case episode, reel(UUID), file(URL) }
     enum Phase { case choose, sending, done }
@@ -252,6 +253,7 @@ struct PubHomeView: View {
             if projectId == nil { projectId = app.session?.project.id ?? app.projects.first?.id }
             if Self.snapshotReel, let r = project?.reels.first { choice = .reel(r.id) }
             reset(); loadAccounts()
+            if let id = Self.snapshotPanel { panel = PubStar.all.first { $0.id == id } }
         }
         .onChange(of: projectId) { _, _ in
             choice = .episode
