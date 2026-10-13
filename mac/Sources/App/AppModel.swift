@@ -9,7 +9,7 @@ struct JobState: Equatable {
     var fraction: Double? = nil      // nil = indeterminate
 }
 
-enum AppSection: String { case pre, prod, post, ama }
+enum AppSection: String { case pre, prod, post, pub, ama }
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -1473,6 +1473,24 @@ final class ProjectSession: ObservableObject {
     // MARK: pubPod: reels a redes
 
     @Published var reelPosts: [PrePodClient.PubPost]?
+
+    /// pubPod: exporta el episodio completo (16:9) y lo deja publicado o programado en YouTube.
+    func publishEpisode(title: String, description: String, at: Date?) {
+        guard let slug = project.episode.prepodSlug else { return }
+        let episodeId = project.episode.prepodEpisodeId
+        reelPosts = nil
+        run("Publicando el episodio") { [self] in
+            let file = try await performExport(format: .landscape)
+            report("Publicando el episodio", "Subiendo el video a thePod…", 0)
+            let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
+                self?.reportAsync("Publicando el episodio", "Subiendo el video a thePod…", f)
+            }
+            report("Publicando el episodio", "Dejándolo listo para YouTube…", nil)
+            reelPosts = try await PrePodClient.shared.createReelPosts(
+                slug: slug, episodeId: episodeId, uploadId: upload, title: title,
+                targets: [(platform: "youtube", caption: description)], at: at, kind: "episode")
+        }
+    }
 
     /// Exporta el reel tal como está ahora, lo sube a prePod y crea una publicación por red.
     func publishReel(_ reel: Reel, targets: [(platform: String, caption: String)], at: Date?) {

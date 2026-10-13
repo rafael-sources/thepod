@@ -144,6 +144,7 @@ struct SectionSwitcher: View {
             chip(.pre, "pre", .prePod)
             chip(.prod, "prod", .prodPod)
             chip(.post, "post", Theme.accent)
+            chip(.pub, "pub", .pubPod)
             chip(.ama, "ama", .amaPod)
         }
         .padding(3)

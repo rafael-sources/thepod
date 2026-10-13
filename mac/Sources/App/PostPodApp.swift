@@ -90,6 +90,8 @@ struct RootView: View {
                 ProdHomeView()
             } else if app.section == .ama {
                 AmaHomeView()
+            } else if app.section == .pub {
+                PubHomeView()
             } else if let session = app.session {
                 ProjectView(session: session)
                     .id(session.project.id)

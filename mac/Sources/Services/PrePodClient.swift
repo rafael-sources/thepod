@@ -248,6 +248,7 @@ actor PrePodClient {
         let result_url: String?
         let error: String?
         var caption: String? = nil
+        var kind: String? = nil
     }
 
     func pubPosts(slug: String) async throws -> [PubPost] {
@@ -291,9 +292,9 @@ actor PrePodClient {
 
     /// Crea una publicación por red para un reel ya subido. `at` nil = ahora.
     func createReelPosts(slug: String, episodeId: Int?, uploadId: String, title: String,
-                         targets: [(platform: String, caption: String)], at: Date?) async throws -> [PubPost] {
+                         targets: [(platform: String, caption: String)], at: Date?, kind: String = "reel") async throws -> [PubPost] {
         var json: [String: Any] = [
-            "slug": slug, "upload_id": uploadId, "title": String(title.prefix(200)),
+            "slug": slug, "upload_id": uploadId, "title": String(title.prefix(200)), "kind": kind,
             "targets": targets.map { ["platform": $0.platform, "caption": $0.caption] },
         ]
         if let episodeId { json["episode_id"] = episodeId }
