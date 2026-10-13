@@ -1487,7 +1487,9 @@ final class ProjectSession: ObservableObject {
                 switch t.platform {
                 case "feed":
                     report("Publicando el episodio", "Exportando el audio…", nil)
-                    (label, file) = ("el audio", latestExport(suffix: "audio", ext: "mp3") ?? (try await performExport(format: .audio)))
+                    var mp3 = latestExport(suffix: "audio", ext: "mp3")
+                    if mp3 == nil { mp3 = try await performExport(format: .audio) }
+                    (label, file) = ("el audio", mp3!)
                 case "instagram_image":
                     report("Publicando el episodio", "Preparando la portada…", nil)
                     (label, file) = ("la portada", try await exportCover())
