@@ -4847,10 +4847,10 @@ var RedesPanel = {
     async function connectNet(net) {
       error.value = "";
       try {
-        const res = await api(`/api/pubpod/${net}/auth-url?slug=${props.slug}`);
+        const res = await api(net === "youtube" ? `/api/youtube/auth-url?slug=${props.slug}` : `/api/pubpod/${net}/auth-url?slug=${props.slug}`);
         const popup = window.open(res.auth_url, "pubpod-" + net, "width=600,height=760");
         const done = () => { window.removeEventListener("message", onMsg); clearInterval(iv); loadAccounts(); };
-        const onMsg = (ev) => { if (ev.data === "pubpod-connected" || ev.data === "pubpod-error") done(); };
+        const onMsg = (ev) => { if (ev.data === "pubpod-connected" || ev.data === "pubpod-error" || ev.data === "youtube-connected") done(); };
         window.addEventListener("message", onMsg);
         const iv = setInterval(() => { if (!popup || popup.closed) done(); }, 1000);
       } catch (e) { error.value = e.message; }
@@ -4964,9 +4964,11 @@ var RedesPanel = {
               {{ accounts.youtube && accounts.youtube.connected ? accounts.youtube.username : 'Sin conectar' }}
             </span>
           </div>
-          <div v-if="!(accounts.youtube && accounts.youtube.connected)" class="dist-card-body" style="font-size: 13px;">
-            <p style="color: var(--paper-dim); margin: 6px 0 10px;">Usa el mismo canal que tus episodios.</p>
-            <button class="ghost" style="font-size: 12px;" @click="$emit('go-distribution')">Conectar en Distribución</button>
+          <div class="dist-card-body" style="font-size: 13px;">
+            <p style="color: var(--paper-dim); margin: 6px 0 10px;">Es el mismo canal que usas para los episodios.</p>
+            <button v-if="accounts.youtube && accounts.youtube.connected" class="ghost" style="font-size: 12px;" @click="disconnect('youtube')">Desconectar</button>
+            <button v-else-if="nets.youtube" class="publish-btn" @click="connectNet('youtube')">Conectar YouTube</button>
+            <p v-else style="color: var(--paper-dim); margin: 0;">Muy pronto.</p>
           </div>
         </div>
         <div class="dist-card">

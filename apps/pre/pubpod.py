@@ -447,8 +447,12 @@ def disconnect(slug, net):
     denied = _access_error(slug)
     if denied:
         return denied
+    if net == "youtube":
+        from youtube_publish import _delete_tokens
+        _delete_tokens(slug)
+        return jsonify({"ok": True})
     if net not in ("instagram", "tiktok"):
-        return jsonify({"error": "esa red se desconecta desde Distribución"}), 400
+        return jsonify({"error": "red desconocida"}), 400
     conn = _db(slug)
     try:
         conn.execute("DELETE FROM pub_accounts WHERE platform=?", (net,))
