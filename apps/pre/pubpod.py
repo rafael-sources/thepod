@@ -52,8 +52,15 @@ bp = Blueprint("pubpod", __name__)
 
 IG_GRAPH = "https://graph.instagram.com/v23.0"
 IG_SCOPES = "instagram_business_basic,instagram_business_content_publish"
-NETWORKS = ("instagram", "youtube", "tiktok")
-CAPTION_MAX = {"instagram": 2200, "youtube": 5000, "tiktok": 2200}
+# Destinos: instagram = Reels (video), instagram_image = la portada en el feed de Instagram,
+# youtube = Shorts (reel) o el episodio completo, tiktok, feed = el audio al feed (Spotify y Apple Podcasts).
+NETWORKS = ("instagram", "instagram_image", "youtube", "tiktok", "feed")
+CAPTION_MAX = {"instagram": 2200, "instagram_image": 2200, "youtube": 5000, "tiktok": 2200, "feed": 20000}
+FOR_KIND = {"reel": {"instagram", "youtube", "tiktok"},
+            "episode": {"youtube", "feed", "instagram_image"}}
+MEDIA_EXT = {"mp4", "mov", "mp3", "m4a", "jpg", "jpeg", "png"}
+MIME = {"mp4": "video/mp4", "mov": "video/quicktime", "mp3": "audio/mpeg", "m4a": "audio/mp4",
+        "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
 TT_API = "https://open.tiktokapis.com/v2"
 TT_SCOPES = "user.info.basic,video.upload"
 MEDIA_KEEP_SECONDS = 7 * 24 * 3600
@@ -131,7 +138,17 @@ def _media_dir(slug: str) -> Path:
 
 
 def _media_path(slug: str, token: str) -> Path:
-    return _media_dir(slug) / f"{token}.mp4"
+    """Archivo guardado para esa publicación (video, audio o imagen)."""
+    d = _media_dir(slug)
+    for f in d.glob(f"{token}.*"):
+        if f.suffix[1:].lower() in MEDIA_EXT:
+            return f
+    return d / f"{token}.mp4"
+
+
+def _media_url(slug: str, path: Path) -> str:
+    base = (load_shared_config().get("prepod_url") or "").rstrip("/")
+    return f"{base}/pub/m/{slug}/{path.name}"
 
 
 def _public_media_url(slug: str, token: str) -> str:
@@ -248,6 +265,7 @@ def networks():
         "instagram": bool(_ig_config()),
         "youtube": bool(_get_youtube_config()),
         "tiktok": bool(_tt_config()),
+        "feed": _feed_ready(),
         "facebook": False,
     })
 
@@ -274,6 +292,8 @@ def accounts(slug):
     if tt and (tt.get("refresh_expires_at") or 0) < _now():
         tt = None   # la conexión de TikTok venció (dura un año): hay que volver a conectar
     out["tiktok"] = ({"connected": True, "username": tt.get("username")} if tt else {"connected": False})
+    out["feed"] = ({"connected": True, "username": "Feed del podcast"} if _feed_ready() else {"connected": False})
+    out["facebook"] = {"connected": False}
     return jsonify(out)
 
 
@@ -610,13 +630,17 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
     if episode_id is not None and not isinstance(episode_id, int):
         return None, "episodio inválido"
     kind = payload.get("kind") or "reel"
-    if kind not in ("reel", "episode"):
+    if kind not in FOR_KIND:
         return None, "tipo inválido"
-    if kind == "episode" and any(t["platform"] != "youtube" for t in targets):
-        return None, "el episodio completo solo se publica en YouTube"
+    wrong = [t["platform"] for t in targets if t["platform"] not in FOR_KIND[kind]]
+    if wrong:
+        return None, ("el episodio completo va a YouTube, Spotify, Apple Podcasts y la portada de Instagram"
+                      if kind == "episode" else "un reel va a Reels, Shorts y TikTok")
+    if any(t["platform"] == "feed" for t in targets) and episode_id is None:
+        return None, "para Spotify y Apple Podcasts el episodio tiene que estar vinculado en prePod"
 
     missing = []
-    ig = any(t["platform"] == "instagram" for t in targets)
+    ig = any(t["platform"] in ("instagram", "instagram_image") for t in targets)
     if ig and not _get_account(slug, "instagram"):
         missing.append("Instagram")
     if any(t["platform"] == "youtube" for t in targets):
@@ -625,11 +649,16 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
             missing.append("YouTube")
     if any(t["platform"] == "tiktok" for t in targets) and not _get_account(slug, "tiktok"):
         missing.append("TikTok")
+    if any(t["platform"] == "feed" for t in targets) and not _feed_ready():
+        missing.append("el alojamiento del feed")
     if missing:
         return None, "conecta primero: " + ", ".join(missing)
 
+    ext = (payload.get("_ext") or Path(src_path).suffix[1:] or "mp4").lower()
+    if ext not in MEDIA_EXT:
+        return None, "ese tipo de archivo no se puede publicar"
     token = uuid.uuid4().hex
-    dest = _media_path(slug, token)
+    dest = _media_dir(slug) / f"{token}.{ext}"
     if move:
         shutil.move(str(src_path), dest)
     else:
@@ -674,6 +703,7 @@ def create_from_upload():
             return jsonify({"error": "ese video ya se está publicando"}), 409
         meta["claimed"] = True
         mp._write_meta(upload_id, meta)
+    data["_ext"] = Path(meta.get("filename") or "").suffix[1:].lower() or "mp4"
     posts, err = _create_posts(slug, path, True, data, session.get("username"))
     if err:
         mp._release_upload_claim(upload_id)
@@ -755,11 +785,12 @@ def retry_post(slug, post_id):
 # Video público temporal (Instagram lo descarga desde aquí)
 # ---------------------------------------------------------------------------
 
-@bp.get("/pub/m/<slug>/<token>.mp4")
-def public_media(slug, token):
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", slug) or not _TOKEN_RE.match(token):
+@bp.get("/pub/m/<slug>/<name>")
+def public_media(slug, name):
+    token, _, ext = name.partition(".")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", slug) or not _TOKEN_RE.match(token) or ext.lower() not in MEDIA_EXT:
         abort(404)
-    path = _media_path(slug, token)
+    path = _media_dir(slug) / f"{token}.{ext}"
     if not path.is_file():
         abort(404)
     conn = _db(slug)
@@ -771,7 +802,7 @@ def public_media(slug, token):
         conn.close()
     if not live:
         abort(404)
-    return send_file(path, mimetype="video/mp4", conditional=True, max_age=0)
+    return send_file(path, mimetype=MIME[ext.lower()], conditional=True, max_age=0)
 
 
 def _cleanup_media(slug):
@@ -785,7 +816,9 @@ def _cleanup_media(slug):
             "SELECT DISTINCT media_token FROM pub_posts WHERE status IN ('scheduled','publishing','error')")}
     finally:
         conn.close()
-    for f in d.glob("*.mp4"):
+    for f in d.glob("*.*"):
+        if f.suffix[1:].lower() not in MEDIA_EXT:
+            continue
         if f.name.startswith("_in_"):
             if _now() - f.stat().st_mtime > 3600:
                 f.unlink(missing_ok=True)
@@ -810,13 +843,14 @@ def _ig_error(resp):
         return resp.text[:200]
 
 
-def publish_instagram(slug, post, media_url):
+def publish_instagram(slug, post, media_url, image=False):
     token, ig_id = _ig_token(slug)
     if not token:
         raise PublishError("Instagram no está conectado")
-    r = requests.post(f"{IG_GRAPH}/{ig_id}/media", data={
-        "media_type": "REELS", "video_url": media_url, "caption": post["caption"],
-        "share_to_feed": "true", "access_token": token}, timeout=60)
+    data = ({"image_url": media_url, "caption": post["caption"], "access_token": token} if image else
+            {"media_type": "REELS", "video_url": media_url, "caption": post["caption"],
+             "share_to_feed": "true", "access_token": token})
+    r = requests.post(f"{IG_GRAPH}/{ig_id}/media", data=data, timeout=60)
     if not r.ok:
         raise PublishError(_ig_error(r))
     container = r.json()["id"]
@@ -937,13 +971,40 @@ def publish_tiktok(slug, post, media_path):
     return "inbox", None
 
 
+def _feed_ready() -> bool:
+    """Spotify y Apple Podcasts leen el feed: hace falta el alojamiento del audio configurado."""
+    return bool((load_shared_config().get("hosting") or {}).get("host"))
+
+
+def publish_feed(slug, post, media_path):
+    """El audio al feed del podcast: Spotify y Apple Podcasts lo toman de ahí solos."""
+    if not post.get("episode_id"):
+        raise PublishError("el episodio no está vinculado en prePod")
+    if (post.get("caption") or "").strip():
+        conn = get_db(slug)
+        try:
+            conn.execute("UPDATE episodes SET description=?, updated_at=datetime('now') WHERE id=?",
+                         (post["caption"].strip(), post["episode_id"]))
+            conn.commit()
+        finally:
+            conn.close()
+    from episodes import upload_episode_media
+    res = upload_episode_media(slug, post["episode_id"], media_path)
+    if not res.get("ok"):
+        raise PublishError(res.get("error") or "no se pudo poner el audio en el feed")
+    return "published", res.get("media_url")
+
+
 def _publish_one(slug, post):
     path = _media_path(slug, post["media_token"])
     if not path.is_file():
-        raise PublishError("el video ya no está disponible; súbelo de nuevo")
+        raise PublishError("el archivo ya no está disponible; súbelo de nuevo")
     if post["platform"] == "instagram":
-        base = (load_shared_config().get("prepod_url") or "").rstrip("/")
-        return publish_instagram(slug, post, f"{base}/pub/m/{slug}/{post['media_token']}.mp4")
+        return publish_instagram(slug, post, _media_url(slug, path))
+    if post["platform"] == "instagram_image":
+        return publish_instagram(slug, post, _media_url(slug, path), image=True)
+    if post["platform"] == "feed":
+        return publish_feed(slug, post, path)
     if post["platform"] == "youtube":
         return publish_youtube(slug, post, path)
     if post["platform"] == "tiktok":

@@ -364,8 +364,8 @@ def test_full_episode_to_youtube_without_shorts_tag(client, monkeypatch):
     monkeypatch.setattr(youtube_publish, "_upload_video", fake_upload)
     _connect_ig()
     r = _reel(client, kind="episode", title="Episodio 16",
-              targets=[{"platform": "youtube", "caption": "notas"}, {"platform": "instagram", "caption": ""}])
-    assert "solo se publica en YouTube" in r.get_json()["error"]
+              targets=[{"platform": "youtube", "caption": "notas"}, {"platform": "tiktok", "caption": ""}])
+    assert "el episodio completo va a" in r.get_json()["error"]
     r = _reel(client, kind="episode", title="Episodio 16", scheduled_at="2099-01-01T00:00:00Z",
               targets=[{"platform": "youtube", "caption": "notas"}])
     post = r.get_json()["posts"][0]
@@ -378,3 +378,76 @@ def test_full_episode_to_youtube_without_shorts_tag(client, monkeypatch):
     post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
     assert seen["title"] == "Episodio 16"
     assert post["result_url"] == "https://www.youtube.com/watch?v=EP"
+
+
+def _upload_named(client, name, data=b"x" * 20):
+    r = client.post("/api/mac/uploads", json={"filename": name, "size": len(data)})
+    uid = r.get_json()["upload_id"]
+    client.put(f"/api/mac/uploads/{uid}/chunk?index=0", data=data)
+    assert client.post(f"/api/mac/uploads/{uid}/finish").status_code == 200
+    return uid
+
+
+def test_feed_puts_audio_in_feed_and_updates_notes(client, monkeypatch):
+    monkeypatch.setattr(pubpod, "load_shared_config", lambda: dict(CFG, hosting={"host": "h"}))
+    conn = db_mod.get_db(SLUG)
+    ep = conn.execute("INSERT INTO episodes (title) VALUES ('Episodio 16')").lastrowid
+    conn.commit()
+    conn.close()
+    seen = {}
+    import episodes
+
+    def fake_upload(slug, ep_id, path):
+        seen["path"] = str(path)
+        return {"ok": True, "media_url": "https://media/ep016.mp3"}
+
+    monkeypatch.setattr(episodes, "upload_episode_media", fake_upload)
+    body = {"slug": SLUG, "upload_id": _upload_named(client, "ep16.mp3"), "title": "Episodio 16",
+            "kind": "episode", "episode_id": ep, "targets": [{"platform": "feed", "caption": "Notas nuevas"}]}
+    r = client.post("/api/pubpod/reels", json=body)
+    assert r.status_code == 201, r.get_json()
+    pubpod.run_due(SLUG)
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert post["status"] == "published" and post["result_url"] == "https://media/ep016.mp3"
+    assert seen["path"].endswith(".mp3")
+    conn = db_mod.get_db(SLUG)
+    assert conn.execute("SELECT description FROM episodes WHERE id=?", (ep,)).fetchone()[0] == "Notas nuevas"
+    conn.close()
+
+
+def test_feed_needs_linked_episode(client, monkeypatch):
+    monkeypatch.setattr(pubpod, "load_shared_config", lambda: dict(CFG, hosting={"host": "h"}))
+    body = {"slug": SLUG, "upload_id": _upload_named(client, "ep.mp3"), "title": "E",
+            "kind": "episode", "targets": [{"platform": "feed", "caption": ""}]}
+    assert "vinculado" in client.post("/api/pubpod/reels", json=body).get_json()["error"]
+
+
+def test_instagram_cover_image(client, monkeypatch):
+    _connect_ig()
+    body = {"slug": SLUG, "upload_id": _upload_named(client, "portada.jpg"), "title": "Episodio 16",
+            "kind": "episode", "targets": [{"platform": "instagram_image", "caption": "Nuevo episodio"}]}
+    assert client.post("/api/pubpod/reels", json=body).status_code == 201
+    token = pubpod._db(SLUG).execute("SELECT media_token FROM pub_posts").fetchone()[0]
+    r = client.get(f"/pub/m/{SLUG}/{token}.jpg")
+    assert r.status_code == 200 and r.mimetype == "image/jpeg"
+    sent = {}
+
+    def fake_post(url, data=None, timeout=None):
+        if url.endswith("/17841/media"):
+            sent.update(data)
+            return _resp(200, {"id": "C1"})
+        return _resp(200, {"id": "M1"})
+
+    monkeypatch.setattr(pubpod.requests, "post", fake_post)
+    monkeypatch.setattr(pubpod.requests, "get", lambda url, params=None, timeout=None:
+                        _resp(200, {"status_code": "FINISHED", "permalink": "https://www.instagram.com/p/x/"}))
+    pubpod.run_due(SLUG)
+    assert sent["image_url"].endswith(f"/pub/m/{SLUG}/{token}.jpg") and "media_type" not in sent
+    post = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"][0]
+    assert post["status"] == "published"
+
+
+def test_reel_cannot_go_to_feed(client):
+    body = {"slug": SLUG, "upload_id": _upload_named(client, "r.mp4"), "title": "R",
+            "targets": [{"platform": "feed", "caption": ""}]}
+    assert "un reel va a" in client.post("/api/pubpod/reels", json=body).get_json()["error"]
