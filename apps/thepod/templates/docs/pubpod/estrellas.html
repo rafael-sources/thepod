@@ -1,0 +1,115 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Las estrellas — Docs · thePod{% endblock %}
+{% block description %}Las ocho estrellas de pubPod: qué enciende el episodio y qué enciende un reel, el panel de cada destino, la firma «Siempre al final» y la lista de publicaciones.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">LAS ESTRELLAS</div>
+  <h1>Ocho destinos, una estrella cada uno</h1>
+  <p class="lede">
+    Arriba de pub, en arco: Spotify, Apple Podcasts, YouTube, Instagram, Shorts, Reels, TikTok y Facebook.
+    Una estrella llena está conectada; una punteada con «Conectar», no. Al elegir qué publicas, se encienden las que corresponden.
+  </p>
+</header>
+
+<section id="arco">
+  <h2><span class="num">01</span> El arco</h2>
+  <div style="position: relative; height: 170px; margin: 8px 0 18px; padding: 10px; border-radius: 14px; background: var(--ink-panel); border: 1px solid var(--ink-line); overflow: hidden;" id="docStars" aria-hidden="true">
+    <div style="position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: var(--paper-dim);">Llena: conectada · Punteada: toca para conectar · Latiendo: publicando</div>
+  </div>
+  <ul>
+    <li>Las puntas bajan y el centro sube, como las estrellas de la bandera. Las de afuera son las que primero se encienden al abrir pub.</li>
+    <li>Una estrella <strong>brilla</strong> al encenderse y <strong>late</strong> mientras algo se está publicando por ahí.</li>
+    <li>Tocar una estrella punteada abre el navegador para conectar esa cuenta. Tocar el nombre de una encendida abre su panel.</li>
+  </ul>
+</section>
+
+<section id="que-enciende">
+  <h2><span class="num">02</span> Qué enciende cada cosa</h2>
+  <table>
+    <thead><tr><th>Eliges</th><th>Se encienden</th><th>Qué sube</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Episodio completo</strong></td><td>YouTube · Spotify · Apple Podcasts · Instagram</td><td>El video 16:9 a YouTube; el audio al feed, con las notas del episodio; un cuadro del video como portada con texto a Instagram.</td></tr>
+      <tr><td><strong>Reel</strong></td><td>Shorts · Reels · TikTok</td><td>El vertical 9:16 tal como se ve en el editor, con subtítulos, música y cintillos del reel.</td></tr>
+      <tr><td><strong>Desde la compu</strong></td><td>Shorts · Reels · TikTok</td><td>Un video que ya tienes, sin pasar por el editor.</td></tr>
+      <tr><td>Facebook</td><td>—</td><td>Muy pronto.</td></tr>
+    </tbody>
+  </table>
+  <p>Spotify y Apple Podcasts son dos estrellas pero una sola conexión: el feed del podcast. Las dos leen lo mismo.</p>
+</section>
+
+<section id="panel">
+  <h2><span class="num">03</span> El panel de cada estrella</h2>
+  <p>Toca el nombre de una estrella, o mantenla presionada. Se abre su panel:</p>
+  <ul>
+    <li><strong>La cuenta</strong>: usuario conectado, «Ver perfil», y Desconectar o Cambiar.</li>
+    <li><strong>Siempre al final</strong>: una firma o hashtags que se agregan solos al pie de cada texto que publiques en ese destino. Se escribe una vez y vale para todas las publicaciones siguientes.</li>
+    <li><strong>Lo último</strong>: lo último que salió por ahí, con su estado y su link.</li>
+    <li><strong>Incluir / Quitar de esta publicación</strong>: para dejar una estrella fuera esta vez sin desconectarla.</li>
+  </ul>
+</section>
+
+<section id="texto">
+  <h2><span class="num">04</span> El texto de cada destino</h2>
+  <p>Debajo de las tarjetas, una pestaña por estrella encendida. Cada red lee su propio texto:</p>
+  <ul>
+    <li><strong>YouTube</strong>: la descripción (los capítulos van solos si cumplen las reglas de YouTube).</li>
+    <li><strong>Shorts</strong>: el texto del Short; se le agrega #Shorts.</li>
+    <li><strong>Instagram y Reels</strong>: el texto con tus hashtags.</li>
+    <li><strong>Spotify y Apple Podcasts</strong>: las notas del episodio, las mismas para los dos.</li>
+    <li><strong>TikTok</strong>: el texto que vas a pegar al publicar desde el teléfono; «Copiar el texto» lo deja listo.</li>
+  </ul>
+</section>
+
+<section id="publicaciones">
+  <h2><span class="num">05</span> Publicaciones</h2>
+  <p>Abajo, la lista de lo que salió y lo que viene, con la hora y el estado de cada una:</p>
+  <table>
+    <thead><tr><th>Estado</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td>Programado</td><td>Sale a la hora que elegiste. Se puede cancelar hasta que empieza.</td></tr>
+      <tr><td>Publicando…</td><td>Subiendo ahora; la estrella late.</td></tr>
+      <tr><td>Publicado</td><td>Listo, con el link.</td></tr>
+      <tr><td>Subido en privado</td><td>Está en YouTube pero no es público todavía: ábrelo y cámbialo a Público.</td></tr>
+      <tr><td>En tu bandeja de TikTok</td><td>El video llegó a TikTok; termina de publicarlo desde el teléfono.</td></tr>
+      <tr><td>No se publicó</td><td>Algo falló; «Ver detalles…» dice qué, y «Reintentar» lo vuelve a intentar.</td></tr>
+      <tr><td>Cancelado</td><td>Lo cancelaste antes de que saliera.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<script>
+  // El arco de la portada de esta página: ocho estrellas, las dos últimas punteadas
+  (function () {
+    var box = document.getElementById("docStars"); if (!box) return;
+    var names = ["Spotify", "Apple", "YouTube", "Instagram", "Shorts", "Reels", "TikTok", "Facebook"];
+    var on = [true, true, true, true, true, true, false, false];
+    function draw() {
+      box.querySelectorAll(".st").forEach(function (e) { e.remove(); });
+      var W = box.clientWidth, slot = (W - 20) / 8;
+      names.forEach(function (n, i) {
+        var t = Math.abs(i - 3.5) / 3.5;
+        var size = Math.round(Math.min(slot - 10, 24 + (1 - t) * 12));
+        var y = Math.round(16 + t * t * 56);
+        var el = document.createElement("div"); el.className = "st";
+        el.style.cssText = "position:absolute;width:" + slot + "px;left:" + (10 + slot * i) + "px;top:" + y + "px;display:flex;flex-direction:column;align-items:center;gap:5px;";
+        el.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 48 48"><polygon points="24,2.5 29.8,17.4 45.5,18.1 33.2,28 37.5,43.5 24,34.7 10.5,43.5 14.8,28 2.5,18.1 18.2,17.4" fill="' + (on[i] ? "#fff" : "none") + '" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"' + (on[i] ? "" : ' stroke-dasharray="4 4"') + '/></svg><span style="font-family:var(--font-mono);font-size:9px;color:var(--paper-dim);white-space:nowrap">' + n + '</span>';
+        box.appendChild(el);
+      });
+    }
+    draw(); window.addEventListener("resize", draw);
+  })();
+</script>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#arco">El arco</a>
+  <a href="#que-enciende">Qué enciende cada cosa</a>
+  <a href="#panel">El panel</a>
+  <a href="#texto">El texto</a>
+  <a href="#publicaciones">Publicaciones</a>
+</nav>
+{% endblock %}

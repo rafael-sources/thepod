@@ -112,6 +112,10 @@ def create_app():
                     "tag": "App para Mac",
                     "sections": ["overview", "quickstart", "conceptos",
                                  "funcionalidades", "atajos", "integraciones", "faq"]},
+        "pubpod":  {"name": "pubPod",  "icon": "★",
+                    "tag": "Publicar",
+                    "sections": ["overview", "quickstart", "estrellas",
+                                 "redes", "programar", "faq"]},
         "amapod":  {"name": "amaPod",  "icon": "❓",
                     "tag": "Q&A en vivo",
                     "sections": ["overview", "quickstart", "conceptos",
@@ -125,6 +129,9 @@ def create_app():
         "funcionalidades":  "Funcionalidades",
         "atajos":           "Atajos",
         "integraciones":    "Integraciones",
+        "estrellas":        "Las estrellas",
+        "redes":            "Qué pide cada red",
+        "programar":        "Programar",
         "faq":              "FAQ",
     }
 
@@ -135,6 +142,7 @@ def create_app():
             "prodpod": cfg2.get("prodpod_url") or "",
             "postpod": cfg2.get("postpod_url") or "",
             "postpodapp": "",
+            "pubpod": "",
             "amapod":  cfg2.get("amapod_url")  or "",
         }
 

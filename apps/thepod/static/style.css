@@ -14,8 +14,8 @@
   --signal-cool: #8db36a;
   --signal-cool-dim: #4d6b3b;
   --signal-hot:  #ff6b6b;
-  --font-display: "Fraunces", serif;
-  --font-body:    "Bricolage Grotesque", sans-serif;
+  --font-display: "Newsreader", "Fraunces", Georgia, serif;
+  --font-body:    "Geist", "Bricolage Grotesque", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", monospace;
   --r-md: 8px; --r-lg: 14px;
 }
@@ -269,6 +269,7 @@ button { font-family: inherit; }
 .theme-prodpod { --accent: #ff3b3b; --accent-soft: rgba(255,59,59,0.14); --accent-dim: rgba(255,59,59,0.45); }
 .theme-postpod { --accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45); }
 .theme-amapod  { --accent: #14b8a6; --accent-soft: rgba(20,184,166,0.14);  --accent-dim: rgba(20,184,166,0.45); }
+.theme-pubpod  { --accent: #ffffff; --accent-soft: rgba(255,255,255,0.12);  --accent-dim: rgba(255,255,255,0.45); }
 .theme-hub     { --accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45); }
 
 /* Docs shell ------------------------------------------------- */
@@ -810,4 +811,112 @@ kbd {
 .x-link.prodpod { color: #ff3b3b; border-color: rgba(255,59,59,0.35); }
 .x-link.postpod { color: #f4c770; border-color: rgba(244,199,112,0.35); }
 .x-link.amapod  { color: #14b8a6; border-color: rgba(20,184,166,0.35); }
+.x-link.pubpod  { color: #ffffff; border-color: rgba(255,255,255,0.35); }
 .x-link::before { content: "↳"; color: var(--paper-dim); }
+
+
+/* ============================================================
+   Docs en el celular: la barra en una línea, las secciones en
+   una tira horizontal, el contenido primero, las otras apps al
+   final. (Diseño aprobado el 13 oct 2026.)
+   ============================================================ */
+.docs-start {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px; margin: 0 0 26px;
+  border-radius: 16px; background: var(--accent); color: #1a1410;
+  text-decoration: none; transition: transform 0.18s ease;
+}
+.docs-start:hover { transform: translateY(-2px); }
+.docs-start .k { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; opacity: 0.75; }
+.docs-start .t { font-family: var(--font-display); font-size: 22px; line-height: 1.1; margin-top: 3px; }
+.docs-start .d { font-size: 13px; opacity: 0.8; margin-top: 3px; }
+.docs-start svg { flex: none; margin-left: auto; }
+
+.docs-flow-v { display: none; }
+
+.docs-apps-foot { display: none; }
+
+.docs-index-card.pub { border-color: rgba(255,255,255,0.22); }
+.docs-index-card.pub .tag { color: #fff; }
+.docs-index-card.pub::before { background: #fff; }
+.docs-index-card.mac { border-color: rgba(244,199,112,0.35); }
+
+@media (max-width: 760px) {
+  .docs-shell { padding: 0 16px 56px; }
+  .docs-top {
+    padding: 8px 0; gap: 10px;
+    background: var(--ink-deep);
+  }
+  .docs-top .brand { gap: 8px; min-width: 0; flex: 1; }
+  .docs-top .brand a { min-height: 44px; }
+  .docs-top .brand .mark { display: none; }
+  .docs-top .brand-disc { width: 26px; height: 26px; }
+  .docs-top .crumb { font-size: 11px; letter-spacing: 0.12em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .docs-top .crumb b { letter-spacing: 0.2em; }
+  .docs-top .app-switch { display: none; }
+  .docs-top .right { gap: 8px; flex: none; }
+  .docs-top .right .tiny { display: none; }
+  .docs-top .right .ghost { min-height: 40px; padding: 0 12px; border-radius: 999px; font-size: 13px; display: inline-flex; align-items: center; }
+
+  .docs-body { margin-top: 0; gap: 0; grid-template-columns: minmax(0, 1fr); }
+  .docs-sidebar { margin: 0 -16px; padding: 12px 16px; border-bottom: 1px solid var(--ink-line); min-width: 0; max-width: calc(100% + 32px); }
+  .docs-sidebar nav { min-width: 0; }
+  .docs-sidebar .app-tag { display: none; }
+  .docs-sidebar nav ol { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .docs-sidebar nav ol::-webkit-scrollbar { display: none; }
+  .docs-sidebar nav li { flex: none; }
+  .docs-sidebar nav a {
+    display: inline-flex; align-items: center; min-height: 40px; margin: 0;
+    padding: 0 14px; border-radius: 999px; border: 1px solid var(--ink-line-2);
+    font-size: 14px; color: var(--paper-soft); white-space: nowrap;
+  }
+  .docs-sidebar nav a::before { display: none; }
+  .docs-sidebar nav a.active { background: var(--paper); color: #0e1014; border-color: var(--paper); font-weight: 600; }
+  .docs-sidebar nav a.active::after { display: none; }
+  .docs-sidebar .back-hub { display: none; }
+
+  .docs-content { padding-top: 26px; font-size: 16px; }
+  .docs-content p, .docs-content li { font-size: 16px; line-height: 1.6; }
+  .docs-header { padding-left: 0; padding-bottom: 22px; margin-bottom: 26px; }
+  .docs-header::before { display: none; }
+  .docs-header h1 { font-size: clamp(30px, 9vw, 38px); }
+  .docs-header .lede { font-size: 16px; }
+  .docs-content table { display: block; overflow-x: auto; }
+
+  .docs-pager { gap: 10px; margin-top: 36px; padding-top: 18px; }
+  .docs-pager a { padding: 14px; min-height: 44px; }
+  .docs-pager a .nm { font-size: 15px; font-family: var(--font-body); font-weight: 500; }
+
+  .docs-apps-foot { display: block; margin-top: 28px; }
+  .docs-apps-foot .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--paper-dim); margin-bottom: 10px; }
+  .docs-apps-foot .row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .docs-apps-foot .row a {
+    flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px;
+    border-radius: 999px; border: 1px solid var(--c, var(--ink-line-2)); color: var(--c, var(--paper-soft));
+    font-size: 14px; text-decoration: none; white-space: nowrap;
+  }
+
+  .docs-index-hero { padding: 26px 0 18px; margin-bottom: 18px; }
+  .docs-index-hero h1 { font-size: clamp(32px, 9.5vw, 40px); }
+  .docs-index-hero .lede { font-size: 16px; }
+  .docs-index-grid { gap: 10px; }
+  .docs-index-card { padding: 16px; display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 14px; align-items: start; }
+  .docs-index-card::before { display: none; }
+  .docs-index-card img.icon { width: 44px; height: 44px; grid-row: 1 / span 4; }
+  .docs-index-card .tag, .docs-index-card .name, .docs-index-card .desc, .docs-index-card .toc-mini { grid-column: 2; }
+  .docs-index-card .name { font-size: 22px; margin: 2px 0 0; }
+  .docs-index-card .desc { font-size: 14px; margin: 6px 0 0; }
+  .docs-index-card .toc-mini { margin-top: 8px; padding-top: 0; border-top: 0; }
+  .docs-index-card .toc-mini span { font-size: 9.5px; padding: 3px 7px; }
+
+  .docs-flow-h { display: none !important; }
+  .docs-flow-v { display: flex; flex-direction: column; margin-top: 18px; }
+  .docs-flow-v .step { display: flex; gap: 14px; }
+  .docs-flow-v .step .dotcol { display: flex; flex-direction: column; align-items: center; width: 14px; }
+  .docs-flow-v .step .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); margin-top: 14px; flex: none; }
+  .docs-flow-v .step .line { width: 1px; flex: 1; background: var(--ink-line-2); margin-top: 4px; }
+  .docs-flow-v .step .txt { flex: 1; padding: 8px 0 18px; }
+  .docs-flow-v .step .nm { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--c); font-weight: 700; }
+  .docs-flow-v .step .vb { font-family: var(--font-display); font-size: 19px; margin-left: 10px; }
+  .docs-flow-v .step .wh { font-size: 13.5px; line-height: 1.5; color: var(--paper-soft); margin-top: 2px; }
+}

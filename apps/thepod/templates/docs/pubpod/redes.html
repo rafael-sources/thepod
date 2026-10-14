@@ -1,0 +1,77 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Qué pide cada red — Docs · thePod{% endblock %}
+{% block description %}Lo que cada red pide para publicar desde pubPod: cuenta profesional de Instagram, la bandeja de TikTok, videos en privado en YouTube, el feed para Spotify y Apple Podcasts.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">QUÉ PIDE CADA RED</div>
+  <h1>Las reglas de cada estrella</h1>
+  <p class="lede">
+    Cada red tiene sus condiciones, y algunas cambian cuando thePod termine las revisiones de Meta, TikTok y Google. Aquí está lo que aplica hoy.
+  </p>
+</header>
+
+<section id="conectar">
+  <h2><span class="num">01</span> Conectar, en general</h2>
+  <p>
+    Se conecta una sola vez, en <a class="x-link prepod" href="/docs/prepod/funcionalidades#redes">prePod → Configurar podcast → Redes</a> o tocando
+    una estrella punteada en pub. Se abre la red en el navegador, das el permiso de publicar en tu nombre, y vuelves. thePod guarda ese permiso,
+    nunca tu contraseña; «Desconectar» lo quita. Si el permiso vence, la estrella vuelve a punteada y la conectas de nuevo.
+  </p>
+</section>
+
+<section id="instagram">
+  <h2><span class="num">02</span> Instagram y Reels</h2>
+  <ul>
+    <li>Necesita una <strong>cuenta profesional</strong>: Creador o Empresa. Se cambia en la app de Instagram: Ajustes → Tipo de cuenta. Una cuenta personal no puede conectarse.</li>
+    <li>Mientras thePod está en revisión de Meta, solo publican las cuentas agregadas como <strong>evaluadoras</strong>. Si eres beta tester, escríbenos con tu usuario y te agregamos; te llega una invitación que aceptas en Instagram, en Ajustes → Sitios web y apps.</li>
+    <li>Los reels salen como Reel; el episodio completo sale como una imagen (un cuadro del video) con el texto.</li>
+    <li>El texto admite hashtags y menciones. Instagram puede tardar unos segundos en procesar el video antes de publicarlo; pub espera solo.</li>
+  </ul>
+</section>
+
+<section id="tiktok">
+  <h2><span class="num">03</span> TikTok</h2>
+  <ul>
+    <li>El video <strong>no se publica directo</strong>: llega a tu <strong>bandeja</strong> de TikTok (la notificación «Tienes un video listo»). Lo abres en el teléfono, pegas el texto que pub te dejó con «Copiar el texto», y lo publicas desde ahí. Es la regla de TikTok hasta que revise la app.</li>
+    <li>Hasta <strong>5 videos pendientes</strong> en la bandeja por día.</li>
+    <li>Mientras la app está en pruebas, solo las cuentas agregadas como probadoras; escríbenos y te decimos cómo.</li>
+  </ul>
+</section>
+
+<section id="youtube">
+  <h2><span class="num">04</span> YouTube y Shorts</h2>
+  <ul>
+    <li>Es la misma conexión de la subida a YouTube de prePod. Shorts es el mismo canal: pub manda el vertical con #Shorts y YouTube lo trata como Short.</li>
+    <li>Hasta que Google verifique la app, todo sube <strong>en privado</strong>. Pub lo marca «Subido en privado»; ábrelo en YouTube y cámbialo a Público.</li>
+    <li>La descripción lleva los capítulos si cumplen las reglas de YouTube (el primero en 00:00, al menos tres, separados por 10 s o más).</li>
+  </ul>
+</section>
+
+<section id="feed">
+  <h2><span class="num">05</span> Spotify y Apple Podcasts</h2>
+  <ul>
+    <li>No se conectan: leen el <strong>feed</strong> del podcast. Se encienden cuando el podcast está configurado para publicar en prePod.</li>
+    <li>Pub sube el audio al feed con las notas del episodio; Spotify y Apple lo muestran solos, normalmente en minutos (Apple a veces tarda más).</li>
+    <li>La primera vez, el feed hay que enviarlo a Spotify y a Apple desde prePod → Distribución. Después ya no.</li>
+  </ul>
+</section>
+
+<section id="facebook">
+  <h2><span class="num">06</span> Facebook</h2>
+  <p>La octava estrella. Está en el arco, pero por ahora aparece como «muy pronto».</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#conectar">Conectar</a>
+  <a href="#instagram">Instagram y Reels</a>
+  <a href="#tiktok">TikTok</a>
+  <a href="#youtube">YouTube y Shorts</a>
+  <a href="#feed">Spotify y Apple</a>
+  <a href="#facebook">Facebook</a>
+</nav>
+{% endblock %}
