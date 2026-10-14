@@ -10,7 +10,7 @@
   <p class="lede">
     Todo lo que hace la app hoy, sección por sección, en el mismo orden que la barra lateral.
     Arriba, junto a “thePod”, cambias entre <strong>pre</strong> (planear), <strong>prod</strong> (grabar),
-    <strong>ama</strong> (preguntas del público) y <strong>post</strong> (editar y publicar). La parte más grande es post.
+    <strong>ama</strong> (preguntas del público), <strong>post</strong> (editar) y <strong>pub</strong> (publicar). La parte más grande es post.
     Los atajos de teclado tienen su <a href="/docs/postpodapp/atajos">propia página</a>.
   </p>
 </header>
@@ -94,12 +94,12 @@
 <h3>3.2 Limpiar sonido</h3>
 <p>Un botón, <strong>Arreglar todo</strong>, hace tres cosas:</p>
 <ol>
-<li><strong>Sonido de estudio</strong>: quita ruido y empareja el volumen. Ruido «Suave» (ventilador, siseo) o «Fuerte» (red neuronal RNNoise incluida, para perro, teclas, calle).</li>
+<li><strong>Sonido de estudio</strong>: quita el ruido con el aislador de voz de Apple (el mismo de Final Cut): teclas, perro, calle, ventilador. Funciona sin internet y tarda unos 3 segundos por minuto de audio. <strong>Cuánto limpia</strong>: Natural, Normal o Máximo; en Normal y Máximo, además, baja lo poco que queda entre palabras. Cada voz queda a un volumen parejo con una ganancia fija (no se comprime cada voz por separado: eso levantaba el ruido). El tecleo de quien habla mientras teclea baja, pero no desaparece del todo; el de quien escucha lo resuelve «Silenciar a quien no habla». En Macs que no traen el aislador se usa la limpieza con red neuronal.</li>
 <li><strong>Quitar silencios</strong> largos (mínimo configurable, con un margen que se conserva alrededor de la voz).</li>
 <li><strong>Quitar muletillas</strong>: «eh», «mmm» y parecidos siempre. Con la opción de palabras, «este», «o sea» y «tipo» solo cuando están sueltos entre pausas, repetidos o pegados a un «eh». «Bueno», «pues» y «digamos» nunca se quitan solos, y si la palabra es de verdad («es bueno», «este tema», «tipo de») ni se marca.</li>
 </ol>
 <p><strong>Para revisar</strong>: lo que no está claro queda como sugerencia, sin quitar. Son muletillas dudosas, frases repetidas o que arrancan dos veces («es que, es que…») y sonidos sin palabras. La lista aparece debajo del botón: ▶ para escuchar desde un poco antes, y <strong>Quitar</strong> o <strong>Dejar</strong>, una por una o todas de una vez. Si vuelves a arreglar, lo que ya decidiste se respeta.</p>
-<p>Nada se borra de verdad: cada corte queda en la lista con su motivo y se apaga o enciende. También: <strong>Silenciar a quien no habla</strong> (baja 18 dB la pista de quien no está hablando, en la vista previa y en el export) y cortar a mano arrastrando en el timeline. La transcripción se hace aquí o en Subtítulos, en la Mac, sin internet (WhisperKit).</p>
+<p>Nada se borra de verdad: cada corte queda en la lista con su motivo y se apaga o enciende. También: <strong>Silenciar a quien no habla</strong> (baja la pista de quien no está hablando, en la vista previa y en el export; baja y sube suave, no se cierra en las pausas cortas, y <strong>Cuánto baja</strong> elige Suave, Normal o Fuerte) y cortar a mano arrastrando en el timeline. La transcripción se hace aquí o en Subtítulos, en la Mac, sin internet (WhisperKit).</p>
 <h3>3.3 Subtítulos</h3>
 <p>Elige un estilo (varios presets, colores, tamaño, posición, mayúsculas, karaoke palabra por palabra). Sobre el video aparece un recuadro amarillo «Subtítulos» que se arrastra a cualquier lugar; «Volver a abajo» deshace la posición libre. En la lista: doble clic en una palabra la corrige; las tijeras quitan la frase del video (es un corte más). Toca una frase para oírla. <strong>Guardar .srt</strong> y <strong>Guardar transcripción (.txt)</strong>; el .srt también está en Exportar.</p>
 <p><strong>Que coincidan con la voz.</strong> La transcripción suele marcar las palabras un poco antes de que se digan, y a veces le pega una pausa a una palabra; al quitar silencios eso se notaba como subtítulos adelantados. <strong>Ajustar al audio</strong> corre cada frase a donde se escucha la voz de esa persona, sin cambiar el texto; si ya quitaste silencios, se vuelven a buscar con los tiempos nuevos. Las transcripciones nuevas ya salen ajustadas; en los proyectos de antes aparece un aviso hasta que lo hagas. <strong>Volver a escuchar todo</strong> escribe la transcripción de nuevo (se pierden las correcciones hechas a mano). Al corregir una frase, las palabras que no cambiaste conservan su momento exacto.</p>
@@ -156,7 +156,7 @@
 <li><strong>Ondas</strong>: forma de onda real por persona, del análisis de sonido (se hace también con una sola persona).</li>
 <li><strong>Solo / Mudo</strong> por persona (S y M en el timeline; también en el panel). Valen en la vista previa y en el export; la pista muda se ve gris.</li>
 <li><strong>Medidor</strong> por persona: al reproducir muestra lo que realmente suena de esa persona, con su volumen, fades, silenciar a quien no habla, línea de volumen y pitidos. En pausa es una estimación.</li>
-<li><strong>Volumen dibujado</strong>: la línea amarilla. Doble clic sobre una persona agrega un punto; arrastrar arriba o abajo (−60 a +12 dB, de a 1 dB, el valor se ve arriba mientras arrastras) y a los lados; clic lo elige, Suprimir lo quita; ⌘Z deshace. Entre puntos el volumen cambia de a poco. Se mezcla con lo automático (fades, silenciar a quien no habla, pitidos): lo tuyo manda.</li>
+<li><strong>Volumen dibujado</strong>: la línea amarilla. Doble clic sobre una persona agrega un punto <em>al volumen que ya tenía</em> (no al alto del clic: así un doble clic cerca del borde de abajo no deja a nadie mudo); arrastrar arriba o abajo (−60 a +12 dB, de a 1 dB, el valor se ve arriba mientras arrastras) y a los lados; clic lo elige, Suprimir lo quita; ⌘Z deshace. Entre puntos el volumen cambia de a poco. Se mezcla con lo automático (fades, silenciar a quien no habla, pitidos): lo tuyo manda. Si la línea le baja la voz a alguien, su panel lo avisa en naranja con «Quitar la línea» al lado.</li>
 <li><strong>Trozos de una sola persona</strong>: al arrastrar sobre una persona, «Silenciar solo a X» (tose, un golpe) y «−6 dB a X» (gritó) ponen cuatro puntos en su línea; el video no se acorta y las demás siguen. «Cortar de todos» es el corte de siempre.</li>
 <li><strong>Voz</strong>: ecualizador de tres bandas con presets, Voz pareja (compresor suave: lo bajo sube, lo alto no pega) y Menos siseo (de-esser), por persona, con «Aplicar».</li>
 <li><strong>Volumen final</strong>: al exportar se mide y se ajusta a −16 LUFS (lo que piden Spotify y YouTube); se apaga en Exportar.</li>
@@ -169,10 +169,10 @@
   <h2><span class="num">05</span> post · Entregar</h2>
 <h3>6.1 Reels</h3>
 <p>Cada momento marcado (en postPod web, con «Marcar momento» bajo el video, con M, o con I y O) es un video vertical 9:16 con subtítulos. La IA no elige reels: salen de tus momentos. «Restaurar desde los momentos» vuelve a crearlos.</p>
-<p><strong>Tarjeta de cada reel</strong> (izquierda): título, empieza y termina (h:mm:ss, ±1 s), duración rápida 30/60/90 s, Ver, borrar, y el botón de bajar que exporta solo ese reel.</p>
+<p><strong>Tarjeta de cada reel</strong> (izquierda): título, empieza y termina (h:mm:ss, ±1 s), duración rápida 30/60/90 s, Ver, borrar, el botón de bajar que exporta solo ese reel y <strong>✈️ Publicar en redes</strong>: exporta el reel tal como se ve, eliges Instagram, YouTube Shorts o TikTok y el texto de cada una, y thePod lo publica aunque cierres la app (lo mismo que hace <a href="#pub">pub</a>, sin salir del editor).</p>
 <p><strong>Pestañas</strong> (derecha, bajo el video): lo que eliges se edita dentro de su pestaña.</p>
 <ul>
-<li><strong>Diseño</strong>: los mismos diseños de Aspecto con sus opciones, orden propio («Propio»), marca (fondo, logo, nombres), logo y fondo solo para reels, y «Música y efectos del episodio» (al apagarlo, música propia del reel). Para todos los reels o, con «Este reel tiene el suyo», solo para uno. <strong>Plantillas</strong>: guardar el diseño con nombre y aplicarlo con un clic en cualquier episodio (no guarda el logo ni el fondo propios, que son archivos del episodio).</li>
+<li><strong>Diseño</strong>: los mismos diseños de Aspecto con sus opciones, orden propio («Propio»), marca (fondo, logo, nombres), logo y fondo solo para reels, «Música y efectos del episodio» (al apagarlo, música propia del reel) y <strong>Título de gancho</strong>: una frase grande arriba durante los primeros 3 segundos. Para todos los reels o, con «Este reel tiene el suyo», solo para uno. <strong>Plantillas</strong>: guardar el diseño con nombre y aplicarlo con un clic en cualquier episodio (no guarda el logo ni el fondo propios, que son archivos del episodio).</li>
 <li><strong>Subtítulos</strong>: arriba, cómo se ven: si salen en los reels, y «Estilo propio para los reels» (presets, colores, tamaño, resaltar palabra, posición arrastrable sobre el video); si no, usan el estilo del episodio acomodado al vertical. Para todos los reels o solo para el que ves. Abajo, el texto del reel: doble clic corrige una palabra (vale para el episodio), las tijeras quitan la frase solo de ese reel; los cortes propios se deshacen con un botón. <strong>Volver a escuchar este reel</strong> escribe de nuevo solo el texto de ese reel, ajustado a la voz: el reel queda con su texto propio (lo que corrijas ahí ya no cambia el episodio) y «Usar el texto del episodio» lo devuelve.</li>
 <li><strong>Música</strong>: «Música de este reel · Agregar…»: empieza al inicio del reel, si es más corta se repite, y se edita (volumen, bajar bajo la voz, fades, mover). Solo suena en ese reel. También: «Limpiar sonido» solo en el reel si el episodio no se limpió, «Quitar silencios solo en este reel» y «Silenciar a quien no habla» propio.</li>
 <li><strong>B-roll</strong>: b-roll solo en ese reel (siempre más corto que el reel).</li>
@@ -183,19 +183,46 @@
 <h3>6.2 Exportar video</h3>
 <p><strong>Antes de exportar</strong>: arriba aparece lo que conviene mirar, cada cosa con su botón para resolverla ahí mismo. Puede ser sonido sin limpiar, subtítulos sin ajustar a la voz («Ajustar»), sugerencias sin revisar («Ver» o «Dejar como están»), palabras sensibles sin buscar o reels elegidos que no miraste. Si está todo, dice «Todo listo». Es solo un aviso: se puede exportar igual.</p>
 <p>Formatos: YouTube 16:9 (en <strong>1080p o 4K</strong>: el 4K pesa unas 4 veces más y tarda más, pero YouTube lo muestra más nítido aunque hayas grabado en 1080p; está en los planes que incluyen la app), Reels/TikTok/Shorts 9:16, Instagram cuadrado 1:1, solo audio (MP3 con título y artista). Qué incluir: subtítulos, sponsors en su momento, cintillos del director. Archivo: <strong>Compatible (H.264)</strong>, se ve en todas partes, o <strong>Liviano (HEVC)</strong>, la mitad de peso y más rápido. «Ajustar el volumen final (−16 LUFS)». <strong>Pistas por separado (WAV)</strong>. Modo tranquilo: si la Mac se calienta, el render baja el ritmo. Los archivos quedan en la carpeta de exportados (botón abajo a la izquierda) y se abren en el Finder.</p>
+<p><strong>Capítulos</strong>: salen del guion y de los momentos, con el intro ya descontado. Siguen las reglas de YouTube para que los muestre (el primero en 00:00, al menos tres, separados por 10 segundos o más); si no se cumplen, la descripción sale sin capítulos en vez de con unos que YouTube ignora. También van dentro del video y del MP3 exportados, para QuickTime, Apple Podcasts y otros reproductores.</p>
 <h3>6.3 Publicar</h3>
-<p>Con lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts y el canal de YouTube (sube el video con progreso real). Si algo falta, el aviso dice qué configurar en prePod.</p>
+<p>Vincula el proyecto con su episodio de prePod (una sola vez) y publica el audio en el feed (Spotify y Apple Podcasts) o sube el video a YouTube, con progreso real. Si algo falta, el aviso dice qué configurar en prePod. Para elegir destinos, programar o publicar reels en redes, está la sección <a href="#pub">pub</a>.</p>
+</section>
+
+<section id="pub">
+  <h2><span class="num">06</span> pub</h2>
+<p>Donde se publica lo que sale de post. La sección es blanca, como las estrellas de la bandera: <strong>ocho destinos en arco</strong>, una estrella cada uno: Spotify, Apple Podcasts, YouTube, Instagram, Shorts, Reels, TikTok y Facebook. Una estrella llena está conectada; una punteada con «Conectar» no, y al tocarla abre el navegador para dar el permiso (la app se da cuenta sola cuando terminaste).</p>
+<h3>Qué publicas</h3>
+<p>A la izquierda, los episodios que tienes en post. Al elegir uno aparecen las tarjetas con miniatura real: <strong>Episodio completo</strong>, cada <strong>reel</strong> y <strong>Desde la compu</strong> (un video que ya tienes). Según lo que elijas se encienden las estrellas que corresponden:</p>
+<ul>
+<li><strong>Episodio completo</strong>: YouTube (el video 16:9), Spotify y Apple Podcasts (el audio al feed, con las notas del episodio) y la portada a Instagram (un cuadro del video con texto).</li>
+<li><strong>Reel</strong>: Shorts, Reels y TikTok (vertical 9:16, tal como se ve en el editor).</li>
+<li>Facebook, próximamente.</li>
+</ul>
+<p>Cada estrella encendida se puede apagar para esta publicación. Abajo, el texto: una pestaña por destino (descripción de YouTube, texto del Short, texto con hashtags para Instagram, notas del episodio para el feed, y el texto para pegar en TikTok). <strong>Ahora</strong> o <strong>Programar</strong> con fecha y hora, y <strong>Exportar y publicar</strong>: la app exporta lo que falte y sube todo; si cierras la app, thePod sigue solo.</p>
+<h3>El panel de cada estrella</h3>
+<p>Toca el nombre de una estrella (o mantenla presionada): ves la cuenta conectada, «Ver perfil», <strong>Lo último</strong> que salió por ahí, Incluir o Quitar de esta publicación, y <strong>Siempre al final</strong>: una firma o hashtags que se agregan solos al pie de cada texto que publiques en ese destino.</p>
+<h3>Publicaciones</h3>
+<p>La lista de lo que salió y lo que está por salir, con su estado: Programado, Publicando, Publicado (con el link), Subido en privado, En tu bandeja de TikTok, No se publicó (con Reintentar) o Cancelado. Una programada se puede cancelar hasta que empieza.</p>
+<h3>Lo que pide cada red</h3>
+<ul>
+<li><strong>Instagram</strong>: cuenta profesional (Creador o Empresa). Mientras la app de thePod está en revisión de Meta, solo publican las cuentas agregadas como evaluadoras.</li>
+<li><strong>TikTok</strong>: el video llega a tu <strong>bandeja</strong> de TikTok con el texto listo para pegar; lo terminas de publicar desde la app del teléfono. Hasta 5 videos pendientes por día.</li>
+<li><strong>YouTube y Shorts</strong>: hasta que Google verifique la app, los videos se suben <strong>en privado</strong>; ábrelo en YouTube y cámbialo a «Público».</li>
+<li><strong>Spotify y Apple Podcasts</strong>: leen el feed del podcast; se encienden con el podcast configurado para publicar en pre.</li>
+</ul>
+<p>Las cuentas se conectan una sola vez en <strong>pre → Configurar podcast → Redes</strong> o desde la propia estrella.</p>
 </section>
 
 <section id="pre">
-  <h2><span class="num">06</span> pre</h2>
-<p>Tablero de episodios (columnas por estado), calendario, guion, rundown, invitados (con RSVP y foto), ideas con votos, plantillas, página del podcast, equipo, publicación, y configuración del podcast: branding (fondo, logo, colores), sponsors (logo, frase, link), soundboard, distribución (feed, YouTube), conductores y directores.</p>
+  <h2><span class="num">07</span> pre</h2>
+<p>Tablero de episodios (columnas por estado), calendario, guion, rundown, invitados (con RSVP y foto), ideas con votos, plantillas, página del podcast, equipo, publicación, y configuración del podcast: branding (fondo, logo, colores), sponsors (logo, frase, link), soundboard, distribución (feed, YouTube), <strong>Redes</strong> y conductores y directores.</p>
+<p><strong>Redes</strong>: solo para conectar las cuentas del podcast, una vez: el feed (Spotify y Apple Podcasts), YouTube (YouTube y Shorts), Instagram (Instagram y Reels), TikTok y Facebook. Junto a cada cuenta se ven las estrellas que enciende en <a href="#pub">pub</a>, que es desde donde se publica. Conectar abre el navegador para dar el permiso y la app lo nota sola al terminar; Desconectar quita el permiso.</p>
 <p><strong>Guion</strong>: secciones con quién habla (etiqueta libre), texto, notas y duración («dura», en minutos). Cada sección puede marcarse <strong>Teleprompter</strong>: quién lo lee (lista: conductores por usuario e invitados del episodio; si no eliges a nadie, le sale a todos), aparece a los <code>min</code> <code>seg</code> (o <strong>después del anterior</strong> con una separación en segundos: prePod calcula cuándo termina el anterior por sus palabras y la velocidad), velocidad (lenta, normal, rápida) y cuánto ocupa (¼, ½, toda la pantalla). «Sugerir» pone el minuto sumando las secciones anteriores. «Ir a grabar» abre la sala.</p>
 <p><strong>Igual que en la web</strong>: «Agregar a mi calendario» (en la vista de calendario) baja los episodios para tu calendario de la Mac; en la configuración del podcast, «Exportar podcast (.zip)» guarda una copia completa y cada sponsor tiene «Reporte» con sus menciones por episodio, que puedes guardar como planilla; en la página del podcast, «Abrir el editor completo» abre el editor de la web.</p>
 </section>
 
 <section id="prod">
-  <h2><span class="num">07</span> prod</h2>
+  <h2><span class="num">08</span> prod</h2>
 <p>Cualquier conductor y el director pueden estar desde la Mac o la web, mezclados; los invitados siempre por web; máximo 4 en la sala; grabación hasta 1080p (una prueba inicial mide la conexión y decide 1080p o 720p).</p>
 <p><strong>Pantalla previa</strong>: cámara, micrófono, audífonos o parlantes (con audífonos se graba el micrófono directo; con parlantes, la voz sin eco), prueba de conexión.</p>
 <p><strong>Probar micrófono (10 s)</strong>: habla como lo harás en el episodio y thePod te dice si tu voz llega baja o muy fuerte y cuánto subirla o bajarla. «Aplicar» lo guarda para ese micrófono: cambia cómo te oye la sala, tu grabación queda igual. «Quitar» vuelve a como estaba.</p>
@@ -207,18 +234,20 @@
 </section>
 
 <section id="ama">
-  <h2><span class="num">08</span> ama</h2>
-<p>Eventos y plantillas, estudio del host: solicitudes con preguntas, cola ordenable arrastrando, al aire, silenciar y ocultar, chat, grabación del servidor, links. Pendiente: ver y oír al del Q&amp;A dentro de la sala de prodPod, grabación en la Mac si la del servidor falla, chat moderado real.</p>
+  <h2><span class="num">09</span> ama</h2>
+<p>Eventos y plantillas, estudio del host: solicitudes con preguntas, cola ordenable arrastrando, al aire, silenciar y ocultar, chat, grabación del servidor, links.</p>
+<p><strong>Chat moderado</strong>: el público escribe desde la página para ver el evento (con su nombre) y mientras espera su turno en la cola. En un evento con chat moderado, cada mensaje te llega primero a ti con Aprobar, Quitar y Bloquear; mientras espera solo lo ven tú y quien lo escribió, y quien queda bloqueado no escribe más en ese evento. Hasta 300 caracteres por mensaje y uno cada 3 segundos por persona.</p>
+<p>Pendiente: ver y oír al del Q&amp;A dentro de la sala de prodPod y grabación en la Mac si la del servidor falla.</p>
 </section>
 
 <section id="ajustes">
-  <h2><span class="num">09</span> Ajustes</h2>
+  <h2><span class="num">10</span> Ajustes</h2>
 <p><strong>Tu cuenta de thePod</strong>: la misma de la web. Se entra con el usuario o con el correo. «¿Olvidaste tu contraseña?» abre la web en la pantalla para recuperarla, y <strong>Cerrar sesión</strong> olvida la contraseña en esta Mac sin tocar tus episodios. «Mi perfil» abre la web para cambiar tu foto, tu nombre, tu correo o tu contraseña; si cambias la contraseña, escríbela también aquí. Las direcciones de los servidores están plegadas en «Servidores». También: «Buscar ahora» actualizaciones, cámara y micrófono por defecto, calidad de la sala, y la clave de Claude opcional para sugerencias.</p>
 <p>El menú <strong>Ayuda</strong> lleva al manual, las preguntas frecuentes, la página de privacidad y a escribirnos.</p>
 </section>
 
 <section id="logos-y-entrada">
-  <h2><span class="num">10</span> Logos y entrada</h2>
+  <h2><span class="num">11</span> Logos y entrada</h2>
 <p>La entrada muestra el logo de thePod con el sonido oficial en cuatro: con cada nota salen dos de las ocho estrellas (como la bandera), de las puntas al centro, y al final brillan juntas. El set de marca (logos en PNG transparente y PDF, GIF y video de la entrada en 16:9, 1:1 y 9:16, con y sin fondo) se genera desde la app: <code>thePod --brand-kit &lt;carpeta&gt;</code> y <code>thePod --intro-frames &lt;carpeta&gt; &lt;ancho&gt; &lt;alto&gt; &lt;0|1|2&gt;</code>.</p>
 </section>
 {% endblock %}
@@ -231,6 +260,7 @@
   <a href="#post-armar">post · Armar</a>
   <a href="#post-mezcla">post · Mezcla</a>
   <a href="#post-entregar">post · Entregar</a>
+  <a href="#pub">pub</a>
   <a href="#pre">pre</a>
   <a href="#prod">prod</a>
   <a href="#ama">ama</a>

@@ -80,17 +80,21 @@
 
 <section id="publicar">
   <h2><span class="num">06</span> Publicar con prePod</h2>
-  <p>La app no guarda claves de Spotify, Apple ni YouTube: publica a través de prePod.</p>
+  <p>La app no guarda claves de ninguna red: publica a través de prePod, donde las cuentas se conectan una sola vez (Configurar podcast → Redes). En la app, la sección <strong>pub</strong> es la que publica.</p>
   <table>
     <thead><tr><th>Destino</th><th>Cómo llega</th><th>Qué necesita en prePod</th></tr></thead>
     <tbody>
       <tr><td>Spotify y Apple Podcasts</td><td>La app envía el audio a prePod y prePod lo publica en tu podcast. Las plataformas lo muestran solas.</td><td>Tu podcast configurado para publicar.</td></tr>
-      <tr><td>YouTube</td><td>La app sube el video 16:9; prePod lo publica en tu canal.</td><td>Canal conectado en Distribución → YouTube.</td></tr>
+      <tr><td>YouTube</td><td>La app sube el video 16:9; prePod lo publica en tu canal. Hasta que Google verifique la app, queda en privado: lo cambias a Público en YouTube.</td><td>Canal conectado en Redes.</td></tr>
+      <tr><td>YouTube Shorts</td><td>El reel vertical, publicado como Short en el mismo canal.</td><td>El mismo canal.</td></tr>
+      <tr><td>Instagram y Reels</td><td>El reel como Reel, o un cuadro del episodio como portada con texto.</td><td>Cuenta profesional (Creador o Empresa) conectada en Redes; mientras la app está en revisión de Meta, solo cuentas evaluadoras.</td></tr>
+      <tr><td>TikTok</td><td>El reel llega a tu bandeja de TikTok con el texto listo para pegar; lo publicas desde el teléfono. Hasta 5 pendientes por día.</td><td>Cuenta de TikTok conectada en Redes.</td></tr>
+      <tr><td>Facebook</td><td>Próximamente.</td><td>—</td></tr>
     </tbody>
   </table>
   <p>
-    Si se corta la conexión mientras sube, la app lo vuelve a intentar sola.
-    Al terminar, te muestra el link publicado.
+    Si se corta la conexión mientras sube, la app lo vuelve a intentar sola; una publicación programada la hace thePod a la hora
+    aunque la app esté cerrada. Al terminar, te muestra el link publicado en la lista de publicaciones de pub.
   </p>
 </section>
 {% endblock %}
