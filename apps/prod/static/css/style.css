@@ -2692,3 +2692,8 @@ a.mark:hover { opacity: 0.8; }
   .modal input, .modal textarea, .modal select { font-size: 16px; min-height: 44px; }
   .modal .row.right button { min-height: 48px; }
 }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .m-sheet .m-help { margin: 0; padding: 4px 6px; font-size: 13px; line-height: 1.45; color: var(--paper-soft); }
+  .m-sheet .m-opt:disabled { opacity: .5; }
+}

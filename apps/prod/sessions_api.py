@@ -17,6 +17,7 @@ from config import (
 )
 from db import get_db
 from integrations import notify_source
+from pod_push import notify as push_notify
 from livekit_service import (
     create_room,
     delete_room,
@@ -1069,7 +1070,7 @@ def join_with_invite(token):
     db = get_db()
     try:
         p = db.execute(
-            "SELECT p.*, s.livekit_room_name, s.status AS session_status "
+            "SELECT p.*, s.livekit_room_name, s.status AS session_status, s.created_by AS session_owner, s.title AS session_title "
             "FROM participants p JOIN sessions s ON s.id = p.session_id "
             "WHERE p.invite_token=?",
             (token,),
@@ -1101,6 +1102,9 @@ def join_with_invite(token):
             (p["id"],),
         )
         db.commit()
+        if not is_host:
+            push_notify([p["session_owner"]], "prodPod · " + (p["session_title"] or "sesión"),
+                        display_name + " entró a la sala", "/prod/", tag="prod-join-" + str(p["session_id"]))
 
         token_jwt = generate_participant_token(
             room_name=p["livekit_room_name"],
