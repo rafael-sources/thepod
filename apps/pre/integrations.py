@@ -183,7 +183,7 @@ def _serialize_episode_payload(slug: str, ep_id: int):
             "FROM landing_config LIMIT 1"
         ).fetchone()
 
-        base = request.host_url.rstrip("/")
+        base = request.url_root.rstrip("/")
         branding = {
             "color_primary": podcast["color_primary"],
             "color_secondary": podcast["color_secondary"],
@@ -223,7 +223,7 @@ def _serialize_episode_payload(slug: str, ep_id: int):
 
         payload = {
             "source_app": "prepod",
-            "source_url": request.host_url.rstrip("/"),
+            "source_url": request.url_root.rstrip("/"),
             "shared_project_id": podcast["shared_project_id"],
             "owner_username": owner_username,
             "extra_hosts": extra_hosts,
@@ -474,7 +474,7 @@ def teleprompter_for_episode():
         ).fetchall()
         sponsors = [{
             "id": r["id"], "name": r["name"], "copy": r["copy"] or "", "url": r["url"],
-            "logo_url": (f"{request.host_url.rstrip('/')}/media/podcasts/{slug}/sponsors/{r['logo_filename']}" if r["logo_filename"] else None),
+            "logo_url": (f"{request.url_root.rstrip('/')}/media/podcasts/{slug}/sponsors/{r['logo_filename']}" if r["logo_filename"] else None),
         } for r in sp_rows]
         return jsonify({"sections": sections, "sponsors": sponsors})
     finally:

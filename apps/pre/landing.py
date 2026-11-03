@@ -589,7 +589,7 @@ def render_rss(slug):
         abort(404)
     podcast = bundle["podcast"]
     landing = bundle["landing"]
-    base = request.host_url.rstrip("/")
+    base = request.url_root.rstrip("/")
     rss_ns = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
     ET.register_namespace("itunes", rss_ns["itunes"])
 
