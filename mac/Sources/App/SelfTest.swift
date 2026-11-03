@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan")
     }
 
     /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
@@ -917,6 +917,32 @@ enum SelfTest {
         if let i = args.firstIndex(of: "--post-snapshot"), args.count > i + 2 {
             let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { postSnapshot(slug: slug, dir: dir) }
+            return
+        }
+        if let i = args.firstIndex(of: "--cover-scan") {   // busca portadas en un proyecto y deja las imágenes en una carpeta
+            let slug = args.count > i + 1 ? args[i + 1] : (ProjectStore.listProjects().first?.id ?? "")
+            let dir = URL(fileURLWithPath: args.count > i + 2 ? args[i + 2] : "/tmp/coverscan")
+            Task { @MainActor in
+                do {
+                    let project = try ProjectStore.load(slug: slug)
+                    let t0 = Date()
+                    print("proyecto \(project.id) · \(Int(project.duration)) s · pistas con video: \(project.lanes.count)")
+                    let found = try await CoverScout.scan(project: project) { f, what in
+                        if Int(f * 100) % 10 == 0 { print(String(format: "  %3d%% %@", Int(f * 100), what)) }
+                    }
+                    print("encontradas \(found.count) en \(Int(Date().timeIntervalSince(t0))) s")
+                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    let imgs = try await CoverScout.renderAll(project: project, times: found.map { $0.time }, energy: AudioAnalysis.loadEnergy(project.id), maxSize: 960) { _ in }
+                    for s in found {
+                        print(String(format: "  %@  score %.2f  %@  caras %d", EditEngine.clock(s.time), s.score, s.allSmiling ? "SONRÍEN" : "       ", s.faces))
+                        if let img = imgs[s.time], let d = CoverScout.jpeg(img) {
+                            try? d.write(to: dir.appendingPathComponent(String(format: "%05d.jpg", Int(s.time))))
+                        }
+                    }
+                    print("OK \(dir.path)")
+                } catch { print("ERROR \(error)") }
+                exit(0)
+            }
             return
         }
         if let i = args.firstIndex(of: "--pub-snapshot"), args.count > i + 1 {
