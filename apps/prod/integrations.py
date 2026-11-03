@@ -30,7 +30,7 @@ def _public_base_url():
     base = (cfg.get("prodpod_url") or "").rstrip("/")
     if base:
         return base
-    return request.host_url.rstrip("/")
+    return request.url_root.rstrip("/")
 
 
 bp = Blueprint("integrations", __name__)

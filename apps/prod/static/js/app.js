@@ -186,7 +186,7 @@ var DashboardView = {
     }
     function exportSession(s, ev) {
       ev.stopPropagation();
-      window.location.href = "/api/sessions/" + s.id + "/export-bundle";
+      window.location.href = podUrl("/api/sessions/" + s.id + "/export-bundle");
     }
     onMounted(function () { load(); startPolling(); });
     onBeforeUnmount(stopPolling);

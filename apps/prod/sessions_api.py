@@ -4,7 +4,7 @@ Sessions CRUD + start/stop recording + participants + invitations.
 
 import secrets
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, jsonify, request, url_for
 
 from auth import current_user, require_auth
 from config import (
@@ -745,7 +745,7 @@ def list_sounds(sid):
         for r in rows:
             d = dict(r)
             if d["is_default"]:
-                d["url"] = f"/static/sounds/{d['filename']}"
+                d["url"] = url_for("static", filename=f"sounds/{d['filename']}")
             else:
                 d["url"] = f"/api/sessions/{sid}/sounds/{d['filename']}"
             out.append(d)
@@ -984,7 +984,7 @@ def reset_sound(sid, sound_id):
             (default["filename"], sound_id),
         )
         db.commit()
-        return jsonify({"ok": True, "url": f"/static/sounds/{default['filename']}"})
+        return jsonify({"ok": True, "url": url_for("static", filename=f"sounds/{default['filename']}")})
     finally:
         db.close()
 
