@@ -307,6 +307,13 @@ enum Help {
             del episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta \
             solo ese reel.
             """
+        case .cover:
+            return """
+            La imagen que representa al episodio: la portada que va a Instagram y la miniatura para YouTube. \
+            «Buscar las mejores capturas» recorre el video y propone los segundos donde todas las personas salen \
+            sonriendo, con los ojos abiertos y nítidas; eliges una en el carrusel. También puedes capturar el segundo \
+            donde esté parado el episodio.
+            """
         case .export:
             return """
             Elige para dónde va (YouTube 16:9, reels 9:16, cuadrado, solo audio). H.264 es el que abre en todos lados; \

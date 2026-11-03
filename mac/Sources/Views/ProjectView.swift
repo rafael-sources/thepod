@@ -24,6 +24,7 @@ struct ProjectView: View {
                     case .sounds: SoundsStep(session: session)
                     case .brands: BrandsStep(session: session)
                     case .reels: ReelsStep(session: session)
+                    case .cover: CoverStep(session: session)
                     case .export: ExportStep(session: session)
                     case .publish: PublishStep(session: session)
                     }
@@ -132,6 +133,7 @@ struct ProjectView: View {
         case .sounds: return !p.audioLane.isEmpty
         case .brands: return !p.sponsors.isEmpty || !p.cintillos.isEmpty
         case .reels: return p.reels.contains { $0.exportedFile != nil }
+        case .cover: return p.coverTime != nil
         case .export: return !session.lastExports.isEmpty
         case .publish: return p.episode.publishedAudioURL != nil || p.episode.publishedYouTubeURL != nil
         }
@@ -149,6 +151,7 @@ struct ProjectView: View {
         case .layers: return p.overlays.isEmpty ? nil : "\(p.overlays.count)"
         case .cintillos: return p.cintillos.isEmpty ? nil : "\(p.cintillos.count)"
         case .brands: return p.sponsors.isEmpty ? nil : "\(p.sponsors.count)"
+        case .cover: return p.coverCandidates.isEmpty ? nil : "\(p.coverCandidates.count)"
         default: return nil
         }
     }
@@ -160,6 +163,7 @@ struct ProjectView: View {
             (p.fix.lastRun != nil, "Sonido limpio", false),
             (p.isTranscribed, "Subtítulos", true),
             (p.backgroundFile != nil && p.logoFile != nil, "Fondo y logo del podcast", true),
+            (p.coverTime != nil, "Portada elegida", true),
         ]
         return VStack(alignment: .leading, spacing: 5) {
             Text("LISTO PARA EXPORTAR").font(.system(size: 10, weight: .semibold)).tracking(1).foregroundStyle(Theme.secondary)

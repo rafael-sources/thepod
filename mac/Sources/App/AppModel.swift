@@ -179,7 +179,7 @@ final class AppModel: ObservableObject {
 }
 
 enum Step: String, CaseIterable, Identifiable {
-    case overview, fix, captions, sensitive, look, layers, sounds, cintillos, brands, reels, export, publish
+    case overview, fix, captions, sensitive, look, layers, sounds, cintillos, brands, reels, cover, export, publish
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -193,6 +193,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .sounds: return "Música y efectos"
         case .brands: return "Patrocinios y marcas"
         case .reels: return "Reels"
+        case .cover: return "Portada"
         case .export: return "Exportar video"
         case .publish: return "Publicar"
         }
@@ -209,6 +210,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .sounds: return "music.note"
         case .brands: return "tag"
         case .reels: return "iphone.gen3"
+        case .cover: return "photo.on.rectangle.angled"
         case .export: return "square.and.arrow.up"
         case .publish: return "paperplane"
         }
@@ -219,7 +221,7 @@ enum Step: String, CaseIterable, Identifiable {
         switch self {
         case .overview, .fix, .captions, .sensitive: return .prepare
         case .look, .layers, .sounds, .cintillos, .brands: return .build
-        case .reels, .export, .publish: return .deliver
+        case .reels, .cover, .export, .publish: return .deliver
         }
     }
     var number: Int { (Step.allCases.firstIndex(of: self) ?? 0) + 1 }
@@ -1508,23 +1510,80 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Portada del episodio para Instagram: un cuadro del episodio tal como se ve (diseño, logo, fondo),
-    /// en el momento del primer reel o, si no hay, a un cuarto del episodio. JPEG 16:9.
+    /// Segundo del episodio que sale en la portada: el elegido en Portada o, si no, el primer reel o un cuarto del episodio.
+    var coverTimeline: Double {
+        project.coverTime ?? project.reels.first.map { $0.start + 1 } ?? project.duration * 0.25
+    }
+
+    /// Portada del episodio (Instagram, miniatura): un cuadro del episodio tal como se ve (diseño, logo, fondo). JPEG 16:9.
     func exportCover() async throws -> URL {
-        let built = try await CompositionBuilder.build(project: project, format: .landscape, window: nil, energy: energy)
-        let gen = AVAssetImageGenerator(asset: built.asset)
-        gen.videoComposition = built.videoComposition
-        gen.requestedTimeToleranceBefore = .zero
-        gen.requestedTimeToleranceAfter = .zero
-        let tl = project.reels.first.map { $0.start + 1 } ?? project.duration * 0.25
-        let outT = (EditEngine.toOutput(tl, keep: built.keep) ?? tl) + built.introDuration
-        let (img, _) = try await gen.image(at: CMTime(seconds: outT, preferredTimescale: 600))
-        guard let data = NSBitmapImageRep(cgImage: img).representation(using: .jpeg, properties: [.compressionFactor: 0.9]) else {
+        let img = try await CoverScout.render(project: project, at: coverTimeline, energy: energy)
+        guard let data = CoverScout.jpeg(img, quality: 0.9) else {
             throw PrePodClient.Failure(message: "No se pudo preparar la portada")
         }
         let url = ProjectStore.exportsFolder(for: project.id).appendingPathComponent("portada.jpg")
         try data.write(to: url, options: .atomic)
         return url
+    }
+
+    /// Busca los segundos donde todas las personas salen sonriendo y nítidas, y deja una imagen de cada uno.
+    func findCoverCandidates() {
+        run("Buscando capturas") { [self] in
+            report("Buscando capturas", "Mirando las caras…", 0)
+            let found = try await CoverScout.scan(project: project) { [weak self] f, what in
+                self?.reportAsync("Buscando capturas", what, f * 0.7)
+            }
+            if found.isEmpty {
+                project.coverCandidates = []
+                project.coverScannedAt = Date()
+                note = "No encontré caras en el video. Elige el segundo a mano en Portada."
+                return
+            }
+            report("Buscando capturas", "Dibujando las portadas…", 0.7)
+            let folder = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("portadas")
+            try? FileManager.default.removeItem(at: folder)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let images = try await CoverScout.renderAll(project: project, times: found.map { $0.time }, energy: energy, maxSize: 960) { [weak self] f in
+                self?.reportAsync("Buscando capturas", "Dibujando las portadas…", 0.7 + f * 0.3)
+            }
+            var out: [CoverCandidate] = []
+            for s in found {
+                guard let img = images[s.time], let data = CoverScout.jpeg(img, quality: 0.85) else { continue }
+                let name = "portada-\(Int(s.time * 10)).jpg"
+                try data.write(to: folder.appendingPathComponent(name), options: .atomic)
+                out.append(CoverCandidate(time: s.time, score: s.score, allSmiling: s.allSmiling, faces: s.faces, file: "portadas/" + name))
+            }
+            project.coverCandidates = out
+            project.coverScannedAt = Date()
+            if project.coverTime == nil, let best = out.max(by: { ($0.allSmiling ? 1 : 0, $0.score) < ($1.allSmiling ? 1 : 0, $1.score) }) {
+                project.coverTime = best.time
+            }
+        }
+    }
+
+    /// Una captura del segundo donde está parado el episodio, para elegirla a mano.
+    func addCoverCandidateAtPlayhead() {
+        let t = playheadTimeline
+        run("Capturando") { [self] in
+            let img = try await CoverScout.render(project: project, at: t, energy: energy, maxSize: 960)
+            guard let data = CoverScout.jpeg(img, quality: 0.85) else { return }
+            let folder = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("portadas")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let name = "portada-\(Int(t * 10)).jpg"
+            try data.write(to: folder.appendingPathComponent(name), options: .atomic)
+            project.coverCandidates.removeAll { abs($0.time - t) < 0.05 }
+            project.coverCandidates.append(CoverCandidate(time: t, score: 0, allSmiling: false, faces: 0, file: "portadas/" + name))
+            project.coverCandidates.sort { $0.time < $1.time }
+            project.coverTime = t
+        }
+    }
+
+    /// Guarda la portada elegida como JPEG en la carpeta de exportados y la muestra en el Finder.
+    func saveCover() {
+        run("Guardando la portada") { [self] in
+            let url = try await exportCover()
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     }
 
     /// Exporta el reel tal como está ahora, lo sube a prePod y crea una publicación por red.

@@ -64,6 +64,9 @@ struct Project: Codable, Identifiable, Equatable {
     var reels: [Reel] = []
     var aiSummary: String?
     var aiAnalyzedAt: Date?             // la IA ya buscó notas y momentos de este episodio (se hace una sola vez)
+    var coverTime: Double?              // portada: segundo del episodio elegido (nil = el de siempre: primer reel o un cuarto)
+    var coverCandidates: [CoverCandidate] = []   // capturas encontradas (la imagen queda en la caché del proyecto)
+    var coverScannedAt: Date?
 
     var logoFile: String?               // relative to project folder
     var backgroundFile: String?
@@ -849,6 +852,16 @@ struct Segment: Codable, Equatable, Identifiable {
     var plannedOffset: Double?          // planned start from prePod
 }
 
+/// Una captura candidata a portada: un segundo del episodio donde todas las personas se ven bien.
+struct CoverCandidate: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var time: Double                    // segundo del episodio (timeline)
+    var score: Double                   // 0…1: cuánto sonríen, ojos abiertos, nitidez
+    var allSmiling: Bool                // todas las personas con cara sonríen en este cuadro
+    var faces: Int                      // caras encontradas (sumando las pistas)
+    var file: String                    // JPEG en la caché del proyecto
+}
+
 /// A moment marked in postPod (or prodPod chapters). Point moments have no duration.
 struct Moment: Codable, Identifiable, Equatable {
     var id: Int
@@ -914,6 +927,9 @@ extension Project {
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
         aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
         aiAnalyzedAt = try c.decodeIfPresent(Date.self, forKey: .aiAnalyzedAt)
+        coverTime = try c.decodeIfPresent(Double.self, forKey: .coverTime)
+        coverCandidates = try c.decodeIfPresent([CoverCandidate].self, forKey: .coverCandidates) ?? []
+        coverScannedAt = try c.decodeIfPresent(Date.self, forKey: .coverScannedAt)
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
         postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)
