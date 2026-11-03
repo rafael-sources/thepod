@@ -2836,3 +2836,8 @@ a.mark:hover { opacity: 0.8; }
   .editor-wide.m-editor > .right-col { display: flex !important; }
   .editor-wide.m-editor .ai-btn-primary { background: var(--signal); color: var(--ink-deep); border-color: var(--signal); }
 }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .m-sheet .m-help { margin: 0; padding: 4px 6px; font-size: 13px; line-height: 1.45; color: var(--paper-soft); }
+  .m-sheet .m-opt:disabled { opacity: .5; }
+}
