@@ -1,4 +1,25 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
+
+/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+var _touchRef = null;
+function useTouch() {
+  if (!_touchRef) {
+    _touchRef = ref(false);
+    try {
+      var mq = window.matchMedia("(max-width: 900px), (pointer: coarse)");
+      _touchRef.value = mq.matches;
+      (mq.addEventListener ? mq.addEventListener("change", function () { _touchRef.value = mq.matches; }) : mq.addListener(function () { _touchRef.value = mq.matches; }));
+    } catch (_) {}
+  }
+  return _touchRef;
+}
+var M_ICONS = {
+  sessions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none"/></svg>',
+  director: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="13" height="11" rx="2"/><path d="M16.5 11l4-2.5v7l-4-2.5"/></svg>',
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.5-4 4-6 7.5-6s6 2 7.5 6"/></svg>',
+  plus: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M13 5v16M5 13h16"/></svg>',
+};
+var SES_STATE = { preparing: { label: "Preparando", color: "#9d9078" }, live: { label: "En vivo", color: "#ff6b6b" }, recording: { label: "Grabando", color: "#ff6b6b" }, finished: { label: "Terminada", color: "#8db36a" }, archived: { label: "Archivada", color: "#5c5240" } };
 var LK = window.LivekitClient;  // set by livekit-client.umd.min.js
 
 /* ==========================================================================
@@ -190,12 +211,60 @@ var DashboardView = {
     }
     onMounted(function () { load(); startPolling(); });
     onBeforeUnmount(stopPolling);
+    var touch = useTouch();
     return { sessions: sessions, loading: loading, error: error, showCreate: showCreate, form: form,
              creating: creating, create: create, remove: remove, fmtDate: fmtDate,
-             importing: importing, triggerImport: triggerImport, exportSession: exportSession };
+             importing: importing, triggerImport: triggerImport, exportSession: exportSession,
+             touch: touch, M_ICONS: M_ICONS, SES_STATE: SES_STATE };
   },
   template: `
-    <div class="container">
+    <div v-if="touch" class="m-shell">
+      <div class="m-top">
+        <h2 style="padding-left:10px;">Sesiones</h2>
+        <span class="m-appchip" aria-hidden="true">thePod · <b>prod</b></span>
+      </div>
+      <div class="m-scroll">
+        <div v-if="error" class="error">{{ error }}</div>
+        <div v-if="loading" class="muted">Cargando sesiones…</div>
+        <p v-else-if="!sessions.length" class="muted" style="padding:24px 4px;text-align:center;">Todavía no hay sesiones. Toca «+» para crear una e invitar participantes.</p>
+        <button v-for="s in sessions" :key="s.id" type="button" class="m-card" :style="{ borderLeftColor: (SES_STATE[s.status] || {}).color || 'var(--ink-line)' }" @click="$props.onOpen(s)">
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span class="m-state" :style="{ color: (SES_STATE[s.status] || {}).color }">{{ (SES_STATE[s.status] || { label: s.status }).label }}</span>
+            <span style="margin-left:auto;font-size:13px;color:var(--paper-soft);">{{ fmtDate(s.created_at) }} · {{ s.max_participants }}p</span>
+          </div>
+          <div class="m-title">{{ s.title }}</div>
+          <div class="m-meta">
+            <span v-if="(s.live_participants || []).length" class="live-chip"><span class="dot"></span>{{ s.live_participants.length }} en vivo · {{ s.live_participants.join(', ') }}</span>
+            <span v-else-if="s.description" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.description }}</span>
+            <span class="m-chip" role="button" tabindex="0" style="margin-left:auto;color:var(--signal-hot);" @click.stop="remove(s, $event)" @keydown.enter.stop="remove(s, $event)">Eliminar</span>
+          </div>
+        </button>
+      </div>
+      <button type="button" class="m-fab" aria-label="Nueva sesión" @click="showCreate = true"><span v-html="M_ICONS.plus"></span></button>
+      <div v-if="showCreate" class="modal-backdrop" @click.self="showCreate = false">
+        <div class="modal" role="dialog" aria-label="Nueva sesión">
+          <div class="eyebrow">NUEVA SESIÓN</div>
+          <h3>Configurar grabación</h3>
+          <div class="form-row" style="margin-bottom:12px;">
+            <label>Título</label>
+            <input type="text" v-model="form.title" @keyup.enter="create" placeholder="Episodio #5 — sobre podcasts">
+          </div>
+          <div class="form-row" style="margin-bottom:12px;">
+            <label>Descripción (opcional)</label>
+            <textarea v-model="form.description" rows="2" placeholder="Notas breves…"></textarea>
+          </div>
+          <div class="form-row">
+            <label>Máx. participantes (incluyéndote)</label>
+            <input type="number" v-model.number="form.max_participants" min="2" max="4" inputmode="numeric">
+          </div>
+          <div class="row right" style="margin-top:20px; gap:8px;">
+            <button class="ghost" @click="showCreate = false">Cancelar</button>
+            <button class="primary" @click="create" :disabled="creating || !form.title.trim()">{{ creating ? "Creando…" : "Crear y abrir estudio" }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="container">
       <div class="page-head">
         <div>
           <div class="eyebrow">SESIONES · LIVE BOOTH</div>
@@ -5958,6 +6027,8 @@ var App = {
 
     function parseRoute() {
       var path = window.location.pathname;
+      var base = window.POD_BASE || "";
+      if (base && path.indexOf(base) === 0) path = path.slice(base.length) || "/";
       var m = path.match(/^\/invite\/([A-Za-z0-9_-]+)/);
       if (m) { state.inviteToken = m[1]; state.route = "invite"; return; }
       state.route = "dashboard";
@@ -5993,6 +6064,10 @@ var App = {
     function openDirectorDash() { state.route = "director-dashboard"; }
     function onOpenDirector(s) { state.currentSession = s; state.route = "director"; }
 
+    var touch = useTouch();
+    watch([touch, function () { return state.route; }, function () { return !!state.user; }], function (v) {
+      document.body.classList.toggle("m-app", !!(v[0] && v[2] && (v[1] === "dashboard" || v[1] === "director-dashboard")));
+    }, { immediate: true });
     onMounted(function () {
       parseRoute();
       checkAuth().then(function () { if (state.user) checkDirectorStatus(); });
@@ -6005,7 +6080,7 @@ var App = {
     });
 
     return { state: state, anyRecording: anyRecording, siblingApps: siblingApps, thepodUrl: thepodUrl,
-             isDirector: isDirector, onLoggedIn: onLoggedIn,
+             isDirector: isDirector, onLoggedIn: onLoggedIn, touch: touch, M_ICONS: M_ICONS, meOpen: ref(false), appsOpen: ref(false),
              openSession: openSession, onJoined: onJoined, logout: logout,
              openDirectorDash: openDirectorDash, onOpenDirector: onOpenDirector,
              backToDash: function () { state.route = "dashboard"; state.currentSession = null; } };
@@ -6057,6 +6132,24 @@ var App = {
       <DirectorView v-else-if="state.route === 'director'" :session="state.currentSession" :user="state.user" :on-back="function() { state.route = 'director-dashboard'; state.currentSession = null; }" />
       <DirectorDashboard v-else-if="state.route === 'director-dashboard'" :user="state.user" :on-open-director="onOpenDirector" :on-back="backToDash" />
       <DashboardView v-else :on-open="openSession" />
+      <template v-if="touch && (state.route === 'dashboard' || state.route === 'director-dashboard')">
+        <nav class="m-tabs" :class="{ two: !isDirector }" aria-label="Secciones de prodPod">
+          <button type="button" :aria-current="state.route === 'dashboard' ? 'page' : null" @click="backToDash"><span class="m-ico" v-html="M_ICONS.sessions"></span>Sesiones</button>
+          <button v-if="isDirector" type="button" :aria-current="state.route === 'director-dashboard' ? 'page' : null" @click="openDirectorDash"><span class="m-ico" v-html="M_ICONS.director"></span>Director</button>
+          <button type="button" @click="meOpen = true"><span class="m-ico" v-html="M_ICONS.me"></span>Yo</button>
+        </nav>
+        <div v-if="meOpen" class="m-sheet-backdrop" @click.self="meOpen = false">
+          <div class="m-sheet" role="dialog" aria-label="Mi cuenta">
+            <div class="m-sheet-grab"></div>
+            <h4>{{ state.user.display_name || state.user.username }}</h4>
+            <a class="m-opt" :href="(thepodUrl || '') + '/perfil'">Mi perfil: foto, nombre y contraseña</a>
+            <a class="m-opt" :href="(thepodUrl || '') + '/docs/prodpod'">Cómo se usa prodPod</a>
+            <a v-for="a in (siblingApps || [])" :key="a.key" class="m-opt" :href="a.url"><span class="ico" :data-app="a.key"></span>{{ a.name }}</a>
+            <a class="m-opt" :href="thepodUrl || '/'">thePod · inicio</a>
+            <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="logout">Cerrar sesión</button>
+          </div>
+        </div>
+      </template>
     </template>
     <ToastHost />
   `,
