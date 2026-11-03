@@ -132,6 +132,52 @@ var LoginView = {
 
 // ── DashboardView ────────────────────────────────────────────────────
 
+/* Filas «Instalar thePod» y «Avisos» de la hoja «Yo» (usa window.podPWA de pod-base.js) */
+var PodPwaRows = {
+  setup: function () {
+    var P = window.podPWA || { enabled: false };
+    var st = reactive({ enabled: !!P.enabled, canInstall: false, installed: false, isIOS: false, push: "unsupported", busy: false, msg: "", showIos: false });
+    function refresh() {
+      if (!st.enabled) return;
+      st.canInstall = P.canInstall; st.installed = P.installed; st.isIOS = P.isIOS;
+      Promise.resolve(P.pushState()).then(function (s) { st.push = s; });
+    }
+    function install() {
+      if (st.canInstall) { P.install().then(function (ok) { st.msg = ok ? "Listo: busca «thePod» en tu pantalla de inicio." : ""; refresh(); }); }
+      else st.showIos = !st.showIos;
+    }
+    function togglePush() {
+      st.busy = true; st.msg = "";
+      var p = st.push === "on" ? P.disablePush() : P.enablePush();
+      p.then(function () { refresh(); st.msg = st.push === "on" ? "" : "Avisos activados en este teléfono."; })
+       .catch(function (e) { st.msg = e.message || "No se pudo."; })
+       .finally(function () { st.busy = false; });
+    }
+    function test() {
+      st.busy = true;
+      P.testPush().then(function (d) { st.msg = d.sent ? "Aviso enviado: debería sonar en un momento." : "No llegó a ningún teléfono."; })
+       .catch(function () { st.msg = "No se pudo enviar."; }).finally(function () { st.busy = false; });
+    }
+    onMounted(function () { refresh(); P.onchange = refresh; });
+    return { st: st, install: install, togglePush: togglePush, test: test };
+  },
+  template: '\
+<template v-if="st.enabled">\
+  <button v-if="!st.installed && (st.canInstall || st.isIOS)" type="button" class="m-opt" @click="install">\
+    <span>📲</span>Instalar thePod en este teléfono\
+  </button>\
+  <p v-if="st.showIos" class="m-help">En Safari: toca <b>Compartir</b> (el cuadrado con la flecha) y luego <b>«Añadir a pantalla de inicio»</b>. Desde ahí abre como una app y puede recibir avisos.</p>\
+  <button v-if="st.push === \'off\'" type="button" class="m-opt" :disabled="st.busy" @click="togglePush"><span>🔔</span>Activar avisos en este teléfono</button>\
+  <template v-else-if="st.push === \'on\'">\
+    <button type="button" class="m-opt" :disabled="st.busy" @click="test"><span>🔔</span>Avisos activados · tocar para probar</button>\
+    <button type="button" class="m-opt" style="color:var(--paper-dim);" :disabled="st.busy" @click="togglePush">Desactivar avisos aquí</button>\
+  </template>\
+  <p v-else-if="st.push === \'needs-install\'" class="m-help">Para recibir avisos en iPhone, primero instala thePod (arriba).</p>\
+  <p v-else-if="st.push === \'denied\'" class="m-help">Los avisos están bloqueados para este sitio en los ajustes del navegador.</p>\
+  <p v-if="st.msg" class="m-help" aria-live="polite">{{ st.msg }}</p>\
+</template>',
+};
+
 var DashboardView = {
   props: { user: Object, onLogout: Function },
   emits: ["open-event"],
@@ -265,6 +311,7 @@ var DashboardView = {
       <h4>{{ user && user.username }}</h4>\
       <a class="m-opt" :href="(thepodUrl || \'\') + \'/perfil\'">Mi perfil: foto, nombre y contraseña</a>\
       <a class="m-opt" :href="(thepodUrl || \'\') + \'/docs/amapod\'">Cómo se usa amaPod</a>\
+      <PodPwaRows />\
       <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="$props.onLogout">Cerrar sesión</button>\
     </div>\
   </div>\
@@ -1968,4 +2015,5 @@ var App = {
 var _app = createApp(App);
 _app.component("participant-view", ParticipantView);
 _app.component("audience-chat", AudienceChat);
+_app.component("PodPwaRows", PodPwaRows);
 _app.mount("#app");

@@ -987,3 +987,8 @@ label {
   body.m-app .toast-host { top: calc(var(--m-top-h) + 10px + env(safe-area-inset-top)); }
   .ama-alt { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; }
 }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .m-sheet .m-help { margin: 0; padding: 4px 6px; font-size: 13px; line-height: 1.45; color: var(--paper-soft); }
+  .m-sheet .m-opt:disabled { opacity: .5; }
+}

@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from auth import require_auth, current_user
 from db import get_db
 from config import PRECONNECT_COUNT
+from pod_push import notify as push_notify
 from livekit_service import (
     generate_participant_token,
     mute_participant,
@@ -117,6 +118,8 @@ def request_access(eid):
         )
         db.commit()
         pid = cur.lastrowid
+        push_notify([ev["host_username"]], "amaPod · " + (ev["title"] or "evento"),
+                    name + " pide la palabra", "/ama/", tag="ama-req-" + str(eid))
         return jsonify({"id": pid, "access_token": token, "status": "pending"}), 201
     finally:
         db.close()
