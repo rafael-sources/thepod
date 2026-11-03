@@ -2552,3 +2552,8 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .episode-detail.m-detail .save-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--ink); border-top: 1px solid var(--ink-line); z-index: 40; }
   .episode-detail.m-detail .save-bar .save-btn { min-height: 48px; }
 }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .m-sheet .m-help { margin: 0; padding: 4px 6px; font-size: 13px; line-height: 1.45; color: var(--paper-soft); }
+  .m-sheet .m-opt:disabled { opacity: .5; }
+}

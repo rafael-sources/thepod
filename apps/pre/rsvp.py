@@ -18,6 +18,7 @@ from flask import Blueprint, abort, jsonify, render_template, request, url_for
 from calendar_export import _build_event_lines, _ics_filename, _wrap_calendar
 from config import PODCASTS_DIR
 from db import get_db
+from pod_push import notify as push_notify
 
 
 bp = Blueprint("rsvp", __name__)
@@ -116,8 +117,19 @@ def rsvp_submit(token):
             (action, g["id"]),
         )
         db.commit()
+        try:
+            meta = db.execute("SELECT owner_username, extra_hosts FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+        except Exception:
+            meta = None
     finally:
         db.close()
+    if meta:
+        from podcasts import _row_owner, _row_extra_hosts
+        who = [_row_owner(meta)] + _row_extra_hosts(meta)
+        label = {"yes": "confirmó", "no": "no puede", "maybe": "quizás"}.get(action, action)
+        push_notify(who, "prePod · " + (g["podcast_name"] or slug),
+                    (g["name"] if "name" in g.keys() and g["name"] else "Un invitado") + " " + label + " · #" + str(g["ep_number"]) + " " + (g["ep_title"] or ""),
+                    "/pre/", tag="pre-rsvp-" + str(g["ep_id"]))
     return jsonify({"ok": True, "rsvp_status": action})
 
 
