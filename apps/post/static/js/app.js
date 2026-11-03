@@ -1,5 +1,30 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 
+/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+var _touchRef = null;
+function useTouch() {
+  if (!_touchRef) {
+    _touchRef = ref(false);
+    try {
+      var mq = window.matchMedia("(max-width: 900px), (pointer: coarse)");
+      _touchRef.value = mq.matches;
+      (mq.addEventListener ? mq.addEventListener("change", function () { _touchRef.value = mq.matches; }) : mq.addListener(function () { _touchRef.value = mq.matches; }));
+    } catch (_) {}
+  }
+  return _touchRef;
+}
+var M_ICONS = {
+  projects: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
+  moments: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>',
+  files: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7a2 2 0 0 1 2-2H10l2 2h6.5a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>',
+  clips: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4M14 10v4M10 15v4" stroke-width="2.6"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>',
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.5-4 4-6 7.5-6s6 2 7.5 6"/></svg>',
+  back: '<svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4l-7 7 7 7"/></svg>',
+  plus: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M13 5v16M5 13h16"/></svg>',
+};
+
 /* ==========================================================================
    Helpers
    ========================================================================== */
@@ -427,11 +452,57 @@ var ProjectListView = {
     onBeforeUnmount(() => { if (importPoll) clearInterval(importPoll); });
 
     onMounted(load);
+    const touch = useTouch();
     return { projects, loading, error, showCreate, newName, creating, create, remove, fmtDate, importProject,
-             isImporting, openProject };
+             isImporting, openProject , touch, M_ICONS };
   },
   template: `
-    <div class="container">
+    <div v-if="touch" class="m-shell">
+      <div class="m-top">
+        <h2 style="padding-left:10px;">Proyectos</h2>
+        <span class="m-appchip" aria-hidden="true">thePod · <b>post</b></span>
+      </div>
+      <div class="m-scroll">
+        <div v-if="error" class="error">{{ error }}</div>
+        <div v-if="loading" class="muted">Cargando sesiones…</div>
+        <p v-else-if="!projects.length" class="muted" style="padding:24px 4px;text-align:center;">Todavía no hay proyectos. Toca «+» para crear el primero o importa uno.</p>
+        <button v-for="p in projects" :key="p.slug" type="button" class="m-card" :style="{ borderLeftColor: isImporting(p) ? '#f4c770' : 'var(--signal)' }" @click="openProject(p)">
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span class="m-state" :style="{ color: isImporting(p) ? '#f4c770' : 'var(--paper-dim)' }">{{ isImporting(p) ? 'Llegando desde prodPod' : 'Sesión' }}</span>
+            <span style="margin-left:auto;font-size:13px;color:var(--paper-soft);">{{ fmtDate(p.created_at) }}</span>
+          </div>
+          <div class="m-title">{{ p.name }}</div>
+          <div class="m-meta">
+            <span class="mono" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">/ {{ p.slug }}</span>
+            <span class="m-chip" role="button" tabindex="0" style="margin-left:auto;color:var(--signal-hot);" @click.stop="remove(p, $event)" @keydown.enter.stop="remove(p, $event)">Eliminar</span>
+          </div>
+        </button>
+        <div class="m-group" style="margin-top:6px;">
+          <button type="button" class="m-row" @click="$refs.importInput.click()">
+            <span class="m-rico" v-html="M_ICONS.files"></span>
+            <span><b>Importar</b><small>Un proyecto (.zip) o un video o audio</small></span>
+            <span class="m-chev" aria-hidden="true">›</span>
+          </button>
+        </div>
+        <input ref="importInput" type="file" accept=".zip,video/*,audio/*,image/*" style="display:none" @change="importProject">
+      </div>
+      <button type="button" class="m-fab" aria-label="Nuevo proyecto" @click="showCreate = true"><span v-html="M_ICONS.plus"></span></button>
+      <div v-if="showCreate" class="modal-backdrop" @click.self="showCreate = false">
+        <div class="modal" role="dialog" aria-label="Nuevo proyecto">
+          <div class="eyebrow">NUEVA SESIÓN</div>
+          <h3>Crear proyecto</h3>
+          <div class="form-row">
+            <label>Nombre</label>
+            <input type="text" v-model="newName" @keyup.enter="create" placeholder="Piloto Podcast Nº 1">
+          </div>
+          <div class="row right" style="margin-top:20px; gap:8px;">
+            <button class="ghost" @click="showCreate = false">Cancelar</button>
+            <button class="primary" @click="create" :disabled="creating || !newName.trim()">{{ creating ? "Creando…" : "Crear" }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="container">
       <div class="page-head">
         <div>
           <div class="eyebrow">PROYECTOS · SESIONES ACTIVAS</div>
@@ -4890,6 +4961,11 @@ var ProjectView = {
       prodpodPrompt.value = null;
     }
 
+    // Celular: una parte del editor por pantalla
+    const touch = useTouch();
+    const mTab = ref("video");
+    function mGo(t) { mTab.value = t; if (t !== "clips") { showParticipants.value = false; } if (t !== "clips" && t !== "moments") selectedMomentId.value = null; }
+
     onMounted(() => {
       refreshTimeline();
       loadAllFiles();
@@ -4920,6 +4996,7 @@ var ProjectView = {
       formatShort,
       prodpodPrompt, placeProdpod, checkMultiTrack,
       verticalSplitSources, autoMultitrack, textOverlaySounds, liveSelection,
+      touch, mTab, mGo, M_ICONS,
     };
   },
   template: `
@@ -4928,16 +5005,23 @@ var ProjectView = {
            'no-left':   !showFiles && !focusMode,
            'no-right':  !showClips && !selectedMoment && !showParticipants,
            'focus-mode': focusMode,
-           'has-ops':    focusMode && selectedMoment != null
+           'has-ops':    focusMode && selectedMoment != null,
+           'm-editor':   touch,
+           ['m-' + mTab]: touch
          }">
+      <div v-if="touch" class="m-top">
+        <button type="button" class="m-icon" aria-label="Volver a proyectos" @click="onBack"><span v-html="M_ICONS.back"></span></button>
+        <h2>{{ project.name }}</h2>
+        <span class="m-appchip" aria-hidden="true">thePod · <b>post</b></span>
+      </div>
       <FilesPanel
-        v-if="showFiles"
+        v-if="touch ? mTab === 'files' : showFiles"
         :project="project"
         @add-to-timeline="addClipToTimeline"
         @refresh="onFilesRefresh"
         @captions-changed="onCaptionsChanged"
       />
-      <aside v-else-if="focusMode" class="moments-sidebar">
+      <aside v-else-if="!touch && focusMode" class="moments-sidebar">
         <MomentsList
           :moments="timeline.moments"
           :selected-moment-id="selectedMomentId"
@@ -4956,7 +5040,7 @@ var ProjectView = {
         />
       </aside>
 
-      <div class="main">
+      <div class="main" v-show="!touch || mTab === 'video' || mTab === 'moments'">
         <div v-if="error" class="error" style="margin: 8px 22px 0;">{{ error }}</div>
 
         <VideoPlayer
@@ -4978,7 +5062,7 @@ var ProjectView = {
           @toggle-captions="captionsEnabled = !captionsEnabled"
         />
 
-        <div class="timeline-section">
+        <div class="timeline-section" v-show="!touch || mTab === 'video'">
           <div class="timeline-head">
             <span class="label">Timeline</span>
             <span class="zoom-info">zoom: <b>{{ formatShort(zoom.startSeconds) }} → {{ formatShort(zoom.endSeconds ?? playerState.duration) }}</b></span>
@@ -5080,7 +5164,7 @@ var ProjectView = {
         </div>
 
         <MomentsList
-          v-if="!focusMode"
+          v-if="touch ? mTab === 'moments' : !focusMode"
           :moments="timeline.moments"
           :selected-moment-id="selectedMomentId"
           @goto="onSeek"
@@ -5105,9 +5189,9 @@ var ProjectView = {
         />
       </div>
 
-      <aside v-if="showClips || selectedMoment || showParticipants" class="right-col">
+      <aside v-if="touch ? (mTab === 'clips' || selectedMoment || showParticipants) : (showClips || selectedMoment || showParticipants)" class="right-col">
         <ClipsPanel
-          v-if="showClips"
+          v-if="touch ? mTab === 'clips' : showClips"
           :clips="clipsWithStarts"
           :total-duration="timeline.duration"
           @reorder="reorderClip"
@@ -5150,7 +5234,27 @@ var ProjectView = {
                         @seek="onSeek"
                         @cuts-changed="() => {}" />
 
-      <AiPanel :slug="project.slug" :moments="timeline.moments" @moment-created="loadTimeline" />
+      <div v-if="touch && mTab === 'more'" class="m-scroll m-more">
+        <div class="m-section">Este episodio</div>
+        <div class="m-group">
+          <button type="button" class="m-row" :disabled="timeline.clips.length === 0" @click="createMoment({})"><span class="m-rico" v-html="M_ICONS.moments"></span><span><b>Capturar momento</b><small>En el segundo donde está el video</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <button type="button" class="m-row" :disabled="timeline.clips.length === 0" @click="showExport = true"><span class="m-rico" v-html="M_ICONS.video"></span><span><b>Exportar</b><small>Episodio completo, vertical o un rango</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <button type="button" class="m-row" :disabled="timeline.clips.length === 0" @click="showTranscript = true"><span class="m-rico" v-html="M_ICONS.files"></span><span><b>Transcripción</b><small>Editar cortando texto</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <button type="button" class="m-row" :disabled="timeline.clips.length === 0" @click="openSilenceModal"><span class="m-rico" v-html="M_ICONS.clips"></span><span><b>Silencios</b><small>Detectar y quitar pausas largas</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <button type="button" class="m-row" @click="showParticipants = true; mTab = 'clips'"><span class="m-rico" v-html="M_ICONS.me"></span><span><b>Participantes</b><small>Nombres y banners</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <button type="button" class="m-row" @click="checkMultiTrack(true)"><span class="m-rico" v-html="M_ICONS.projects"></span><span><b>Pistas</b><small>Cada video en su propia pista</small></span><span class="m-chev" aria-hidden="true">›</span></button>
+          <a class="m-row" :href="'/api/projects/' + project.slug + '/export-bundle'"><span class="m-rico" v-html="M_ICONS.files"></span><span><b>Descargar proyecto</b><small>Un .zip con todo</small></span><span class="m-chev" aria-hidden="true">↓</span></a>
+        </div>
+        <AiPanel :slug="project.slug" :moments="timeline.moments" @moment-created="refreshTimeline" />
+      </div>
+      <AiPanel v-else-if="!touch" :slug="project.slug" :moments="timeline.moments" @moment-created="refreshTimeline" />
+      <nav v-if="touch" class="m-tabs" aria-label="Partes del editor">
+        <button type="button" :aria-current="mTab === 'video' ? 'page' : null" @click="mGo('video')"><span class="m-ico" v-html="M_ICONS.video"></span>Video</button>
+        <button type="button" :aria-current="mTab === 'moments' ? 'page' : null" @click="mGo('moments')"><span class="m-ico" v-html="M_ICONS.moments"></span>Momentos</button>
+        <button type="button" :aria-current="mTab === 'files' ? 'page' : null" @click="mGo('files')"><span class="m-ico" v-html="M_ICONS.files"></span>Archivos</button>
+        <button type="button" :aria-current="mTab === 'clips' ? 'page' : null" @click="mGo('clips')"><span class="m-ico" v-html="M_ICONS.clips"></span>Clips</button>
+        <button type="button" :aria-current="mTab === 'more' ? 'page' : null" @click="mGo('more')"><span class="m-ico" v-html="M_ICONS.more"></span>Más</button>
+      </nav>
 
       <div v-if="prodpodPrompt" class="modal-backdrop" @click.self="prodpodPrompt = null">
         <div class="modal" style="width: 460px;">
@@ -5219,9 +5323,12 @@ var App = {
       const v = document.querySelector(".video-frame video");
       isPlaying.value = !!(v && !v.paused && !v.ended);
     }
+    const touch = useTouch();
+    const meOpen = ref(false);
+    watch([touch, () => !!state.username], ([t, logged]) => { document.body.classList.toggle("m-app", !!(t && logged)); }, { immediate: true });
     onMounted(() => { checkAuth(); loadApps(); setInterval(syncTally, 250); });
 
-    return { state, isPlaying, siblingApps, thepodUrl, onLoggedIn, onOpen, onBack, logout };
+    return { state, isPlaying, siblingApps, thepodUrl, onLoggedIn, onOpen, onBack, logout, touch, meOpen, M_ICONS };
   },
   template: `
     <template v-if="state.loading">
@@ -5257,7 +5364,24 @@ var App = {
         </div>
       </header>
       <ProjectView v-if="state.currentProject" :project="state.currentProject" :on-back="onBack" />
-      <ProjectListView v-else :on-open="onOpen" />
+      <template v-else>
+        <ProjectListView :on-open="onOpen" />
+        <nav v-if="touch" class="m-tabs two" aria-label="Secciones de postPod">
+          <button type="button" aria-current="page"><span class="m-ico" v-html="M_ICONS.projects"></span>Proyectos</button>
+          <button type="button" @click="meOpen = true"><span class="m-ico" v-html="M_ICONS.me"></span>Yo</button>
+        </nav>
+        <div v-if="touch && meOpen" class="m-sheet-backdrop" @click.self="meOpen = false">
+          <div class="m-sheet" role="dialog" aria-label="Mi cuenta">
+            <div class="m-sheet-grab"></div>
+            <h4>{{ state.username }}</h4>
+            <a class="m-opt" :href="(thepodUrl || '') + '/perfil'">Mi perfil: foto, nombre y contraseña</a>
+            <a class="m-opt" :href="(thepodUrl || '') + '/docs/postpod'">Cómo se usa postPod</a>
+            <a v-for="a in (siblingApps || [])" :key="a.key" class="m-opt" :href="a.url"><span class="ico" :data-app="a.key"></span>{{ a.name }}</a>
+            <a class="m-opt" :href="thepodUrl || '/'">thePod · inicio</a>
+            <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="logout">Cerrar sesión</button>
+          </div>
+        </div>
+      </template>
     </template>
   `,
 };
