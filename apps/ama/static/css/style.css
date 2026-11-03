@@ -16,7 +16,7 @@
 
   --paper:       #efe3d0;
   --paper-soft:  #c7b894;
-  --paper-dim:   #8a7d65;
+  --paper-dim:   #9d9078;   /* 5.8:1 sobre --ink (WCAG AA) */
   --paper-faint: #5c5240;
 
   /* Signal — TEAL "Q&A" */
@@ -934,3 +934,56 @@ label {
 /* En la página de ver: el chat ocupa el espacio libre entre el título y los botones */
 .ama-watch-chat { flex: 1 1 auto; min-height: 180px; }
 .ama-watch-chat .ama-chat-list { flex: 1 1 auto; max-height: none; }
+
+/* ==========================================================================
+   thePod móvil · capa compartida (misma que prePod, señal teal)
+   ========================================================================== */
+@media (max-width: 900px), (pointer: coarse) {
+  :root { --m-tab-h: 56px; --m-top-h: 52px; }
+  :focus-visible { outline: 2px solid var(--signal-strong); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+  .m-shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  .m-top { display: flex; align-items: center; gap: 4px; min-height: var(--m-top-h); padding: env(safe-area-inset-top) 8px 0 8px; border-bottom: 1px solid var(--ink-line); background: var(--ink); flex: none; }
+  .m-top h1, .m-top h2, .m-top h3 { flex: 1; min-width: 0; margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-top .m-icon { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: var(--paper); padding: 0; cursor: pointer; flex: none; }
+  .m-top .m-icon svg { width: 22px; height: 22px; }
+  .m-appchip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--ink-line); background: transparent; color: var(--paper); font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; cursor: pointer; flex: none; }
+  .m-appchip b { color: var(--signal-strong); font-weight: 600; }
+
+  .m-tabs { display: grid; grid-template-columns: repeat(3, 1fr); flex: none; padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--ink-line); background: var(--ink); }
+  .m-tabs button { background: transparent; border: 0; color: var(--paper-dim); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 50px; padding: 0; border-radius: 12px; font-family: var(--font-body); font-size: 11px; font-weight: 500; cursor: pointer; }
+  .m-tabs button svg { width: 24px; height: 24px; }
+  .m-tabs button .m-ico { display: inline-flex; padding: 3px 14px; border-radius: 999px; }
+  .m-tabs button[aria-current="page"] { color: var(--signal-strong); }
+  .m-tabs button[aria-current="page"] .m-ico { background: rgba(45,212,191,.16); }
+
+  .m-scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 10px 16px calc(96px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
+  .m-card { display: block; width: 100%; text-align: left; padding: 14px 16px; border-radius: 14px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-left-width: 3px; color: var(--paper); font: inherit; cursor: pointer; text-decoration: none; }
+  .m-card .m-state { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+  .m-card .m-title { font-size: 17px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+  .m-card .m-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--paper-soft); flex-wrap: wrap; }
+  .m-chip { font-family: var(--font-mono); font-size: 12px; padding: 0 12px; min-height: 36px; display: inline-flex; align-items: center; border-radius: 6px; border: 1px solid var(--ink-line); color: var(--paper-soft); }
+  .m-fab { position: fixed; right: 16px; bottom: calc(var(--m-tab-h) + 22px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 18px; border: 0; background: var(--signal-strong); color: var(--ink-deep); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 10px 24px rgba(0,0,0,.45); cursor: pointer; z-index: 50; }
+  .m-fab svg { width: 26px; height: 26px; }
+
+  .m-sheet-backdrop { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.55); }
+  .m-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--ink-panel); border-top: 1px solid var(--ink-line); border-radius: 22px 22px 0 0; padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; max-height: 80dvh; overflow-y: auto; }
+  .m-sheet-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--ink-line); margin: 2px auto 8px; }
+  .m-sheet h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  .m-sheet .m-opt { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--ink-line); background: transparent; color: var(--paper); font: inherit; font-size: 15px; cursor: pointer; text-align: left; width: 100%; text-decoration: none; }
+
+  /* Estudio del anfitrión: pestañas con icono de trazo y estado accesible */
+  .ama-host .host-tabs button[aria-current="page"] { color: var(--signal-strong); background: rgba(45,212,191,.1); }
+  .ama-host .ht-ico { display: inline-flex; width: 24px; height: 24px; }
+  .ama-host .ht-ico svg { width: 24px; height: 24px; }
+  .ama-host .host-tabs button { min-height: 54px; }
+  .ama-host .actions .icon { min-width: 44px; min-height: 44px; }
+  .ama-host .chat-mod button { min-height: 36px; font-size: 13px; padding: 0 10px; }
+  .create-modal input, .create-modal textarea { font-size: 16px; }
+  .create-modal .modal-actions button { min-height: 48px; }
+}
+@media (max-width: 900px), (pointer: coarse) {
+  body.m-app .toast-host { top: calc(var(--m-top-h) + 10px + env(safe-area-inset-top)); }
+  .ama-alt { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px; }
+}

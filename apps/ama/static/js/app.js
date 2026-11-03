@@ -1,6 +1,32 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 var LK = window.LivekitClient;
 
+/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+var _touchRef = null;
+function useTouch() {
+  if (!_touchRef) {
+    _touchRef = ref(false);
+    try {
+      var mq = window.matchMedia("(max-width: 900px), (pointer: coarse)");
+      _touchRef.value = mq.matches;
+      (mq.addEventListener ? mq.addEventListener("change", function () { _touchRef.value = mq.matches; }) : mq.addListener(function () { _touchRef.value = mq.matches; }));
+    } catch (_) {}
+  }
+  return _touchRef;
+}
+var M_ICONS = {
+  events: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>',
+  templates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>',
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.5-4 4-6 7.5-6s6 2 7.5 6"/></svg>',
+  back: '<svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4l-7 7 7 7"/></svg>',
+  plus: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M13 5v16M5 13h16"/></svg>',
+  hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v8"/><path d="M8 12l-2-2.5a1.4 1.4 0 0 0-2.3 1.6L7 16.5c1.2 2.2 2.8 3.5 5.5 3.5 3.3 0 4.5-2.2 4.5-5V9"/></svg>',
+  queue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2z"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>',
+};
+var EV_STATE = { created: { label: "Sin empezar", color: "#f4c770" }, active: { label: "En vivo", color: "#2dd4bf" }, finished: { label: "Terminado", color: "#9d9078" } };
+
 // ── helpers ──────────────────────────────────────────────────────────
 
 async function api(path, options) {
@@ -110,6 +136,12 @@ var DashboardView = {
   props: { user: Object, onLogout: Function },
   emits: ["open-event"],
   setup: function (props, ctx) {
+    var touch = useTouch();
+    var mTab = ref("events");
+    var meOpen = ref(false);
+    var appsOpen = ref(false);
+    var thepodUrl = ref("");
+    function mGo(t) { if (t === "me") { meOpen.value = true; return; } mTab.value = t; }
     var events = ref([]);
     var templates = ref([]);
     var loading = ref(true);
@@ -129,6 +161,7 @@ var DashboardView = {
       try {
         var cfg = await api("/api/config/apps");
         apps.value = (cfg.apps || []).filter(function (a) { return a.key !== "amapod" && a.url; });
+        thepodUrl.value = cfg.thepod_url || "";
       } catch (_) {}
     }
 
@@ -167,10 +200,76 @@ var DashboardView = {
     return { events: events, templates: templates, loading: loading, showCreate: showCreate,
              newTitle: newTitle, newDesc: newDesc, apps: apps,
              createEvent: createEvent, createFromTemplate: createFromTemplate,
-             deleteEvent: deleteEvent, openEvent: openEvent, fmtDate: fmtDate };
+             deleteEvent: deleteEvent, openEvent: openEvent, fmtDate: fmtDate,
+             touch: touch, mTab: mTab, meOpen: meOpen, appsOpen: appsOpen, thepodUrl: thepodUrl, mGo: mGo, M_ICONS: M_ICONS, EV_STATE: EV_STATE };
   },
   template: '\
-<div>\
+<div v-if="touch" class="m-shell">\
+  <div class="m-top">\
+    <h2 style="padding-left:10px;">{{ mTab === \'templates\' ? \'Plantillas\' : \'Eventos\' }}</h2>\
+    <button type="button" class="m-appchip" aria-haspopup="dialog" @click="appsOpen = true">thePod · <b>ama</b> ▾</button>\
+  </div>\
+  <div class="m-scroll" v-if="mTab === \'events\'">\
+    <div v-if="loading" class="loading">Cargando...</div>\
+    <p v-else-if="!events.length" class="muted" style="padding:24px 4px;text-align:center;">No hay eventos. Toca «+» para crear el primero.</p>\
+    <button v-for="e in events" :key="e.id" type="button" class="m-card" :style="{ borderLeftColor: (EV_STATE[e.status] || {}).color }" @click="openEvent(e)">\
+      <div style="display:flex;align-items:baseline;gap:10px;">\
+        <span class="m-state" :style="{ color: (EV_STATE[e.status] || {}).color }">{{ (EV_STATE[e.status] || { label: e.status }).label }}</span>\
+        <span style="margin-left:auto;font-size:13px;color:var(--paper-soft);">{{ fmtDate(e.created_at) }}</span>\
+      </div>\
+      <div class="m-title">{{ e.title }}</div>\
+      <div class="m-meta">\
+        <span v-if="e.description" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ e.description }}</span>\
+        <span v-if="e.like_count || e.spectator_count">&#10084; {{ e.like_count || 0 }} &middot; &#128065; {{ e.spectator_count || 0 }}</span>\
+        <span v-if="e.status === \'created\'" class="m-chip" role="button" tabindex="0" style="margin-left:auto;color:var(--signal-hot);" @click.stop="deleteEvent(e.id)" @keydown.enter.stop="deleteEvent(e.id)">Eliminar</span>\
+      </div>\
+    </button>\
+  </div>\
+  <div class="m-scroll" v-else>\
+    <p class="muted" style="padding:4px 2px 0;">Toca una plantilla para crear un evento con ese título y descripción.</p>\
+    <p v-if="!templates.length" class="muted" style="padding:24px 4px;text-align:center;">Todavía no hay plantillas. Se guardan desde el escritorio.</p>\
+    <button v-for="t in templates" :key="t.id" type="button" class="m-card" @click="createFromTemplate(t.id); mTab = \'events\'">\
+      <div class="m-title" style="margin-top:0;">{{ t.title }}</div>\
+    </button>\
+  </div>\
+  <button type="button" class="m-fab" aria-label="Nuevo evento" @click="showCreate = true"><span v-html="M_ICONS.plus"></span></button>\
+  <nav class="m-tabs" aria-label="Secciones de amaPod">\
+    <button type="button" :aria-current="mTab === \'events\' ? \'page\' : null" @click="mGo(\'events\')"><span class="m-ico" v-html="M_ICONS.events"></span>Eventos</button>\
+    <button type="button" :aria-current="mTab === \'templates\' ? \'page\' : null" @click="mGo(\'templates\')"><span class="m-ico" v-html="M_ICONS.templates"></span>Plantillas</button>\
+    <button type="button" @click="mGo(\'me\')"><span class="m-ico" v-html="M_ICONS.me"></span>Yo</button>\
+  </nav>\
+  <div v-if="showCreate" class="create-modal-overlay" @click.self="showCreate = false">\
+    <div class="create-modal" role="dialog" aria-label="Nuevo evento">\
+      <h2>Nuevo evento</h2>\
+      <label>Título</label>\
+      <input type="text" v-model="newTitle" placeholder="Título del evento" autofocus>\
+      <label style="margin-top:10px">Descripción</label>\
+      <textarea v-model="newDesc" placeholder="Descripción (opcional)" rows="3"></textarea>\
+      <div class="modal-actions">\
+        <button @click="showCreate = false">Cancelar</button>\
+        <button class="primary" @click="createEvent" :disabled="!newTitle.trim()">Crear</button>\
+      </div>\
+    </div>\
+  </div>\
+  <div v-if="appsOpen" class="m-sheet-backdrop" @click.self="appsOpen = false">\
+    <div class="m-sheet" role="dialog" aria-label="Cambiar de app">\
+      <div class="m-sheet-grab"></div>\
+      <h4>Estás en amaPod</h4>\
+      <a v-for="a in apps" :key="a.key" class="m-opt" :href="a.url"><span class="ico" :data-app="a.key"></span>{{ a.name }}</a>\
+      <a class="m-opt" :href="thepodUrl || \'/\'">thePod · inicio</a>\
+    </div>\
+  </div>\
+  <div v-if="meOpen" class="m-sheet-backdrop" @click.self="meOpen = false">\
+    <div class="m-sheet" role="dialog" aria-label="Mi cuenta">\
+      <div class="m-sheet-grab"></div>\
+      <h4>{{ user && user.username }}</h4>\
+      <a class="m-opt" :href="(thepodUrl || \'\') + \'/perfil\'">Mi perfil: foto, nombre y contraseña</a>\
+      <a class="m-opt" :href="(thepodUrl || \'\') + \'/docs/amapod\'">Cómo se usa amaPod</a>\
+      <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="$props.onLogout">Cerrar sesión</button>\
+    </div>\
+  </div>\
+</div>\
+<div v-else>\
   <header class="app-header">\
     <span class="brand">ama<span class="brand-accent">Pod</span></span>\
     <div class="sibling-apps d-only">\
@@ -311,11 +410,11 @@ var HostView = {
     var previewStream = ref(null);
 
     var joinLink = computed(function () {
-      return window.location.origin + "/join/" + eventData.value.id;
+      return window.location.origin + (window.POD_BASE || "") + "/join/" + eventData.value.id;
     });
 
     var watchLink = computed(function () {
-      return window.location.origin + "/watch/" + eventData.value.id;
+      return window.location.origin + (window.POD_BASE || "") + "/watch/" + eventData.value.id;
     });
 
     async function listDevices() {
@@ -674,6 +773,7 @@ var HostView = {
       sendChat: sendChat, copyJoinLink: copyJoinLink, copyWatchLink: copyWatchLink, initials: initials,
       sideTab: sideTab, setTab: setTab, newRequests: newRequests, unreadChat: unreadChat, turnTime: turnTime,
       statusLabel: statusLabel, shareLink: shareLink, watchLink: watchLink,
+      M_ICONS: M_ICONS,
     };
   },
   template: '\
@@ -835,11 +935,11 @@ var HostView = {
       <p class="muted mas-note">Se desconecta a todos y se detiene la grabación.</p>\
     </div>\
   </div>\
-  <nav class="host-tabs m-only">\
-    <button :class="{ on: sideTab === \'solicitudes\' }" @click="setTab(\'solicitudes\')"><span class="ht-ico">&#9995;</span>Solicitudes<i v-if="requests.length" class="ht-badge" :class="{ hot: newRequests }">{{ requests.length }}</i></button>\
-    <button :class="{ on: sideTab === \'cola\' }" @click="setTab(\'cola\')"><span class="ht-ico">&#9776;</span>Cola<i v-if="inQueueOnly.length" class="ht-badge">{{ inQueueOnly.length }}</i></button>\
-    <button :class="{ on: sideTab === \'chat\' }" @click="setTab(\'chat\')"><span class="ht-ico">&#128172;</span>Chat<i v-if="unreadChat" class="ht-badge hot">{{ unreadChat }}</i></button>\
-    <button :class="{ on: sideTab === \'mas\' }" @click="setTab(\'mas\')"><span class="ht-ico">&#8943;</span>Más</button>\
+  <nav class="host-tabs m-only" aria-label="Panel del evento">\
+    <button type="button" :class="{ on: sideTab === \'solicitudes\' }" :aria-current="sideTab === \'solicitudes\' ? \'page\' : null" @click="setTab(\'solicitudes\')"><span class="ht-ico" v-html="M_ICONS.hand"></span>Solicitudes<i v-if="requests.length" class="ht-badge" :class="{ hot: newRequests }" :aria-label="requests.length + \' por revisar\'">{{ requests.length }}</i></button>\
+    <button type="button" :class="{ on: sideTab === \'cola\' }" :aria-current="sideTab === \'cola\' ? \'page\' : null" @click="setTab(\'cola\')"><span class="ht-ico" v-html="M_ICONS.queue"></span>Cola<i v-if="inQueueOnly.length" class="ht-badge" :aria-label="inQueueOnly.length + \' en la cola\'">{{ inQueueOnly.length }}</i></button>\
+    <button type="button" :class="{ on: sideTab === \'chat\' }" :aria-current="sideTab === \'chat\' ? \'page\' : null" @click="setTab(\'chat\')"><span class="ht-ico" v-html="M_ICONS.chat"></span>Chat<i v-if="unreadChat" class="ht-badge hot" :aria-label="unreadChat + \' sin leer\'">{{ unreadChat }}</i></button>\
+    <button type="button" :class="{ on: sideTab === \'mas\' }" :aria-current="sideTab === \'mas\' ? \'page\' : null" @click="setTab(\'mas\')"><span class="ht-ico" v-html="M_ICONS.more"></span>Más</button>\
   </nav>\
 </div>'
 };
@@ -1814,6 +1914,8 @@ var App = {
 
     function parseRoute() {
       var path = window.location.pathname;
+      var base = window.POD_BASE || "";
+      if (base && path.indexOf(base) === 0) path = path.slice(base.length) || "/";
       var m;
       m = path.match(/^\/join\/(\d+)$/);
       if (m) { state.joinEventId = parseInt(m[1]); state.route = "join"; return; }
@@ -1843,6 +1945,10 @@ var App = {
       state.route = "login";
     }
 
+    var touch = useTouch();
+    watch([touch, function () { return state.route; }], function (v) {
+      document.body.classList.toggle("m-app", !!(v[0] && (v[1] === "dashboard" || v[1] === "host")));
+    }, { immediate: true });
     onMounted(checkAuth);
     return { state: state, onLoggedIn: onLoggedIn, openEvent: openEvent, backToDashboard: backToDashboard, logout: logout };
   },
