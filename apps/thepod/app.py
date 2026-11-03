@@ -206,6 +206,24 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
+    # ----- PWA: manifiesto y service worker en la raíz (abarcan /pre, /prod, /ama, /post) -----
+    @app.get("/manifest.webmanifest")
+    def pwa_manifest():
+        r = send_file(Path(app.static_folder) / "pwa" / "manifest.webmanifest", mimetype="application/manifest+json")
+        r.headers["Cache-Control"] = "public, max-age=3600"
+        return r
+
+    @app.get("/sw.js")
+    def pwa_sw():
+        r = send_file(Path(app.static_folder) / "pwa" / "sw.js", mimetype="application/javascript")
+        r.headers["Cache-Control"] = "no-cache"
+        r.headers["Service-Worker-Allowed"] = "/"
+        return r
+
+    @app.get("/offline.html")
+    def pwa_offline():
+        return render_template("offline.html")
+
     @app.get("/privacidad")
     def privacidad():
         return render_template("privacidad.html", username=session.get("username"),

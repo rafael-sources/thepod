@@ -2,6 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/pwa/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0B0F1A">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Docs · thePod{% endblock %}</title>
   <meta name="description" content="{% block description %}Documentación de la suite thePod — prePod, prodPod, amaPod, postPod, pubPod y la app para Mac.{% endblock %}">
@@ -154,5 +158,6 @@
     update();
   }
 </script>
+<script>if ("serviceWorker" in navigator) addEventListener("load", function(){ navigator.serviceWorker.register("/sw.js", {scope: "/"}).catch(function(){}); });</script>
 </body>
 </html>
