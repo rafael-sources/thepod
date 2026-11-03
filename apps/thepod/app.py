@@ -206,6 +206,10 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
+    # ----- Una sola app: /pre, /prod, /ama y /post se reenvían a cada app (gateway.py) -----
+    import gateway
+    gateway.install(app, cfg)
+
     # ----- PWA: manifiesto y service worker en la raíz (abarcan /pre, /prod, /ama, /post) -----
     @app.get("/manifest.webmanifest")
     def pwa_manifest():
