@@ -1,7 +1,7 @@
 /* thePod · service worker.
    Solo guarda la cáscara (iconos, fuentes, vendors) y responde con ella sin red.
    Todo lo de /api/ y todo lo que no sea GET va siempre a la red: nada de datos viejos. */
-const VERSION = "thepod-sw-1";
+const VERSION = "thepod-sw-2";
 const SHELL = ["/static/pwa/icon-192.png", "/static/pwa/icon-512.png", "/offline.html"];
 
 self.addEventListener("install", (e) => {
@@ -40,4 +40,33 @@ self.addEventListener("fetch", (e) => {
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
   }
+});
+
+/* Avisos: el servidor manda {title, body, url, tag, icon}; al tocar, se abre (o se enfoca) esa pantalla */
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { title: "thePod", body: e.data ? e.data.text() : "" }; }
+  const title = d.title || "thePod";
+  e.waitUntil(self.registration.showNotification(title, {
+    body: d.body || "",
+    icon: d.icon || "/static/pwa/icon-192.png",
+    badge: "/static/pwa/icon-192.png",
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    data: { url: d.url || "/" },
+  }));
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    for (const c of list) {
+      if (c.url === url && "focus" in c) return c.focus();
+    }
+    for (const c of list) {
+      if ("navigate" in c && "focus" in c) return c.navigate(url).then((w) => w && w.focus());
+    }
+    return self.clients.openWindow(url);
+  }));
 });
