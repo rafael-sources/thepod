@@ -77,6 +77,66 @@ function isTouchLayout() {
   try { return window.matchMedia("(max-width: 900px), (pointer: coarse)").matches; } catch (_) { return false; }
 }
 
+/* thePod móvil: un ref que sigue al tamaño de la ventana, para que los componentes cambien de forma */
+var _touchRef = null;
+function useTouch() {
+  if (!_touchRef) {
+    _touchRef = ref(isTouchLayout());
+    try {
+      var mq = window.matchMedia("(max-width: 900px), (pointer: coarse)");
+      (mq.addEventListener ? mq.addEventListener("change", function () { _touchRef.value = mq.matches; }) : mq.addListener(function () { _touchRef.value = mq.matches; }));
+    } catch (_) {}
+  }
+  return _touchRef;
+}
+
+/* Iconos de la barra de abajo y las filas (trazo, 24 px) */
+var M_ICONS = {
+  episodes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  landing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c3 3 3 14 0 17M12 3.5c-3 3-3 14 0 17"/></svg>',
+  config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="var(--ink)"/><circle cx="15" cy="12" r="2" fill="var(--ink)"/><circle cx="8" cy="17" r="2" fill="var(--ink)"/></svg>',
+  me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"/><path d="M4.5 20c1.5-4 4-6 7.5-6s6 2 7.5 6"/></svg>',
+  back: '<svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4l-7 7 7 7"/></svg>',
+  plus: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M13 5v16M5 13h16"/></svg>',
+  script: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 4h9l4 4v12H6z"/><path d="M9 12h6M9 16h6"/></svg>',
+  rundown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  guests: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c1-3.5 3.5-5 6-5s5 1.5 6 5M15 19c.5-2 2-3 3.5-3s2.5 1 3 3"/></svg>',
+  ideas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 18h6M10 21h4M8.5 15.5a5 5 0 1 1 7 0c-.8.8-1.5 1.5-1.5 2.5h-4c0-1-.7-1.7-1.5-2.5z"/></svg>',
+  publish: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4M14 10v4M10 15v4" stroke-width="2.6"/></svg>',
+  links: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 14l4-4M8 16l-2 2a3 3 0 0 1-4-4l4-4M16 8l2-2a3 3 0 0 1 4 4l-4 4"/></svg>',
+  rec: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><circle cx="9" cy="9" r="2.5" fill="currentColor" stroke="none"/></svg>',
+  notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>',
+  star: '<svg viewBox="0 0 48 48" aria-hidden="true"><polygon points="24,2.5 29.8,17.4 45.5,18.1 33.2,28 37.5,43.5 24,34.7 10.5,43.5 14.8,28 2.5,18.1 18.2,17.4" fill="currentColor"/></svg>',
+};
+var EP_STATE_LABEL = { idea: "Idea", planning: "Planificando", scripted: "Con guion", recorded: "Grabado", published: "Publicado", archived: "Archivado" };
+var EP_STATE_COLOR = { idea: "#9d9078", planning: "#7ba3ff", scripted: "#f4c770", recorded: "#ff6b6b", published: "#8db36a", archived: "#5c5240" };
+function fmtWhen(ep) {
+  var s = ep.scheduled_at || ep.scheduled_date;
+  if (!s) return "";
+  try {
+    var d = new Date(s.length <= 10 ? s + "T09:00" : s);
+    var opts = s.length <= 10 ? { weekday: "short", day: "numeric", month: "short" } : { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+    return d.toLocaleString("es", opts).replace(",", "");
+  } catch (_) { return s; }
+}
+
+/* Barra de abajo de prePod (celular) */
+var MobileTabs = {
+  props: { current: String },
+  emits: ["go"],
+  setup() { return { M_ICONS }; },
+  template: `
+    <nav class="m-tabs" aria-label="Secciones de prePod">
+      <button type="button" :aria-current="current === 'episodes' ? 'page' : null" @click="$emit('go', 'episodes')"><span class="m-ico" v-html="M_ICONS.episodes"></span>Episodios</button>
+      <button type="button" :aria-current="current === 'calendar' ? 'page' : null" @click="$emit('go', 'calendar')"><span class="m-ico" v-html="M_ICONS.calendar"></span>Calendario</button>
+      <button type="button" :aria-current="current === 'landing' ? 'page' : null" @click="$emit('go', 'landing')"><span class="m-ico" v-html="M_ICONS.landing"></span>Página</button>
+      <button type="button" :aria-current="current === 'config' ? 'page' : null" @click="$emit('go', 'config')"><span class="m-ico" v-html="M_ICONS.config"></span>Configurar</button>
+      <button type="button" :aria-current="current === 'me' ? 'page' : null" @click="$emit('go', 'me')"><span class="m-ico" v-html="M_ICONS.me"></span>Yo</button>
+    </nav>
+  `,
+};
+
 var LoginView = {
   props: { onLoggedIn: { type: Function, required: true } },
   setup(props) {
@@ -1201,6 +1261,28 @@ var EpisodesBoard = {
       } catch (e) { error.value = e.message; }
     }
 
+    // Celular: lista con filtro por estado y «Mover a…» en una hoja
+    const touch = useTouch();
+    const mFilter = ref("all");
+    const mMove = ref(null);
+    const mList = computed(() => {
+      const all = mFilter.value === "all" ? episodes.value.filter(e => e.status !== "archived") : episodes.value.filter(e => e.status === mFilter.value);
+      const rank = { recorded: 0, scripted: 1, planning: 2, idea: 3, published: 4, archived: 5 };
+      return [...all].sort((a, b) => (rank[a.status] - rank[b.status]) || ((a.scheduled_date || "9") > (b.scheduled_date || "9") ? 1 : -1));
+    });
+    const mCounts = computed(() => {
+      const c = { all: 0 };
+      for (const e of episodes.value) { c[e.status] = (c[e.status] || 0) + 1; if (e.status !== "archived") c.all++; }
+      return c;
+    });
+    async function mMoveTo(status) {
+      const ep = mMove.value; mMove.value = null;
+      if (!ep || ep.status === status) return;
+      ep.status = status;
+      try { await api(`/api/podcasts/${props.slug}/episodes/${ep.id}`, { method: "PUT", body: { status } }); }
+      catch (e) { error.value = e.message; await load(); }
+    }
+
     onMounted(() => { load(); loadTemplates(); });
     return {
       columns: EPISODE_COLS, episodes, templates, byStatus, error, dragOverCol,
@@ -1209,10 +1291,44 @@ var EpisodesBoard = {
       onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, askCreate, doCreate,
       removeEpisode, moveLanding,
       fmtDate, fmtDurationMin,
+      touch, mFilter, mMove, mList, mCounts, mMoveTo, EP_STATE_LABEL, EP_STATE_COLOR, fmtWhen, M_ICONS,
     };
   },
   template: `
-    <div class="kanban">
+    <div v-if="touch" class="m-board" style="display:flex;flex-direction:column;flex:1;min-height:0;">
+      <div class="m-pills" role="tablist" aria-label="Estado">
+        <button type="button" role="tab" :aria-selected="mFilter === 'all'" @click="mFilter = 'all'">Todos · {{ mCounts.all }}</button>
+        <button v-for="c in columns" :key="c.key" type="button" role="tab" :aria-selected="mFilter === c.key" @click="mFilter = c.key">{{ EP_STATE_LABEL[c.key] }} · {{ mCounts[c.key] || 0 }}</button>
+      </div>
+      <div class="m-scroll">
+        <div v-if="error" class="error">{{ error }}</div>
+        <p v-if="!mList.length" class="muted" style="padding: 24px 4px; text-align: center;">Nada por aquí. Toca «+» para crear un episodio.</p>
+        <button v-for="ep in mList" :key="ep.id" type="button" class="m-card" :style="{ borderLeftColor: EP_STATE_COLOR[ep.status] }" @click="$emit('open-episode', ep.id)">
+          <div style="display:flex;align-items:baseline;gap:10px;">
+            <span class="m-state" :style="{ color: EP_STATE_COLOR[ep.status] }">{{ EP_STATE_LABEL[ep.status] }}</span>
+            <span style="margin-left:auto;font-size:13px;color:var(--paper-soft);font-variant-numeric:tabular-nums;">{{ fmtWhen(ep) }}</span>
+          </div>
+          <div class="m-title">#{{ ep.episode_number }} · {{ ep.title }}</div>
+          <div class="m-meta">
+            <span v-if="ep.duration_estimate">{{ fmtDurationMin(ep.duration_estimate) }}</span>
+            <span class="m-chip" style="margin-left:auto;" @click.stop="mMove = ep" role="button" tabindex="0" @keydown.enter.stop="mMove = ep">Mover a…</span>
+          </div>
+        </button>
+      </div>
+      <button type="button" class="m-fab" aria-label="Nuevo episodio" @click="askCreate(mFilter === 'all' || mFilter === 'archived' ? 'idea' : mFilter)"><span v-html="M_ICONS.plus"></span></button>
+      <div v-if="mMove" class="m-sheet-backdrop" @click.self="mMove = null">
+        <div class="m-sheet" role="dialog" aria-label="Mover episodio">
+          <div class="m-sheet-grab"></div>
+          <h4>Mover «#{{ mMove.episode_number }} · {{ mMove.title }}» a…</h4>
+          <div class="m-grid2">
+            <button v-for="c in columns" :key="c.key" type="button" class="m-opt" :aria-current="mMove.status === c.key ? 'true' : null" :style="{ color: EP_STATE_COLOR[c.key] }" @click="mMoveTo(c.key)">{{ EP_STATE_LABEL[c.key] }}<span v-if="mMove.status === c.key"> ✓</span></button>
+          </div>
+          <button type="button" class="m-opt" style="color:var(--signal-hot);justify-content:center;" @click="removeEpisode(mMove); mMove = null">Eliminar episodio</button>
+        </div>
+      </div>
+      <CreateEpisodeModal :show="showCreate" :suggested-number="suggestedNumber" :templates="templates" @create="doCreate" @cancel="showCreate = false" />
+    </div>
+    <div v-else class="kanban">
       <div
         v-for="col in columns"
         :key="col.key"
@@ -2245,12 +2361,12 @@ var GuestsPanel = {
 
     const canShare = typeof navigator !== "undefined" && !!navigator.share;
     function shareRsvp(g) {
-      const url = g._rsvp_full_url || (window.location.origin + (g.rsvp_url || ""));
+      const url = g._rsvp_full_url || (window.location.origin + (window.POD_BASE || "") + (g.rsvp_url || ""));
       navigator.share({ title: "Invitación", text: `Hola ${g.name}, te invitamos al podcast. Confirma aquí:`, url }).catch(() => {});
     }
 
     async function copyRsvp(g) {
-      const url = g._rsvp_full_url || (window.location.origin + (g.rsvp_url || ""));
+      const url = g._rsvp_full_url || (window.location.origin + (window.POD_BASE || "") + (g.rsvp_url || ""));
       if (!url) return;
       try {
         await navigator.clipboard.writeText(url);
@@ -2272,7 +2388,7 @@ var GuestsPanel = {
         // when SMTP isn't configured (legacy / dev setups).
         if (r.rsvp_url) g._rsvp_full_url = r.rsvp_url.startsWith("http")
           ? r.rsvp_url
-          : (window.location.origin + r.rsvp_url);
+          : (window.location.origin + (window.POD_BASE || "") + r.rsvp_url);
         if (r.ok) {
           g._rsvp_msg = `✓ Email enviado a ${r.sent_to}`;
         } else if (r.reason === "no_smtp") {
@@ -2781,12 +2897,111 @@ var EpisodeDetail = {
       finally { publishing.value = false; }
     }
 
+    // Celular: un hub con el episodio y una sección por pantalla
+    const touch = useTouch();
+    const mSec = ref("hub");
+    const M_SECS = [
+      { key: "info", label: "Ficha", sub: "Descripción, estado, fecha y duración", ico: "notes" },
+      { key: "script", label: "Guion", sub: "Lo que se va a decir", ico: "script" },
+      { key: "rundown", label: "Rundown", sub: "Bloques y tiempos", ico: "rundown" },
+      { key: "guests", label: "Invitados", sub: "Quién viene y sus datos", ico: "guests" },
+      { key: "ideas", label: "Ideas", sub: "Temas y apuntes sueltos", ico: "ideas" },
+      { key: "publish", label: "Publicar", sub: "Audio, notas y plataformas", ico: "publish" },
+      { key: "links", label: "Links", sub: "Enlaces del episodio", ico: "links" },
+    ];
+    watch(() => props.episodeId, () => { mSec.value = "hub"; });
+
     return { ep, error, saveState, dirty, saveNow, fmtDate,
              showNotesOpen, openShowNotes, closeShowNotes,
-             publishPath, publishing, syncNotes, doPublish };
+             publishPath, publishing, syncNotes, doPublish,
+             touch, mSec, M_SECS, M_ICONS, EP_STATE_LABEL, EP_STATE_COLOR, fmtWhen };
   },
   template: `
-    <div v-if="ep" class="episode-detail">
+    <div v-if="ep && touch" class="episode-detail m-detail">
+      <div class="m-pills" role="tablist" aria-label="Partes del episodio">
+        <button type="button" role="tab" :aria-selected="mSec === 'hub'" @click="mSec = 'hub'">Episodio</button>
+        <button v-for="sc in M_SECS" :key="sc.key" type="button" role="tab" :aria-selected="mSec === sc.key" @click="mSec = sc.key">{{ sc.label }}</button>
+      </div>
+      <div class="m-scroll" style="padding-bottom: calc(110px + env(safe-area-inset-bottom));">
+        <div v-if="error" class="error">{{ error }}</div>
+
+        <template v-if="mSec === 'hub'">
+          <div class="m-ep-head">
+            <span class="m-state" :style="{ color: EP_STATE_COLOR[ep.status], fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 600 }">{{ EP_STATE_LABEL[ep.status] }} · #{{ ep.episode_number }}</span>
+            <h2>{{ ep.title || 'Sin título' }}</h2>
+            <div class="m-when">{{ fmtWhen(ep) || 'Sin fecha todavía' }}<span v-if="ep.duration_estimate"> · {{ ep.duration_estimate }} min</span></div>
+          </div>
+          <div class="m-grid2" style="margin-top: 6px;">
+            <a v-if="ep.scheduled_at || ep.scheduled_date" class="m-btn ghost" :href="'/api/podcasts/' + slug + '/episodes/' + ep.id + '.ics'" download>Al calendario</a>
+            <button v-else type="button" class="m-btn ghost" @click="mSec = 'info'">Poner fecha</button>
+            <button type="button" class="m-btn primary" @click="openShowNotes">Show notes</button>
+          </div>
+          <EpisodeIntegrationBar :slug="slug" :episode-id="ep.id" />
+          <div class="m-section">Preparar</div>
+          <div class="m-group">
+            <button v-for="sc in M_SECS" :key="sc.key" type="button" class="m-row" @click="mSec = sc.key">
+              <span class="m-rico" v-html="M_ICONS[sc.ico]"></span>
+              <span><b>{{ sc.label }}</b><small>{{ sc.sub }}</small></span>
+              <span class="m-chev" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div class="show-notes-panel" v-if="ep.ai_summary">
+            <h4>Show Notes (AI)</h4>
+            <div class="show-notes-summary">{{ ep.ai_summary }}</div>
+            <div class="show-notes-actions"><button @click="syncNotes">Sincronizar notas</button></div>
+          </div>
+        </template>
+
+        <div v-else-if="mSec === 'info'" class="section">
+          <div class="form-row">
+            <label>Título</label>
+            <input type="text" v-model="ep.title" class="m-title-input">
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <label>Episodio #</label>
+            <input type="number" v-model.number="ep.episode_number" min="1" inputmode="numeric">
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <label>Descripción</label>
+            <textarea v-model="ep.description" rows="4" placeholder="De qué va este episodio..."></textarea>
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <label>Estado</label>
+            <select v-model="ep.status" @change="$emit('updated', ep)">
+              <option value="idea">Idea</option>
+              <option value="planning">Planificando</option>
+              <option value="scripted">Con guion</option>
+              <option value="recorded">Grabado</option>
+              <option value="published">Publicado</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <label>Fecha y hora</label>
+            <input type="datetime-local" v-model="ep.scheduled_at">
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <label>Duración estimada (min)</label>
+            <input type="number" v-model.number="ep.duration_estimate" min="0" step="1" inputmode="numeric">
+          </div>
+        </div>
+        <div v-else-if="mSec === 'script'" class="section"><ScriptEditor :slug="slug" :episode-id="ep.id" /></div>
+        <div v-else-if="mSec === 'rundown'" class="section"><RundownEditor :slug="slug" :episode-id="ep.id" /></div>
+        <div v-else-if="mSec === 'guests'" class="section"><GuestsPanel :slug="slug" :episode-id="ep.id" /></div>
+        <div v-else-if="mSec === 'ideas'" class="section"><IdeasPanel :slug="slug" :episode-id="ep.id" /></div>
+        <div v-else-if="mSec === 'publish'"><PublishPanel :slug="slug" :ep="ep" @published="(u) => { ep.media_url = u; ep.status = 'published'; }" /></div>
+        <div v-else-if="mSec === 'links'" class="section"><EpisodeLinks :slug="slug" :episode-id="ep.id" /></div>
+      </div>
+
+      <div class="save-bar" v-if="dirty || saveState">
+        <span v-if="saveState === 'saving'" class="save-indicator saving">◉ guardando…</span>
+        <span v-else-if="saveState === 'saved'" class="save-indicator">✓ guardado</span>
+        <span v-else-if="saveState === 'error'" class="save-indicator" style="background: var(--signal-hot); color: #fff;">◆ error</span>
+        <span v-else-if="dirty" class="save-indicator dirty">● sin guardar</span>
+        <button class="primary save-btn" :disabled="!dirty || saveState === 'saving'" @click="saveNow">Guardar</button>
+      </div>
+      <ShowNotesModal :show="showNotesOpen" :slug="slug" :episode-id="ep.id" @close="closeShowNotes" />
+    </div>
+    <div v-else-if="ep" class="episode-detail">
       <div class="main">
         <div v-if="error" class="error">{{ error }}</div>
 
@@ -3180,8 +3395,8 @@ var LandingPanel = {
       _idleSave();
     });
 
-    const landingUrl   = computed(() => `${window.location.origin}/landing/${props.podcast.slug}`);
-    const defaultRssUrl = computed(() => `${window.location.origin}/landing/${props.podcast.slug}/feed.xml`);
+    const landingUrl   = computed(() => `${window.location.origin}${window.POD_BASE || ""}/landing/${props.podcast.slug}`);
+    const defaultRssUrl = computed(() => `${window.location.origin}${window.POD_BASE || ""}/landing/${props.podcast.slug}/feed.xml`);
     const rssOverride  = ref(props.podcast.rss_override_url || "");
     const effectiveRss = computed(() => (rssOverride.value || "").trim() || defaultRssUrl.value);
     const rssSaveState = ref(null);
@@ -4872,10 +5087,44 @@ var RedesPanel = {
   `,
 };
 
+/* Celular → Configurar: una lista con todo lo que en escritorio son pestañas */
+var CONFIG_ROWS = [
+  { key: "branding", label: "Branding", sub: "Nombre, logo, colores y voz", ico: "star" },
+  { key: "sounds", label: "Sonidos", sub: "Cortinas, efectos y música", ico: "rec" },
+  { key: "templates", label: "Plantillas", sub: "Estructuras de episodio", ico: "rundown" },
+  { key: "sponsors", label: "Sponsors", sub: "Marcas y menciones", ico: "publish" },
+  { key: "exports", label: "Archivos", sub: "Lo que se exporta para prod", ico: "notes" },
+  { key: "distribution", label: "Distribución", sub: "Plataformas y feed", ico: "links" },
+  { key: "redes", label: "Redes", sub: "Cuentas conectadas para publicar", ico: "guests" },
+];
+var MODE_TITLE = { branding: "Branding", sounds: "Sonidos", templates: "Plantillas", sponsors: "Sponsors", exports: "Archivos", distribution: "Distribución", redes: "Redes", landing: "Página", calendar: "Calendario", episodes: "Episodios", config: "Configurar" };
+
 var PodcastView = {
-  components: { BrandingEditor, EpisodesBoard, EpisodeDetail, LandingPanel, SoundboardLibrary, CalendarView, TemplatesPanel, SponsorsPanel, ExportsPanel, DistributionPanel, RedesPanel },
-  props: { podcast: Object, onBack: Function, onUpdated: Function },
+  components: { BrandingEditor, EpisodesBoard, EpisodeDetail, LandingPanel, SoundboardLibrary, CalendarView, TemplatesPanel, SponsorsPanel, ExportsPanel, DistributionPanel, RedesPanel, MobileTabs },
+  props: { podcast: Object, onBack: Function, onUpdated: Function, siblingApps: Array, thepodUrl: String, username: String, onLogout: Function },
   setup(props) {
+    const touch = useTouch();
+    const meOpen = ref(false);
+    const appsOpen = ref(false);
+    // La pestaña de abajo que corresponde al modo actual
+    const mTab = computed(() => {
+      const m = mode.value;
+      if (m === "episodes" || m === "episode-detail") return "episodes";
+      if (m === "calendar" || m === "landing") return m;
+      return "config";
+    });
+    const mTitle = computed(() => mode.value === "config" ? props.podcast.name : (MODE_TITLE[mode.value] || props.podcast.name));
+    const inConfigChild = computed(() => CONFIG_ROWS.some(r => r.key === mode.value));
+    function mGo(tab) {
+      if (tab === "me") { meOpen.value = true; return; }
+      selectedEpId.value = null;
+      mode.value = tab;
+    }
+    function mBack() {
+      if (mode.value === "episode-detail") { backToBoard(); return; }
+      if (inConfigChild.value) { mode.value = "config"; return; }
+      props.onBack();
+    }
     // En celular/iPad se entra directo a los episodios: es lo que se usa en una emergencia.
     const mode = ref(isTouchLayout() ? "episodes" : "branding");
     const selectedEpId = ref(null);
@@ -4907,11 +5156,17 @@ var PodcastView = {
     onMounted(() => window.addEventListener("keydown", onEpisodeKey));
     onBeforeUnmount(() => window.removeEventListener("keydown", onEpisodeKey));
 
-    return { mode, selectedEpId, openEpisode, backToBoard, moreOpen, MORE_MODES, goMode, inMore };
+    return { mode, selectedEpId, openEpisode, backToBoard, moreOpen, MORE_MODES, goMode, inMore,
+             touch, meOpen, appsOpen, mTab, mTitle, inConfigChild, mGo, mBack, CONFIG_ROWS, M_ICONS };
   },
   template: `
     <div class="podcast-view-wrap">
-      <div class="page-bar">
+      <div v-if="touch" class="m-top">
+        <button type="button" class="m-icon" :aria-label="mode === 'episode-detail' ? 'Volver a episodios' : (inConfigChild ? 'Volver a configurar' : 'Volver a podcasts')" @click="mBack"><span v-html="M_ICONS.back"></span></button>
+        <h2>{{ mTitle }}</h2>
+        <button type="button" class="m-appchip" aria-haspopup="dialog" @click="appsOpen = true">thePod · <b>pre</b> ▾</button>
+      </div>
+      <div v-else class="page-bar">
         <button v-if="mode === 'episode-detail'" class="ghost" @click="backToBoard">← Episodios</button>
         <button v-else class="ghost" @click="onBack">← Podcasts</button>
         <h3>{{ podcast.name }}</h3>
@@ -4944,8 +5199,47 @@ var PodcastView = {
       <DistributionPanel v-else-if="mode === 'distribution'" :slug="podcast.slug" />
       <RedesPanel v-else-if="mode === 'redes'" :slug="podcast.slug" @go-distribution="mode = 'distribution'" />
       <EpisodeDetail v-else-if="mode === 'episode-detail'" :slug="podcast.slug" :episode-id="selectedEpId" @back="backToBoard" />
+      <div v-else-if="mode === 'config'" class="m-scroll">
+        <div class="m-section">Este podcast</div>
+        <div class="m-group">
+          <button v-for="r in CONFIG_ROWS" :key="r.key" type="button" class="m-row" @click="mode = r.key">
+            <span class="m-rico" v-html="M_ICONS[r.ico]"></span>
+            <span><b>{{ r.label }}</b><small>{{ r.sub }}</small></span>
+            <span class="m-chev" aria-hidden="true">›</span>
+          </button>
+        </div>
+        <div class="m-section">Llevar a otra app</div>
+        <div class="m-group">
+          <a class="m-row" :href="'/api/podcasts/' + podcast.slug + '/export-bundle'" download>
+            <span class="m-rico" v-html="M_ICONS.notes"></span>
+            <span><b>Exportar podcast</b><small>Un archivo con todo para prod y post</small></span>
+            <span class="m-chev" aria-hidden="true">↓</span>
+          </a>
+        </div>
+      </div>
 
-      <nav v-if="mode !== 'episode-detail'" class="pod-tabs m-only">
+      <MobileTabs v-if="touch && mode !== 'episode-detail'" :current="mTab" @go="mGo" />
+      <div v-if="touch && appsOpen" class="m-sheet-backdrop" @click.self="appsOpen = false">
+        <div class="m-sheet" role="dialog" aria-label="Cambiar de app">
+          <div class="m-sheet-grab"></div>
+          <h4>Estás en prePod · {{ podcast.name }}</h4>
+          <button type="button" class="m-opt" @click="appsOpen = false; onBack()"><span>🎙</span>Otro podcast</button>
+          <a v-for="a in (siblingApps || [])" :key="a.key" class="m-opt" :href="a.url"><span class="ico" :data-app="a.key"></span>{{ a.name }}</a>
+          <a class="m-opt" :href="thepodUrl || '/'">thePod · inicio</a>
+        </div>
+      </div>
+      <div v-if="touch && meOpen" class="m-sheet-backdrop" @click.self="meOpen = false">
+        <div class="m-sheet" role="dialog" aria-label="Mi cuenta">
+          <div class="m-sheet-grab"></div>
+          <h4>{{ username }}</h4>
+          <a class="m-opt" :href="(thepodUrl || '') + '/perfil'">Mi perfil: foto, nombre y contraseña</a>
+          <a class="m-opt" :href="(thepodUrl || '') + '/docs/prepod'">Cómo se usa prePod</a>
+          <button type="button" class="m-opt" @click="meOpen = false; onBack()">Mis podcasts</button>
+          <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="onLogout && onLogout()">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <nav v-if="!touch && mode !== 'episode-detail'" class="pod-tabs m-only" style="display:none !important;">
         <button :class="{ on: mode === 'episodes' }" @click="goMode('episodes')"><span class="pt-ico">🎙</span>Episodios</button>
         <button :class="{ on: mode === 'calendar' }" @click="goMode('calendar')"><span class="pt-ico">📅</span>Calendario</button>
         <button :class="{ on: mode === 'landing' }" @click="goMode('landing')"><span class="pt-ico">🌐</span>Landing</button>
@@ -5360,7 +5654,7 @@ var UsersAdminModal = {
 var App = {
   components: { LoginView, PodcastListView, PodcastView, IntegrationSettingsModal, UsersAdminModal },
   setup() {
-    const state = reactive({ username: null, isAdmin: false, currentPodcast: null, loading: true, showSettings: false, showUsers: false });
+    const state = reactive({ username: null, isAdmin: false, currentPodcast: null, loading: true, showSettings: false, showUsers: false, meOpen: false });
     const siblingApps = ref(null);
     const thepodUrl = ref("");
 
@@ -5395,8 +5689,12 @@ var App = {
         state.currentPodcast = { ...state.currentPodcast, ...p };
       }
     }
+    const touch = useTouch();
+    watch([touch, () => !!state.username], function ([t, logged]) {
+      document.body.classList.toggle("m-app", !!(t && logged));
+    }, { immediate: true });
     onMounted(function () { checkAuth(); loadApps(); });
-    return { state, siblingApps, thepodUrl, onLoggedIn, onOpen, onBack, onUpdated, logout };
+    return { state, siblingApps, thepodUrl, onLoggedIn, onOpen, onBack, onUpdated, logout, touch, M_ICONS };
   },
   template: `
     <template v-if="state.loading">
@@ -5433,8 +5731,27 @@ var App = {
           <button class="ghost" @click="logout">Salir</button>
         </div>
       </header>
-      <PodcastView v-if="state.currentPodcast" :podcast="state.currentPodcast" :on-back="onBack" :on-updated="onUpdated" />
-      <PodcastListView v-else :on-open="onOpen" />
+      <PodcastView v-if="state.currentPodcast" :podcast="state.currentPodcast" :on-back="onBack" :on-updated="onUpdated"
+                   :sibling-apps="siblingApps" :thepod-url="thepodUrl" :username="state.username" :on-logout="logout" />
+      <template v-else>
+        <div v-if="touch" class="m-top">
+          <h2 style="padding-left:10px;">Mis podcasts</h2>
+          <button v-if="state.isAdmin" type="button" class="m-icon" aria-label="Administrar usuarios" @click="state.showUsers = true"><span v-html="M_ICONS.guests"></span></button>
+          <button type="button" class="m-icon" aria-label="Integraciones" @click="state.showSettings = true"><span v-html="M_ICONS.config"></span></button>
+          <button type="button" class="m-appchip" aria-haspopup="dialog" @click="state.meOpen = true">{{ state.username }} ▾</button>
+        </div>
+        <PodcastListView :on-open="onOpen" />
+        <div v-if="touch && state.meOpen" class="m-sheet-backdrop" @click.self="state.meOpen = false">
+          <div class="m-sheet" role="dialog" aria-label="Mi cuenta">
+            <div class="m-sheet-grab"></div>
+            <h4>{{ state.username }}</h4>
+            <a class="m-opt" :href="(thepodUrl || '') + '/perfil'">Mi perfil: foto, nombre y contraseña</a>
+            <a v-for="a in (siblingApps || [])" :key="a.key" class="m-opt" :href="a.url"><span class="ico" :data-app="a.key"></span>{{ a.name }}</a>
+            <a class="m-opt" :href="thepodUrl || '/'">thePod · inicio</a>
+            <button type="button" class="m-opt" style="color:var(--signal-hot);" @click="logout">Cerrar sesión</button>
+          </div>
+        </div>
+      </template>
       <IntegrationSettingsModal v-if="state.showSettings" @close="state.showSettings = false" />
       <UsersAdminModal v-if="state.showUsers" :thepod-url="thepodUrl" @close="state.showUsers = false" />
     </template>
