@@ -23,6 +23,7 @@ from flask import Blueprint, Response, abort, jsonify, request
 from auth import current_user, require_auth
 from config import INTEGRATION_SECRET, POSTPOD_INTERNAL_URL, POSTPOD_URL, SESSIONS_DIR
 from db import get_db, session_dir
+from pod_push import notify as push_notify
 from integrations import notify_source
 
 
@@ -425,6 +426,16 @@ def stream_recording_chunk(sid):
                     row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
                     size = row["size_bytes"]
             body = {"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}
+            # Aviso al dueño de la sesión: la pista de esta persona ya está completa en el servidor
+            try:
+                who = db.execute("SELECT display_name FROM participants WHERE id=?", (participant_id,)).fetchone()
+                mb = round(size / 1048576) if size else 0
+                push_notify([sess["created_by"]], "prodPod · " + (sess["title"] or "sesión"),
+                            ((who["display_name"] if who else "Un participante") + ": " + ("video" if track_type == "video" else track_type)
+                             + " subido" + (" · %d MB" % mb if mb else "")),
+                            "/prod/", tag="prod-rec-" + str(sid))
+            except Exception:
+                pass
             db.close()
             try:
                 maybe_auto_export(sid)
