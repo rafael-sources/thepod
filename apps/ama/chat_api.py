@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request, session
 
 from auth import require_auth, current_user
 from db import get_db
+from pod_push import notify as push_notify
 
 bp = Blueprint("chat_api", __name__)
 
@@ -122,6 +123,11 @@ def send_message(eid):
         )
         db.commit()
         row = db.execute("SELECT * FROM chat_messages WHERE id = ?", (cur.lastrowid,)).fetchone()
+        if not is_approved:
+            # Solo si el anfitrión tiene que decidir: un aviso por evento, se reemplaza con el último
+            push_notify([ev["host_username"]], "amaPod · " + (ev["title"] or "evento"),
+                        sender_name + " escribió en el chat y espera tu aprobación: «" + message[:80] + ("…" if len(message) > 80 else "") + "»",
+                        "/ama/", tag="ama-chat-" + str(eid))
         return jsonify(_serialize_message(row, key)), 201
     finally:
         db.close()
