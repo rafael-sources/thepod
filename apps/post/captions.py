@@ -20,6 +20,7 @@ from flask import Blueprint, abort, jsonify, request, send_file
 from auth import require_auth
 from config import PROJECTS_DIR
 from db import get_db
+from pod_push import notify as push_notify, project_hosts, project_name
 
 
 bp = Blueprint("captions", __name__)
@@ -296,6 +297,8 @@ def _run_caption_job(slug, job_id, file_id, language, model):
         _update_job(slug, job_id, status="done", progress=100,
                     srt_filename=srt_filename,
                     finished_at_marker=None)
+        push_notify(project_hosts(slug), "postPod · " + project_name(slug),
+                    "Transcripción lista", "/post/", tag="post-captions-" + str(job_id))
         db = get_db(slug)
         try:
             db.execute("UPDATE caption_jobs SET finished_at=datetime('now') WHERE id=?", (job_id,))

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from config import PROJECTS_DIR, drawtext_fontfile, find_preset
 from db import get_db
+from pod_push import notify as push_notify, project_hosts, project_name
 
 
 SUBTITLE_FONT_MAP = {
@@ -3402,6 +3403,8 @@ def run_export(slug: str, job_id: int):
             db.commit()
         finally:
             db.close()
+        push_notify(project_hosts(slug), "postPod · " + project_name(slug),
+                    "Exportación lista: " + Path(out_rel).name, "/post/", tag="post-export-" + str(job_id))
     else:
         # Distinguish cancellation from failure. SIGTERM typically yields negative returncode.
         if proc.returncode is not None and proc.returncode < 0:
@@ -3432,6 +3435,8 @@ def run_export(slug: str, job_id: int):
             if tail:
                 msg += f"\n{tail[-900:]}"
             _update_job(slug, job_id, status="error", error_msg=msg)
+            push_notify(project_hosts(slug), "postPod · " + project_name(slug),
+                        "La exportación falló (ffmpeg). Ábrela para ver el detalle.", "/post/", tag="post-export-" + str(job_id))
 
 
 def start_export_thread(slug: str, job_id: int):
