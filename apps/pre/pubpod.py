@@ -46,6 +46,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from auth import require_auth
 from config import PODCASTS_DIR, SECRET_KEY
 from db import get_db
+from pod_push import notify as push_notify
 from shared_config import load_shared_config
 
 bp = Blueprint("pubpod", __name__)
@@ -1087,6 +1088,34 @@ def _claim_due(slug):
         conn.close()
 
 
+_NET_LABEL = {"youtube": "YouTube", "instagram": "Instagram", "instagram_image": "Instagram", "tiktok": "TikTok", "feed": "el feed (Spotify/Apple)"}
+
+
+def _notify_post(slug, post, status, url=None, error=None):
+    """Aviso al teléfono de quien programó y del dueño/hosts: publicado, en revisión o fallido."""
+    try:
+        conn = _db(slug)
+        try:
+            meta = conn.execute("SELECT name, owner_username, extra_hosts FROM podcast_meta WHERE slug=?", (slug,)).fetchone()
+        finally:
+            conn.close()
+        from podcasts import _row_owner, _row_extra_hosts
+        who = ([_row_owner(meta)] + _row_extra_hosts(meta)) if meta else []
+        if post.get("created_by"):
+            who.append(post["created_by"])
+        net = _NET_LABEL.get(post["platform"], post["platform"])
+        title = "pub · " + ((meta["name"] if meta and meta["name"] else slug))
+        if status == "error":
+            body = "No se pudo publicar «%s» en %s: %s" % (post["title"], net, (error or "")[:120])
+        elif status in ("private", "inbox"):
+            body = "«%s» quedó en %s pero sin publicar todavía (%s)." % (post["title"], net, "privado" if status == "private" else "bandeja de entrada")
+        else:
+            body = "«%s» ya está en %s." % (post["title"], net)
+        push_notify(who, title, body, url or "/pre/", tag="pub-" + str(post["id"]))
+    except Exception:
+        pass
+
+
 def run_due(slug):
     """Publica lo vencido de un podcast. Devuelve cuántas publicaciones procesó."""
     done = 0
@@ -1094,11 +1123,14 @@ def run_due(slug):
         try:
             status, url = _publish_one(slug, post)
             _set_status(slug, post["id"], ("publishing",), status, result_url=url, error=None)
+            _notify_post(slug, post, status, url=url)
         except PublishError as e:
             _set_status(slug, post["id"], ("publishing",), "error", error=str(e)[:300])
+            _notify_post(slug, post, "error", error=str(e))
         except Exception as e:  # noqa: BLE001 — nunca dejar un post colgado en "publishing"
             _set_status(slug, post["id"], ("publishing",), "error",
                         error=f"error inesperado: {str(e)[:200]}")
+            _notify_post(slug, post, "error", error="error inesperado")
         done += 1
     _cleanup_media(slug)
     return done
