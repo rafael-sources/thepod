@@ -14,6 +14,7 @@ import export_api
 import files as files_bp
 import integrations
 import projects
+import review
 import startup
 import timeline_api
 import transcript_api
@@ -110,6 +111,7 @@ def create_app():
     app.register_blueprint(ai_api.bp)
     import export_review
     app.register_blueprint(export_review.bp)
+    app.register_blueprint(review.bp)
 
     # Per-project access guard for restricted users.
     import re as _re
