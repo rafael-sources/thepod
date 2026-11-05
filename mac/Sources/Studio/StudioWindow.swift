@@ -39,12 +39,14 @@ struct AudioStudioView: View {
         VStack(spacing: 0) {
             transport
             Divider()
-            EpisodeTimeline(session: session)
-                .padding(.horizontal, 12).padding(.top, 8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .clipped()
+            ScrollView(.vertical) {
+                EpisodeTimeline(session: session)
+                    .padding(.horizontal, 12).padding(.top, 8)
+            }
+            .frame(height: 360)
             Divider()
             console
+            Spacer(minLength: 0)
         }
         .sheet(item: $editingInsert) { ref in
             InsertEditor(session: session, ref: ref)
