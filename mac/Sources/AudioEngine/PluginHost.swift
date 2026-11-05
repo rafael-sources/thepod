@@ -37,6 +37,18 @@ enum PluginHost {
         return out.sorted { ($0.vendor, $0.name) < ($1.vendor, $1.name) }
     }
 
+    // MARK: Usados hace poco (los últimos 6 que se metieron en una cadena, en esta Mac)
+
+    private static let usedKey = "estudio.plugins.usados"
+    static func noteUsed(_ a: Available) {
+        var ids = (UserDefaults.standard.stringArray(forKey: usedKey) ?? []).filter { $0 != a.id }
+        ids.insert(a.id, at: 0)
+        UserDefaults.standard.set(Array(ids.prefix(6)), forKey: usedKey)
+    }
+    static func favorites(from avail: [Available]) -> [Available] {
+        (UserDefaults.standard.stringArray(forKey: usedKey) ?? []).compactMap { id in avail.first { $0.id == id } }
+    }
+
     static func description(_ p: PluginInsert) -> AudioComponentDescription {
         AudioComponentDescription(componentType: p.type, componentSubType: p.subtype, componentManufacturer: p.manufacturer, componentFlags: 0, componentFlagsMask: 0)
     }

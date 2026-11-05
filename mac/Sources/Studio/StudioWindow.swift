@@ -211,6 +211,10 @@ struct ChannelStrip: View {
                         .help("\(pl.vendor) · abrir la ventana del plugin")
                         .contextMenu {
                             Button(pl.enabled ? "Apagar" : "Encender") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }) { c.plugins[i].enabled.toggle() } } }
+                            let idx = chain.plugins.firstIndex(where: { $0.id == pl.id }) ?? 0
+                            Button("Subir") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }), i > 0 { c.plugins.swapAt(i, i - 1) } } }.disabled(idx == 0)
+                            Button("Bajar") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }), i < c.plugins.count - 1 { c.plugins.swapAt(i, i + 1) } } }.disabled(idx >= chain.plugins.count - 1)
+                            Divider()
                             Button("Quitar de la cadena", role: .destructive) { edit { c in c.plugins.removeAll { $0.id == pl.id } } }
                         }
                     }
@@ -218,10 +222,16 @@ struct ChannelStrip: View {
                 Menu {
                     let avail = PluginHost.available()
                     if avail.isEmpty { Text("No hay plugins Audio Unit instalados") }
+                    let favs = PluginHost.favorites(from: avail)
+                    if !favs.isEmpty {
+                        Section("Usados hace poco") {
+                            ForEach(favs) { a in Button(a.name) { add(a) } }
+                        }
+                    }
                     ForEach(Dictionary(grouping: avail, by: \.vendor).keys.sorted(), id: \.self) { vendor in
                         Menu(vendor) {
                             ForEach(avail.filter { $0.vendor == vendor }) { a in
-                                Button(a.name + (a.isV3 ? "" : "  (AUv2, dentro de la app)")) { edit { c in c.plugins.append(a.insert) } }
+                                Button(a.name + (a.isV3 ? "" : "  (AUv2, dentro de la app)")) { add(a) }
                             }
                         }
                     }
@@ -302,6 +312,10 @@ struct ChannelStrip: View {
         var c = lane.effectiveChain
         f(&c)
         Lane.store(c, in: &session.project.lanes[index])
+    }
+    private func add(_ a: PluginHost.Available) {
+        PluginHost.noteUsed(a)
+        edit { c in c.plugins.append(a.insert) }
     }
 
     private func insertRow(_ name: String, on: Bool, detail: String, open: @escaping () -> Void) -> some View {
