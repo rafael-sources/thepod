@@ -420,6 +420,48 @@ enum StudioTests {
         return ok
     }
 
+    /// Quitar clics: sobre un tono de voz con 20 clics de una muestra, los clics desaparecen (pico ≤ el del tono),
+    /// el tono se conserva, y sin clics la señal pasa intacta (retardada).
+    static func declickTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let sr = 48_000.0, total = Int(sr * 3)
+        var clean = [Float](repeating: 0, count: total)
+        for i in 0..<total { clean[i] = 0.3 * Float(sin(2 * .pi * 220 * Double(i) / sr)) + 0.1 * Float(sin(2 * .pi * 1700 * Double(i) / sr)) }
+        var dirty = clean
+        var positions: [Int] = []
+        for k in 0..<20 { let pos = 6000 + k * 6500; positions.append(pos); dirty[pos] += 0.6; dirty[pos + 1] -= 0.4 }
+        func run(_ input: [Float], amount: Float) -> ([Float], Int) {
+            let d = DeClicker(); d.amount = amount; d.prepare(channels: 1)
+            var out = input
+            out.withUnsafeMutableBufferPointer { op in
+                var abl = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(mNumberChannels: 1, mDataByteSize: 0, mData: nil))
+                var pos = 0
+                while pos < total {
+                    let n = min(1024, total - pos)
+                    abl.mBuffers.mData = UnsafeMutableRawPointer(op.baseAddress! + pos); abl.mBuffers.mDataByteSize = UInt32(n * 4)
+                    d.process(&abl, frames: n); pos += n
+                }
+            }
+            return (out, d.clicks)
+        }
+        let lat = DeClicker.lookahead
+        let (out, found) = run(dirty, amount: 0.5)
+        check(found >= 18 && found <= 24, "encuentra los clics (\(found) de 20)")
+        var maxResidual: Float = 0
+        for pos in positions { for j in -3...4 { maxResidual = max(maxResidual, abs(out[pos + j + lat] - clean[pos + j])) } }
+        check(maxResidual < 0.06, String(format: "donde había clic queda la onda (residuo máximo %.3f)", maxResidual))
+        var diff = 0.0, ref = 0.0
+        for i in 1000..<(total - 2000) { let d = Double(out[i + lat] - clean[i]); diff += d * d; ref += Double(clean[i] * clean[i]) }
+        check(10 * log10(diff / ref) < -40, String(format: "el resto de la voz queda igual (error %.1f dB)", 10 * log10(diff / ref)))
+        let (same, none) = run(clean, amount: 0.5)
+        var d2 = 0.0
+        for i in 1000..<(total - 2000) { let d = Double(same[i + lat] - clean[i]); d2 += d * d }
+        check(none == 0 && 10 * log10(d2 / ref) < -60, String(format: "sin clics no toca nada (%d detectados, error %.1f dB)", none, 10 * log10(max(1e-20, d2) / ref)))
+        print(ok ? "OK quitar clics" : "FAIL quitar clics")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

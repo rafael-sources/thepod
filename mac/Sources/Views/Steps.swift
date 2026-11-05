@@ -215,6 +215,8 @@ struct FixStep: View {
                             .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
                         }
                         Divider()
+                        DeclickRow(session: session)
+                        Divider()
                         NoiseProfileRow(session: session)
                         Divider()
                         VoicesMatchRow(session: session)
@@ -2132,6 +2134,39 @@ struct NoiseProfileRow: View {
                     }
                 }
                 working = false
+            }
+        }
+    }
+}
+
+
+/// «Quitar clics y chasquidos»: saltos bruscos de menos de 2,5 ms (chasquidos de boca, clics de cable) se
+/// sustituyen por una línea entre las muestras sanas. Sin IA; la voz no se toca.
+struct DeclickRow: View {
+    @ObservedObject var session: ProjectSession
+    private var anyOn: Bool { session.project.lanes.contains { $0.declick } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { anyOn }, set: { on in for i in session.project.lanes.indices { session.project.lanes[i].declick = on } })) {
+                VStack(alignment: .leading) {
+                    Text("Quitar clics y chasquidos").font(.headline)
+                    Text("Chasquidos de boca, clics de cable o de teclado muy cortos: se detectan como saltos bruscos de menos de 2,5 ms y se cosen. No usa inteligencia artificial y no cambia el timbre.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if anyOn {
+                ForEach(session.project.lanes) { lane in
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == lane.id }) {
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: $session.project.lanes[i].declick).labelsHidden().controlSize(.mini)
+                            Text(session.project.laneName(lane.id)).font(.caption).frame(width: 120, alignment: .leading).lineLimit(1)
+                            Picker("", selection: $session.project.lanes[i].declickAmount) {
+                                Text("Suave").tag(0.25); Text("Normal").tag(0.5); Text("Fuerte").tag(0.8)
+                            }.pickerStyle(.segmented).labelsHidden().frame(width: 200).disabled(!lane.declick)
+                        }
+                    }
+                }
+                Text("Si en «Fuerte» se come consonantes (p, t, k), vuelve a Normal.").font(.caption2).foregroundStyle(Theme.secondary)
             }
         }
     }

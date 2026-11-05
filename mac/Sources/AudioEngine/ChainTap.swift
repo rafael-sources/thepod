@@ -30,6 +30,8 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
     var pan: Double = 0
     /// Reducción de ruido por huella, antes de la cadena (nil = apagada).
     var noise: NoiseReducer?
+    /// Quitar clics, antes de la cadena (nil = apagado).
+    var declick: DeClicker?
 
     init(laneId: Int, settings: ChainSettings, keep: [EditEngine.Span] = [], introDuration: Double = 0) {
         self.laneId = laneId
@@ -110,6 +112,7 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
                 me.sampleRate = format.pointee.mSampleRate > 0 ? format.pointee.mSampleRate : 48_000
                 me.loudness.prepare(sampleRate: me.sampleRate, channels: Int(format.pointee.mChannelsPerFrame))
                 me.noise?.prepare(channels: Int(format.pointee.mChannelsPerFrame))
+                me.declick?.prepare(channels: Int(format.pointee.mChannelsPerFrame))
                 me.chain.prepare(format: format.pointee, maxFrames: UInt32(maxFrames))
                 me.chain.setInput(ChainTap.pull, refCon: MTAudioProcessingTapGetStorage(tap))
             },
@@ -123,7 +126,10 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
                 guard MTAudioProcessingTapGetSourceAudio(tap, frames, bufferList, flagsOut, &range, framesOut) == noErr else { return }
                 let tl = range.start.isValid ? me.timelineTime(output: range.start.seconds) : nil
                 // 1b) Reducción de ruido por huella, sobre la fuente, antes de la cadena
-                if let nr = me.noise, !VoiceChainRegistry.shared.bypassAll { nr.process(bufferList, frames: Int(framesOut.pointee)) }
+                if !VoiceChainRegistry.shared.bypassAll {
+                    me.declick?.process(bufferList, frames: Int(framesOut.pointee))
+                    me.noise?.process(bufferList, frames: Int(framesOut.pointee))
+                }
                 // 2) Por la cadena (el AU de entrada copia de este mismo bloque)
                 me.sourceList = bufferList
                 me.sourceFrames = framesOut.pointee

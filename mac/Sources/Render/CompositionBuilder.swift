@@ -316,6 +316,7 @@ enum CompositionBuilder {
                 // se le suma la misma curva al leerlo.
                 let chainTap = ChainTap(laneId: id, settings: lane.effectiveChain, keep: keep, introDuration: introDur)
                 chainTap.pan = project.conversationPan ? lane.pan : 0
+                if lane.declick { let d = DeClicker(); d.amount = Float(lane.declickAmount); chainTap.declick = d }
                 if lane.noiseReduce, let prof = lane.noiseProfile, prof.count == NoiseReducer.bins {
                     let nr = NoiseReducer(); nr.profile = prof; nr.amount = Float(lane.noiseAmount); chainTap.noise = nr
                 }

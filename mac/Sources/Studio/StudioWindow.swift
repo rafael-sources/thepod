@@ -217,7 +217,18 @@ struct ChannelStrip: View {
                 }
             }
             VStack(spacing: 3) {
-                // Reducción de ruido por huella (nivel simple y Studio comparten el mismo ajuste)
+                // Clics y ruido por huella (nivel simple y Studio comparten los mismos ajustes)
+                HStack(spacing: 6) {
+                    Circle().fill(lane.declick ? Theme.good : Color.clear).overlay(Circle().strokeBorder(lane.declick ? Theme.good : Theme.secondary, lineWidth: 1)).frame(width: 7, height: 7)
+                    Text("Clics").font(.caption).lineLimit(1)
+                    Spacer()
+                    Picker("", selection: $session.project.lanes[index].declickAmount) { Text("S").tag(0.25); Text("N").tag(0.5); Text("F").tag(0.8) }
+                        .pickerStyle(.segmented).labelsHidden().controlSize(.mini).frame(width: 70).disabled(!lane.declick)
+                    Toggle("", isOn: $session.project.lanes[index].declick).labelsHidden().toggleStyle(.switch).controlSize(.mini)
+                }
+                .padding(.horizontal, 6).frame(height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
+                .help("Chasquidos y clics de menos de 2,5 ms se cosen antes de la cadena")
                 HStack(spacing: 6) {
                     Circle().fill(lane.noiseReduce ? Theme.good : Color.clear).overlay(Circle().strokeBorder(lane.noiseReduce ? Theme.good : Theme.secondary, lineWidth: 1)).frame(width: 7, height: 7)
                     Text("Ruido · huella").font(.caption).lineLimit(1)

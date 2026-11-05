@@ -165,6 +165,8 @@ extension Lane {
         noiseAmount = try c.decodeIfPresent(Double.self, forKey: .noiseAmount) ?? 0.6
         noiseProfile = try c.decodeIfPresent([Float].self, forKey: .noiseProfile)
         noiseProfileAt = try c.decodeIfPresent(Double.self, forKey: .noiseProfileAt)
+        declick = try c.decodeIfPresent(Bool.self, forKey: .declick) ?? false
+        declickAmount = try c.decodeIfPresent(Double.self, forKey: .declickAmount) ?? 0.5
         measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
         matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
     }
@@ -455,6 +457,8 @@ struct Lane: Codable, Identifiable, Equatable {
     var noiseAmount: Double = 0.6       // cuánto: 0,3 suave · 0,6 normal · 0,9 fuerte
     var noiseProfile: [Float]?          // la huella: magnitud media por banda del segundo más quieto
     var noiseProfileAt: Double?         // de qué segundo del episodio salió la huella
+    var declick: Bool = false           // quitar clics y chasquidos de boca
+    var declickAmount: Double = 0.5     // sensibilidad 0…1
     var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
     var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
 
