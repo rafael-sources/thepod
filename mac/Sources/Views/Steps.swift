@@ -215,6 +215,8 @@ struct FixStep: View {
                             .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
                         }
                         Divider()
+                        VoicesMatchRow(session: session)
+                        Divider()
                         Toggle(isOn: $session.project.fix.removeSilences) {
                             VStack(alignment: .leading) {
                                 Text("Quitar silencios").font(.headline)
@@ -1968,6 +1970,63 @@ struct AIMomentsCard: View {
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text("Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad.")
+        }
+    }
+}
+
+/// «Voces parejas por medición»: mide la sonoridad de cada persona y aplica la ganancia que las iguala.
+struct VoicesMatchRow: View {
+    @ObservedObject var session: ProjectSession
+    @State private var measuring = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { session.project.matchVoices }, set: { on in
+                if on, session.project.lanes.allSatisfy({ $0.measuredLUFS == nil }) { measure() }
+                session.project.matchVoices = on
+            })) {
+                VStack(alignment: .leading) {
+                    Text("Voces parejas por medición").font(.headline)
+                    Text("Mide cuánto suena cada persona (como lo miden Spotify y YouTube, solo mientras habla) y sube o baja cada voz lo justo para que todas queden al mismo nivel. Es una ganancia fija: no comprime ni cambia el timbre.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .disabled(session.project.lanes.count < 2)
+            if session.project.matchVoices {
+                ForEach(session.project.lanes) { lane in
+                    HStack(spacing: 10) {
+                        Text(session.project.laneName(lane.id)).font(.caption).frame(width: 140, alignment: .leading).lineLimit(1)
+                        if let l = lane.measuredLUFS {
+                            Text(String(format: "%.1f LUFS", l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
+                            Text(String(format: "%@%.1f dB", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption.monospacedDigit().bold())
+                                .foregroundStyle(abs(lane.matchGain) < 0.05 ? Theme.secondary : Theme.accent).frame(width: 64, alignment: .trailing)
+                        } else {
+                            Text(measuring ? "midiendo…" : "sin medir").font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                }
+                HStack {
+                    Button(measuring ? "Midiendo…" : "Medir de nuevo") { measure() }.controlSize(.small).disabled(measuring)
+                    Text("Vuelve a medir si cambias «Sonido de estudio» o las grabaciones.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private func measure() {
+        measuring = true
+        let p = session.project
+        Task.detached(priority: .userInitiated) {
+            let results = LoudnessMatch.measure(project: p)
+            await MainActor.run {
+                for r in results {
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == r.lane }) {
+                        session.project.lanes[i].measuredLUFS = r.lufs
+                        session.project.lanes[i].matchGain = r.gainDB
+                    }
+                }
+                measuring = false
+            }
         }
     }
 }

@@ -277,6 +277,10 @@ struct ChannelStrip: View {
                 Toggle("M", isOn: $session.project.lanes[index].muted).toggleStyle(.button).controlSize(.small)
                 Toggle("S", isOn: $session.project.lanes[index].solo).toggleStyle(.button).controlSize(.small)
                 Spacer()
+                if session.project.matchVoices, abs(lane.matchGain) >= 0.05 {
+                    Text(String(format: "%@%.1f", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.accent)
+                        .help(String(format: "Voces parejas por medición: %.1f LUFS medidos, %+.1f dB aplicados antes del fader", lane.measuredLUFS ?? 0, lane.matchGain))
+                }
                 Text(Fader.label(lane.volume)).font(.caption.monospacedDigit())
             }
             HStack(spacing: 6) {

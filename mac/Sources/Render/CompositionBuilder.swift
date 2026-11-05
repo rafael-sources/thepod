@@ -231,7 +231,9 @@ enum CompositionBuilder {
             var aTrack: AVMutableCompositionTrack?
             var laneSpan: (start: Double, end: Double)?
             let audible = project.laneAudible(lane)
-            var laneBase = audible ? lane.volume : 0
+            // Voces parejas por medición: la ganancia que iguala esta voz con las demás (fija, antes de todo lo demás)
+            let match = project.matchVoices ? pow(10, lane.matchGain / 20) : 1
+            var laneBase = audible ? lane.volume * match : 0
             for placed in lane.placed {
                 guard let media = project.mediaItem(placed.clip.mediaId) else { continue }
                 let videoAsset = asset(media.file)
@@ -253,7 +255,7 @@ enum CompositionBuilder {
                         if let span = try place(track: aTrack!, source: src, sourceDuration: aDur,
                                                 tlStart: placed.tlStart, srcIn: placed.clip.srcIn, length: placed.clip.length) {
                             laneSpan = laneSpan.map { (min($0.start, span.start), max($0.end, span.end)) } ?? span
-                            laneBase = audible ? lane.volume * placed.clip.volume : 0
+                            laneBase = audible ? lane.volume * placed.clip.volume * match : 0
                         }
                     }
                 }

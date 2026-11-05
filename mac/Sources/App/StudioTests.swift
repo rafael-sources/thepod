@@ -32,6 +32,45 @@ enum StudioTests {
                            names: [:], showNames: false, cropX: [:], logo: nil, background: nil, title: "prueba")
     }
 
+    /// Voces parejas por medición: un tono a −20 dBFS mide −23 LUFS (BS.1770); dos archivos a 10 dB de diferencia
+    /// reciben ganancias de ±5 dB; el silencio no cuenta (compuerta); las ganancias se acotan a ±12 dB.
+    static func loudnessMatchTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("match-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        func tone(_ name: String, dbfs: Double, secs: Double = 4, silenceAfter: Double = 0) -> URL? {
+            let url = dir.appendingPathComponent(name)
+            let sr = 48_000.0
+            guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1),
+                  let file = try? AVAudioFile(forWriting: url, settings: fmt.settings) else { return nil }
+            let n = AVAudioFrameCount(sr * (secs + silenceAfter))
+            guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n) else { return nil }
+            buf.frameLength = n
+            let amp = Float(pow(10, dbfs / 20))
+            for i in 0..<Int(n) {
+                let t = Double(i) / sr
+                buf.floatChannelData![0][i] = t < secs ? amp * Float(sin(2 * .pi * 1000 * t)) : 0
+            }
+            try? file.write(from: buf)
+            return url
+        }
+        guard let a = tone("a.caf", dbfs: -20), let b = tone("b.caf", dbfs: -30), let c = tone("c.caf", dbfs: -20, silenceAfter: 8) else {
+            check(false, "no se pudieron escribir los tonos"); return false
+        }
+        let la = LoudnessMatch.integratedLUFS(url: a) ?? -999, lb = LoudnessMatch.integratedLUFS(url: b) ?? -999, lc = LoudnessMatch.integratedLUFS(url: c) ?? -999
+        check(abs(la + 23) < 0.3, String(format: "seno 1 kHz a −20 dBFS mide %.2f LUFS (esperado −23,0)", la))
+        check(abs(lb + 33) < 0.3, String(format: "a −30 dBFS mide %.2f LUFS", lb))
+        check(abs(lc - la) < 0.3, String(format: "8 s de silencio después no cambian la medida (%.2f): la compuerta los deja fuera", lc))
+        let g = LoudnessMatch.gains(for: [(1, la), (2, lb)])
+        check(g.count == 2 && abs(g[0].gainDB + 5) < 0.15 && abs(g[1].gainDB - 5) < 0.15, "dos voces a 10 dB de diferencia: −5 dB y +5 dB hacia el promedio (\(g.map(\.gainDB)))")
+        let far = LoudnessMatch.gains(for: [(1, -10), (2, -50)])
+        check(far[1].gainDB == 12 && far[0].gainDB == -12, "las ganancias se acotan a ±12 dB")
+        print(ok ? "OK voces parejas por medición" : "FAIL voces parejas")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

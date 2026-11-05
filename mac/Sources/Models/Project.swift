@@ -39,6 +39,7 @@ struct Project: Codable, Identifiable, Equatable {
     var intro: Bumper?                  // imagen (y música) antes del video
     var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
     var matchColors = false             // igualar el color de las cámaras
+    var matchVoices = false             // voces parejas por medición: aplicar `Lane.matchGain`
     var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (calculado al activar matchColors)
     var exportHEVC = false              // archivo más liviano (HEVC) en vez de compatible (H.264)
     var normalizeLoudness = true        // ajustar el volumen final a −16 LUFS
@@ -158,6 +159,8 @@ extension Lane {
         muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
+        measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
+        matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
     }
 }
 
@@ -441,6 +444,8 @@ struct Lane: Codable, Identifiable, Equatable {
     var muted: Bool = false             // M: esta persona no suena (vista previa y export)
     var solo: Bool = false              // S: solo suenan las personas con solo
     var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
+    var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
+    var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
 
     /// La cadena que suena: la del estudio si existe, si no el preset del nivel simple.
     var effectiveChain: ChainSettings { chain ?? ChainSettings.preset(eq) }
@@ -1281,6 +1286,7 @@ extension Project {
         intro = try c.decodeIfPresent(Bumper.self, forKey: .intro)
         colorLook = try c.decodeIfPresent(String.self, forKey: .colorLook) ?? "none"
         matchColors = try c.decodeIfPresent(Bool.self, forKey: .matchColors) ?? false
+        matchVoices = try c.decodeIfPresent(Bool.self, forKey: .matchVoices) ?? false
         laneColorGain = try c.decodeIfPresent([Int: [Double]].self, forKey: .laneColorGain) ?? [:]
         exportHEVC = try c.decodeIfPresent(Bool.self, forKey: .exportHEVC) ?? false
         normalizeLoudness = try c.decodeIfPresent(Bool.self, forKey: .normalizeLoudness) ?? true
