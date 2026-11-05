@@ -8,7 +8,7 @@ struct StudioRoot: View {
     var body: some View {
         Group {
             if let s = app.session {
-                StudioView(session: s)
+                AudioStudioView(session: s)
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(Theme.secondary)
@@ -24,7 +24,7 @@ struct StudioRoot: View {
     }
 }
 
-struct StudioView: View {
+struct AudioStudioView: View {
     @ObservedObject var session: ProjectSession
     @State private var editingInsert: InsertRef?
 
@@ -127,7 +127,7 @@ struct ChannelStrip: View {
     @ObservedObject var session: ProjectSession
     let index: Int
     let color: Color
-    let openInsert: (StudioView.InsertRef.Kind) -> Void
+    let openInsert: (AudioStudioView.InsertRef.Kind) -> Void
 
     private var lane: Lane { session.project.lanes[index] }
     private var chain: ChainSettings { lane.effectiveChain }
@@ -271,7 +271,7 @@ struct MasterStrip: View {
 /// Editor de un insert. Cada cambio se oye al instante.
 struct InsertEditor: View {
     @ObservedObject var session: ProjectSession
-    let ref: StudioView.InsertRef
+    let ref: AudioStudioView.InsertRef
     @Environment(\.dismiss) private var dismiss
 
     private var index: Int? { session.project.lanes.firstIndex { $0.id == ref.laneId } }
