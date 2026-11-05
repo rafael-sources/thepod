@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan") || CommandLine.arguments.contains("--voice-chain-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan") || CommandLine.arguments.contains("--voice-chain-test") || CommandLine.arguments.contains("--studio-snapshot")
     }
 
     /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
@@ -306,6 +306,51 @@ enum SelfTest {
 
     /// Editor de postPod (Arreglar y Exportar) con un proyecto real, en una ventana fuera de la pantalla.
     @MainActor
+    /// "--studio-snapshot <slug> <carpeta>": la ventana del estudio y el editor del EQ, en PNG.
+    static func studioSnapshot(slug: String, dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        Task { @MainActor in
+            do {
+                let app = AppModel()
+                var p = try ProjectStore.load(slug: slug)
+                // Una voz «ajustada en el estudio» para ver la etiqueta y los inserts encendidos
+                if !p.lanes.isEmpty {
+                    var c = ChainSettings.preset(VoiceEQ.preset("clear"))
+                    c.bands.append(EQBand(kind: .highshelf, freq: 9000, gain: 2.5, q: 0.7))
+                    c.compressorOn = true; c.ratio = 4; c.gateOn = true
+                    p.lanes[0].chain = c
+                }
+                let session = ProjectSession(project: p, app: app)
+                app.session = session
+                func shoot(_ view: some View, _ name: String, w: CGFloat, h: CGFloat) async {
+                    let host = NSHostingView(rootView: AnyView(view.environmentObject(app).frame(width: w, height: h).preferredColorScheme(.dark)))
+                    host.frame = NSRect(x: 0, y: 0, width: w, height: h)
+                    let win = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+                    win.appearance = NSAppearance(named: .darkAqua)
+                    win.contentView = host
+                    win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
+                    win.orderFrontRegardless()
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    host.layoutSubtreeIfNeeded()
+                    if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                        host.cacheDisplay(in: host.bounds, to: rep)
+                        try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
+                        print("snapshot \(name)")
+                    }
+                    win.orderOut(nil)
+                }
+                await shoot(StudioRoot(), "estudio", w: 1280, h: 820)
+                if let lane = p.lanes.first {
+                    await shoot(InsertEditor(session: session, ref: .init(laneId: lane.id, kind: .eq)), "eq", w: 660, h: 520)
+                    await shoot(InsertEditor(session: session, ref: .init(laneId: lane.id, kind: .compressor)), "compresor", w: 660, h: 330)
+                }
+                session.step = .fix
+                await shoot(ProjectView(session: session), "limpiar-sonido", w: 1440, h: 900)
+            } catch { print("ERROR \(error.localizedDescription)") }
+            fflush(stdout); exit(0)
+        }
+    }
+
     static func postSnapshot(slug: String, dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         Task { @MainActor in
@@ -980,6 +1025,11 @@ enum SelfTest {
                 }
                 fflush(stdout); exit(0)
             }
+            return
+        }
+        if let i = args.firstIndex(of: "--studio-snapshot"), args.count > i + 2 {
+            let slug = args[i + 1], dir = URL(fileURLWithPath: args[i + 2])
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { studioSnapshot(slug: slug, dir: dir) }
             return
         }
         if let i = args.firstIndex(of: "--post-snapshot"), args.count > i + 2 {
