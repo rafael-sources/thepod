@@ -520,6 +520,16 @@ struct LaneClip: Codable, Equatable {
     var srcOut: Double
     var volume: Double = 1.0
     var length: Double { max(0, srcOut - srcIn) }
+    init(mediaId: Int, srcIn: Double, srcOut: Double, volume: Double = 1.0) {
+        self.mediaId = mediaId; self.srcIn = srcIn; self.srcOut = srcOut; self.volume = volume
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mediaId = try c.decode(Int.self, forKey: .mediaId)
+        srcIn = try c.decodeIfPresent(Double.self, forKey: .srcIn) ?? 0
+        srcOut = try c.decode(Double.self, forKey: .srcOut)
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1.0   // proyectos de antes de que hubiera volumen por clip
+    }
 }
 
 struct AudioLaneClip: Codable, Identifiable, Equatable {
