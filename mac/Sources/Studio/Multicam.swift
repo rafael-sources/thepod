@@ -46,21 +46,22 @@ struct MulticamStrip: View {
     private func angle(_ n: Int, _ lane: Lane, live: Bool) -> some View {
         Button { cut(to: lane.id) } label: {
             VStack(spacing: 4) {
-                ZStack(alignment: .topLeading) {
-                    Group {
-                        if let img = thumbs[lane.id] { Image(nsImage: img).resizable().aspectRatio(contentMode: .fill) }
-                        else { Rectangle().fill(Color.white.opacity(0.06)) }
-                    }
-                    .frame(width: 112, height: 63).clipped()
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(live ? Theme.accent : Color.white.opacity(0.12), lineWidth: live ? 2 : 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                Group {
+                    if let img = thumbs[lane.id] { Image(nsImage: img).resizable().aspectRatio(contentMode: .fill) }
+                    else { Rectangle().fill(Color.white.opacity(0.06)) }
+                }
+                .frame(width: 112, height: 63).clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(live ? Theme.accent : Color.white.opacity(0.12), lineWidth: live ? 2 : 1))
+                .overlay(alignment: .topLeading) {
                     Text("\(n)").font(.caption2.bold()).padding(.horizontal, 5).padding(.vertical, 1)
                         .background(live ? Theme.accent : Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
                         .foregroundStyle(live ? Color.black : .white).padding(4)
+                }
+                .overlay(alignment: .topTrailing) {
                     if live {
                         Text("AL AIRE").font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(.black)
-                            .frame(maxWidth: .infinity, alignment: .trailing).padding(4)
+                            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(.black).padding(4)
                     }
                 }
                 Text(session.project.laneName(lane.id)).font(.caption2).lineLimit(1).frame(width: 112)
