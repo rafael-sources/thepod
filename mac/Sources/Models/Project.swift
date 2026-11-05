@@ -1054,7 +1054,7 @@ struct LayerAnimation: Codable, Equatable {
     /// Pone (o mueve) un keyframe en `t`; dos keyframes a menos de 40 ms se consideran el mismo.
     mutating func write(_ p: String, t: Double, v: Double, ease: Keyframe.Ease = .smooth) {
         var pts = tracks[p] ?? []
-        if let i = pts.firstIndex(where: { abs($0.t - t) < 0.04 }) { pts[i].v = v }
+        if let i = pts.firstIndex(where: { abs($0.t - t) < 0.04 }) { pts[i].v = v; pts[i].ease = ease }
         else { pts.append(Keyframe(t: t, v: v, ease: ease)) }
         tracks[p] = pts.sorted { $0.t < $1.t }
     }
