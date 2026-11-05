@@ -81,7 +81,7 @@ struct Project: Codable, Identifiable, Equatable {
         // (antes alargaba el episodio y la música seguía sola, sin video, antes del cierre).
         let laneEnd = lanes.map { $0.duration }.max() ?? 0
         if laneEnd > 0 { return laneEnd }
-        return audioLane.map { $0.tlStart + ($0.srcOut - $0.srcIn) }.max() ?? 0
+        return audioLane.map { $0.tlEnd }.max() ?? 0
     }
 
     func mediaItem(_ id: Int) -> SourceMedia? { media.first { $0.id == id } }
@@ -524,8 +524,12 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var duckDB: Double = 12
     var loop: Bool = false              // repetir en bucle hasta el final del episodio
     var crossfade: Bool = false         // Studio · Video: fades curvos (igual potencia), para cruzar con otro clip
+    /// Studio · Video: velocidad (1 = normal). 0,5 = a la mitad (dura el doble), 2 = al doble. El tono se mantiene.
+    var speed: Double = 1
     var ducks: Bool { duck ?? ((srcOut - srcIn) > 8) }
-    var tlEnd: Double { tlStart + (srcOut - srcIn) }
+    /// Lo que dura en el episodio (la fuente, estirada o comprimida por la velocidad)
+    var length: Double { (srcOut - srcIn) / max(0.1, speed) }
+    var tlEnd: Double { tlStart + length }
     init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
         self.id = id; self.mediaId = mediaId; self.tlStart = tlStart; self.srcIn = srcIn; self.srcOut = srcOut
         self.volume = volume; self.fadeIn = fadeIn; self.fadeOut = fadeOut
@@ -544,6 +548,7 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
         duckDB = try c.decodeIfPresent(Double.self, forKey: .duckDB) ?? 12
         loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? false
         crossfade = try c.decodeIfPresent(Bool.self, forKey: .crossfade) ?? false
+        speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? 1
     }
 }
 
@@ -1026,6 +1031,8 @@ struct BRollClip: Codable, Identifiable, Equatable {
     var placement: String = "full"      // full | pipLeft | pipRight (ventanita abajo a la izquierda o a la derecha)
     /// Studio · Video: cómo entra este clip (nil = el fundido corto de siempre)
     var transitionIn: Transition?
+    /// Studio · Video: velocidad del video (1 = normal). 0,25–1 cámara lenta, 1–4 acelerado. `duration` sigue siendo lo que ocupa en pantalla.
+    var speed: Double = 1
     var end: Double { start + duration }
     static let maxSeconds = 10.0        // un b-roll es un apoyo corto, no otro video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
@@ -1045,6 +1052,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0
         placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "full"
         transitionIn = try c.decodeIfPresent(Transition.self, forKey: .transitionIn)
+        speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? 1
     }
 }
 

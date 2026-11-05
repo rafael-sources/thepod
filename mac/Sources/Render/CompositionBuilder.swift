@@ -75,17 +75,21 @@ enum CompositionBuilder {
         /// Devuelve el tramo [inicio, fin) en tiempo de salida que ocupó lo colocado (para los fades).
         @discardableResult
         func place(track: AVMutableCompositionTrack, source: AVAssetTrack, sourceDuration: Double,
-                   tlStart: Double, srcIn: Double, length: Double) throws -> (start: Double, end: Double)? {
+                   tlStart: Double, srcIn: Double, length: Double, speed: Double = 1) throws -> (start: Double, end: Double)? {
             var cursor = 0.0
             var outStart: Double?, outEnd: Double?
+            let speed = max(0.1, speed)
             for k in keep {
                 let a = max(k.start, tlStart), b = min(k.end, tlStart + length)
                 if b - a > 0.01 {
-                    let src = srcIn + (a - tlStart)
-                    let len = min(b - a, max(0, sourceDuration - src))
+                    // Con velocidad ≠ 1, cada segundo del episodio consume `speed` segundos de la fuente
+                    let src = srcIn + (a - tlStart) * speed
+                    let srcLen = min((b - a) * speed, max(0, sourceDuration - src))
+                    let len = srcLen / speed
                     if len > 0.01 {
                         let at = introDur + cursor + (a - k.start)
-                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(len)), of: source, at: cm(at))
+                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(srcLen)), of: source, at: cm(at))
+                        if speed != 1 { track.scaleTimeRange(CMTimeRange(start: cm(at), duration: cm(srcLen)), toDuration: cm(len)) }
                         if outStart == nil { outStart = at }
                         outEnd = at + len
                     }
@@ -337,7 +341,7 @@ enum CompositionBuilder {
             let a = asset(media.file)
             guard let src = try await a.loadTracks(withMediaType: .audio).first else { continue }
             let dur = try await a.load(.duration).seconds
-            let len = clip.srcOut - clip.srcIn
+            let len = clip.length
             // Cada música/efecto con su propia pista: así cada uno tiene su volumen y sus fades.
             // Si no cae dentro de lo que se exporta (p. ej. un trozo), la pista vacía se quita: AVFoundation falla con pistas sin nada.
             let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
@@ -346,17 +350,18 @@ enum CompositionBuilder {
                 // En bucle: se repite pegada hasta el final del episodio (los cortes se aplican igual a cada vuelta)
                 var at = clip.tlStart
                 while at < project.duration - 0.05 {
-                    if let s = try place(track: track, source: src, sourceDuration: dur, tlStart: at, srcIn: clip.srcIn, length: len) {
+                    if let s = try place(track: track, source: src, sourceDuration: dur, tlStart: at, srcIn: clip.srcIn, length: len, speed: clip.speed) {
                         span = (span?.start ?? s.start, max(span?.end ?? 0, s.end))
                     }
                     at += len
                 }
             } else {
-                span = try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len)
+                span = try place(track: track, source: src, sourceDuration: dur, tlStart: clip.tlStart, srcIn: clip.srcIn, length: len, speed: clip.speed)
             }
             guard let span else { comp.removeTrack(track); continue }
             sfxTracks.append((track, clip.tlStart + len))
             let p = AVMutableAudioMixInputParameters(track: track)
+            if clip.speed != 1 { p.audioTimePitchAlgorithm = .spectral }   // estirar o comprimir sin cambiar el tono
             let duck = clip.ducks && !speech.isEmpty
             let low = pow(10, -clip.duckDB / 20)
             // Si la música se corta al final del episodio (bucle o más larga que el video), que no termine de golpe
@@ -385,15 +390,22 @@ enum CompositionBuilder {
                 guard let v = try? await a.loadTracks(withMediaType: .video).first else { continue }
                 let dur = (try? await a.load(.duration).seconds) ?? 0
                 let srcIn = min(max(0, b.srcIn), max(0, dur - 0.1))
-                let len = min(end - start, max(0, dur - srcIn))
+                let speed = max(0.1, b.speed)
+                // En pantalla ocupa `len`; de la fuente consume `len × velocidad` (si no alcanza, se acorta)
+                let srcLen = min((end - start) * speed, max(0, dur - srcIn))
+                let len = srcLen / speed
                 guard len > 0.1 else { continue }
                 let track = comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)!
-                do { try track.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(len)), of: v, at: cm(start)) }
-                catch { comp.removeTrack(track); continue }
+                do {
+                    try track.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(srcLen)), of: v, at: cm(start))
+                    if speed != 1 { track.scaleTimeRange(CMTimeRange(start: cm(start), duration: cm(srcLen)), toDuration: cm(len)) }
+                } catch { comp.removeTrack(track); continue }
                 if b.volume > 0.01, let at = try? await a.loadTracks(withMediaType: .audio).first {
                     let atrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
-                    try? atrack.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(len)), of: at, at: cm(start))
+                    try? atrack.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(srcLen)), of: at, at: cm(start))
+                    if speed != 1 { atrack.scaleTimeRange(CMTimeRange(start: cm(start), duration: cm(srcLen)), toDuration: cm(len)) }
                     let p = AVMutableAudioMixInputParameters(track: atrack)
+                    if speed != 1 { p.audioTimePitchAlgorithm = .spectral }
                     p.setVolume(Float(b.volume), at: .zero)
                     mixParams.append(p)
                 }

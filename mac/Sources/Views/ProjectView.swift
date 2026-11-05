@@ -424,7 +424,7 @@ struct TrackInspector: View {
         let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido"
         let lo = reel?.start ?? 0
         let hi = reel?.end ?? session.project.duration
-        let len = clip.srcOut - clip.srcIn
+        let len = clip.length
         return Group {
         header((reel != nil ? "Música del reel · " : "") + "\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
         volumeRow(value: b.volume, max: 1.5)

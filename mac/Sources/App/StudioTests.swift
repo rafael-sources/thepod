@@ -578,6 +578,70 @@ enum StudioTests {
         return ok
     }
 
+    /// Velocidad (time-stretch): un clip a 2× ocupa la mitad y a 0,5× el doble, y el tono no cambia (algoritmo espectral
+    /// de AVFoundation, el mismo que usa la mezcla). También el modelo: `length`, `tlEnd` y los proyectos viejos a 1×.
+    static func speedTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        var c = AudioLaneClip(id: 1, mediaId: 1, tlStart: 10, srcIn: 2, srcOut: 6)
+        check(c.length == 4 && c.tlEnd == 14, "a 1× dura lo que la fuente")
+        c.speed = 2
+        check(c.length == 2 && c.tlEnd == 12, "a 2× dura la mitad en el episodio")
+        c.speed = 0.5
+        check(c.length == 8 && c.tlEnd == 18, "a 0,5× dura el doble")
+        var p = Project(id: "vel", name: "Vel", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
+        p.audioLane = [c]
+        check(abs(p.duration - 18) < 1e-9, "sin voces, el episodio dura hasta donde llega la música estirada (\(p.duration))")
+        if let old = try? JSONDecoder().decode(AudioLaneClip.self, from: Data(#"{"id":1,"mediaId":1,"tlStart":0,"srcOut":3}"#.utf8)) {
+            check(old.speed == 1 && old.length == 3, "un clip guardado antes abre a 1×")
+        } else { check(false, "no decodifica un clip viejo") }
+        if let b = try? JSONDecoder().decode(BRollClip.self, from: Data(#"{"id":1,"file":"x.mp4"}"#.utf8)) { check(b.speed == 1, "un b-roll viejo abre a 1×") }
+        else { check(false, "no decodifica un b-roll viejo") }
+        // Mecanismo real: estirar sin cambiar el tono
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vel-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let sr = 48_000.0
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1)!
+            let src = dir.appendingPathComponent("tono.caf")
+            let file = try AVAudioFile(forWriting: src, settings: fmt.settings)
+            let n = AVAudioFrameCount(sr * 4)
+            let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!; buf.frameLength = n
+            for i in 0..<Int(n) { buf.floatChannelData![0][i] = Float(0.3 * sin(2 * .pi * 440 * Double(i) / sr)) }
+            try file.write(from: buf)
+            func stretched(_ speed: Double) async throws -> (seconds: Double, hz: Double) {
+                let asset = AVURLAsset(url: src)
+                let comp = AVMutableComposition()
+                let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                let st = try await asset.loadTracks(withMediaType: .audio).first!
+                let full = try await asset.load(.duration)
+                try track.insertTimeRange(CMTimeRange(start: .zero, duration: full), of: st, at: .zero)
+                track.scaleTimeRange(CMTimeRange(start: .zero, duration: full), toDuration: CMTime(seconds: full.seconds / speed, preferredTimescale: 90_000))
+                let p = AVMutableAudioMixInputParameters(track: track); p.audioTimePitchAlgorithm = .spectral
+                let mix = AVMutableAudioMix(); mix.inputParameters = [p]
+                let out = dir.appendingPathComponent("out-\(UUID().uuidString).m4a")
+                let s = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetAppleM4A)!
+                s.audioMix = mix; s.outputURL = out; s.outputFileType = .m4a
+                await s.export()
+                if let e = s.error { throw e }
+                let f = try AVAudioFile(forReading: out)
+                let b = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
+                try f.read(into: b)
+                let m = Int(b.frameLength), ch = b.floatChannelData![0]
+                var crossings = 0
+                for i in (m / 3 + 1)..<(2 * m / 3) where (ch[i - 1] < 0) != (ch[i] < 0) { crossings += 1 }
+                let secs = Double(m / 3) / f.processingFormat.sampleRate
+                return (Double(m) / f.processingFormat.sampleRate, Double(crossings) / 2 / secs)
+            }
+            let fast = try await stretched(2), slow = try await stretched(0.5)
+            check(abs(fast.seconds - 2) < 0.15 && abs(fast.hz - 440) < 15, String(format: "a 2×: dura %.2f s y sigue a %.0f Hz", fast.seconds, fast.hz))
+            check(abs(slow.seconds - 8) < 0.15 && abs(slow.hz - 440) < 15, String(format: "a 0,5×: dura %.2f s y sigue a %.0f Hz", slow.seconds, slow.hz))
+        } catch { check(false, "export: \(error.localizedDescription)") }
+        print(ok ? "OK velocidad (time-stretch)" : "FAIL velocidad")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {

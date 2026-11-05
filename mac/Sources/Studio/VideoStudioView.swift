@@ -191,6 +191,7 @@ struct VideoInspector: View {
             Toggle("Llenar la pantalla (recorta)", isOn: $session.project.brolls[i].fill).font(.caption)
             if b.isVideo {
                 HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? "mudo" : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
+                SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono.")
             }
             Spacer(minLength: 8)
             Text("La transición actúa sobre este clip al entrar; lo de abajo (cámaras o el b-roll anterior) sigue hasta que este lo tapa.")
@@ -209,6 +210,7 @@ struct VideoInspector: View {
             HStack { Text("Sale en").font(.caption); Slider(value: $session.project.audioLane[i].fadeOut, in: 0...5); Text(String(format: "%.1f s", c.fadeOut)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
             Toggle("Fades de igual potencia (para cruzar)", isOn: $session.project.audioLane[i].crossfade).font(.caption)
             HStack { Text("Volumen").font(.caption); Slider(value: $session.project.audioLane[i].volume, in: 0...1); Text(String(format: "%.0f %%", c.volume * 100)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
+            SpeedRow(speed: $session.project.audioLane[i].speed, range: 0.5...2, note: "Estira o comprime la música sin cambiar el tono: a 0,5× dura el doble, a 2× la mitad.")
             Divider()
             if let n = next {
                 let overlap = c.tlEnd - n.tlStart
@@ -511,7 +513,7 @@ struct VideoTracks: View {
     private func brollsRow(_ w: CGFloat) -> some View {
         ForEach(session.project.brolls) { b in
             let sel: Bool = { if case .broll(let id) = session.selectedTrack { return id == b.id }; return false }()
-            clip(b.title + (b.transitionIn.map { " · \($0.kind.name)" } ?? ""), start: b.start, dur: b.duration, color: Self.brollColor, selected: sel, w: w,
+            clip(b.title + (b.speed != 1 ? String(format: " · %.2g×", b.speed) : "") + (b.transitionIn.map { " · \($0.kind.name)" } ?? ""), start: b.start, dur: b.duration, color: Self.brollColor, selected: sel, w: w,
                  onSelect: { session.selectedTrack = .broll(b.id); selectedCut = nil },
                  onMove: { t in if let i = session.project.brolls.firstIndex(where: { $0.id == b.id }) { session.project.brolls[i].start = t } },
                  onResize: { d in if let i = session.project.brolls.firstIndex(where: { $0.id == b.id }) { session.project.brolls[i].duration = min(BRollClip.maxSeconds, d) } })
@@ -606,7 +608,7 @@ struct VideoTracks: View {
         ForEach(session.project.audioLane) { c in
             let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
             let sel: Bool = { if case .sound(let id) = session.selectedTrack { return id == c.id }; return false }()
-            clip(name + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? " · fades" : ""), start: c.tlStart, dur: c.srcOut - c.srcIn, color: Self.musicColor, selected: sel, w: w, height: 28,
+            clip(name + (c.speed != 1 ? String(format: " · %.2g×", c.speed) : "") + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? " · fades" : ""), start: c.tlStart, dur: c.length, color: Self.musicColor, selected: sel, w: w, height: 28,
                  onSelect: { session.selectedTrack = .sound(c.id); selectedCut = nil },
                  onMove: { t in
                      if let i = session.project.audioLane.firstIndex(where: { $0.id == c.id }) {
@@ -680,5 +682,29 @@ struct KeyframeStrip: View {
         f(&pts)
         a.tracks[param] = pts.isEmpty ? nil : pts.sorted { $0.t < $1.t }
         session.project.overlays[overlayIndex].animation = a.isEmpty ? nil : a
+    }
+}
+
+
+/// Velocidad de un clip (b-roll o música), con paradas en los valores de siempre y vuelta a 1× con un clic.
+struct SpeedRow: View {
+    @Binding var speed: Double
+    let range: ClosedRange<Double>
+    let note: String
+    private static let stops: [Double] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Velocidad").font(.caption)
+                Slider(value: Binding(get: { log2(speed) }, set: { v in
+                    let raw = pow(2, v)
+                    speed = Self.stops.first { abs($0 - raw) < 0.04 } ?? (raw * 100).rounded() / 100
+                }), in: log2(range.lowerBound)...log2(range.upperBound))
+                Button(String(format: "%.2g×", speed)) { speed = 1 }
+                    .buttonStyle(.plain).font(.caption.monospacedDigit().bold()).frame(width: 44, alignment: .trailing)
+                    .foregroundStyle(speed == 1 ? Theme.secondary : Theme.accent).help("Volver a velocidad normal")
+            }
+            Text(note).font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
