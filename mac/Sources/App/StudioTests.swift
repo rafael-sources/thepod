@@ -131,7 +131,8 @@ enum StudioTests {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         var p = Project(id: "entrega-prueba", name: "Entrega", podcastName: "Prueba", createdAt: Date(), importedFrom: "tracks")
-        p.lanes = [Lane(id: 1, name: "Ana", participantId: nil, clips: []), Lane(id: 2, name: "Beto", participantId: nil, clips: [])]
+        let clip = LaneClip(mediaId: 1, srcIn: 0, srcOut: 10)
+        p.lanes = [Lane(id: 1, name: "Ana", participantId: nil, clips: [clip]), Lane(id: 2, name: "Beto", participantId: nil, clips: [clip])]
         p.words = [Word(w: "Hola", s: 0.2, e: 0.5, lane: 1), Word(w: "a", s: 0.5, e: 0.6, lane: 1), Word(w: "todos", s: 0.6, e: 1.0, lane: 1),
                    Word(w: "Qué", s: 3.0, e: 3.3, lane: 2), Word(w: "tal", s: 3.3, e: 3.6, lane: 2)]
         p.transcribedLanes = [1, 2]
@@ -155,7 +156,7 @@ enum StudioTests {
             let mp4 = dir.appendingPathComponent("base.mp4")
             do {
                 _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=black:s=320x180:d=5", "-f", "lavfi", "-i", "sine=frequency=440:duration=5",
-                                          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", mp4.path])
+                                          "-c:v", "mpeg4", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", mp4.path])
                 let srtURL = dir.appendingPathComponent("s.srt"); try Exporter.srt(project: p).write(to: srtURL, atomically: true, encoding: .utf8)
                 let with = dir.appendingPathComponent("con-subs.mp4")
                 _ = try await FFmpeg.run(["-i", mp4.path, "-i", srtURL.path, "-map", "0", "-map", "1", "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=spa", with.path])
