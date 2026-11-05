@@ -48,13 +48,19 @@ final class NoiseReducer {
     final class FFT {
         let setup: FFTSetup
         let window: [Float]
+        /// Cuánto suma la ventana (entrada × salida) solapada cada `hop`: con Hann y salto n/4 da 1,5.
+        let olaGain: Float
         private var real = [Float](repeating: 0, count: n / 2)
         private var imag = [Float](repeating: 0, count: n / 2)
         init() {
             setup = vDSP_create_fftsetup(vDSP_Length(log2(Double(n))), FFTRadix(kFFTRadix2))!
             var w = [Float](repeating: 0, count: n)
             vDSP_hann_window(&w, vDSP_Length(n), Int32(vDSP_HANN_DENORM))
-            window = w.map { sqrt($0) }       // raíz de Hann: entrada × salida = Hann, y con salto n/4 suma 1
+            window = w.map { sqrt($0) }       // raíz de Hann a la entrada y a la salida
+            var g: Float = 0
+            var i = 0
+            while i < n { g += w[i]; i += hop }
+            olaGain = g
         }
         deinit { vDSP_destroy_fftsetup(setup) }
 
@@ -96,7 +102,8 @@ final class NoiseReducer {
                             vDSP_ztoc(&split, 1, cp, 2, vDSP_Length(n / 2))
                         }
                     }
-                    var scale = Float(1) / Float(2 * n)     // vDSP escala por 2n en ida y vuelta
+                    // vDSP devuelve 2× en la ida y n× en la vuelta (4n en total con zrip); y la suma de ventanas
+                    var scale = Float(1) / (Float(4 * n) * olaGain)
                     vDSP_vsmul(out, 1, &scale, &out, 1, vDSP_Length(n))
                 }
             }
