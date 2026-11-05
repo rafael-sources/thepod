@@ -207,7 +207,7 @@ enum StudioTests {
         check(BeatGrid.snap(1.46, to: beats, tolerance: 0.1) == 1.5 && BeatGrid.snap(1.3, to: beats, tolerance: 0.1) == nil && BeatGrid.snap(0.2, to: beats, tolerance: 1) == 1.0,
               "el imán elige el beat más cercano solo dentro de la tolerancia")
         var clip = AudioLaneClip(id: 1, mediaId: 1, tlStart: 100, srcIn: 1.2, srcOut: 1.9)
-        check(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip) == [100.3, 100.8], "los beats de un clip pasan al tiempo del episodio (\(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip)))")
+        check(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip) == [100.3], "los beats de un clip pasan al tiempo del episodio (el de 2,0 s queda fuera del clip) (\(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip)))")
         clip.srcIn = 0
         print(ok ? "OK imán al ritmo" : "FAIL imán al ritmo")
         return ok
