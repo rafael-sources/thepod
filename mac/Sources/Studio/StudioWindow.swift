@@ -379,7 +379,7 @@ struct MasterStrip: View {
             Text("−16 LUFS para Spotify y Apple · −14 para YouTube y redes. Se mide de verdad (EBU R128) al exportar.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Text("El medidor de arriba estima la sonoridad mientras suena. Plugins AU de terceros: próxima etapa.")
+            Text("El medidor de arriba estima la sonoridad mientras suena. Los plugins AU de cada persona (menú «+ plugin AU») suenan y se exportan igual que el resto de la cadena.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)

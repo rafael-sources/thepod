@@ -618,7 +618,22 @@ enum SelfTest {
                 let lufs = MixLoudness.lufs(pwr)
                 print(String(format: "filtro K: seno 1 kHz a −20 dBFS = %.2f LUFS (esperado −23.0)", lufs))
                 ok = ok && abs(lufs + 23.0) < 0.3
-                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización) y el filtro K mide bien" : "FAIL")
+                // Plugin AU dentro de la cadena: un paso alto de Apple (no es de la cadena) a 2 kHz debe hundir
+                // los 300 Hz y dejar los 7 kHz. Su corte va en el estado guardado, así se prueba guardar/restaurar.
+                var hp = PluginInsert(type: kAudioUnitType_Effect, subtype: kAudioUnitSubType_HighPassFilter,
+                                      manufacturer: kAudioUnitManufacturer_Apple, name: "AUHighPassFilter", vendor: "Apple")
+                if let u = PluginHost.instantiate(hp) {
+                    AudioUnitSetParameter(u, kHipassParam_CutoffFrequency, kAudioUnitScope_Global, 0, 2000, 0)
+                    hp.state = PluginHost.state(of: u)
+                    AudioComponentInstanceDispose(u)
+                }
+                var withPlugin = ChainSettings(); withPlugin.plugins = [hp]
+                let plugged = try await export(withPlugin)
+                let lo2 = try band(plugged, hz: 300), hi2 = try band(plugged, hz: 7000)
+                print(String(format: "plugin AU (paso alto 2 kHz, estado restaurado): 300 Hz %.1f dB · 7 kHz %.1f dB", lo2, hi2))
+                let pluginOK = hp.state != nil && (lo0 - lo2) > 12 && abs(hi0 - hi2) < 2
+                ok = ok && pluginOK
+                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización y plugin AU) y el filtro K mide bien" : "FAIL")
                 try? FileManager.default.removeItem(at: dir)
                 exit(ok ? 0 : 1)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
