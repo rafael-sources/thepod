@@ -173,6 +173,46 @@ enum StudioTests {
         return ok
     }
 
+    /// Imán al ritmo: una pista de golpes a 120 BPM (patada de 80 Hz cada 0,5 s con ruido) debe dar 120 BPM, los
+    /// beats sobre los golpes y los ataques contados; el enganche elige el beat más cercano dentro de la tolerancia.
+    static func beatGridTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ritmo-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sr = 48_000.0, secs = 20.0, period = 0.5
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1), let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(sr * secs)) else { return false }
+        buf.frameLength = AVAudioFrameCount(sr * secs)
+        var seed: UInt32 = 777
+        for i in 0..<Int(sr * secs) {
+            let t = Double(i) / sr
+            seed = seed &* 1664525 &+ 1013904223
+            var v = (Float(seed % 20000) / 10000 - 1) * 0.02                       // ruido de fondo
+            let inBeat = t.truncatingRemainder(dividingBy: period)
+            if inBeat < 0.06 { v += Float(0.6 * exp(-inBeat * 40) * sin(2 * .pi * 80 * t)) }   // patada que decae
+            buf.floatChannelData![0][i] = v
+        }
+        let url = dir.appendingPathComponent("golpes.caf")
+        guard let f = try? AVAudioFile(forWriting: url, settings: fmt.settings), (try? f.write(from: buf)) != nil else { return false }
+        guard let g = BeatGrid.analyze(url: url) else { check(false, "no se pudo analizar"); return false }
+        check(abs(g.bpm - 120) < 1.5, String(format: "tempo detectado %.1f BPM (esperado 120)", g.bpm))
+        let expected = Int(secs / period)
+        check(abs(g.onsets.count - expected) <= 3, "ataques: \(g.onsets.count) (esperado ~\(expected))")
+        let offsets = g.beats.map { b -> Double in let r = b.truncatingRemainder(dividingBy: period); return min(r, period - r) }
+        let worst = offsets.max() ?? 1
+        check(g.beats.count >= expected - 2 && worst < 0.03, String(format: "la rejilla cae sobre los golpes (peor desvío %.0f ms, %d beats)", worst * 1000, g.beats.count))
+        // Enganche
+        let beats = [1.0, 1.5, 2.0]
+        check(BeatGrid.snap(1.46, to: beats, tolerance: 0.1) == 1.5 && BeatGrid.snap(1.3, to: beats, tolerance: 0.1) == nil && BeatGrid.snap(0.2, to: beats, tolerance: 1) == 1.0,
+              "el imán elige el beat más cercano solo dentro de la tolerancia")
+        var clip = AudioLaneClip(id: 1, mediaId: 1, tlStart: 100, srcIn: 1.2, srcOut: 1.9)
+        check(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip) == [100.3, 100.8], "los beats de un clip pasan al tiempo del episodio (\(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip)))")
+        clip.srcIn = 0
+        print(ok ? "OK imán al ritmo" : "FAIL imán al ritmo")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

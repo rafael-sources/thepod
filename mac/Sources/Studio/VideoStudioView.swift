@@ -336,6 +336,10 @@ struct VideoTracks: View {
     private var duration: Double { max(1, session.project.duration) }
 
     @State private var viewportW: CGFloat = 1200
+    /// Imán al ritmo: los beats de la música del episodio (tiempo del episodio) y si se engancha a ellos
+    @State private var beats: [Double] = []
+    @State private var beatSnap = true
+    @State private var bpmLabel = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -355,7 +359,7 @@ struct VideoTracks: View {
                        let a = session.project.overlays[i].animation, !a.isEmpty {
                         ForEach(LayerAnimation.params.filter { a.has($0) }, id: \.self) { p in
                             track("  ◆ \(VideoTracks.paramName(p))", color: Theme.accent, height: 44, sub: "\(a.tracks[p]?.count ?? 0) puntos") { w in
-                                KeyframeStrip(session: session, overlayIndex: i, param: p, width: w)
+                                KeyframeStrip(session: session, overlayIndex: i, param: p, width: w, beats: beatSnap ? beats : [])
                             }
                         }
                     }
@@ -366,6 +370,23 @@ struct VideoTracks: View {
             .onChange(of: outer.size.width) { _, w in viewportW = w }
             }
         }
+        .task(id: session.project.audioLane.map { "\($0.id):\($0.mediaId):\($0.tlStart):\($0.srcIn):\($0.srcOut)" }.joined(separator: "|")) {
+            let p = session.project
+            let (b, label) = await Task.detached(priority: .utility) { () -> ([Double], String) in
+                let bs = BeatGrid.episodeBeats(project: p)
+                let bpms = Set(p.audioLane.compactMap { BeatGrid.load(project: p, mediaId: $0.mediaId)?.bpm }.filter { $0 > 0 })
+                return (bs, bpms.isEmpty ? "" : bpms.sorted().map { String(format: "%.0f", $0) }.joined(separator: " · ") + " BPM")
+            }.value
+            beats = b; bpmLabel = label
+        }
+    }
+
+    /// Segundos que cubren 8 px a la escala actual: la tolerancia del imán.
+    private var snapTolerance: Double { 8 / Double(timelineWidth) * duration }
+    /// El tiempo enganchado al beat más cercano si el imán está puesto.
+    private func snapped(_ t: Double) -> Double {
+        guard beatSnap, !beats.isEmpty else { return t }
+        return BeatGrid.snap(t, to: beats, tolerance: snapTolerance) ?? t
     }
 
     static func paramName(_ p: String) -> String {
@@ -385,6 +406,11 @@ struct VideoTracks: View {
             Button("+ Imagen…") { session.chooseOverlayImage() }
             Button("+ B-roll…") { session.chooseBRoll() }
             Spacer()
+            if !beats.isEmpty {
+                Toggle(isOn: $beatSnap) { Label("Imán al ritmo", systemImage: "metronome") }.toggleStyle(.button)
+                    .help("Al arrastrar, los clips, los keyframes y los cortes de cámara se enganchan al golpe de la música más cercano (\(bpmLabel))")
+                Text(bpmLabel).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+            }
             Text("Clic: ir ahí · arrastra un clip para moverlo · clic derecho en Cámaras: fijar").font(.caption).foregroundStyle(Theme.secondary)
             Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
             Slider(value: $zoom, in: 1...30).frame(width: 110)
@@ -402,6 +428,11 @@ struct VideoTracks: View {
                 let pxPerSec = w / duration
                 let step: Double = pxPerSec > 20 ? 5 : pxPerSec > 8 ? 15 : pxPerSec > 3 ? 30 : pxPerSec > 1 ? 60 : pxPerSec > 0.4 ? 300 : 600
                 ZStack(alignment: .topLeading) {
+                    // Beats de la música: marcas finas (solo cuando se distinguen)
+                    if !beats.isEmpty, w / CGFloat(duration) * 0.4 > 2 {
+                        Path { p in for b in beats { let x = CGFloat(b / duration) * w; p.move(to: CGPoint(x: x, y: 14)); p.addLine(to: CGPoint(x: x, y: 20)) } }
+                            .stroke(VideoTracks.musicColor.opacity(beatSnap ? 0.9 : 0.4), lineWidth: 1)
+                    }
                     ForEach(Array(stride(from: 0.0, through: duration, by: step)), id: \.self) { t in
                         Text(EditEngine.clock(t)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.secondary)
                             .offset(x: CGFloat(t / duration) * w + 3, y: 3)
@@ -462,7 +493,7 @@ struct VideoTracks: View {
         .onTapGesture { onSelect() }
         .gesture(DragGesture(minimumDistance: 2).onChanged { v in
             if dragStart == nil { dragStart = start; onSelect() }
-            onMove(max(0, min(duration - dur, (dragStart ?? start) + Double(v.translation.width / w) * duration)))
+            onMove(snapped(max(0, min(duration - dur, (dragStart ?? start) + Double(v.translation.width / w) * duration))))
         }.onEnded { _ in dragStart = nil })
     }
 
@@ -593,6 +624,7 @@ struct KeyframeStrip: View {
     let overlayIndex: Int
     let param: String
     let width: CGFloat
+    var beats: [Double] = []
     @State private var dragging: UUID?
     private let h: CGFloat = 44
 
@@ -622,7 +654,8 @@ struct KeyframeStrip: View {
                     .help("\(EditEngine.clock(pt.t)) · \(VideoTracks.paramName(param)) \(String(format: "%.2f", pt.v)) · \(pt.ease.name)")
                     .gesture(DragGesture(minimumDistance: 1).onChanged { v in
                         dragging = pt.id
-                        let t = max(0, min(duration, Double(v.location.x / width) * duration))
+                        var t = max(0, min(duration, Double(v.location.x / width) * duration))
+                        if let b = BeatGrid.snap(t, to: beats, tolerance: 8 / Double(width) * duration) { t = b }
                         let val = value(forY: v.location.y)
                         update { pts in if let i = pts.firstIndex(where: { $0.id == pt.id }) { pts[i].t = t; pts[i].v = val } }
                     }.onEnded { _ in dragging = nil })
