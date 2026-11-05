@@ -123,6 +123,7 @@ def _serialize_meta(row):
         "rss_override_url": row["rss_override_url"] if "rss_override_url" in keys else None,
         "landing_blocks": row["landing_blocks"] if "landing_blocks" in keys else None,
         "voice_presets": row["voice_presets"] if "voice_presets" in keys else None,
+        "title_presets": row["title_presets"] if "title_presets" in keys else None,
         "font_heading": row["font_heading"],
         "font_body": row["font_body"],
         "logo_filename": row["logo_filename"],
@@ -340,7 +341,7 @@ def update_podcast(slug):
         "name", "description", "tagline",
         "color_primary", "color_secondary", "color_accent",
         "color_bg", "color_text", "color_text_align",
-        "rss_override_url", "landing_blocks", "voice_presets",
+        "rss_override_url", "landing_blocks", "voice_presets", "title_presets",
         "font_heading", "font_body",
     }
     updates = {k: v for k, v in data.items() if k in allowed}

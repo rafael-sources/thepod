@@ -274,6 +274,7 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "podcast_meta", "directors", "directors TEXT")  # JSON array of usernames
     _ensure_column(conn, "podcast_meta", "background_filename", "background_filename TEXT")
     _ensure_column(conn, "podcast_meta", "voice_presets", "voice_presets TEXT")  # JSON: cadenas de voz del estudio (thePod para Mac)
+    _ensure_column(conn, "podcast_meta", "title_presets", "title_presets TEXT")  # JSON: plantillas de título de Studio · Video (thePod para Mac)
     _ensure_column(conn, "episodes", "ai_summary", "ai_summary TEXT")
     _ensure_column(conn, "episodes", "ai_highlights", "ai_highlights TEXT")
     _ensure_column(conn, "episodes", "ai_notes_edited", "ai_notes_edited INTEGER DEFAULT 0")
