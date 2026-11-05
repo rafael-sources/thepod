@@ -34,26 +34,46 @@ final class RenderScene: @unchecked Sendable {
     }
     var cintillos: [CintilloCard] = []
     /// Capas (textos, imágenes, stickers) ya dibujadas a su tamaño; centro en fracción del cuadro (y desde arriba).
-    struct OverlayCard { let id: Int; let start: Double; let end: Double; let image: CIImage; let cx: Double; let cy: Double; let animate: Bool }
+    struct OverlayCard {
+        let id: Int; let start: Double; let end: Double; let image: CIImage; let cx: Double; let cy: Double; let animate: Bool
+        /// Studio · Video: keyframes (ya en tiempo del video final) y el tamaño con que se dibujó la imagen.
+        var anim: LayerAnimation? = nil
+        var baseScale: Double = 1
+    }
     var overlays: [OverlayCard] = []
     /// Recuadro de cada capa en fracciones del cuadro (x, y desde arriba, ancho, alto), para poder moverla sobre la vista previa.
-    func overlayBox(_ id: Int) -> CGRect? {
+    func overlayBox(_ id: Int, at t: Double? = nil) -> CGRect? {
         guard let c = overlays.first(where: { $0.id == id }) else { return nil }
-        let r = overlayRect(c)
+        let r = overlayRect(c, at: t.map { $0 - contentStart })
         let W = renderSize.width, H = renderSize.height
         return CGRect(x: r.minX / W, y: 1 - r.maxY / H, width: r.width / W, height: r.height / H)
     }
-    /// Dónde va la capa (coordenadas de Core Image, y hacia arriba), sin salirse del cuadro.
-    func overlayRect(_ c: OverlayCard) -> CGRect {
+    /// Dónde va la capa (coordenadas de Core Image, y hacia arriba), sin salirse del cuadro. Con `t` (tiempo del
+    /// contenido) sigue sus keyframes de posición y tamaño.
+    func overlayRect(_ c: OverlayCard, at t: Double? = nil) -> CGRect {
         let W = renderSize.width, H = renderSize.height
-        let w = c.image.extent.width, h = c.image.extent.height
-        // Un margen chico para que nada quede pegado al borde (si cabe)
+        var cx = c.cx, cy = c.cy, s = 1.0
+        if let t, let a = c.anim {
+            cx = a.value(LayerAnimation.x, at: t) ?? cx
+            cy = a.value(LayerAnimation.y, at: t) ?? cy
+            if let k = a.value(LayerAnimation.scale, at: t), c.baseScale > 0 { s = max(0.05, k / c.baseScale) }
+        }
+        let w = c.image.extent.width * s, h = c.image.extent.height * s
+        // Un margen chico para que nada quede pegado al borde (si cabe). Con keyframes la capa puede salir del
+        // cuadro a propósito (entrar desde fuera), así que ahí no se limita.
+        if c.anim?.isEmpty == false {
+            return CGRect(x: CGFloat(cx) * W - w / 2, y: (1 - CGFloat(cy)) * H - h / 2, width: w, height: h)
+        }
         let m = min(W, H) * 0.03
         let mx = w + 2 * m <= W ? m : 0, my = h + 2 * m <= H ? m : 0
-        let x = min(max(mx, CGFloat(c.cx) * W - w / 2), max(0, W - w - mx))
-        let y = min(max(my, (1 - CGFloat(c.cy)) * H - h / 2), max(0, H - h - my))
+        let x = min(max(mx, CGFloat(cx) * W - w / 2), max(0, W - w - mx))
+        let y = min(max(my, (1 - CGFloat(cy)) * H - h / 2), max(0, H - h - my))
         return CGRect(x: x, y: y, width: w, height: h)
     }
+    /// Studio · Video: tramos de cámara fijados a mano (tiempo del contenido del video final).
+    struct CameraSpan { let start: Double; let end: Double; let lane: Int?; let template: LayoutTemplate? }
+    var cameraSpans: [CameraSpan] = []
+    func cameraSpan(at t: Double) -> CameraSpan? { cameraSpans.first { t >= $0.start && t < $0.end } }
     /// Intro y cierre: imagen fija antes de `contentStart` y después de `contentEnd` (tiempos del video final).
     var contentStart: Double = 0
     var contentEnd: Double = .infinity
@@ -63,6 +83,7 @@ final class RenderScene: @unchecked Sendable {
     struct BRoll {
         let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool; let placement: String
         var transform: CGAffineTransform = .identity     // preferredTransform de la pista (rotación de videos de teléfono)
+        var transition: Transition? = nil                // Studio · Video: cómo entra (nil = fundido corto)
     }
     var brolls: [BRoll] = []
 
@@ -296,6 +317,8 @@ final class RenderScene: @unchecked Sendable {
     // MARK: Speaker
 
     func activeLane(at t: Double) -> (lane: Int, since: Double) {
+        // Un tramo fijado a mano en Studio gana sobre quién habla
+        if let span = cameraSpan(at: t), let lane = span.lane { return (lane, span.start) }
         var current = switches.first ?? SpeakerSwitch(time: 0, lane: laneOrder.first ?? 1)
         for s in switches {
             if s.time > t + 1e-4 { break }
@@ -347,7 +370,7 @@ final class RenderScene: @unchecked Sendable {
                 out = img.transformed(by: .init(translationX: (W - img.extent.width) / 2, y: H * 0.3)).composited(over: out)
             }
         } else {
-            let resolved = resolve(layout, count: visible.count)
+            let resolved = resolve(cameraSpan(at: t)?.template ?? layout, count: visible.count)
             let mainLane: Int = {
                 // Ventanita con "siempre la primera persona": el grande es la primera pista y la ventanita cambia
                 if resolved == .pip, !options.pipFollowSpeaker, let first = visible.first { return first }
@@ -421,7 +444,12 @@ final class RenderScene: @unchecked Sendable {
             var pic: CIImage? = b.image
             if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
             guard let pic else { continue }
-            let k = CGFloat(min(1, (t - b.start) / 0.35, (b.end - t) / 0.35))   // fundido corto al entrar y salir
+            // Entrada: la transición de Studio si la hay (corte, fundido, a negro, deslizar, zoom); si no, fundido corto
+            let trIn = b.transition
+            let inDur = trIn.map { max(0.001, $0.duration) } ?? 0.35
+            let kIn = CGFloat(min(1, (t - b.start) / inDur))
+            let kOut = CGFloat(min(1, (b.end - t) / 0.35))
+            let k = trIn == nil ? min(kIn, kOut) : kOut            // el fundido de siempre, o solo la salida
             var img: CIImage
             if b.placement == "pipLeft" || b.placement == "pipRight" {
                 // Ventanita abajo, con marco: no tapa a las personas
@@ -445,6 +473,28 @@ final class RenderScene: @unchecked Sendable {
                 }
             } else {
                 img = b.fill ? fill(pic, into: full, cropX: 0.5) : fit(pic, into: full).composited(over: dark)
+            }
+            if let tr = trIn, kIn < 1 {
+                let e = CGFloat(1 - pow(1 - Double(kIn), 3))      // sale suave
+                switch tr.kind {
+                case .cut: break
+                case .fade:
+                    img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: kIn)])
+                case .black:
+                    // Primera mitad: lo de abajo se va a negro; segunda: el clip aparece desde negro
+                    if kIn < 0.5 {
+                        img = dark.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: kIn * 2)])
+                    } else {
+                        img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: (kIn - 0.5) * 2)]).composited(over: dark)
+                    }
+                case .slide:
+                    img = img.transformed(by: .init(translationX: -W * (1 - e), y: 0))
+                case .zoom:
+                    let s = 0.8 + 0.2 * e
+                    let cx = img.extent.midX, cy = img.extent.midY
+                    img = img.transformed(by: CGAffineTransform(translationX: -cx, y: -cy).concatenating(.init(scaleX: s, y: s)).concatenating(.init(translationX: cx, y: cy)))
+                        .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: kIn)])
+                }
             }
             if k < 1 { img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: k)]) }
             out = img.composited(over: out)
@@ -522,8 +572,23 @@ final class RenderScene: @unchecked Sendable {
 
         // Capas del usuario: encima del video y de los cintillos, debajo de los subtítulos
         for c in overlays where t >= c.start && t < c.end {
-            let r = overlayRect(c)
+            let r = overlayRect(c, at: t)
             var img = c.image.transformed(by: .init(translationX: -c.image.extent.minX, y: -c.image.extent.minY))
+            // Studio · Video: tamaño, giro y opacidad por keyframes (la posición ya la resolvió overlayRect)
+            if let a = c.anim, !a.isEmpty {
+                let s = r.width / max(1, c.image.extent.width)
+                let rot = a.value(LayerAnimation.rotation, at: t) ?? 0
+                if abs(s - 1) > 1e-4 || abs(rot) > 1e-4 {
+                    let w = c.image.extent.width, h = c.image.extent.height
+                    img = img.transformed(by: CGAffineTransform(translationX: -w / 2, y: -h / 2)
+                        .concatenating(.init(scaleX: s, y: s))
+                        .concatenating(.init(rotationAngle: CGFloat(-rot * .pi / 180)))
+                        .concatenating(.init(translationX: r.width / 2, y: r.height / 2)))
+                }
+                if let o = a.value(LayerAnimation.opacity, at: t), o < 1 {
+                    img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(max(0, o)))])
+                }
+            }
             if c.animate {
                 let k = min(1, (t - c.start) / 0.3, (c.end - t) / 0.3)
                 if k < 1 {
@@ -608,7 +673,7 @@ final class RenderScene: @unchecked Sendable {
             a.layout.reserve(CGRect(x: W - w - m, y: H - h - m, width: w, height: h))
         }
         // Fijo: capas puestas a mano
-        for c in overlays where t >= c.start && t < c.end { a.layout.reserve(overlayRect(c)) }
+        for c in overlays where t >= c.start && t < c.end { a.layout.reserve(overlayRect(c, at: t)) }
         // Subtítulos
         if style.enabled, !captions.isEmpty {
             let bandH = captionFontSize() * 2.6, bandW = W * 0.86

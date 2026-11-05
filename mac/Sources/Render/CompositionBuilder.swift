@@ -349,10 +349,10 @@ enum CompositionBuilder {
                 }
                 // Videos de teléfono vienen grabados "acostados" con una rotación en los metadatos: se aplica al dibujar
                 let xf = (try? await v.load(.preferredTransform)) ?? .identity
-                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf))
+                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf, transition: b.transitionIn))
             } else {
                 guard let img = CIImage(contentsOf: ProjectStore.url(b.file, in: project.id), options: [.applyOrientationProperty: true]) else { continue }
-                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement))
+                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement, transition: b.transitionIn))
             }
         }
 
@@ -448,7 +448,7 @@ enum CompositionBuilder {
                 layout: layoutOverride ?? project.layout,
                 laneOrder: project.lanesOnScreen.map(\.id), trackIDs: videoTrackIDs,
                 captions: captions, style: style,
-                switches: switches,
+                switches: AudioAnalysis.cameraSwitches(switches, settings: project.studioVideo),
                 names: names, showNames: project.showNames,
                 cropX: project.laneCrop,
                 logo: project.showLogo ? project.logoFile.flatMap { ImageFile.ciImage(ProjectStore.url($0, in: project.id)) } : nil,
@@ -474,6 +474,13 @@ enum CompositionBuilder {
             s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
             s.fastSegmentation = preview
             s.brolls = brollScene
+            // Studio · Video: tramos de cámara a mano, en tiempo del contenido del video final
+            s.cameraSpans = project.studioVideo.cuts.compactMap { c in
+                guard let a = Self.outputStart(c.start, keep: keep) else { return nil }
+                let z = EditEngine.toOutput(c.end, keep: keep) ?? (a + (c.end - c.start))
+                guard z > a + 0.05 else { return nil }
+                return RenderScene.CameraSpan(start: a, end: z, lane: c.lane, template: c.template)
+            }
             for (lane, vb) in project.laneBackground {
                 s.virtualBG[lane] = RenderScene.VirtualBG(
                     mode: vb.mode, blur: vb.blur, color: TextRenderer.color(vb.color).map { CIColor(color: $0) ?? .black } ?? .black,
@@ -566,8 +573,14 @@ enum CompositionBuilder {
                     }
             }
             guard let img else { return nil }
-            return RenderScene.OverlayCard(id: o.id, start: start, end: start + o.duration, image: img,
-                                           cx: o.x, cy: o.y, animate: o.animate)
+            var card = RenderScene.OverlayCard(id: o.id, start: start, end: start + o.duration, image: img,
+                                               cx: o.x, cy: o.y, animate: o.animate)
+            if let a = o.animation, !a.isEmpty {
+                // Keyframes al tiempo del video final; los que caen en un corte se corren al siguiente tramo
+                card.anim = a.mapped { Self.outputStart($0, keep: keep) }
+                card.baseScale = Double(k)
+            }
+            return card
         }
     }
 

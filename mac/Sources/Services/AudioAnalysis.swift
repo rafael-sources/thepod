@@ -157,6 +157,24 @@ enum AudioAnalysis {
         return cleaned.isEmpty ? [SpeakerSwitch(time: 0, lane: first)] : cleaned
     }
 
+    /// Los cambios de cámara que ve la pantalla (Studio · Video): con «sigue a quien habla» apagado, una sola
+    /// cámara (la plantilla manda); si no, los mismos cambios pero sin cambiar antes de `minHold` segundos.
+    static func cameraSwitches(_ switches: [SpeakerSwitch], settings: StudioVideoSettings) -> [SpeakerSwitch] {
+        guard let first = switches.first else { return [] }
+        guard settings.followSpeaker else { return [first] }
+        var out: [SpeakerSwitch] = [first]
+        let rest = Array(switches.dropFirst())
+        for (i, s) in rest.enumerated() {
+            guard let last = out.last else { continue }
+            // Si llega antes de la permanencia mínima, se pospone; si para entonces ya hay otro cambio, se salta
+            let at = max(s.time, last.time + settings.minHold)
+            if i + 1 < rest.count, rest[i + 1].time <= at { continue }
+            if last.lane == s.lane { continue }
+            out.append(SpeakerSwitch(time: at, lane: s.lane))
+        }
+        return out
+    }
+
     /// «Silenciar a quien no habla», hecho como lo hace una puerta de mezcla de verdad: cada persona queda ABIERTA
     /// mientras habla y un rato después (`hold`), y también cuando habla encima de quien tiene la palabra (risas,
     /// interrupciones). Devuelve, por persona, los tramos abiertos en tiempo del video final (sin intro). Fuera de

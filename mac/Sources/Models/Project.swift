@@ -58,6 +58,7 @@ struct Project: Codable, Identifiable, Equatable {
     var showCintillos: Bool = true
     var overlays: [VideoLayer] = []        // textos, imágenes y stickers encima del video
     var brolls: [BRollClip] = []           // b-roll: un video o imagen que tapa la pantalla un rato (la voz sigue)
+    var studioVideo = StudioVideoSettings() // Studio · Video: cortes de cámara a mano y cómo sigue a quien habla
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
@@ -912,8 +913,12 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     var y: Double = 0.5                 // centro, 0 = arriba … 1 = abajo
     var scale: Double = 1               // tamaño (1 = normal)
     var animate: Bool = true            // entra y sale con fundido y un pequeño salto
+    /// Studio · Video: keyframes de posición, tamaño, giro y opacidad (nil = la capa está quieta, como la puso el simple)
+    var animation: LayerAnimation?
 
     var end: Double { start + duration }
+    /// Tocada en Studio: tiene keyframes que el paso simple no sabe expresar.
+    var tunedInStudio: Bool { !(animation?.isEmpty ?? true) }
     var title: String {
         switch kind {
         case .text: return text.isEmpty ? "Texto" : text
@@ -947,6 +952,7 @@ struct VideoLayer: Codable, Identifiable, Equatable {
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1
         animate = try c.decodeIfPresent(Bool.self, forKey: .animate) ?? true
+        animation = try c.decodeIfPresent(LayerAnimation.self, forKey: .animation)
     }
 }
 
@@ -962,6 +968,8 @@ struct BRollClip: Codable, Identifiable, Equatable {
     var fill: Bool = true               // llenar la pantalla (recorta) o entrar completo con bordes
     var volume: Double = 0              // sonido del b-roll (0 = mudo)
     var placement: String = "full"      // full | pipLeft | pipRight (ventanita abajo a la izquierda o a la derecha)
+    /// Studio · Video: cómo entra este clip (nil = el fundido corto de siempre)
+    var transitionIn: Transition?
     var end: Double { start + duration }
     static let maxSeconds = 10.0        // un b-roll es un apoyo corto, no otro video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
@@ -980,7 +988,150 @@ struct BRollClip: Codable, Identifiable, Equatable {
         fill = try c.decodeIfPresent(Bool.self, forKey: .fill) ?? true
         volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0
         placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "full"
+        transitionIn = try c.decodeIfPresent(Transition.self, forKey: .transitionIn)
     }
+}
+
+// MARK: - Studio · Video
+
+/// Un punto de una curva: en qué segundo del episodio, qué valor, y cómo se llega al siguiente punto.
+struct Keyframe: Codable, Equatable, Hashable, Identifiable {
+    enum Ease: String, Codable, CaseIterable {
+        case linear, smooth, hold
+        var name: String { switch self { case .linear: return "Lineal"; case .smooth: return "Suave"; case .hold: return "Pausa" } }
+    }
+    var id = UUID()
+    var t: Double
+    var v: Double
+    var ease: Ease = .smooth
+    init(t: Double, v: Double, ease: Ease = .smooth) { self.t = t; self.v = v; self.ease = ease }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        t = try c.decode(Double.self, forKey: .t)
+        v = try c.decode(Double.self, forKey: .v)
+        ease = try c.decodeIfPresent(Ease.self, forKey: .ease) ?? .smooth
+    }
+}
+
+/// Animación de una capa: por parámetro, sus keyframes (tiempo del episodio). Posición en fracciones del cuadro
+/// (0–1, como `VideoLayer.x/y`) para que la misma curva valga en 16:9, 9:16 y 1:1; tamaño como factor; giro en
+/// grados; opacidad 0–1. Un parámetro sin keyframes usa el valor fijo de la capa.
+struct LayerAnimation: Codable, Equatable {
+    static let x = "x", y = "y", scale = "scale", rotation = "rotation", opacity = "opacity"
+    static let params = [x, y, scale, rotation, opacity]
+    var tracks: [String: [Keyframe]] = [:]
+
+    var isEmpty: Bool { tracks.values.allSatisfy(\.isEmpty) }
+    func has(_ p: String) -> Bool { !(tracks[p] ?? []).isEmpty }
+
+    /// Valor del parámetro en `t`, o nil si no tiene keyframes.
+    func value(_ p: String, at t: Double) -> Double? {
+        guard let pts = tracks[p], !pts.isEmpty else { return nil }
+        return Self.interpolate(pts, at: t)
+    }
+
+    static func interpolate(_ raw: [Keyframe], at t: Double) -> Double {
+        let pts = raw.sorted { $0.t < $1.t }
+        guard let first = pts.first, let last = pts.last else { return 0 }
+        if t <= first.t { return first.v }
+        if t >= last.t { return last.v }
+        for i in 0..<(pts.count - 1) where t >= pts[i].t && t <= pts[i + 1].t {
+            let a = pts[i], b = pts[i + 1]
+            let span = b.t - a.t
+            guard span > 1e-6 else { return b.v }
+            var f = (t - a.t) / span
+            switch a.ease {
+            case .hold: f = 0
+            case .smooth: f = f * f * (3 - 2 * f)
+            case .linear: break
+            }
+            return a.v + (b.v - a.v) * f
+        }
+        return last.v
+    }
+
+    /// Pone (o mueve) un keyframe en `t`; dos keyframes a menos de 40 ms se consideran el mismo.
+    mutating func write(_ p: String, t: Double, v: Double, ease: Keyframe.Ease = .smooth) {
+        var pts = tracks[p] ?? []
+        if let i = pts.firstIndex(where: { abs($0.t - t) < 0.04 }) { pts[i].v = v }
+        else { pts.append(Keyframe(t: t, v: v, ease: ease)) }
+        tracks[p] = pts.sorted { $0.t < $1.t }
+    }
+    mutating func remove(_ p: String, id: UUID) {
+        var pts = tracks[p] ?? []
+        pts.removeAll { $0.id == id }
+        tracks[p] = pts.isEmpty ? nil : pts
+    }
+    mutating func clear(_ p: String) { tracks[p] = nil }
+
+    /// La misma animación con los tiempos convertidos (p. ej. del episodio al video final).
+    func mapped(_ f: (Double) -> Double?) -> LayerAnimation {
+        var out = LayerAnimation()
+        for (p, pts) in tracks {
+            let m = pts.compactMap { k -> Keyframe? in f(k.t).map { var c = k; c.t = $0; return c } }
+            if !m.isEmpty { out.tracks[p] = m }
+        }
+        return out
+    }
+}
+
+/// Cómo entra un clip desde lo que había antes.
+struct Transition: Codable, Equatable {
+    enum Kind: String, Codable, CaseIterable {
+        case cut, fade, black, slide, zoom
+        var name: String {
+            switch self {
+            case .cut: return "Corte"; case .fade: return "Fundido"; case .black: return "A negro"
+            case .slide: return "Deslizar"; case .zoom: return "Zoom"
+            }
+        }
+    }
+    var kind: Kind = .fade
+    var duration: Double = 0.6
+    init(kind: Kind = .fade, duration: Double = 0.6) { self.kind = kind; self.duration = duration }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .fade
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 0.6
+    }
+}
+
+/// Un tramo de cámara fijado a mano en Studio (tiempo del episodio): dentro de él gana sobre «sigue a quien habla».
+struct CameraCut: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var start: Double
+    var end: Double
+    var lane: Int?                      // la persona en grande; nil = todas, con la plantilla
+    var template: LayoutTemplate?       // plantilla solo para este tramo; nil = la del proyecto
+    init(start: Double, end: Double, lane: Int? = nil, template: LayoutTemplate? = nil) {
+        self.start = start; self.end = end; self.lane = lane; self.template = template
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        start = try c.decode(Double.self, forKey: .start)
+        end = try c.decode(Double.self, forKey: .end)
+        lane = try c.decodeIfPresent(Int.self, forKey: .lane)
+        template = try c.decodeIfPresent(LayoutTemplate.self, forKey: .template)
+    }
+}
+
+/// Lo que Studio · Video decide sobre las cámaras.
+struct StudioVideoSettings: Codable, Equatable {
+    var followSpeaker = true            // cortes automáticos a quien habla (apagado: la plantilla fija del proyecto)
+    var minHold = 2.5                   // segundos mínimos en una cámara antes de cambiar (para no «picar»)
+    var cuts: [CameraCut] = []          // tramos fijados a mano
+    var isDefault: Bool { followSpeaker && abs(minHold - 2.5) < 1e-9 && cuts.isEmpty }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        followSpeaker = try c.decodeIfPresent(Bool.self, forKey: .followSpeaker) ?? true
+        minHold = try c.decodeIfPresent(Double.self, forKey: .minHold) ?? 2.5
+        cuts = try c.decodeIfPresent([CameraCut].self, forKey: .cuts) ?? []
+    }
+    /// El tramo a mano que cubre `t` (tiempo del episodio), si hay.
+    func cut(at t: Double) -> CameraCut? { cuts.first { t >= $0.start && t < $0.end } }
 }
 
 /// Cintillo tipo noticiero que el director lanzó durante la grabación.
@@ -1123,6 +1274,7 @@ extension Project {
         showCintillos = try c.decodeIfPresent(Bool.self, forKey: .showCintillos) ?? true
         overlays = try c.decodeIfPresent([VideoLayer].self, forKey: .overlays) ?? []
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
+        studioVideo = try c.decodeIfPresent(StudioVideoSettings.self, forKey: .studioVideo) ?? StudioVideoSettings()
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
@@ -1134,6 +1286,11 @@ extension Project {
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
         postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)
+    }
+
+    /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).
+    var videoTunedInStudio: Bool {
+        overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil } || !studioVideo.isDefault
     }
 
     /// When each sponsor appears (timeline time) — same rule as postPod web's exporter:
