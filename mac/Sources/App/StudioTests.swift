@@ -164,7 +164,8 @@ enum StudioTests {
                 check(tracks.contains { $0.mediaType == .subtitle || $0.mediaType == .text }, "el MP4 lleva una pista de subtítulos (\(tracks.map { $0.mediaType.rawValue }))")
                 let mp3 = dir.appendingPathComponent("con-letra.mp3")
                 _ = try await FFmpeg.run(["-i", mp4.path, "-vn", "-c:a", "libmp3lame", "-b:a", "64k", "-id3v2_version", "3", "-metadata", "lyrics=" + Exporter.transcriptText(project: p), mp3.path])
-                let meta = try await AVURLAsset(url: mp3).load(.metadata)
+                let asset3 = AVURLAsset(url: mp3)
+                let meta = (try await asset3.loadMetadata(for: .id3Metadata)) + (try await asset3.load(.metadata))
                 let lyr = meta.first { ($0.identifier?.rawValue ?? "").lowercased().contains("lyric") || ($0.key as? String ?? "").uppercased().contains("USLT") }
                 let text = (try? await lyr?.load(.stringValue)) ?? nil
                 check(text?.contains("Hola a todos") == true, "el MP3 lleva la transcripción dentro (\(lyr?.identifier?.rawValue ?? "sin etiqueta"))")
