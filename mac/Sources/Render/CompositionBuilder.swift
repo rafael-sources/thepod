@@ -18,6 +18,8 @@ struct BuiltComposition {
     var meters: [Int: ChainTap] = [:]
     /// Solo en la vista previa: volumen que la mezcla le da a cada persona en cada instante del video (0…).
     var gains: [Int: (Double) -> Double] = [:]
+    /// Solo en la vista previa: la sonoridad de la mezcla (estimada sumando las pistas con su volumen).
+    var loudness: MixLoudness?
 
     /// Lo que suena de una persona en el instante `t` del video, en dB (nil si no está sonando ahora).
     func levelDB(lane: Int, at t: Double) -> Double? {
@@ -93,8 +95,13 @@ enum CompositionBuilder {
         }
         /// Curva de volumen de una pista: el producto de varios factores (fades, auto-silencio, bajar bajo la voz)
         /// convertido en rampas consecutivas que no se pisan (AVFoundation ignora rampas superpuestas).
+        // Vista previa: cada pista con su curva de volumen, para estimar la sonoridad de la mezcla
+        var loudSources: [(p: AVMutableAudioMixInputParameters, gain: (Double) -> Double)] = []
         func applyEnvelope(_ p: AVMutableAudioMixInputParameters, base: Double, span: (start: Double, end: Double),
-                           points: [Double], factor: (Double) -> Double) {
+                           points: [Double], factor: @escaping (Double) -> Double) {
+            if preview {
+                loudSources.append((p, { t in t >= span.start && t <= span.end ? max(0, base * factor(t)) : 0 }))
+            }
             var pts = ([span.start, span.end] + points.filter { $0 > span.start && $0 < span.end }).sorted()
             pts = pts.reduce(into: [Double]()) { acc, t in if let l = acc.last, t - l < 0.004 { return }; acc.append(t) }
             func v(_ t: Double) -> Float { Float(max(0, base * factor(t))) }
@@ -263,7 +270,7 @@ enum CompositionBuilder {
                 // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
                 // se le suma la misma curva al leerlo.
                 let chainTap = ChainTap(laneId: id, settings: lane.effectiveChain, keep: keep, introDuration: introDur)
-                if let proc = chainTap.makeProcessor() { p.audioTapProcessor = proc; meters[id] = chainTap }
+                if let proc = chainTap.makeProcessor() { p.audioTapProcessor = proc; chainTap.processor = proc; meters[id] = chainTap }
                 if preview {
                     let base = laneBase
                     gains[id] = { t in t >= span.start && t <= span.end ? base * factor(t) : 0 }
@@ -403,6 +410,19 @@ enum CompositionBuilder {
             }
         }
 
+        var loudness: MixLoudness?
+        if preview {
+            let ml = MixLoudness()
+            for src in loudSources {
+                if let existing = src.p.audioTapProcessor, let chainTap = meters.values.first(where: { $0.processor === existing }) {
+                    ml.add(chainTap, gain: src.gain)
+                } else if src.p.audioTapProcessor == nil {
+                    let m = MeterTap()
+                    if let proc = m.makeProcessor() { src.p.audioTapProcessor = proc; ml.add(m, gain: src.gain) }
+                }
+            }
+            loudness = ml
+        }
         let mix = AVMutableAudioMix()
         mix.inputParameters = mixParams
         if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
@@ -478,6 +498,7 @@ enum CompositionBuilder {
                                      keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
         built.meters = meters
         built.gains = gains
+        built.loudness = loudness
         return built
     }
 

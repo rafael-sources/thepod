@@ -7,9 +7,13 @@ import QuartzCore
 /// en el export (AVAssetExportSession): por eso lo que se oye es lo que sale.
 ///
 /// También mide el nivel de lo que pasa, para el medidor del timeline (`recent`), como hacía `LevelTap`.
-final class ChainTap: @unchecked Sendable {
+final class ChainTap: @unchecked Sendable, LoudnessSource {
     let chain: VoiceChain
     let laneId: Int
+    let loudness = LoudnessAccumulator()
+    /// El tap creado con makeProcessor (para reconocerlo en la mezcla).
+    var processor: MTAudioProcessingTap?
+    func recentPower() -> (power: Double, mediaTime: Double, stamp: CFTimeInterval)? { loudness.recent() }
     private var sampleTime: Double = 0
     private var maxFrames: UInt32 = 4096
 
@@ -99,6 +103,7 @@ final class ChainTap: @unchecked Sendable {
                 me.maxFrames = UInt32(maxFrames)
                 me.sampleTime = 0
                 me.sampleRate = format.pointee.mSampleRate > 0 ? format.pointee.mSampleRate : 48_000
+                me.loudness.prepare(sampleRate: me.sampleRate, channels: Int(format.pointee.mChannelsPerFrame))
                 me.chain.prepare(format: format.pointee, maxFrames: UInt32(maxFrames))
                 me.chain.setInput(ChainTap.pull, refCon: MTAudioProcessingTapGetStorage(tap))
             },
@@ -122,6 +127,7 @@ final class ChainTap: @unchecked Sendable {
                 }
                 me.sampleTime += Double(frames)
                 me.measure(bufferList)
+                me.loudness.add(bufferList, frames: Int(framesOut.pointee), mediaTime: range.start.isValid ? range.start.seconds : 0)
             })
         var tap: MTAudioProcessingTap?
         let err = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PreEffects, &tap)

@@ -110,17 +110,46 @@ struct AudioStudioView: View {
 struct MasterBadge: View {
     @ObservedObject var session: ProjectSession
     var body: some View {
-        HStack(spacing: 8) {
-            Text("MASTER").font(.caption2.monospaced()).foregroundStyle(Theme.secondary)
-            if session.project.normalizeLoudness {
-                Text("−16 LUFS audio · −14 video").font(.caption.monospacedDigit())
-                Text("al exportar").font(.caption2).foregroundStyle(Theme.secondary)
-            } else {
-                Text("sin ajuste de sonoridad").font(.caption).foregroundStyle(.orange)
+        TimelineView(.periodic(from: .now, by: 0.2)) { _ in
+            let r = session.built?.loudness?.read()
+            HStack(spacing: 10) {
+                Text("MASTER").font(.caption2.monospaced()).foregroundStyle(Theme.secondary)
+                if let r {
+                    LoudnessBar(lufs: r.momentary, target: -16)
+                    Text(String(format: "%.1f", r.momentary)).font(.callout.monospacedDigit())
+                    Text("LUFS").font(.caption2).foregroundStyle(Theme.secondary)
+                    if let i = r.integrated {
+                        Text(String(format: "int. %.1f", i)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                    }
+                } else {
+                    Text("— LUFS").font(.callout.monospacedDigit()).foregroundStyle(Theme.secondary)
+                }
+                Text(session.project.normalizeLoudness ? "→ −16 audio · −14 video al exportar" : "sin ajuste al exportar")
+                    .font(.caption2).foregroundStyle(session.project.normalizeLoudness ? Theme.secondary : .orange)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+            .help("Sonoridad de la mezcla mientras suena (estimada sumando las pistas con su volumen, con filtro K). La medida exacta se hace al exportar.")
+        }
+    }
+}
+
+struct LoudnessBar: View {
+    let lufs: Double
+    let target: Double
+    var body: some View {
+        GeometryReader { g in
+            let frac = max(0, min(1, (lufs + 40) / 40))         // −40 … 0 LUFS
+            let tf = max(0, min(1, (target + 40) / 40))
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3).fill(Color.black.opacity(0.35))
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(abs(lufs - target) < 1.5 ? Theme.good : (lufs > target ? Theme.accent : Theme.secondary))
+                    .frame(width: g.size.width * frac)
+                Rectangle().fill(Color.white).frame(width: 1).offset(x: g.size.width * tf)
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+        .frame(width: 110, height: 8)
     }
 }
 
@@ -263,7 +292,7 @@ struct MasterStrip: View {
             Text("−16 LUFS para Spotify y Apple · −14 para YouTube y redes. Se mide de verdad (EBU R128) al exportar.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Text("Medidor de LUFS en vivo y plugins AU de terceros: próximas etapas.")
+            Text("El medidor de arriba estima la sonoridad mientras suena. Plugins AU de terceros: próxima etapa.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
