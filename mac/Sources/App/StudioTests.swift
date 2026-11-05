@@ -309,9 +309,15 @@ enum StudioTests {
             let size = pdf.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int } ?? 0
             check(pdf?.lastPathComponent == "episodio.sonoridad.pdf" && size > 2000, "escribe episodio.sonoridad.pdf (\(size) bytes)")
             if FFmpeg.isAvailable {
-                let tone = dir.appendingPathComponent("tono.m4a")
+                let tone = dir.appendingPathComponent("tono.caf")
+                let sr = 48_000.0
+                if let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1), let f = try? AVAudioFile(forWriting: tone, settings: fmt.settings),
+                   let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(sr * 6)) {
+                    b.frameLength = AVAudioFrameCount(sr * 6)
+                    for i in 0..<Int(b.frameLength) { b.floatChannelData![0][i] = Float(0.1 * sin(2 * .pi * 1000 * Double(i) / sr)) }
+                    try? f.write(from: b)
+                }
                 do {
-                    _ = try await FFmpeg.run(["-f", "lavfi", "-i", "sine=frequency=1000:duration=6", "-af", "volume=-20dB", "-c:a", "aac", "-b:a", "128k", tone.path])
                     if let r = await LoudnessReport.measure(tone) {
                         check(abs(r.integrated + 23) < 0.5 && abs(r.truePeak + 20) < 0.7 && r.duration > 5.5, String(format: "mide el archivo real: %.1f LUFS, pico %.1f dBTP, %.1f s", r.integrated, r.truePeak, r.duration))
                     } else { check(false, "no midió el archivo") }
