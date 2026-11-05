@@ -61,6 +61,15 @@ final class PreModel: ObservableObject {
         episodes = try await api.preEpisodes(slug)
     }
 
+    /// Crea el podcast en prePod y lo deja seleccionado.
+    func createPodcast(name: String) async throws {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        let newSlug = try await api.createPrePodcast(name: n)
+        podcasts = try await api.prePodcasts()
+        select(newSlug)
+    }
+
     func select(_ s: String) {
         slug = s
         open = nil
@@ -177,6 +186,9 @@ struct PreHomeView: View {
     @StateObject private var model: PreModel
     @State private var newTitle = ""
     @State private var creating = false
+    @State private var newPodcastName = ""
+    @State private var creatingPodcast = false
+    @State private var podcastBusy = false
     @State private var templates: [ShowTemplate] = []
     @State private var templateId = -1          // -1 = la de por defecto, 0 = sin plantilla
     @AppStorage("preVistaCalendario") private var showCalendar = false
@@ -221,11 +233,26 @@ struct PreHomeView: View {
 
             if model.podcasts.isEmpty {
                 Card {
-                    if let err = model.error {
-                        Label(err, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    if !PrePodClient.isConfigured {
+                        Label(model.error ?? "Conecta tu cuenta en Ajustes para ver tus podcasts.", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                         SettingsLink { Text("Abrir Ajustes") }
-                    } else {
+                    } else if model.loading {
                         ProgressView("Cargando tus podcasts…")
+                    } else {
+                        if let err = model.error {
+                            Label(err, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        }
+                        Text("Todavía no tienes ningún podcast").font(.headline)
+                        Text("Ponle nombre y queda creado en prePod; después puedes cambiar el logo, los colores y lo demás en «Configurar podcast».")
+                            .font(.callout).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            TextField("Nombre del podcast", text: $newPodcastName)
+                                .textFieldStyle(.roundedBorder).frame(maxWidth: 360)
+                                .onSubmit(createPodcastNow)
+                            Button("Crear podcast", action: createPodcastNow)
+                                .buttonStyle(.borderedProminent)
+                                .disabled(podcastBusy || newPodcastName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
                     }
                 }
             } else {
@@ -285,6 +312,8 @@ struct PreHomeView: View {
                             if p.slug == model.slug { Label(p.name, systemImage: "checkmark") } else { Text(p.name) }
                         }
                     }
+                    Divider()
+                    Button { newPodcastName = ""; creatingPodcast = true } label: { Label("Nuevo podcast…", systemImage: "plus") }
                 } label: {
                     HStack(spacing: 6) {
                         Text(model.podcast?.name ?? "Elige un podcast").font(.system(size: 26, weight: .bold, design: .rounded))
@@ -295,7 +324,24 @@ struct PreHomeView: View {
                     .foregroundStyle(.white)
                 }
                 .menuStyle(.button).buttonStyle(.plain).fixedSize()
-                .help("Cambiar de podcast")
+                .help("Cambiar de podcast o crear uno nuevo")
+                .popover(isPresented: $creatingPodcast, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Nuevo podcast").font(.title3.bold())
+                        TextField("Nombre del podcast", text: $newPodcastName)
+                            .textFieldStyle(.roundedBorder).frame(width: 320)
+                            .onSubmit(createPodcastNow)
+                        Text("Se crea en prePod con tu usuario como dueño. El logo, los colores y la página los pones después en «Configurar podcast».")
+                            .font(.caption).foregroundStyle(Theme.secondary).frame(width: 320, alignment: .leading)
+                        HStack {
+                            Spacer()
+                            Button("Cancelar") { creatingPodcast = false }
+                            Button("Crear", action: createPodcastNow).buttonStyle(.borderedProminent)
+                                .disabled(podcastBusy || newPodcastName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                    }
+                    .padding(18)
+                }
                 Text(summary).font(.callout).foregroundStyle(Theme.secondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
@@ -320,6 +366,20 @@ struct PreHomeView: View {
         var parts = ["\(active) en preparación", "\(published) publicados"]
         if let t = model.podcast?.tagline, !t.isEmpty, t.count <= 90 { parts.insert(t, at: 0) }
         return parts.joined(separator: " · ")
+    }
+
+    private func createPodcastNow() {
+        let name = newPodcastName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !podcastBusy else { return }
+        podcastBusy = true
+        Task {
+            defer { podcastBusy = false }
+            do {
+                try await model.createPodcast(name: name)
+                creatingPodcast = false
+                newPodcastName = ""
+            } catch { model.error = error.localizedDescription }
+        }
     }
 
     private var createPopover: some View {

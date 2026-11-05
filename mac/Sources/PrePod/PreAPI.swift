@@ -132,6 +132,15 @@ extension PrePodClient {
         try decode([PrePodcast].self, await send("GET", "/api/podcasts"))
     }
 
+    /// Crea un podcast nuevo en prePod (igual que «+ Nuevo podcast» en la web) y devuelve su slug.
+    func createPrePodcast(name: String) async throws -> String {
+        let d = try await send("POST", "/api/podcasts", json: ["name": name])
+        guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any], let slug = o["slug"] as? String else {
+            throw NSError(domain: "prePod", code: 1, userInfo: [NSLocalizedDescriptionKey: "prePod no devolvió el podcast creado"])
+        }
+        return slug
+    }
+
     // Episodios
     func preEpisodes(_ slug: String) async throws -> [PreEpisode] {
         try decode([PreEpisode].self, await send("GET", ep(slug) + "/episodes"))
