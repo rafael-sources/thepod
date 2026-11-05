@@ -711,10 +711,11 @@ enum StudioTests {
         check(endSpan.r > 0.25 && endSpan.g > 0.25, "al terminar un tramo a mano también se funde hacia el automático")
         s.cameraSpans = []
         s.switchTransition = Transition(kind: .zoom, duration: 0.4)
-        // Zoom suave: un cuadro de 1 = rojo con un borde azul de 40 px; justo al cambiar, la cámara 2 (verde con borde) se ve agrandada: el borde queda fuera
-        let green = solid(0, 1, 0, CGSize(width: 560, height: 280)).transformed(by: .init(translationX: 40, y: 40)).composited(over: solid(0, 0, 1, size))
-        let zoomed = mean(s.render(frames: [1: frames[1]!, 2: green], time: 5.02), CGRect(x: 0, y: 0.45, width: 0.03, height: 0.1), size: size)
-        let settled = mean(s.render(frames: [1: frames[1]!, 2: green], time: 6), CGRect(x: 0, y: 0.45, width: 0.03, height: 0.1), size: size)
+        // Zoom suave: la cámara 2 es verde con un borde azul de 8 px; justo al cambiar entra un 4 % más grande y el borde queda fuera del cuadro
+        let green = solid(0, 1, 0, CGSize(width: 624, height: 344)).transformed(by: .init(translationX: 8, y: 8)).composited(over: solid(0, 0, 1, size))
+        let edge = CGRect(x: 0, y: 0.45, width: 0.01, height: 0.1)   // los primeros 6 px: borde azul, salvo con el zoom (sale 12 px fuera)
+        let zoomed = mean(s.render(frames: [1: frames[1]!, 2: green], time: 5.02), edge, size: size)
+        let settled = mean(s.render(frames: [1: frames[1]!, 2: green], time: 6), edge, size: size)
         check(zoomed.b < 0.5 && settled.b > 0.8, String(format: "zoom suave: al cambiar entra más grande (borde azul fuera: %.2f) y luego se asienta (%.2f)", zoomed.b, settled.b))
         print(ok ? "OK multicámara" : "FAIL multicámara")
         return ok
