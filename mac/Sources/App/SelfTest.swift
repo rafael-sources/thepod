@@ -368,6 +368,17 @@ enum SelfTest {
                 }
                 session.step = .fix
                 await shoot(ProjectView(session: session), "limpiar-sonido", w: 1440, h: 900)
+                // Exportar con la cola a medias: uno listo, uno corriendo, uno esperando y uno fallido
+                session.exportQueueRunner = { _ in try await Task.sleep(nanoseconds: 3_000_000_000); return [] }
+                session.exportQueue = [
+                    { var j = ExportJob(kind: .format(.landscape)); j.status = .done([URL(fileURLWithPath: "/tmp/episodio.mp4")]); return j }(),
+                    { var j = ExportJob(kind: .stems); j.status = .failed("No hay pistas por separado en este episodio"); return j }(),
+                    { var j = ExportJob(kind: .format(.audio)); j.status = .running; return j }(),
+                    ExportJob(kind: .reels),
+                ]
+                session.job = JobState(title: "En cola: Solo audio (MP3)", detail: "1 más esperando", fraction: 0.42)
+                session.step = .export
+                await shoot(ProjectView(session: session), "exportar", w: 1440, h: 900)
             } catch { print("ERROR \(error.localizedDescription)") }
             fflush(stdout); exit(0)
         }
