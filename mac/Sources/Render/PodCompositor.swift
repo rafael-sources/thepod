@@ -100,6 +100,13 @@ final class RenderScene: @unchecked Sendable {
         let y = min(max(my, (1 - CGFloat(cy)) * H - h / 2), max(0, H - h - my))
         return CGRect(x: x, y: y, width: w, height: h)
     }
+    /// Punch-in dinámico: factor de acercamiento por persona cada 100 ms (tiempo del contenido). Vacío = apagado.
+    var punchIn: [Int: [Float]] = [:]
+    func punch(_ lane: Int, at t: Double) -> CGFloat {
+        guard let arr = punchIn[lane], !arr.isEmpty else { return 1 }
+        let i = max(0, min(arr.count - 1, Int(t / 0.1)))
+        return CGFloat(arr[i])
+    }
     /// Studio · Video: tramos de cámara fijados a mano (tiempo del contenido del video final).
     struct CameraSpan { let start: Double; let end: Double; let lane: Int?; let template: LayoutTemplate? }
     var cameraSpans: [CameraSpan] = []
@@ -433,10 +440,13 @@ final class RenderScene: @unchecked Sendable {
                     frame = frame.transformed(by: flip)
                     cutout = cutout?.transformed(by: flip)
                 }
-                var panel = fill(frame, into: rect, cropX: cropX[lane] ?? 0.5)
+                // Punch-in: la persona se acerca un poco cuando su voz sube; se llena un recuadro algo mayor y se recorta
+                let z = punch(lane, at: t)
+                let zRect = z > 1.001 ? rect.insetBy(dx: -rect.width * (z - 1) / 2, dy: -rect.height * (z - 1) / 2) : rect
+                var panel = fill(frame, into: zRect, cropX: cropX[lane] ?? 0.5).cropped(to: rect)
                 if let cutout, let bg = background {
                     let behind = fill(bg, into: full, cropX: 0.5).cropped(to: rect)
-                    let m = fill(cutout, into: rect, cropX: cropX[lane] ?? 0.5)
+                    let m = fill(cutout, into: zRect, cropX: cropX[lane] ?? 0.5).cropped(to: rect)
                     panel = panel.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: behind, kCIInputMaskImageKey: m]).cropped(to: rect)
                 }
                 if border {

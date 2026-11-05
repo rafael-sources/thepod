@@ -78,8 +78,8 @@ enum LoudnessReport {
             text(value, size: 26, bold: true, at: y, x: x)
             text(label, size: 9, color: NSColor(white: 0.45, alpha: 1), at: y - 14, x: x)
         }
-        big(String(format: "%.1f LUFS", m.integrated), "sonoridad integrada (BS.1770-4, con compuerta)", x: 56)
-        big(String(format: "%.1f dBTP", m.truePeak), "pico real (sobremuestreo ×4)", x: 236)
+        big(String(format: "%.1f LUFS", m.integrated), "sonoridad integrada (BS.1770-4)", x: 56)
+        big(String(format: "%.1f dBTP", m.truePeak), "pico real", x: 236)
         big(String(format: "%.1f LU", m.range), "rango de sonoridad (LRA)", x: 416)
         y -= 50
         let mins = Int(m.duration / 60), secs = Int(m.duration) % 60

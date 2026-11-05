@@ -774,12 +774,14 @@ struct LayoutOptions: Codable, Equatable {
     var soloStudio: Bool = false        // Quien habla: un recuadro con marco sobre el fondo del podcast (sin recortar el video)
     var gridSpeakerBig: Bool = false    // Cuadrícula: quien habla en grande arriba, los demás en cuadritos abajo
     var pipFollowSpeaker: Bool = true   // Ventanita: en grande quien habla (si no, siempre la primera persona)
+    var punchIn: Bool = false           // acercamiento sutil a cada persona cuando sube la energía de su voz
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         soloStudio = try c.decodeIfPresent(Bool.self, forKey: .soloStudio) ?? false
         gridSpeakerBig = try c.decodeIfPresent(Bool.self, forKey: .gridSpeakerBig) ?? false
         pipFollowSpeaker = try c.decodeIfPresent(Bool.self, forKey: .pipFollowSpeaker) ?? true
+        punchIn = try c.decodeIfPresent(Bool.self, forKey: .punchIn) ?? false
     }
 }
 

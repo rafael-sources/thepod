@@ -1514,6 +1514,13 @@ struct LookStep: View {
         let l = session.project.layout
         let hasBackground = session.project.backgroundFile != nil
         VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: $session.project.layoutOptions.punchIn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Acercamiento al hablar")
+                    Text("Cada cámara se acerca un poco (hasta un 4,5 %) cuando sube la energía de la voz de esa persona y vuelve suave. Da vida a cámaras fijas sin tocar nada.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if l == .auto || l == .solo {
                 Toggle("Con marco de estudio (el fondo del podcast detrás)", isOn: $session.project.layoutOptions.soloStudio)
                 if session.project.layoutOptions.soloStudio && !hasBackground {

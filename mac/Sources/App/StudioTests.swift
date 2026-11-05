@@ -328,6 +328,37 @@ enum StudioTests {
         return ok
     }
 
+    /// Punch-in dinámico: la curva sube cuando la persona habla fuerte y baja despacio; en el cuadro, el borde del
+    /// video queda fuera cuando hay acercamiento.
+    static func punchInTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        // 10 s: 4 s callado (−70), 2 s hablando normal (−30), 1 s fuerte (−22), 3 s callado
+        var e: [Float] = []
+        e += [Float](repeating: -70, count: 40); e += [Float](repeating: -30, count: 20); e += [Float](repeating: -22, count: 10); e += [Float](repeating: -70, count: 30)
+        let keep = [EditEngine.Span(start: 0, end: 10)]
+        let c = AudioAnalysis.punchInCurve(energy: e, keep: keep)
+        check(c.count >= 100 && c[20] < 1.002, "callado: sin acercamiento (\(String(format: "%.3f", c[20])))")
+        check(c[69] > 1.03 && c[69] <= 1.046, "hablando fuerte: cerca del tope (\(String(format: "%.3f", c[69])))")
+        check(c[72] > c[80] && c[80] > c[95] && c[95] < 1.01, "al callarse baja despacio (\(String(format: "%.3f → %.3f → %.3f", c[72], c[80], c[95])))")
+        let cut = AudioAnalysis.punchInCurve(energy: e, keep: [EditEngine.Span(start: 6, end: 10)])
+        check(cut.count >= 40 && cut[5] > 1.03, "con cortes, la curva va en tiempo del video final (\(String(format: "%.3f", cut.count > 5 ? cut[5] : -1)))")
+        // Cuadro: persona roja con una franja azul a la izquierda (8 %); con acercamiento la franja se recorta
+        let size = CGSize(width: 640, height: 360)
+        var style = CaptionStyle(); style.enabled = false
+        let scene = RenderScene(renderSize: size, format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
+                                switches: [SpeakerSwitch(time: 0, lane: 1)], names: [:], showNames: false, cropX: [:], logo: nil, background: nil, title: "p")
+        let red = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 1280, height: 720))
+        let stripe = CIImage(color: CIColor(red: 0, green: 0, blue: 1)).cropped(to: CGRect(x: 0, y: 0, width: 102, height: 720))
+        let frame = stripe.composited(over: red)
+        let before = mean(scene.render(frames: [1: frame], time: 1), CGRect(x: 0.05, y: 0.4, width: 0.025, height: 0.2), size: size)
+        scene.punchIn = [1: [Float](repeating: 1.1, count: 100)]
+        let after = mean(scene.render(frames: [1: frame], time: 1), CGRect(x: 0.05, y: 0.4, width: 0.025, height: 0.2), size: size)
+        check(before.b > 0.7 && after.r > 0.7, "con acercamiento del 10 %, lo que estaba en el borde queda fuera del cuadro")
+        print(ok ? "OK punch-in dinámico" : "FAIL punch-in")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

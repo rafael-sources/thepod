@@ -157,6 +157,36 @@ enum AudioAnalysis {
         return cleaned.isEmpty ? [SpeakerSwitch(time: 0, lane: first)] : cleaned
     }
 
+    /// Punch-in dinámico: cuánto acercarse a una persona en cada 100 ms del video final (1 = nada … 1,045 = tope).
+    /// Sale de la energía de su voz: por encima de su nivel típico de habla (percentil 90) menos 12 dB va subiendo,
+    /// con subida rápida (0,25 s) y bajada lenta (0,8 s) para que no tiemble.
+    static func punchInCurve(energy: [Float], keep: [EditEngine.Span], amount: Double = 0.045) -> [Float] {
+        guard !energy.isEmpty else { return [] }
+        let talking = energy.filter { $0 > -60 }.sorted()
+        guard talking.count > 10 else { return [] }
+        let level = Double(talking[Int(Double(talking.count - 1) * 0.9)])
+        let hop = EnergyMap.hop
+        // fuerza 0…1 en tiempo del episodio, suavizada hacia delante
+        var smooth = [Float](repeating: 0, count: energy.count)
+        var v = 0.0
+        let aAtt = 1 - exp(-hop / 0.25), aRel = 1 - exp(-hop / 0.8)
+        for i in 0..<energy.count {
+            let raw = max(0, min(1, (Double(energy[i]) - (level - 12)) / 12))
+            v += (raw > v ? aAtt : aRel) * (raw - v)
+            smooth[i] = Float(v)
+        }
+        // al tiempo del video final
+        let outDur = EditEngine.outputDuration(keep)
+        let n = Int(outDur / hop) + 1
+        var out = [Float](repeating: 1, count: n)
+        for i in 0..<n {
+            let t = EditEngine.toTimeline(Double(i) * hop, keep: keep)
+            let j = Int(t / hop)
+            if j >= 0, j < smooth.count { out[i] = 1 + Float(amount) * smooth[j] }
+        }
+        return out
+    }
+
     /// Los cambios de cámara que ve la pantalla (Studio · Video): con «sigue a quien habla» apagado, una sola
     /// cámara (la plantilla manda); si no, los mismos cambios pero sin cambiar antes de `minHold` segundos.
     static func cameraSwitches(_ switches: [SpeakerSwitch], settings: StudioVideoSettings) -> [SpeakerSwitch] {
