@@ -709,7 +709,7 @@ final class ProjectSession: ObservableObject {
         if wasEmpty { project.wordsSynced = true }
     }
 
-    private func ensureEnergy() async throws {
+    func ensureEnergy() async throws {
         guard energy == nil else { return }
         report("Analizando quién habla", "", 0)
         energy = try await AudioAnalysis.computeEnergy(project: project) { [weak self] f in
