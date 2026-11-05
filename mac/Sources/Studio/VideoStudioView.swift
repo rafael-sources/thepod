@@ -49,6 +49,13 @@ struct VideoStudioView: View {
                 }
                 .pickerStyle(.segmented).labelsHidden().frame(width: 280)
                 Spacer()
+                if let ps = session.proxyStatus {
+                    ProgressView().controlSize(.mini)
+                    Text(ps).font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1)
+                }
+                Toggle("Proxys", isOn: Binding(get: { ProxyStore.enabled }, set: { session.setProxies($0) }))
+                    .toggleStyle(.switch).controlSize(.small).font(.caption)
+                    .help("Copias livianas de las grabaciones de más de 1080p para que la vista previa vaya fluida. El export usa siempre los originales.")
                 Toggle("Las cámaras siguen a quien habla", isOn: $session.project.studioVideo.followSpeaker)
                     .toggleStyle(.switch).controlSize(.small).font(.caption)
                     .help("Apagado: la plantilla del proyecto queda fija; solo cambian los tramos que fijes a mano")

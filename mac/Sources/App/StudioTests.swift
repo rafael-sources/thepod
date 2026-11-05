@@ -827,6 +827,56 @@ enum StudioTests {
         return ok
     }
 
+    /// Proxys: solo las grabaciones de más de 1080p lo piden; el proxy mide 960 de ancho, dura lo mismo, y la vista
+    /// previa lo usa mientras el export va al original; apagados, no se usan.
+    static func proxyTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        guard FFmpeg.isAvailable else { print("  (sin ffmpeg: no se prueban los proxys)"); return true }
+        let slug = "proxy-prueba-\(Int(Date().timeIntervalSince1970))"
+        let folder = ProjectStore.folder(for: slug)
+        try? FileManager.default.createDirectory(at: folder.appendingPathComponent("media"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let wasOn = ProxyStore.enabled
+        defer { ProxyStore.enabled = wasOn }
+        do {
+            let big = folder.appendingPathComponent("media/grande.mp4"), small = folder.appendingPathComponent("media/chico.mp4")
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=red:s=2560x1440:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", big.path])
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=blue:s=1280x720:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", small.path])
+            check(await ProxyStore.needsProxy(big) && !(await ProxyStore.needsProxy(small)), "pide proxy el de 1440p, no el de 720p")
+            var p = Project(id: slug, name: "Proxy", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
+            p.media = [SourceMedia(id: 1, originalName: "grande.mp4", file: "media/grande.mp4", kind: .video, duration: 3),
+                       SourceMedia(id: 2, originalName: "chico.mp4", file: "media/chico.mp4", kind: .video, duration: 3)]
+            p.lanes = [Lane(id: 1, name: "Ana", participantId: nil, clips: [LaneClip(mediaId: 1, srcIn: 0, srcOut: 3)])]
+            let pend = await ProxyStore.pending(project: p)
+            check(pend.map(\.id) == [1], "pendiente solo el grande (\(pend.map(\.id)))")
+            try await ProxyStore.make(p.media[0], project: slug)
+            check(ProxyStore.exists(mediaId: 1, project: slug), "el proxy queda en la caché del proyecto")
+            let pa = AVURLAsset(url: ProxyStore.url(mediaId: 1, project: slug))
+            let size = try await pa.loadTracks(withMediaType: .video).first!.load(.naturalSize)
+            let dur = try await pa.load(.duration).seconds
+            check(size.width <= 960 && abs(dur - 3) < 0.15, String(format: "mide %.0f px de ancho y dura %.2f s", size.width, dur))
+            check(await ProxyStore.pending(project: p).isEmpty, "ya no queda nada pendiente")
+            // La vista previa usa el proxy; el export, el original
+            ProxyStore.enabled = true
+            let prev = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
+            let exp = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: false)
+            func width(_ b: BuiltComposition) async -> Double {
+                guard let t = try? await b.asset.loadTracks(withMediaType: .video).first, let s = try? await t.load(.naturalSize) else { return 0 }
+                return s.width
+            }
+            let wp = await width(prev), we = await width(exp)
+            check(wp <= 960 && we >= 2560, String(format: "vista previa con proxy (%.0f px), export con el original (%.0f px)", wp, we))
+            ProxyStore.enabled = false
+            let off = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
+            check(await width(off) >= 2560, "con los proxys apagados la vista previa usa el original")
+            ProxyStore.removeAll(project: slug)
+            check(!ProxyStore.exists(mediaId: 1, project: slug), "borrar los proxys los quita")
+        } catch { check(false, "proxys: \(error.localizedDescription)") }
+        print(ok ? "OK proxys" : "FAIL proxys")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {

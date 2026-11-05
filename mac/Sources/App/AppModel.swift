@@ -329,6 +329,9 @@ final class ProjectSession: ObservableObject {
     private var queueJobTask: Task<[URL], Error>?
     /// Cola de exportación (feature 15): se procesa en segundo plano, de a uno.
     @Published var exportQueue: [ExportJob] = []
+    /// Proxys (copias livianas para la vista previa): qué se está preparando, o nil
+    @Published var proxyStatus: String?
+    private var proxyTask: Task<Void, Never>?
     var exportQueueTask: Task<Void, Never>?
     /// Solo para pruebas: reemplaza la exportación real por una función que simula cada trabajo.
     var exportQueueRunner: ((ExportJob.Kind) async throws -> [URL])?
@@ -344,6 +347,7 @@ final class ProjectSession: ObservableObject {
         refreshExports()
         vigilarPausa()
         schedulePreview(immediate: true)
+        prepareProxies()
         // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
         if project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty { fetchBranding() }
         // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
@@ -976,6 +980,38 @@ final class ProjectSession: ObservableObject {
     /// ¿El ecualizador de esta persona ya está aplicado tal como está configurado? Con la cadena en
     /// tiempo real, siempre: se oye al instante.
     func eqApplied(laneId: Int) -> Bool { true }
+
+    // MARK: Proxys
+
+    /// Prepara en segundo plano, con prioridad baja, los proxys de las grabaciones grandes que no lo tengan; al
+    /// terminar cada uno, la vista previa se rearma con él. No bloquea nada y no toca el export.
+    func prepareProxies() {
+        guard ProxyStore.enabled, proxyTask == nil else { return }
+        let p = project
+        proxyTask = Task(priority: .utility) { [weak self] in
+            defer { Task { @MainActor in self?.proxyTask = nil } }
+            let pending = await ProxyStore.pending(project: p)
+            guard !pending.isEmpty else { return }
+            for (i, m) in pending.enumerated() {
+                if Task.isCancelled { return }
+                await MainActor.run { self?.proxyStatus = "Preparando proxy \(i + 1) de \(pending.count): \(m.originalName)" }
+                do {
+                    try await ProxyStore.make(m, project: p.id)
+                    await MainActor.run { self?.schedulePreview(immediate: true) }
+                } catch {
+                    await MainActor.run { self?.note = "No se pudo preparar el proxy de \(m.originalName): \(error.localizedDescription)" }
+                }
+            }
+            await MainActor.run { self?.proxyStatus = nil }
+        }
+    }
+
+    /// Encender o apagar los proxys (preferencia de la app) y rearmar la vista previa.
+    func setProxies(_ on: Bool) {
+        ProxyStore.enabled = on
+        if on { prepareProxies() } else { proxyTask?.cancel(); proxyTask = nil; proxyStatus = nil }
+        schedulePreview(immediate: true)
+    }
 
     // MARK: Igualar color de las cámaras
 

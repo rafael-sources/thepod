@@ -65,7 +65,13 @@ enum CompositionBuilder {
         var assets: [String: AVURLAsset] = [:]
         func asset(_ rel: String) -> AVURLAsset {
             if let a = assets[rel] { return a }
-            let a = AVURLAsset(url: ProjectStore.url(rel, in: project.id), options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            var url = ProjectStore.url(rel, in: project.id)
+            // Vista previa: si hay proxy (copia liviana) de esta grabación, se usa; el export siempre va al original
+            if preview, ProxyStore.enabled, let m = project.media.first(where: { $0.file == rel && $0.hasVideo }),
+               ProxyStore.exists(mediaId: m.id, project: project.id) {
+                url = ProxyStore.url(mediaId: m.id, project: project.id)
+            }
+            let a = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
             assets[rel] = a
             return a
         }
