@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan") || CommandLine.arguments.contains("--voice-chain-test") || CommandLine.arguments.contains("--studio-snapshot") || CommandLine.arguments.contains("--video-studio-test") || CommandLine.arguments.contains("--studio-tests") || CommandLine.arguments.contains("--loudness-match-test") || CommandLine.arguments.contains("--room-tone-test")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan") || CommandLine.arguments.contains("--voice-chain-test") || CommandLine.arguments.contains("--studio-snapshot") || CommandLine.arguments.contains("--video-studio-test") || CommandLine.arguments.contains("--studio-tests") || CommandLine.arguments.contains("--loudness-match-test") || CommandLine.arguments.contains("--room-tone-test") || CommandLine.arguments.contains("--delivery-test")
     }
 
     /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
@@ -733,6 +733,7 @@ enum SelfTest {
         if args.contains("--video-studio-test") { exit(StudioTests.videoStudioTest() ? 0 : 1) }
         if args.contains("--loudness-match-test") { exit(StudioTests.loudnessMatchTest() ? 0 : 1) }
         if args.contains("--room-tone-test") { exit(StudioTests.roomToneTest() ? 0 : 1) }
+        if args.contains("--delivery-test") { Task { exit(await StudioTests.deliveryTest() ? 0 : 1) }; return }
         if args.contains("--studio-tests") {
             // Todo Studio seguido: primero video (sin archivos), luego la cadena de voz (export real)
             print("== Studio · Video =="); fflush(stdout)
@@ -741,6 +742,11 @@ enum SelfTest {
             guard StudioTests.loudnessMatchTest() else { exit(1) }
             print("== Tono de sala =="); fflush(stdout)
             guard StudioTests.roomToneTest() else { exit(1) }
+            print("== Entrega: subtítulos y capítulos =="); fflush(stdout)
+            let sem = DispatchSemaphore(value: 0); var deliveryOK = false
+            Task { deliveryOK = await StudioTests.deliveryTest(); sem.signal() }
+            while sem.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+            guard deliveryOK else { exit(1) }
             print("== Studio · Audio =="); fflush(stdout)
             voiceChainTest(); return
         }

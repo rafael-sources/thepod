@@ -125,6 +125,54 @@ enum StudioTests {
         return ok
     }
 
+    /// Entrega: subtítulos .srt/.vtt y capítulos .chapters.json junto al export; subtítulos dentro del MP4 y
+    /// transcripción dentro del MP3 (con ffmpeg).
+    static func deliveryTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        var p = Project(id: "entrega-prueba", name: "Entrega", podcastName: "Prueba", createdAt: Date(), importedFrom: "tracks")
+        p.lanes = [Lane(id: 1, name: "Ana", participantId: nil, clips: []), Lane(id: 2, name: "Beto", participantId: nil, clips: [])]
+        p.words = [Word(w: "Hola", s: 0.2, e: 0.5, lane: 1), Word(w: "a", s: 0.5, e: 0.6, lane: 1), Word(w: "todos", s: 0.6, e: 1.0, lane: 1),
+                   Word(w: "Qué", s: 3.0, e: 3.3, lane: 2), Word(w: "tal", s: 3.3, e: 3.6, lane: 2)]
+        p.transcribedLanes = [1, 2]
+        let v = Exporter.vtt(project: p)
+        check(v.hasPrefix("WEBVTT\n\n1\n00:00:00.200 --> "), "el VTT empieza con la cabecera y el primer tiempo con punto (\(v.prefix(30).replacingOccurrences(of: "\n", with: "⏎")))")
+        check(v.contains("<v Ana>") && v.contains("<v Beto>"), "el VTT dice quién habla en cada línea")
+        let srt = Exporter.srt(project: p)
+        check(srt.contains("00:00:00,200 -->") && !srt.contains("<v "), "el SRT usa coma en los tiempos y no lleva etiquetas de voz")
+        let chapters = [(time: 0.0, title: "Inicio"), (time: 61.5, title: "El tema"), (time: 125.0, title: "Cierre")]
+        let json = Exporter.chaptersJSON(chapters) ?? ""
+        check(json.contains("\"version\" : \"1.2.0\"") && json.contains("\"startTime\" : 61.5") && json.contains("\"title\" : \"El tema\""), "el JSON de capítulos sigue Podcasting 2.0")
+        check(Exporter.chaptersJSON([]) == nil, "sin capítulos no hay JSON")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("entrega-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fake = dir.appendingPathComponent("episodio.mp4")
+        let written = Exporter.writeSidecars(project: p, next: fake, chapters: chapters).map(\.lastPathComponent).sorted()
+        check(written == ["episodio.chapters.json", "episodio.srt", "episodio.vtt"], "junto al export quedan .srt, .vtt y .chapters.json (\(written))")
+        // Con ffmpeg: un MP4 de 5 s con subtítulos dentro y un MP3 con la transcripción
+        if FFmpeg.isAvailable {
+            let mp4 = dir.appendingPathComponent("base.mp4")
+            do {
+                _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=black:s=320x180:d=5", "-f", "lavfi", "-i", "sine=frequency=440:duration=5",
+                                          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", mp4.path])
+                let srtURL = dir.appendingPathComponent("s.srt"); try Exporter.srt(project: p).write(to: srtURL, atomically: true, encoding: .utf8)
+                let with = dir.appendingPathComponent("con-subs.mp4")
+                _ = try await FFmpeg.run(["-i", mp4.path, "-i", srtURL.path, "-map", "0", "-map", "1", "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=spa", with.path])
+                let tracks = try await AVURLAsset(url: with).load(.tracks)
+                check(tracks.contains { $0.mediaType == .subtitle || $0.mediaType == .text }, "el MP4 lleva una pista de subtítulos (\(tracks.map { $0.mediaType.rawValue }))")
+                let mp3 = dir.appendingPathComponent("con-letra.mp3")
+                _ = try await FFmpeg.run(["-i", mp4.path, "-vn", "-c:a", "libmp3lame", "-b:a", "64k", "-id3v2_version", "3", "-metadata", "lyrics=" + Exporter.transcriptText(project: p), mp3.path])
+                let meta = try await AVURLAsset(url: mp3).load(.metadata)
+                let lyr = meta.first { ($0.identifier?.rawValue ?? "").lowercased().contains("lyric") || ($0.key as? String ?? "").uppercased().contains("USLT") }
+                let text = (try? await lyr?.load(.stringValue)) ?? nil
+                check(text?.contains("Hola a todos") == true, "el MP3 lleva la transcripción dentro (\(lyr?.identifier?.rawValue ?? "sin etiqueta"))")
+            } catch { check(false, "ffmpeg: \(error.localizedDescription)") }
+        } else { print("  (sin ffmpeg: no se prueba la pista de subtítulos ni la letra)") }
+        print(ok ? "OK entrega: subtítulos y capítulos junto al archivo y dentro de él" : "FAIL entrega")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]
