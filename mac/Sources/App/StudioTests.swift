@@ -509,6 +509,13 @@ enum StudioTests {
         let talking = mean(scene.render(frames: [:], time: 3), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
         let silent = mean(scene.render(frames: [:], time: 1), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
         check(talking.r > quiet.r + 0.3 && talking.r > silent.r + 0.2, String(format: "las barras del centro crecen al hablar (%.2f → %.2f; callado %.2f)", quiet.r, talking.r, silent.r))
+        if let dir = ProcessInfo.processInfo.environment["THEPOD_SHOT"] {
+            let big = RenderScene(renderSize: CGSize(width: 1280, height: 720), format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
+                                  switches: [SpeakerSwitch(time: 0, lane: 1)], names: [1: ("Ana María", nil)], showNames: false, cropX: [:], logo: nil, background: nil, title: "p")
+            big.audiogram = [1: c]
+            let img = big.render(frames: [:], time: 3.2)
+            try? ctx.writePNGRepresentation(of: img, to: URL(fileURLWithPath: dir).appendingPathComponent("audiograma.png"), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        }
         print(ok ? "OK audiograma" : "FAIL audiograma")
         return ok
     }
