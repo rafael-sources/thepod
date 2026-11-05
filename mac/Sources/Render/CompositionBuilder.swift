@@ -116,16 +116,24 @@ enum CompositionBuilder {
                 p.setVolumeRamp(fromStartVolume: va, toEndVolume: vb, timeRange: CMTimeRange(start: cm(a), duration: cm(b - a)))
             }
         }
-        func fadeFactor(_ t: Double, span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double) -> Double {
+        /// `curved`: fades de igual potencia (seno), para que dos clips cruzados no bajen de volumen en el medio.
+        func fadeFactor(_ t: Double, span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double, curved: Bool = false) -> Double {
             let len = span.end - span.start
             let fi = min(fadeIn, len / 2), fo = min(fadeOut, len / 2)
             var f = 1.0
-            if fi > 0.01 { f *= min(1, max(0, (t - span.start) / fi)) }
-            if fo > 0.01 { f *= min(1, max(0, (span.end - t) / fo)) }
+            let shape: (Double) -> Double = curved ? { sin($0 * .pi / 2) } : { $0 }
+            if fi > 0.01 { f *= shape(min(1, max(0, (t - span.start) / fi))) }
+            if fo > 0.01 { f *= shape(min(1, max(0, (span.end - t) / fo))) }
             return f
         }
-        func fadePoints(_ span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double) -> [Double] {
-            [span.start + min(fadeIn, (span.end - span.start) / 2), span.end - min(fadeOut, (span.end - span.start) / 2)]
+        func fadePoints(_ span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double, curved: Bool = false) -> [Double] {
+            let fi = min(fadeIn, (span.end - span.start) / 2), fo = min(fadeOut, (span.end - span.start) / 2)
+            var pts = [span.start + fi, span.end - fo]
+            if curved {
+                // La curva se aproxima con rampas de un cuarto
+                for q in 1..<4 { pts.append(span.start + fi * Double(q) / 4); pts.append(span.end - fo * Double(q) / 4) }
+            }
+            return pts
         }
 
         // Quién habla (en tiempo de salida): lo usa el diseño y la puerta por persona
@@ -313,8 +321,8 @@ enum CompositionBuilder {
             let cutAtEnd = clip.loop || clip.tlStart + len > project.duration + 0.05
             let fadeOut = (cutAtEnd && clip.fadeOut == 0) ? 1.5 : clip.fadeOut
             applyEnvelope(p, base: clip.volume, span: span,
-                          points: fadePoints(span, fadeIn: clip.fadeIn, fadeOut: fadeOut) + (duck ? duckPoints : [])) { t in
-                var f = fadeFactor(t, span: span, fadeIn: clip.fadeIn, fadeOut: fadeOut)
+                          points: fadePoints(span, fadeIn: clip.fadeIn, fadeOut: fadeOut, curved: clip.crossfade) + (duck ? duckPoints : [])) { t in
+                var f = fadeFactor(t, span: span, fadeIn: clip.fadeIn, fadeOut: fadeOut, curved: clip.crossfade)
                 if duck, inSpeech(t) { f *= low }
                 return f
             }

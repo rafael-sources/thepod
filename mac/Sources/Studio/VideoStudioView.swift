@@ -71,6 +71,8 @@ struct VideoInspector: View {
                     overlayInspector(i)
                 } else if case .broll(let id) = session.selectedTrack, let i = session.project.brolls.firstIndex(where: { $0.id == id }) {
                     brollInspector(i)
+                } else if case .sound(let id) = session.selectedTrack, let i = session.project.audioLane.firstIndex(where: { $0.id == id }) {
+                    soundInspector(i)
                 } else {
                     camerasInspector
                 }
@@ -192,6 +194,33 @@ struct VideoInspector: View {
             }
             Spacer(minLength: 8)
             Text("La transición actúa sobre este clip al entrar; lo de abajo (cámaras o el b-roll anterior) sigue hasta que este lo tapa.")
+                .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // Clip de música o efecto: fades, cruce con el vecino
+    private func soundInspector(_ i: Int) -> some View {
+        let c = session.project.audioLane[i]
+        let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
+        let next = session.project.audioLane.filter { $0.id != c.id && $0.tlStart >= c.tlStart }.min { $0.tlStart < $1.tlStart }
+        return VStack(alignment: .leading, spacing: 10) {
+            header(name, "\(EditEngine.clock(c.tlStart)) → \(EditEngine.clock(c.tlEnd))", color: VideoTracks.musicColor)
+            HStack { Text("Entra en").font(.caption); Slider(value: $session.project.audioLane[i].fadeIn, in: 0...5); Text(String(format: "%.1f s", c.fadeIn)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
+            HStack { Text("Sale en").font(.caption); Slider(value: $session.project.audioLane[i].fadeOut, in: 0...5); Text(String(format: "%.1f s", c.fadeOut)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
+            Toggle("Fades de igual potencia (para cruzar)", isOn: $session.project.audioLane[i].crossfade).font(.caption)
+            HStack { Text("Volumen").font(.caption); Slider(value: $session.project.audioLane[i].volume, in: 0...1); Text(String(format: "%.0f %%", c.volume * 100)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
+            Divider()
+            if let n = next {
+                let overlap = c.tlEnd - n.tlStart
+                if overlap > 0.05 {
+                    Label(String(format: "Cruzado con el siguiente: %.1f s", overlap), systemImage: "arrow.left.arrow.right").font(.caption).foregroundStyle(Theme.accent)
+                } else {
+                    Button("Cruzar con el siguiente (1,2 s)") { session.project.crossfade(c.id, with: n.id, seconds: 1.2) }.controlSize(.small)
+                        .help("Adelanta el siguiente clip para que se solapen 1,2 s y pone fades curvos en los dos")
+                }
+            }
+            Spacer(minLength: 8)
+            Text("Dos clips que se solapan en la pista se cruzan solos: el que termina baja y el que empieza sube, sin hueco en el medio.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -546,9 +575,14 @@ struct VideoTracks: View {
         ForEach(session.project.audioLane) { c in
             let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
             let sel: Bool = { if case .sound(let id) = session.selectedTrack { return id == c.id }; return false }()
-            clip(name + (c.fadeIn > 0 || c.fadeOut > 0 ? " · fades" : ""), start: c.tlStart, dur: c.srcOut - c.srcIn, color: Self.musicColor, selected: sel, w: w, height: 28,
+            clip(name + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? " · fades" : ""), start: c.tlStart, dur: c.srcOut - c.srcIn, color: Self.musicColor, selected: sel, w: w, height: 28,
                  onSelect: { session.selectedTrack = .sound(c.id); selectedCut = nil },
-                 onMove: { t in if let i = session.project.audioLane.firstIndex(where: { $0.id == c.id }) { session.project.audioLane[i].tlStart = t } })
+                 onMove: { t in
+                     if let i = session.project.audioLane.firstIndex(where: { $0.id == c.id }) {
+                         session.project.audioLane[i].tlStart = t
+                         session.project.crossfadeOverlaps(touching: c.id)
+                     }
+                 })
         }
     }
 }

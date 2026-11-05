@@ -502,7 +502,9 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var duck: Bool?                     // bajar bajo la voz; nil = automático (sí si dura más de 8 s: música, no efectos)
     var duckDB: Double = 12
     var loop: Bool = false              // repetir en bucle hasta el final del episodio
+    var crossfade: Bool = false         // Studio · Video: fades curvos (igual potencia), para cruzar con otro clip
     var ducks: Bool { duck ?? ((srcOut - srcIn) > 8) }
+    var tlEnd: Double { tlStart + (srcOut - srcIn) }
     init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
         self.id = id; self.mediaId = mediaId; self.tlStart = tlStart; self.srcIn = srcIn; self.srcOut = srcOut
         self.volume = volume; self.fadeIn = fadeIn; self.fadeOut = fadeOut
@@ -520,6 +522,7 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
         duck = try c.decodeIfPresent(Bool.self, forKey: .duck)
         duckDB = try c.decodeIfPresent(Double.self, forKey: .duckDB) ?? 12
         loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? false
+        crossfade = try c.decodeIfPresent(Bool.self, forKey: .crossfade) ?? false
     }
 }
 
@@ -1312,6 +1315,31 @@ extension Project {
         logoFile = try c.decodeIfPresent(String.self, forKey: .logoFile)
         backgroundFile = try c.decodeIfPresent(String.self, forKey: .backgroundFile)
         postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)
+    }
+
+    /// Studio · Video: si el clip `id` se solapa con otro de la pista de música, los cruza (fades curvos del largo
+    /// del solape). Si ya no se solapan, los fades que había puesto un cruce se quitan.
+    mutating func crossfadeOverlaps(touching id: Int) {
+        guard let i = audioLane.firstIndex(where: { $0.id == id }) else { return }
+        for j in audioLane.indices where j != i {
+            let a = audioLane[i].tlStart < audioLane[j].tlStart ? i : j
+            let b = a == i ? j : i
+            let overlap = audioLane[a].tlEnd - audioLane[b].tlStart
+            if overlap > 0.05, overlap < min(audioLane[a].tlEnd - audioLane[a].tlStart, audioLane[b].tlEnd - audioLane[b].tlStart) {
+                audioLane[a].fadeOut = overlap; audioLane[a].crossfade = true
+                audioLane[b].fadeIn = overlap; audioLane[b].crossfade = true
+            } else if audioLane[a].crossfade, audioLane[b].crossfade, overlap <= 0.05, abs(audioLane[a].fadeOut - audioLane[b].fadeIn) < 0.01 {
+                // Se separaron: el cruce ya no existe
+                audioLane[a].fadeOut = 0; audioLane[b].fadeIn = 0
+            }
+        }
+    }
+
+    /// Cruza dos clips: adelanta el segundo para que se solapen `seconds` y pone fades curvos.
+    mutating func crossfade(_ firstId: Int, with secondId: Int, seconds: Double) {
+        guard let a = audioLane.firstIndex(where: { $0.id == firstId }), let b = audioLane.firstIndex(where: { $0.id == secondId }) else { return }
+        audioLane[b].tlStart = max(audioLane[a].tlStart + 0.5, audioLane[a].tlEnd - seconds)
+        crossfadeOverlaps(touching: secondId)
     }
 
     /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).

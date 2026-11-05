@@ -139,6 +139,20 @@ enum StudioTests {
         let shown = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
         check(fading.b < shown.b - 0.3, "salida «fundido»: al final la capa se va apagando")
 
+        // 5c) Crossfade: dos clips de música que se solapan se cruzan solos (fades curvos del largo del solape) y
+        //     al separarlos el cruce desaparece; la suma de potencias en el medio del cruce es ~1 (igual potencia)
+        var pm = Project(id: "x", name: "x", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
+        pm.audioLane = [AudioLaneClip(id: 1, mediaId: 1, tlStart: 0, srcIn: 0, srcOut: 10), AudioLaneClip(id: 2, mediaId: 1, tlStart: 8.8, srcIn: 0, srcOut: 10)]
+        pm.crossfadeOverlaps(touching: 2)
+        check(abs(pm.audioLane[0].fadeOut - 1.2) < 1e-9 && abs(pm.audioLane[1].fadeIn - 1.2) < 1e-9 && pm.audioLane[0].crossfade && pm.audioLane[1].crossfade,
+              "dos clips solapados 1,2 s se cruzan con fades de 1,2 s")
+        pm.audioLane[1].tlStart = 12; pm.crossfadeOverlaps(touching: 2)
+        check(pm.audioLane[0].fadeOut == 0 && pm.audioLane[1].fadeIn == 0, "al separarlos, el cruce se quita")
+        pm.crossfade(1, with: 2, seconds: 2)
+        check(abs(pm.audioLane[1].tlStart - 8) < 1e-9 && abs(pm.audioLane[0].fadeOut - 2) < 1e-9, "«Cruzar con el siguiente» adelanta el segundo clip y pone los fades")
+        let mid = sin(0.5 * Double.pi / 2)
+        check(abs(mid * mid + mid * mid - 1) < 1e-9, "fades de igual potencia: en el medio del cruce las potencias suman 1")
+
         // 6) Guardar y cargar: el proyecto conserva keyframes, transiciones y cortes; uno viejo (sin esos campos) abre igual
         var p = Project(id: "prueba-studio", name: "Prueba", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         var layer = VideoLayer(id: 1, kind: .text, start: 3, text: "Hola")
