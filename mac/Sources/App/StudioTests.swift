@@ -727,18 +727,19 @@ enum StudioTests {
     static func colorTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        // `mean` devuelve valores lineales (sin espacio de color): 0,40 sRGB ≈ 0,13 lineal
         let size = CGSize(width: 64, height: 64)
         let box = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
         let gray = solid(0.4, 0.4, 0.4, size)
         var g = ColorGrade(); g.exposure = 1
         let bright = mean(g.apply(to: gray), box, size: size)
-        check(bright.r > 0.65 && bright.r < 0.95, String(format: "exposición +1 EV: el gris 0,40 pasa a ~0,80 (%.2f)", bright.r))
+        check(bright.r > 0.22 && bright.r < 0.32, String(format: "exposición +1 EV: el gris 0,40 (0,13 lineal) pasa al doble (%.2f lineal)", bright.r))
         g = ColorGrade(); g.temperature = 60
         let warm = mean(g.apply(to: gray), box, size: size)
-        check(warm.r > warm.b + 0.04, String(format: "temperatura +60: más rojo que azul (%.2f / %.2f)", warm.r, warm.b))
+        check(warm.r > warm.b + 0.02, String(format: "temperatura +60: más rojo que azul (%.2f / %.2f)", warm.r, warm.b))
         g.temperature = -60
         let cool = mean(g.apply(to: gray), box, size: size)
-        check(cool.b > cool.r + 0.04, String(format: "temperatura −60: más azul que rojo (%.2f / %.2f)", cool.r, cool.b))
+        check(cool.b > cool.r + 0.02, String(format: "temperatura −60: más azul que rojo (%.2f / %.2f)", cool.r, cool.b))
         let red = solid(0.8, 0.2, 0.2, size)
         g = ColorGrade(); g.saturation = -100
         let desat = mean(g.apply(to: red), box, size: size)
@@ -761,10 +762,10 @@ enum StudioTests {
         check(LUTLibrary.importCube(cube) == "prueba-invertir.cube" && LUTLibrary.names().contains("prueba-invertir.cube"), "importar lo copia a la biblioteca")
         g = ColorGrade(); g.lut = "prueba-invertir.cube"
         let inv = mean(g.apply(to: red), box, size: size)
-        check(inv.r < 0.3 && inv.g > 0.7, String(format: "el LUT invierte (rojo → cian: %.2f / %.2f)", inv.r, inv.g))
+        check(inv.r < 0.1 && inv.g > 0.5, String(format: "el LUT invierte (rojo → cian: %.2f / %.2f)", inv.r, inv.g))
         g.amount = 0.5
         let half = mean(g.apply(to: red), box, size: size)
-        check(half.r > 0.4 && half.r < 0.6, String(format: "intensidad 50 %%: a medio camino (%.2f)", half.r))
+        check(half.r > 0.2 && half.r < 0.45, String(format: "intensidad 50 %%: a medio camino entre 0,60 y 0,03 (%.2f)", half.r))
         check(LUTLibrary.parse(dir.appendingPathComponent("no-existe.cube")) == nil, "un archivo que no es LUT no se importa")
         let bad = dir.appendingPathComponent("malo.cube"); try? "LUT_3D_SIZE 2\n0 0 0\n".write(to: bad, atomically: true, encoding: .utf8)
         check(LUTLibrary.importCube(bad) == nil, "un .cube incompleto se rechaza")
@@ -776,7 +777,7 @@ enum StudioTests {
         sc.laneGrade = [1: lg]
         let f = sc.render(frames: frames, time: 1)
         let left = mean(f, CGRect(x: 0.1, y: 0.4, width: 0.2, height: 0.2), size: fsize), right = mean(f, CGRect(x: 0.7, y: 0.4, width: 0.2, height: 0.2), size: fsize)
-        check(left.r > right.r + 0.25, String(format: "color por cámara: solo la cámara 1 se aclara (%.2f vs %.2f)", left.r, right.r))
+        check(left.r > right.r + 0.1, String(format: "color por cámara: solo la cámara 1 se aclara (%.2f vs %.2f)", left.r, right.r))
         var gg = ColorGrade(); gg.saturation = -100
         sc.globalGrade = gg
         let blue = solid(0.2, 0.2, 0.9, CGSize(width: 320, height: 180))
