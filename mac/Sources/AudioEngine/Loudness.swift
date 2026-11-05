@@ -181,3 +181,29 @@ final class MixLoudness: @unchecked Sendable {
         return (m, integrated)
     }
 }
+
+/// Presets de cadena de voz guardados por la persona («mi cadena para Admin»): viven en esta Mac.
+/// (Sincronizarlos con el podcast en prePod queda para más adelante.)
+enum ChainPresets {
+    struct Item: Codable, Identifiable, Equatable {
+        var id = UUID()
+        var name: String
+        var chain: ChainSettings
+    }
+    private static let key = "estudio.presets"
+
+    static func all() -> [Item] {
+        guard let d = UserDefaults.standard.data(forKey: key), let v = try? JSONDecoder().decode([Item].self, from: d) else { return [] }
+        return v
+    }
+    static func save(_ items: [Item]) {
+        if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key) }
+    }
+    static func add(name: String, chain: ChainSettings) {
+        var c = chain; c.automation = [:]            // el preset es la cadena, no su automatización
+        var items = all().filter { $0.name != name }
+        items.append(Item(name: name, chain: c))
+        save(items)
+    }
+    static func remove(_ id: UUID) { save(all().filter { $0.id != id }) }
+}

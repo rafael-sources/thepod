@@ -159,6 +159,9 @@ struct ChannelStrip: View {
     let index: Int
     let color: Color
     let openInsert: (AudioStudioView.InsertRef.Kind) -> Void
+    @State private var askPresetName = false
+    @State private var presetName = ""
+    @State private var presetsTick = 0
 
     private var lane: Lane { session.project.lanes[index] }
     private var chain: ChainSettings { lane.effectiveChain }
@@ -200,10 +203,41 @@ struct ChannelStrip: View {
                 Spacer()
                 Text(Fader.label(lane.volume)).font(.caption.monospacedDigit())
             }
-            if lane.chain != nil {
-                Button("Volver al preset simple") { session.project.lanes[index].chain = nil }
-                    .controlSize(.mini).buttonStyle(.plain).foregroundStyle(Theme.secondary)
+            HStack(spacing: 6) {
+                Menu {
+                    Button("Guardar esta cadena como preset…") { askPresetName = true }
+                    let mine = ChainPresets.all()
+                    if !mine.isEmpty {
+                        Divider()
+                        ForEach(mine) { p in
+                            Button(p.name) { Lane.store(p.chain, in: &session.project.lanes[index]) }
+                        }
+                        Divider()
+                        Menu("Borrar un preset") {
+                            ForEach(mine) { p in Button(p.name, role: .destructive) { ChainPresets.remove(p.id); presetsTick += 1 } }
+                        }
+                    }
+                    Divider()
+                    Button("Voz clara") { Lane.store(ChainSettings.preset(VoiceEQ.preset("clear")), in: &session.project.lanes[index]) }
+                    Button("Cálida") { Lane.store(ChainSettings.preset(VoiceEQ.preset("warm")), in: &session.project.lanes[index]) }
+                    Button("Original (sin cadena)") { session.project.lanes[index].eq = VoiceEQ(); session.project.lanes[index].chain = nil }
+                } label: { Label("Presets", systemImage: "square.stack").font(.caption) }
+                .menuStyle(.borderlessButton).fixedSize().id(presetsTick)
+                Spacer()
+                if lane.chain != nil {
+                    Button("Volver al simple") { session.project.lanes[index].chain = nil }
+                        .controlSize(.mini).buttonStyle(.plain).foregroundStyle(Theme.secondary)
+                }
             }
+            .alert("Nombre del preset", isPresented: $askPresetName) {
+                TextField("Mi cadena de voz", text: $presetName)
+                Button("Guardar") {
+                    let n = presetName.trimmingCharacters(in: .whitespaces)
+                    if !n.isEmpty { ChainPresets.add(name: n, chain: lane.effectiveChain); presetsTick += 1 }
+                    presetName = ""
+                }
+                Button("Cancelar", role: .cancel) { presetName = "" }
+            } message: { Text("Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) para usarlos con cualquier voz, en cualquier episodio.") }
         }
         .padding(10)
         .frame(width: 190)
