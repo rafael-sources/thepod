@@ -271,6 +271,57 @@ enum StudioTests {
         return ok
     }
 
+    /// Informe de sonoridad: se lee el resumen de ffmpeg, se juzga cada destino y se escribe el PDF; con ffmpeg,
+    /// un tono a −20 dBFS mide −23 LUFS y pico −20 dBTP en el archivo real.
+    static func loudnessReportTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let sample = """
+        [Parsed_ebur128_0 @ 0x1] Summary:
+
+          Integrated loudness:
+            I:         -16.3 LUFS
+            Threshold: -26.8 LUFS
+
+          Loudness range:
+            LRA:         7.2 LU
+            Threshold: -36.9 LUFS
+            LRA low:   -21.1 LUFS
+            LRA high:  -13.9 LUFS
+
+          True peak:
+            Peak:       -1.4 dBFS
+        """
+        let m = LoudnessReport.parse(sample, duration: 125)
+        check(m == LoudnessReport.Measure(integrated: -16.3, truePeak: -1.4, range: 7.2, duration: 125), "lee integrado, LRA y pico real del resumen de ffmpeg (\(String(describing: m)))")
+        if let m {
+            let ok16 = LoudnessReport.targets[0].passes(m), ok14 = LoudnessReport.targets[2].passes(m), ok23 = LoudnessReport.targets[3].passes(m)
+            check(ok16 && !ok14 && !ok23, "a −16,3 LUFS cumple Spotify/Apple y no YouTube ni radio")
+            var hot = m; hot.truePeak = -0.2
+            check(!LoudnessReport.targets[0].passes(hot), "con pico real por encima de −1 dBTP no cumple aunque el nivel esté bien")
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("informe-\(UUID().uuidString)")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            var p = Project(id: "x", name: "Informe de prueba", podcastName: "Podcast", createdAt: Date(), importedFrom: "tracks")
+            p.episode.title = "El episodio"
+            let fake = dir.appendingPathComponent("episodio.mp3")
+            let pdf = LoudnessReport.writePDF(project: p, file: fake, format: .audio, measure: m, target: -16)
+            let size = pdf.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int } ?? 0
+            check(pdf?.lastPathComponent == "episodio.sonoridad.pdf" && size > 2000, "escribe episodio.sonoridad.pdf (\(size) bytes)")
+            if FFmpeg.isAvailable {
+                let tone = dir.appendingPathComponent("tono.m4a")
+                do {
+                    _ = try await FFmpeg.run(["-f", "lavfi", "-i", "sine=frequency=1000:duration=6", "-af", "volume=-20dB", "-c:a", "aac", "-b:a", "128k", tone.path])
+                    if let r = await LoudnessReport.measure(tone) {
+                        check(abs(r.integrated + 23) < 0.5 && abs(r.truePeak + 20) < 0.7 && r.duration > 5.5, String(format: "mide el archivo real: %.1f LUFS, pico %.1f dBTP, %.1f s", r.integrated, r.truePeak, r.duration))
+                    } else { check(false, "no midió el archivo") }
+                } catch { check(false, "ffmpeg: \(error.localizedDescription)") }
+            }
+        }
+        print(ok ? "OK informe de sonoridad" : "FAIL informe de sonoridad")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

@@ -77,6 +77,7 @@ enum Exporter {
             try? FileManager.default.removeItem(at: m4a)
             if window == nil {
                 writeSidecars(project: project, next: mp3, chapters: chapterList(project: project, keep: built.keep, introDuration: 0, total: built.duration))
+                if let m = await LoudnessReport.measure(mp3) { LoudnessReport.writePDF(project: project, file: mp3, format: format, measure: m, target: -16) }
             }
             return mp3
         }
@@ -133,6 +134,7 @@ enum Exporter {
             if let chap { try? FileManager.default.removeItem(at: chap) }
             if let srtTmp { try? FileManager.default.removeItem(at: srtTmp) }
             writeSidecars(project: project, next: url, chapters: chapters)
+            if let m = await LoudnessReport.measure(url) { LoudnessReport.writePDF(project: project, file: url, format: format, measure: m, target: target) }
             try? notes(project: project, keep: built.keep, introDuration: built.introDuration)
                 .write(to: url.deletingPathExtension().appendingPathExtension("txt"), atomically: true, encoding: .utf8)
         }
