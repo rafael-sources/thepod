@@ -81,12 +81,15 @@ enum Exporter {
         let fix = project.normalizeLoudness && FFmpeg.isAvailable
         try await run(asset: built.asset, preset: preset, videoComposition: built.videoComposition,
                       audioMix: built.audioMix, to: url, type: .mp4, metadata: meta) { progress($0 * (fix ? 0.95 : 1)) }
-        // Volumen final: medir y, si hace falta, corregir solo el audio (el video se copia tal cual, es rápido)
-        if fix, let lufs = await AudioAnalysis.loudness(url), abs(lufs + 16) > 0.7 {
+        // Volumen final: medir y, si hace falta, corregir solo el audio (el video se copia tal cual, es rápido).
+        // El video va a YouTube/Instagram/TikTok, que normalizan a −14 LUFS: se entrega ya a ese nivel
+        // (el audio solo, para Spotify/Apple, va a −16).
+        let target = -14.0
+        if fix, let lufs = await AudioAnalysis.loudness(url), abs(lufs - target) > 0.7 {
             let fixed = folder.appendingPathComponent(name + "_vol.mp4")
             do {
                 try await FFmpeg.run(["-i", url.path, "-map", "0", "-c:v", "copy",
-                                      "-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs),
+                                      "-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", target - lufs),
                                       "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", fixed.path])
                 try FileManager.default.removeItem(at: url)
                 try FileManager.default.moveItem(at: fixed, to: url)

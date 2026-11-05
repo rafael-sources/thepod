@@ -1533,7 +1533,7 @@ struct ExportStep: View {
                             .pickerStyle(.radioGroup).font(.caption)
                         }
                     }
-                    Toggle("Ajustar el volumen final para Spotify y YouTube (−16 LUFS)", isOn: $session.project.normalizeLoudness)
+                    Toggle("Ajustar el volumen final: −16 LUFS para Spotify y Apple, −14 para YouTube y redes", isOn: $session.project.normalizeLoudness)
                         .font(.caption)
                     BigButton(title: "Exportar \(format.title)", symbol: "square.and.arrow.up", disabled: session.isBusy) {
                         session.export(format: format)

@@ -40,7 +40,7 @@ struct EpisodeTimeline: View {
                 .buttonStyle(.plain)
                 if !collapsed {
                     legend
-                    Text(p.normalizeLoudness ? "Volumen final: −16 LUFS al exportar" : "Volumen final: sin ajuste")
+                    Text(p.normalizeLoudness ? "Volumen final: −16 LUFS el audio · −14 el video" : "Volumen final: sin ajuste")
                         .font(.caption2).foregroundStyle(p.normalizeLoudness ? Theme.secondary : .orange)
                         .help("Lo que piden Spotify y YouTube. Se mide y se corrige al exportar; se apaga en Exportar.")
                     Spacer()
