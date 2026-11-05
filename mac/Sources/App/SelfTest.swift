@@ -379,6 +379,7 @@ enum SelfTest {
                 session.job = JobState(title: "En cola: Solo audio (MP3)", detail: "1 más esperando", fraction: 0.42)
                 session.step = .export
                 await shoot(ProjectView(session: session), "exportar", w: 1440, h: 900)
+                await shoot(ExportQueueCard(session: session).padding(20).background(Theme.background), "cola", w: 600, h: 260)
             } catch { print("ERROR \(error.localizedDescription)") }
             fflush(stdout); exit(0)
         }
