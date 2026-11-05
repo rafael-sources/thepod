@@ -3,14 +3,10 @@ import AudioToolbox
 
 /// Cadena de voz en tiempo real: lo que se oye al mover un control es exactamente lo que se exporta.
 ///
-/// Por cada persona: ecualizador (Audio Unit del sistema, `AUNBandEQ`), compresor «voz pareja»
-/// (`AUDynamicsProcessor`), de-esser «menos siseo» (propio, por bandas) y limitador (`AUPeakLimiter`).
-/// Hasta hoy esto se hacía con ffmpeg generando un archivo por cada ajuste; ahora se procesa al vuelo
-/// dentro de la mezcla (`MTAudioProcessingTap`), igual en la vista previa que en el export.
-///
-/// `VoiceEQ` sigue siendo la configuración «simple» (graves/medios/agudos, retumbe, voz pareja, siseo);
-/// aquí se traduce a parámetros de los Audio Units. En el estudio (etapa B) se expondrán los parámetros
-/// completos sobre esta misma cadena.
+/// Por cada persona: ecualizador paramétrico de hasta 8 bandas (`AUNBandEQ`), compresor/puerta
+/// (`AUDynamicsProcessor`), de-esser propio por bandas y limitador (`AUPeakLimiter`). Se engancha a la
+/// pista dentro de la mezcla (`ChainTap`), igual en la vista previa que en el export. La configuración
+/// es `ChainSettings` (el estudio); el nivel simple (`VoiceEQ`) es un preset de ella.
 final class VoiceChain: @unchecked Sendable {
     private var eqUnit: AudioUnit?
     private var compUnit: AudioUnit?
@@ -23,18 +19,21 @@ final class VoiceChain: @unchecked Sendable {
     private var dsLow: [Float] = []
     private var dsEnv: [Float] = []
     private var dsOn = false
+    private var dsFloor: Float = 0.32
+    private var dsThr: Float = 0.05
     private var dsCoef: Float = 0
     private var dsRelease: Float = 0.9995
 
     private var lock = os_unfair_lock()
-    private var pending: VoiceEQ?
-    private(set) var settings = VoiceEQ()
+    private var pending: ChainSettings?
+    private(set) var settings: ChainSettings
 
-    // Bandas del ecualizador (índice fijo): 0 paso alto 120 · 1 −3 dB a 250 · 2 graves · 3 medios · 4 agudos
-    private enum Band: UInt32 { case highpass = 0, rumble = 1, low = 2, mid = 3, high = 4 }
-    private static let bandCount: UInt32 = 5
+    private static let bandCount: UInt32 = UInt32(ChainSettings.maxBands)
+    // Tipos de filtro de AUNBandEQ
+    private static let ftParametric: Float = 0, ftLowPass: Float = 1, ftHighPass: Float = 2, ftLowShelf: Float = 7, ftHighShelf: Float = 8
 
-    init(settings: VoiceEQ) { self.settings = settings }
+    init(settings: ChainSettings) { self.settings = settings }
+    convenience init(settings eq: VoiceEQ) { self.init(settings: ChainSettings.preset(eq)) }
 
     deinit { teardown() }
 
@@ -62,17 +61,9 @@ final class VoiceChain: @unchecked Sendable {
         AudioUnitSetProperty(comp, kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &c1, UInt32(MemoryLayout<AudioUnitConnection>.size))
         var c2 = AudioUnitConnection(sourceAudioUnit: comp, sourceOutputNumber: 0, destInputNumber: 0)
         AudioUnitSetProperty(lim, kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &c2, UInt32(MemoryLayout<AudioUnitConnection>.size))
-        // Bandas fijas del EQ
-        setBand(.highpass, type: Self.ftHighPass, freq: 120, gain: 0, width: 0.5)
-        setBand(.rumble, type: Self.ftParametric, freq: 250, gain: -3, width: 1)
-        setBand(.low, type: Self.ftParametric, freq: 120, gain: 0, width: 0.8)
-        setBand(.mid, type: Self.ftParametric, freq: 1000, gain: 0, width: 1)
-        setBand(.high, type: Self.ftParametric, freq: 6000, gain: 0, width: 0.8)
-        // Limitador siempre al final (como el alimiter de antes): sin ganancia previa
         AudioUnitSetParameter(lim, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, 0, 0)
         AudioUnitSetParameter(lim, kLimiterParam_AttackTime, kAudioUnitScope_Global, 0, 0.005, 0)
         AudioUnitSetParameter(lim, kLimiterParam_DecayTime, kAudioUnitScope_Global, 0, 0.05, 0)
-        // De-esser: paso alto de un polo a 5 kHz
         dsCoef = Float(1 - exp(-2 * Double.pi * 5000 / sampleRate))
         dsRelease = Float(exp(-1 / (0.06 * sampleRate)))
         dsLow = Array(repeating: 0, count: channels)
@@ -83,10 +74,10 @@ final class VoiceChain: @unchecked Sendable {
 
     /// Quién alimenta el primer eslabón (el tap llama con el audio de la pista).
     func setInput(_ proc: @escaping AURenderCallback, refCon: UnsafeMutableRawPointer) {
-        guard let eq = eqUnit else { return }
+        guard let eq = eqUnit, let comp = compUnit, let lim = limUnit else { return }
         var cb = AURenderCallbackStruct(inputProc: proc, inputProcRefCon: refCon)
         AudioUnitSetProperty(eq, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb, UInt32(MemoryLayout<AURenderCallbackStruct>.size))
-        for u in [eq, compUnit!, limUnit!] { AudioUnitInitialize(u) }
+        for u in [eq, comp, lim] { AudioUnitInitialize(u) }
     }
 
     func teardown() {
@@ -98,58 +89,70 @@ final class VoiceChain: @unchecked Sendable {
         prepared = false
     }
 
-    // MARK: Parámetros (se pueden cambiar desde cualquier hilo mientras suena)
+    // MARK: Parámetros (desde cualquier hilo mientras suena)
 
-    func update(_ eq: VoiceEQ) {
-        os_unfair_lock_lock(&lock); pending = eq; settings = eq; os_unfair_lock_unlock(&lock)
+    func update(_ c: ChainSettings) {
+        os_unfair_lock_lock(&lock); pending = c; settings = c; os_unfair_lock_unlock(&lock)
     }
+    func update(_ eq: VoiceEQ) { update(ChainSettings.preset(eq)) }
 
-    private func applyNow(_ e: VoiceEQ) {
-        guard let eqU = eqUnit, let comp = compUnit else { return }
-        bypass(.highpass, !e.rumbleCut)
-        bypass(.rumble, !e.rumbleCut)
-        bypass(.low, abs(e.low) < 0.1)
-        bypass(.mid, abs(e.mid) < 0.1)
-        bypass(.high, abs(e.high) < 0.1)
-        AudioUnitSetParameter(eqU, kAUNBandEQParam_Gain + Band.low.rawValue, kAudioUnitScope_Global, 0, Float(e.low), 0)
-        AudioUnitSetParameter(eqU, kAUNBandEQParam_Gain + Band.mid.rawValue, kAudioUnitScope_Global, 0, Float(e.mid), 0)
-        AudioUnitSetParameter(eqU, kAUNBandEQParam_Gain + Band.high.rawValue, kAudioUnitScope_Global, 0, Float(e.high), 0)
-        // «Voz pareja»: umbral −20 dB, compresión ≈ 3:1, ataque 8 ms, salida 140 ms, +4 dB de compensación
-        if e.compress {
-            AudioUnitSetParameter(comp, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, -20, 0)
-            AudioUnitSetParameter(comp, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, 6, 0)
-            AudioUnitSetParameter(comp, kDynamicsProcessorParam_AttackTime, kAudioUnitScope_Global, 0, 0.008, 0)
-            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ReleaseTime, kAudioUnitScope_Global, 0, 0.14, 0)
-            AudioUnitSetParameter(comp, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, 4, 0)
+    private func applyNow(_ c: ChainSettings) {
+        guard let eqU = eqUnit, let comp = compUnit, let lim = limUnit else { return }
+        // Bandas: las que hay, el resto en bypass
+        let bands = Array(c.bands.prefix(ChainSettings.maxBands))
+        for i in 0..<ChainSettings.maxBands {
+            let b = UInt32(i)
+            if i < bands.count, bands[i].enabled {
+                let band = bands[i]
+                let type: Float
+                switch band.kind {
+                case .highpass: type = Self.ftHighPass
+                case .lowpass: type = Self.ftLowPass
+                case .lowshelf: type = Self.ftLowShelf
+                case .highshelf: type = Self.ftHighShelf
+                case .peak: type = Self.ftParametric
+                }
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_FilterType + b, kAudioUnitScope_Global, 0, type, 0)
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_Frequency + b, kAudioUnitScope_Global, 0, Float(max(20, min(20_000, band.freq))), 0)
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_Gain + b, kAudioUnitScope_Global, 0, Float(max(-24, min(24, band.gain))), 0)
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_Bandwidth + b, kAudioUnitScope_Global, 0, Float(max(0.05, min(5, band.q))), 0)
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_BypassBand + b, kAudioUnitScope_Global, 0, 0, 0)
+            } else {
+                AudioUnitSetParameter(eqU, kAUNBandEQParam_BypassBand + b, kAudioUnitScope_Global, 0, 1, 0)
+            }
+        }
+        // Compresor: el AU no tiene «ratio»; su «head room» es cuánto por encima del umbral sigue subiendo
+        // la salida. ratio r ≈ headroom = 40 / r (3:1 ≈ 13 dB… se ajusta a lo que suena como 3:1 en voz: 6 dB)
+        if c.compressorOn {
+            let headroom = Float(max(0.5, min(40, 18 / max(1, c.ratio))))
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, Float(c.threshold), 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, headroom, 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_AttackTime, kAudioUnitScope_Global, 0, Float(c.attack), 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ReleaseTime, kAudioUnitScope_Global, 0, Float(c.release), 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, Float(c.makeup), 0)
         } else {
-            // Sin compresión: umbral por encima de todo y sin ganancia
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, 0, 0)
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, 40, 0)
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, 0, 0)
         }
-        AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 1, 0)
-        dsOn = e.deess
-    }
-
-    // Tipos de filtro de AUNBandEQ: 0 paramétrico · 1 paso bajo Butterworth · 2 paso alto Butterworth
-    private static let ftParametric: Float = 0, ftHighPass: Float = 2
-
-    private func setBand(_ b: Band, type: Float, freq: Float, gain: Float, width: Float) {
-        guard let eq = eqUnit else { return }
-        AudioUnitSetParameter(eq, kAUNBandEQParam_FilterType + b.rawValue, kAudioUnitScope_Global, 0, type, 0)
-        AudioUnitSetParameter(eq, kAUNBandEQParam_Frequency + b.rawValue, kAudioUnitScope_Global, 0, freq, 0)
-        AudioUnitSetParameter(eq, kAUNBandEQParam_Gain + b.rawValue, kAudioUnitScope_Global, 0, gain, 0)
-        AudioUnitSetParameter(eq, kAUNBandEQParam_Bandwidth + b.rawValue, kAudioUnitScope_Global, 0, width, 0)
-    }
-
-    private func bypass(_ b: Band, _ on: Bool) {
-        guard let eq = eqUnit else { return }
-        AudioUnitSetParameter(eq, kAUNBandEQParam_BypassBand + b.rawValue, kAudioUnitScope_Global, 0, on ? 1 : 0, 0)
+        // Puerta suave: expansión 1:2 por debajo del umbral
+        if c.gateOn {
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 2, 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionThreshold, kAudioUnitScope_Global, 0, Float(c.gateThreshold), 0)
+        } else {
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 1, 0)
+            AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionThreshold, kAudioUnitScope_Global, 0, -120, 0)
+        }
+        // Limitador: cuando está apagado se sube el techo para que no actúe
+        AudioUnitSetParameter(lim, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, c.limiterOn ? 0 : -0.01, 0)
+        dsOn = c.deesserOn
+        let a = Float(max(0, min(1, c.deesserAmount)))
+        dsFloor = 1 - 0.75 * a            // hasta −12 dB
+        dsThr = 0.08 - 0.06 * a           // más cantidad = actúa antes
     }
 
     // MARK: Procesar un bloque (hilo de audio)
 
-    /// Pasa `frames` cuadros por la cadena. `list` ya tiene el audio de la pista (lo pidió el callback de entrada).
     func render(into list: UnsafeMutablePointer<AudioBufferList>, frames: UInt32, sampleTime: Double) -> OSStatus {
         guard prepared, let lim = limUnit else { return noErr }
         if os_unfair_lock_trylock(&lock) {
@@ -165,10 +168,9 @@ final class VoiceChain: @unchecked Sendable {
     }
 
     /// De-esser por bandas: separa lo que hay por encima de 5 kHz, sigue su envolvente y, cuando silba,
-    /// baja solo esa parte (hasta −10 dB). Lo demás de la voz no se toca.
+    /// baja solo esa parte. Lo demás de la voz no se toca.
     private func deess(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
-        let thr: Float = 0.05          // ≈ −26 dBFS en la banda alta
-        let floorGain: Float = 0.32    // −10 dB
+        let thr = dsThr, floorGain = dsFloor
         var ch = 0
         for buf in UnsafeMutableAudioBufferListPointer(list) {
             guard let data = buf.mData, ch < dsLow.count else { continue }
@@ -212,10 +214,11 @@ final class VoiceChainRegistry: @unchecked Sendable {
         chains[lane] = (chains[lane] ?? []).filter { $0.chain != nil } + [WeakChain(chain: chain)]
     }
 
-    func update(lane: Int, _ eq: VoiceEQ) {
+    func update(lane: Int, _ c: ChainSettings) {
         os_unfair_lock_lock(&lock)
         let list = (chains[lane] ?? []).compactMap(\.chain)
         os_unfair_lock_unlock(&lock)
-        for c in list { c.update(eq) }
+        for ch in list { ch.update(c) }
     }
+    func update(lane: Int, _ eq: VoiceEQ) { update(lane: lane, ChainSettings.preset(eq)) }
 }

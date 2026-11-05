@@ -370,6 +370,16 @@ struct TrackInspector: View {
             .font(.callout).controlSize(.small)
         }
         Divider()
+        if lane.tunedInStudio {
+            HStack(spacing: 8) {
+                Label("Ajustado en el estudio", systemImage: "waveform.badge.magnifyingglass").foregroundStyle(Theme.accent)
+                Text("Esta voz tiene una cadena que estos controles no alcanzan a describir.").foregroundStyle(Theme.secondary)
+                Spacer()
+                Button("Volver al preset") { session.project.lanes[i].chain = nil }
+                OpenStudioButton()
+            }
+            .font(.callout).controlSize(.small)
+        }
         HStack(spacing: 6) {
             Text("Voz").frame(width: 72, alignment: .leading)
             Button("Cálida") { setEQ(i, VoiceEQ.preset("warm")) }
@@ -383,16 +393,20 @@ struct TrackInspector: View {
                 .help("De-esser: suaviza las eses y las ches que silban")
         }
         .font(.callout).controlSize(.small)
-        eqRow("Graves", $session.project.lanes[i].eq.low)
-        eqRow("Medios", $session.project.lanes[i].eq.mid)
-        eqRow("Agudos", $session.project.lanes[i].eq.high)
+        .disabled(lane.tunedInStudio)
+        Group {
+            eqRow("Graves", $session.project.lanes[i].eq.low)
+            eqRow("Medios", $session.project.lanes[i].eq.mid)
+            eqRow("Agudos", $session.project.lanes[i].eq.high)
+        }
+        .disabled(lane.tunedInStudio).opacity(lane.tunedInStudio ? 0.5 : 1)
         Text("Se oye al instante mientras suena; lo que oyes es lo que se exporta.")
             .font(.caption2).foregroundStyle(Theme.secondary)
         Text("\(session.project.laneName(lane.id)) \(ProjectSession.offsetText(lane.offset)). Con − suena antes (se salta el principio de su grabación); con + suena después. También puedes escribir los segundos. Los cortes se aplican igual a todas las pistas.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 
-    private func setEQ(_ i: Int, _ eq: VoiceEQ) { session.project.lanes[i].eq = eq }
+    private func setEQ(_ i: Int, _ eq: VoiceEQ) { session.project.lanes[i].eq = eq; session.project.lanes[i].chain = nil }
 
     private func eqRow(_ label: String, _ value: Binding<Double>) -> some View {
         HStack(spacing: 8) {

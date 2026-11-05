@@ -236,8 +236,11 @@ final class ProjectSession: ObservableObject {
             // Solo cambió el ecualizador / voz pareja / siseo de alguien: se aplica al vuelo en la cadena de voz
             // (vista previa y export en marcha), sin rearmar la vista previa ni cortar el audio.
             if Self.onlyVoiceChainChanged(oldValue, project) {
-                for l in project.lanes where l.eq != oldValue.lanes.first(where: { $0.id == l.id })?.eq {
-                    VoiceChainRegistry.shared.update(lane: l.id, l.eq)
+                for l in project.lanes {
+                    let before = oldValue.lanes.first(where: { $0.id == l.id })
+                    if l.eq != before?.eq || l.chain != before?.chain {
+                        VoiceChainRegistry.shared.update(lane: l.id, l.effectiveChain)
+                    }
                 }
                 dirty(preview: false)
             } else {
@@ -249,7 +252,7 @@ final class ProjectSession: ObservableObject {
     private static func onlyVoiceChainChanged(_ a: Project, _ b: Project) -> Bool {
         guard a.lanes.count == b.lanes.count else { return false }
         var c = b
-        for i in c.lanes.indices { c.lanes[i].eq = a.lanes[i].eq }
+        for i in c.lanes.indices { c.lanes[i].eq = a.lanes[i].eq; c.lanes[i].chain = a.lanes[i].chain }
         return c == a
     }
     let history = ProjectHistory()

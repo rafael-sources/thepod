@@ -19,7 +19,7 @@ final class ChainTap: @unchecked Sendable {
     private var level: Float = -120
     private var stamp: CFTimeInterval = 0
 
-    init(laneId: Int, settings: VoiceEQ) {
+    init(laneId: Int, settings: ChainSettings) {
         self.laneId = laneId
         chain = VoiceChain(settings: settings)
         VoiceChainRegistry.shared.register(chain, lane: laneId)

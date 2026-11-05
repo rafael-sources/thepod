@@ -278,6 +278,21 @@ struct FixStep: View {
                             CutList(session: session)
                         }
                     }
+                    Card {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "slider.horizontal.3").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Estudio").font(.headline)
+                                Text("Consola, ecualizador por bandas, compresor completo, de-esser y puerta por persona. Para quien quiere llegar más lejos; todo lo de arriba sigue funcionando sin entrar aquí.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                                if session.project.lanes.contains(where: \.tunedInStudio) {
+                                    Label("Hay voces ajustadas en el estudio", systemImage: "waveform.badge.magnifyingglass").font(.caption).foregroundStyle(Theme.accent)
+                                }
+                            }
+                            Spacer()
+                            OpenStudioButton().buttonStyle(.bordered)
+                        }
+                    }
                 }
                 .padding(28)
             }

@@ -521,7 +521,7 @@ enum SelfTest {
                     let st = try await asset.loadTracks(withMediaType: .audio).first!
                     try track.insertTimeRange(CMTimeRange(start: .zero, duration: try await asset.load(.duration)), of: st, at: .zero)
                     let p = AVMutableAudioMixInputParameters(track: track)
-                    let tap = ChainTap(laneId: 1, settings: eq)
+                    let tap = ChainTap(laneId: 1, settings: ChainSettings.preset(eq))
                     p.audioTapProcessor = tap.makeProcessor()
                     let mix = AVMutableAudioMix(); mix.inputParameters = [p]
                     let out = dir.appendingPathComponent("out-\(UUID().uuidString).m4a")

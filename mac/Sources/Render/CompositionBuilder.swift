@@ -262,7 +262,7 @@ enum CompositionBuilder {
                 // Cadena de voz de la persona (EQ, voz pareja, siseo, limitador) antes del volumen de la mezcla.
                 // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
                 // se le suma la misma curva al leerlo.
-                let chainTap = ChainTap(laneId: id, settings: lane.eq)
+                let chainTap = ChainTap(laneId: id, settings: lane.effectiveChain)
                 if let proc = chainTap.makeProcessor() { p.audioTapProcessor = proc; meters[id] = chainTap }
                 if preview {
                     let base = laneBase

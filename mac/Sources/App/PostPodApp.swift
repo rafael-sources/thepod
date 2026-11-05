@@ -31,6 +31,9 @@ struct PostPodApp: App {
                 Divider()
                 OpenProbeButton()
             }
+            CommandMenu("Estudio") {
+                OpenStudioButton()
+            }
             CommandGroup(replacing: .help) {
                 Button("Manual de thePod") { Links.open("/docs/postpodapp") }
                 Button("Preguntas frecuentes") { Links.open("/docs/postpodapp/faq") }
@@ -44,6 +47,11 @@ struct PostPodApp: App {
             RoomProbeView()
         }
         .windowStyle(.hiddenTitleBar)
+
+        Window("Estudio", id: "estudio") {
+            StudioRoot().environmentObject(app)
+        }
+        .defaultSize(width: 1280, height: 820)
 
         Settings {
             SettingsView()

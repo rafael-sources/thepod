@@ -153,6 +153,7 @@ extension Lane {
         fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn) ?? 0
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut) ?? 0
         eq = try c.decodeIfPresent(VoiceEQ.self, forKey: .eq) ?? VoiceEQ()
+        chain = try c.decodeIfPresent(ChainSettings.self, forKey: .chain)
         muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
@@ -237,6 +238,103 @@ struct VoiceEQ: Codable, Equatable {
     }
 }
 
+/// Una banda del ecualizador paramétrico del estudio.
+struct EQBand: Codable, Equatable, Identifiable, Hashable {
+    enum Kind: String, Codable, CaseIterable { case highpass, lowshelf, peak, highshelf, lowpass }
+    var id = UUID()
+    var kind: Kind = .peak
+    var freq: Double = 1000             // Hz
+    var gain: Double = 0                // dB (no aplica a paso alto/bajo)
+    var q: Double = 1.0                 // ancho (octavas aprox. en AUNBandEQ)
+    var enabled = true
+    var label: String {
+        switch kind {
+        case .highpass: return "Paso alto"
+        case .lowshelf: return "Estante bajo"
+        case .peak: return "Campana"
+        case .highshelf: return "Estante alto"
+        case .lowpass: return "Paso bajo"
+        }
+    }
+}
+
+/// La cadena de voz completa de una persona (el estudio). El nivel simple (`VoiceEQ`) es un preset de esto.
+struct ChainSettings: Codable, Equatable {
+    static let maxBands = 8
+    var bands: [EQBand] = []
+    var compressorOn = false
+    var threshold: Double = -20          // dB
+    var ratio: Double = 3               // :1 (se traduce a «head room» del AU)
+    var attack: Double = 0.008          // s
+    var release: Double = 0.14          // s
+    var makeup: Double = 4              // dB
+    var deesserOn = false
+    var deesserAmount: Double = 0.5     // 0…1 (cuánto baja las eses)
+    var limiterOn = true
+    var gateOn = false
+    var gateThreshold: Double = -45     // dB (expansión suave por debajo)
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bands = try c.decodeIfPresent([EQBand].self, forKey: .bands) ?? []
+        compressorOn = try c.decodeIfPresent(Bool.self, forKey: .compressorOn) ?? false
+        threshold = try c.decodeIfPresent(Double.self, forKey: .threshold) ?? -20
+        ratio = try c.decodeIfPresent(Double.self, forKey: .ratio) ?? 3
+        attack = try c.decodeIfPresent(Double.self, forKey: .attack) ?? 0.008
+        release = try c.decodeIfPresent(Double.self, forKey: .release) ?? 0.14
+        makeup = try c.decodeIfPresent(Double.self, forKey: .makeup) ?? 4
+        deesserOn = try c.decodeIfPresent(Bool.self, forKey: .deesserOn) ?? false
+        deesserAmount = try c.decodeIfPresent(Double.self, forKey: .deesserAmount) ?? 0.5
+        limiterOn = try c.decodeIfPresent(Bool.self, forKey: .limiterOn) ?? true
+        gateOn = try c.decodeIfPresent(Bool.self, forKey: .gateOn) ?? false
+        gateThreshold = try c.decodeIfPresent(Double.self, forKey: .gateThreshold) ?? -45
+    }
+
+    /// Lo que describe el nivel simple, traducido a la cadena.
+    static func preset(_ e: VoiceEQ) -> ChainSettings {
+        var c = ChainSettings()
+        if e.rumbleCut {
+            c.bands.append(EQBand(kind: .highpass, freq: 120, gain: 0, q: 0.7))
+            c.bands.append(EQBand(kind: .peak, freq: 250, gain: -3, q: 1))
+        }
+        if abs(e.low) >= 0.1 { c.bands.append(EQBand(kind: .peak, freq: 120, gain: e.low, q: 0.8)) }
+        if abs(e.mid) >= 0.1 { c.bands.append(EQBand(kind: .peak, freq: 1000, gain: e.mid, q: 1)) }
+        if abs(e.high) >= 0.1 { c.bands.append(EQBand(kind: .peak, freq: 6000, gain: e.high, q: 0.8)) }
+        c.compressorOn = e.compress
+        c.deesserOn = e.deess
+        return c
+    }
+
+    /// Si esta cadena es exactamente lo que el nivel simple sabe decir, devuelve ese preset; si no, nil.
+    var asSimple: VoiceEQ? {
+        var e = VoiceEQ()
+        var rest = bands.filter { $0.enabled }
+        if let hp = rest.firstIndex(where: { $0.kind == .highpass && abs($0.freq - 120) < 1 }),
+           let r = rest.firstIndex(where: { $0.kind == .peak && abs($0.freq - 250) < 1 && abs($0.gain + 3) < 0.05 }) {
+            e.rumbleCut = true
+            for i in [hp, r].sorted(by: >) { rest.remove(at: i) }
+        }
+        for b in rest {
+            guard b.kind == .peak else { return nil }
+            if abs(b.freq - 120) < 1, abs(b.q - 0.8) < 0.01, e.low == 0 { e.low = b.gain }
+            else if abs(b.freq - 1000) < 1, abs(b.q - 1) < 0.01, e.mid == 0 { e.mid = b.gain }
+            else if abs(b.freq - 6000) < 1, abs(b.q - 0.8) < 0.01, e.high == 0 { e.high = b.gain }
+            else { return nil }
+        }
+        if compressorOn {
+            guard abs(threshold + 20) < 0.05, abs(ratio - 3) < 0.05, abs(attack - 0.008) < 0.0005, abs(release - 0.14) < 0.005, abs(makeup - 4) < 0.05 else { return nil }
+            e.compress = true
+        }
+        if deesserOn {
+            guard abs(deesserAmount - 0.5) < 0.01 else { return nil }
+            e.deess = true
+        }
+        guard limiterOn, !gateOn else { return nil }
+        return e
+    }
+}
+
 struct Lane: Codable, Identifiable, Equatable {
     var id: Int                         // 1-based track number
     var name: String
@@ -246,10 +344,22 @@ struct Lane: Codable, Identifiable, Equatable {
     var offset: Double = 0              // timeline time where this person's recording starts
     var fadeIn: Double = 0              // segundos de entrada suave del audio de esta persona
     var fadeOut: Double = 0             // segundos de salida suave
-    var eq = VoiceEQ()                  // ecualizador de 3 bandas (se aplica procesando el audio)
+    var eq = VoiceEQ()                  // ecualizador de 3 bandas (el nivel simple)
+    var chain: ChainSettings?           // la cadena completa del estudio; nil = la que describe `eq`
     var muted: Bool = false             // M: esta persona no suena (vista previa y export)
     var solo: Bool = false              // S: solo suenan las personas con solo
     var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
+
+    /// La cadena que suena: la del estudio si existe, si no el preset del nivel simple.
+    var effectiveChain: ChainSettings { chain ?? ChainSettings.preset(eq) }
+    /// El estudio cambió algo que el nivel simple no sabe decir.
+    var tunedInStudio: Bool { chain != nil && chain?.asSimple == nil }
+
+    /// Guarda una cadena del estudio: si el nivel simple la sabe decir, va al preset (y los controles
+    /// simples la muestran); si no, queda como cadena del estudio y el simple avisa.
+    static func store(_ c: ChainSettings, in lane: inout Lane) {
+        if let simple = c.asSimple { lane.eq = simple; lane.chain = nil } else { lane.chain = c }
+    }
 
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
