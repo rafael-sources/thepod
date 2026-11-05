@@ -229,7 +229,29 @@ enum Step: String, CaseIterable, Identifiable {
 
 @MainActor
 final class ProjectSession: ObservableObject {
-    @Published var project: Project { didSet { if project != oldValue { history.record(before: oldValue); dirty() } } }
+    @Published var project: Project {
+        didSet {
+            guard project != oldValue else { return }
+            history.record(before: oldValue)
+            // Solo cambió el ecualizador / voz pareja / siseo de alguien: se aplica al vuelo en la cadena de voz
+            // (vista previa y export en marcha), sin rearmar la vista previa ni cortar el audio.
+            if Self.onlyVoiceChainChanged(oldValue, project) {
+                for l in project.lanes where l.eq != oldValue.lanes.first(where: { $0.id == l.id })?.eq {
+                    VoiceChainRegistry.shared.update(lane: l.id, l.eq)
+                }
+                dirty(preview: false)
+            } else {
+                dirty()
+            }
+        }
+    }
+
+    private static func onlyVoiceChainChanged(_ a: Project, _ b: Project) -> Bool {
+        guard a.lanes.count == b.lanes.count else { return false }
+        var c = b
+        for i in c.lanes.indices { c.lanes[i].eq = a.lanes[i].eq }
+        return c == a
+    }
     let history = ProjectHistory()
     @Published var note: String?          // aviso corto (atajos, deshacer)
     private var offsetWork: Task<Void, Never>?
@@ -354,14 +376,14 @@ final class ProjectSession: ObservableObject {
 
     // MARK: Persistence & preview
 
-    private func dirty() {
+    private func dirty(preview: Bool = true) {
         saveTask?.cancel()
         saveTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             try? ProjectStore.save(project)
         }
-        schedulePreview()
+        if preview { schedulePreview() }
     }
 
     func schedulePreview(immediate: Bool = false) {
@@ -865,7 +887,8 @@ final class ProjectSession: ObservableObject {
 
     // MARK: Ecualizador por persona
 
-    /// Procesa el audio de la persona con su ecualizador (ffmpeg) y lo deja listo para la vista previa y el export.
+    /// (Hasta 0.30) procesaba el audio con ffmpeg; ahora la cadena de voz va en tiempo real y no hay nada que aplicar.
+    /// Se conserva para proyectos que todavía tengan archivos `eq_*.m4a`: ya no se usan.
     func applyEQ(laneId: Int) {
         guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return }
         let eq = lane.eq
@@ -887,17 +910,9 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// ¿El ecualizador de esta persona ya está aplicado tal como está configurado?
-    func eqApplied(laneId: Int) -> Bool {
-        guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return true }
-        if lane.eq.isFlat { return true }
-        return lane.clips.allSatisfy { c in
-            guard let m = project.mediaItem(c.mediaId), m.hasAudio else { return true }
-            var base = (project.enhanceAudio ? m.enhancedAudioFile : nil) ?? m.file
-            if !FileManager.default.fileExists(atPath: ProjectStore.url(base, in: project.id).path) { base = m.file }
-            return m.eqAudioFile == AudioAnalysis.eqRel(mediaId: m.id, base: base, eq: lane.eq)
-        }
-    }
+    /// ¿El ecualizador de esta persona ya está aplicado tal como está configurado? Con la cadena en
+    /// tiempo real, siempre: se oye al instante.
+    func eqApplied(laneId: Int) -> Bool { true }
 
     // MARK: Igualar color de las cámaras
 

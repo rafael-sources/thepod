@@ -15,7 +15,7 @@ struct BuiltComposition {
     /// Segundos de intro antes del contenido (0 si no hay). El cierre va después del contenido.
     var introDuration: Double = 0
     /// Solo en la vista previa: lo que suena de cada persona (id de pista → medidor), para el medidor del timeline.
-    var meters: [Int: LevelTap] = [:]
+    var meters: [Int: ChainTap] = [:]
     /// Solo en la vista previa: volumen que la mezcla le da a cada persona en cada instante del video (0…).
     var gains: [Int: (Double) -> Double] = [:]
 
@@ -209,7 +209,7 @@ enum CompositionBuilder {
         let duckPoints: [Double] = speech.flatMap { [$0.start - 0.3, $0.start, $0.end, $0.end + 0.8] }
 
         let wantVideo = format != .audio
-        var meters: [Int: LevelTap] = [:]
+        var meters: [Int: ChainTap] = [:]
         var gains: [Int: (Double) -> Double] = [:]
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
@@ -229,12 +229,8 @@ enum CompositionBuilder {
                 if media.hasAudio {
                     var audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
                     if !FileManager.default.fileExists(atPath: ProjectStore.url(audioRel, in: project.id).path) { audioRel = media.file }
-                    // Ecualizador de la persona: archivo ya procesado con la misma configuración y la misma base
-                    if !lane.eq.isFlat, let eqRel = media.eqAudioFile,
-                       eqRel == AudioAnalysis.eqRel(mediaId: media.id, base: audioRel, eq: lane.eq),
-                       FileManager.default.fileExists(atPath: ProjectStore.url(eqRel, in: project.id).path) {
-                        audioRel = eqRel
-                    }
+                    // El ecualizador, «voz pareja» y «menos siseo» ya no generan archivos: van en la cadena de
+                    // voz en tiempo real (ChainTap), igual en la vista previa que en el export.
                     let audioAsset = asset(audioRel)
                     if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
                         let aDur = try await audioAsset.load(.duration).seconds
@@ -263,10 +259,12 @@ enum CompositionBuilder {
                 applyEnvelope(p, base: laneBase, span: span,
                               points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints(id) : []) + bleepPoints(id) + automationPoints(lane),
                               factor: factor)
+                // Cadena de voz de la persona (EQ, voz pareja, siseo, limitador) antes del volumen de la mezcla.
+                // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
+                // se le suma la misma curva al leerlo.
+                let chainTap = ChainTap(laneId: id, settings: lane.eq)
+                if let proc = chainTap.makeProcessor() { p.audioTapProcessor = proc; meters[id] = chainTap }
                 if preview {
-                    // El medidor escucha la pista ANTES del volumen de la mezcla (medido): se le suma la misma curva
-                    let meter = LevelTap()
-                    if let proc = meter.makeProcessor() { p.audioTapProcessor = proc; meters[id] = meter }
                     let base = laneBase
                     gains[id] = { t in t >= span.start && t <= span.end ? base * factor(t) : 0 }
                 }

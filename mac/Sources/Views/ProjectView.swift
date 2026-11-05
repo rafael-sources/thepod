@@ -386,15 +386,8 @@ struct TrackInspector: View {
         eqRow("Graves", $session.project.lanes[i].eq.low)
         eqRow("Medios", $session.project.lanes[i].eq.mid)
         eqRow("Agudos", $session.project.lanes[i].eq.high)
-        if !session.eqApplied(laneId: lane.id) {
-            HStack {
-                Text("Cambios sin aplicar: el ecualizador procesa el audio de esta persona (unos segundos por minuto).")
-                    .font(.caption2).foregroundStyle(.orange)
-                Spacer()
-                Button("Aplicar") { session.applyEQ(laneId: lane.id) }.controlSize(.small).buttonStyle(.borderedProminent)
-                    .disabled(session.isBusy)
-            }
-        }
+        Text("Se oye al instante mientras suena; lo que oyes es lo que se exporta.")
+            .font(.caption2).foregroundStyle(Theme.secondary)
         Text("\(session.project.laneName(lane.id)) \(ProjectSession.offsetText(lane.offset)). Con − suena antes (se salta el principio de su grabación); con + suena después. También puedes escribir los segundos. Los cortes se aplican igual a todas las pistas.")
             .font(.caption2).foregroundStyle(Theme.secondary)
     }

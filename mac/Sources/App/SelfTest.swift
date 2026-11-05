@@ -10,7 +10,7 @@ import AVFoundation
 enum SelfTest {
     static var isRequested: Bool {
         CommandLine.arguments.contains("--selftest") || CommandLine.arguments.contains("--render")
-            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan")
+            || CommandLine.arguments.contains("--prepod-test") || CommandLine.arguments.contains("--postpod-test") || CommandLine.arguments.contains("--pre-test") || CommandLine.arguments.contains("--update-test") || CommandLine.arguments.contains("--pre-snapshot") || CommandLine.arguments.contains("--prod-test") || CommandLine.arguments.contains("--prod-snapshot") || CommandLine.arguments.contains("--rec-test") || CommandLine.arguments.contains("--prod-recs") || CommandLine.arguments.contains("--cintillo-snapshot") || CommandLine.arguments.contains("--director-snapshot") || CommandLine.arguments.contains("--ama-snapshot") || CommandLine.arguments.contains("--post-snapshot") || CommandLine.arguments.contains("--tts") || CommandLine.arguments.contains("--intro-snapshot") || CommandLine.arguments.contains("--intro-frames") || CommandLine.arguments.contains("--brand-kit") || CommandLine.arguments.contains("--extras-test") || CommandLine.arguments.contains("--sensitive-test") || CommandLine.arguments.contains("--stems-test") || CommandLine.arguments.contains("--sync-test") || CommandLine.arguments.contains("--frame-test") || CommandLine.arguments.contains("--meter-test") || CommandLine.arguments.contains("--filler-test") || CommandLine.arguments.contains("--miccheck-test") || CommandLine.arguments.contains("--chapters-test") || CommandLine.arguments.contains("--enhance-test") || CommandLine.arguments.contains("--pub-snapshot") || CommandLine.arguments.contains("--cover-scan") || CommandLine.arguments.contains("--voice-chain-test")
     }
 
     /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
@@ -493,6 +493,73 @@ enum SelfTest {
         }
     }
 
+    /// "--voice-chain-test": genera un tono de 300 Hz + 7 kHz, lo pasa por la cadena de voz con agudos a −12 dB
+    /// y de-esser dentro de un export real (AVAssetExportSession + AVAudioMix + tap), y comprueba que la
+    /// banda alta baje y la baja no. Es la misma ruta que la vista previa y el export de verdad.
+    static func voiceChainTest() {
+        Task {
+            do {
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("voicechain-\(UUID().uuidString)")
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let src = dir.appendingPathComponent("tone.caf")
+                let sr = 48_000.0, secs = 3.0
+                let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1)!
+                let file = try AVAudioFile(forWriting: src, settings: fmt.settings)
+                let n = AVAudioFrameCount(sr * secs)
+                let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
+                buf.frameLength = n
+                for i in 0..<Int(n) {
+                    let t = Double(i) / sr
+                    buf.floatChannelData![0][i] = Float(0.25 * sin(2 * .pi * 300 * t) + 0.25 * sin(2 * .pi * 7000 * t))
+                }
+                try file.write(from: buf)
+
+                func export(_ eq: VoiceEQ) async throws -> URL {
+                    let asset = AVURLAsset(url: src)
+                    let comp = AVMutableComposition()
+                    let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                    let st = try await asset.loadTracks(withMediaType: .audio).first!
+                    try track.insertTimeRange(CMTimeRange(start: .zero, duration: try await asset.load(.duration)), of: st, at: .zero)
+                    let p = AVMutableAudioMixInputParameters(track: track)
+                    let tap = ChainTap(laneId: 1, settings: eq)
+                    p.audioTapProcessor = tap.makeProcessor()
+                    let mix = AVMutableAudioMix(); mix.inputParameters = [p]
+                    let out = dir.appendingPathComponent("out-\(UUID().uuidString).m4a")
+                    let s = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetAppleM4A)!
+                    s.audioMix = mix; s.outputURL = out; s.outputFileType = .m4a
+                    await s.export()
+                    if let e = s.error { throw e }
+                    _ = tap
+                    return out
+                }
+                /// Energía (dB) de una banda, con una DFT directa a esa frecuencia (Goertzel) sobre el segundo central.
+                func band(_ url: URL, hz: Double) throws -> Double {
+                    let f = try AVAudioFile(forReading: url)
+                    let b = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
+                    try f.read(into: b)
+                    let x = b.floatChannelData![0], N = Int(b.frameLength)
+                    let a = N / 3, len = N / 3
+                    let w = 2 * Double.pi * hz / f.processingFormat.sampleRate
+                    var re = 0.0, im = 0.0
+                    for i in 0..<len { let v = Double(x[a + i]); re += v * cos(w * Double(i)); im -= v * sin(w * Double(i)) }
+                    let mag = sqrt(re * re + im * im) / Double(len) * 2
+                    return 20 * log10(max(mag, 1e-9))
+                }
+                let flat = try await export(VoiceEQ())
+                var e = VoiceEQ(); e.high = -12; e.deess = true
+                let cut = try await export(e)
+                let lo0 = try band(flat, hz: 300), hi0 = try band(flat, hz: 7000)
+                let lo1 = try band(cut, hz: 300), hi1 = try band(cut, hz: 7000)
+                print(String(format: "plano: 300 Hz %.1f dB · 7 kHz %.1f dB", lo0, hi0))
+                print(String(format: "agudos −12 + siseo: 300 Hz %.1f dB · 7 kHz %.1f dB", lo1, hi1))
+                let ok = abs(lo0 - lo1) < 2 && (hi0 - hi1) > 8 && lo0 > -20
+                print(ok ? "OK la cadena de voz procesa dentro del export" : "FAIL")
+                try? FileManager.default.removeItem(at: dir)
+                exit(ok ? 0 : 1)
+            } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+        }
+    }
+
     /// "--chapters-test <slug> [intro_s]": los capítulos que saldrían en las notas y en el archivo.
     static func chaptersTest() {
         let a = CommandLine.arguments
@@ -563,6 +630,7 @@ enum SelfTest {
         if args.contains("--render") { render(); return }
         if args.contains("--chapters-test") { chaptersTest(); return }
         if args.contains("--enhance-test") { enhanceTest(); return }
+        if args.contains("--voice-chain-test") { voiceChainTest(); return }
         if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
             // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
             let dir = URL(fileURLWithPath: args[i + 1])
