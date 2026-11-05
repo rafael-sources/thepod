@@ -580,6 +580,8 @@ enum CompositionBuilder {
                 card.anim = a.mapped { Self.outputStart($0, keep: keep) }
                 card.baseScale = Double(k)
             }
+            card.enter = o.enter
+            card.exit = o.exit
             return card
         }
     }

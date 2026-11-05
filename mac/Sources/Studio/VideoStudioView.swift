@@ -113,10 +113,36 @@ struct VideoInspector: View {
                 }
                 Button("Quitar toda la animación", role: .destructive) { session.project.overlays[i].animation = nil }.controlSize(.small)
             }
-            Toggle("Entra y sale con fundido", isOn: $session.project.overlays[i].animate).font(.caption)
+            motionRow("Entrada", Binding(get: { session.project.overlays[i].enter }, set: { session.project.overlays[i].enter = $0 }))
+            motionRow("Salida", Binding(get: { session.project.overlays[i].exit }, set: { session.project.overlays[i].exit = $0 }))
+            if o.enter == nil && o.exit == nil {
+                Toggle("Entra y sale con fundido", isOn: $session.project.overlays[i].animate).font(.caption)
+            }
             Spacer(minLength: 8)
             Text("En «Textos y stickers» esta capa dirá «Ajustado en Studio» mientras tenga keyframes. Las posiciones son fracciones del cuadro: valen igual en 16:9, 9:16 y 1:1.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Entrada o salida de una capa: tipo y duración.
+    private func motionRow(_ label: String, _ m: Binding<TitleMotion?>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label).font(.caption)
+                Spacer()
+                Picker("", selection: Binding<TitleMotion.Kind?>(
+                    get: { m.wrappedValue?.kind },
+                    set: { k in m.wrappedValue = k.map { TitleMotion(kind: $0, duration: m.wrappedValue?.duration ?? 0.4) } })) {
+                    Text("Simple (fundido)").tag(TitleMotion.Kind?.none)
+                    ForEach(TitleMotion.Kind.allCases, id: \.self) { Text($0.name).tag(TitleMotion.Kind?.some($0)) }
+                }.labelsHidden().frame(width: 150)
+            }
+            if let cur = m.wrappedValue {
+                HStack {
+                    Slider(value: Binding(get: { cur.duration }, set: { m.wrappedValue?.duration = $0 }), in: 0.1...2)
+                    Text(String(format: "%.1f s", cur.duration)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing)
+                }
+            }
         }
     }
 

@@ -39,6 +39,36 @@ final class RenderScene: @unchecked Sendable {
         /// Studio · Video: keyframes (ya en tiempo del video final) y el tamaño con que se dibujó la imagen.
         var anim: LayerAnimation? = nil
         var baseScale: Double = 1
+        var enter: TitleMotion? = nil
+        var exit: TitleMotion? = nil
+    }
+
+    /// La entrada o la salida de una capa: `k` va de 0 (fuera) a 1 (puesta). Trabaja sobre la imagen ya colocada en
+    /// su recuadro `r` (origen 0,0 = esquina inferior izquierda del recuadro).
+    static func motion(_ img: CIImage, kind: TitleMotion.Kind, k: Double, r: CGRect, H: CGFloat) -> CIImage {
+        let e = CGFloat(1 - pow(1 - max(0, min(1, k)), 3))     // sale suave
+        let alpha = { (i: CIImage, a: CGFloat) in i.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: a)]) }
+        switch kind {
+        case .fade:
+            return alpha(img, e)
+        case .rise:
+            return alpha(img.transformed(by: .init(translationX: 0, y: -(r.height * 0.6 + H * 0.03) * (1 - e))), e)
+        case .drop:
+            return alpha(img.transformed(by: .init(translationX: 0, y: (r.height * 0.6 + H * 0.03) * (1 - e))), e)
+        case .grow:
+            let s = 0.6 + 0.4 * e
+            return alpha(img.transformed(by: CGAffineTransform(translationX: -r.width / 2, y: -r.height / 2).concatenating(.init(scaleX: s, y: s)).concatenating(.init(translationX: r.width / 2, y: r.height / 2))), e)
+        case .reveal:
+            // Se escribe de izquierda a derecha (lineal, como una máquina)
+            return img.cropped(to: CGRect(x: 0, y: -4, width: max(0, r.width * CGFloat(k)) + 1, height: r.height + 8))
+        case .wipe:
+            // Una barra del color del texto barre y deja el texto detrás
+            let x = r.width * e
+            let shown = img.cropped(to: CGRect(x: 0, y: -4, width: max(0, x) + 1, height: r.height + 8))
+            guard e < 1 else { return shown }
+            let bar = CIImage(color: CIColor(red: 0.957, green: 0.780, blue: 0.439)).cropped(to: CGRect(x: x, y: 0, width: max(2, r.height * 0.08), height: r.height))
+            return bar.composited(over: shown)
+        }
     }
     var overlays: [OverlayCard] = []
     /// Recuadro de cada capa en fracciones del cuadro (x, y desde arriba, ancho, alto), para poder moverla sobre la vista previa.
@@ -589,7 +619,18 @@ final class RenderScene: @unchecked Sendable {
                     img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(max(0, o)))])
                 }
             }
-            if c.animate {
+            if c.enter != nil || c.exit != nil {
+                // Studio · Video: entrada y salida elegidas
+                if let en = c.enter, t - c.start < en.duration {
+                    img = Self.motion(img, kind: en.kind, k: (t - c.start) / max(0.001, en.duration), r: r, H: H)
+                } else if let ex = c.exit, c.end - t < ex.duration {
+                    img = Self.motion(img, kind: ex.kind, k: (c.end - t) / max(0.001, ex.duration), r: r, H: H)
+                } else if c.animate {
+                    // Solo un lado elegido: el otro usa el fundido de siempre
+                    let k = c.enter == nil ? min(1, (t - c.start) / 0.3) : min(1, (c.end - t) / 0.3)
+                    if k < 1 { img = img.applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(k))]) }
+                }
+            } else if c.animate {
                 let k = min(1, (t - c.start) / 0.3, (c.end - t) / 0.3)
                 if k < 1 {
                     let s = CGFloat(0.85 + 0.15 * (1 - pow(1 - k, 3)))

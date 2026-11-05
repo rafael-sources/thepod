@@ -915,10 +915,13 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     var animate: Bool = true            // entra y sale con fundido y un pequeño salto
     /// Studio · Video: keyframes de posición, tamaño, giro y opacidad (nil = la capa está quieta, como la puso el simple)
     var animation: LayerAnimation?
+    /// Studio · Video: cómo entra y cómo sale (nil = el fundido con saltito de `animate`)
+    var enter: TitleMotion?
+    var exit: TitleMotion?
 
     var end: Double { start + duration }
-    /// Tocada en Studio: tiene keyframes que el paso simple no sabe expresar.
-    var tunedInStudio: Bool { !(animation?.isEmpty ?? true) }
+    /// Tocada en Studio: tiene keyframes o entradas que el paso simple no sabe expresar.
+    var tunedInStudio: Bool { !(animation?.isEmpty ?? true) || enter != nil || exit != nil }
     var title: String {
         switch kind {
         case .text: return text.isEmpty ? "Texto" : text
@@ -953,6 +956,29 @@ struct VideoLayer: Codable, Identifiable, Equatable {
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1
         animate = try c.decodeIfPresent(Bool.self, forKey: .animate) ?? true
         animation = try c.decodeIfPresent(LayerAnimation.self, forKey: .animation)
+        enter = try c.decodeIfPresent(TitleMotion.self, forKey: .enter)
+        exit = try c.decodeIfPresent(TitleMotion.self, forKey: .exit)
+    }
+}
+
+/// Cómo entra (o sale) un título, sticker o imagen: la animación va sobre la capa ya dibujada.
+struct TitleMotion: Codable, Equatable {
+    enum Kind: String, Codable, CaseIterable {
+        case rise, fade, reveal, grow, wipe, drop
+        var name: String {
+            switch self {
+            case .rise: return "Subir"; case .fade: return "Fundido"; case .reveal: return "Escribir"
+            case .grow: return "Crecer"; case .wipe: return "Barrido"; case .drop: return "Caer"
+            }
+        }
+    }
+    var kind: Kind = .rise
+    var duration: Double = 0.4
+    init(kind: Kind = .rise, duration: Double = 0.4) { self.kind = kind; self.duration = duration }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .rise
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 0.4
     }
 }
 

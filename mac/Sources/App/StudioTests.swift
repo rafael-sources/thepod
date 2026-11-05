@@ -112,10 +112,36 @@ enum StudioTests {
         let sl = mean(slide, CGRect(x: 0.05, y: 0.4, width: 0.1, height: 0.2), size: size), sr = mean(slide, CGRect(x: 0.85, y: 0.4, width: 0.1, height: 0.2), size: size)
         check(sl.r > 0.9 && sl.g > 0.9 && sr.g < 0.3, "transición deslizar: a mitad ya cubre la izquierda y aún no la derecha")
 
+        // 5b) Entradas y salidas de un título: subir deja la capa más abajo a mitad de camino; escribir la revela de izquierda
+        //     a derecha; fundido al salir la apaga; sin entrada elegida, la salida simple sigue
+        let s4 = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
+        let wide = solid(0, 0, 1, CGSize(width: 320, height: 60))
+        var tc = RenderScene.OverlayCard(id: 9, start: 2, end: 8, image: wide, cx: 0.5, cy: 0.5, animate: true)
+        tc.enter = TitleMotion(kind: .rise, duration: 1)
+        s4.overlays = [tc]
+        let risen = s4.render(frames: frames, time: 2.3)        // un tercio de la subida
+        let centerY = mean(risen, CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
+        let belowY = mean(risen, CGRect(x: 0.45, y: 0.56, width: 0.1, height: 0.08), size: size)
+        check(belowY.b > 0.3 && belowY.b > centerY.b, "entrada «subir»: a un tercio la capa está más abajo que su sitio")
+        let settled = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
+        check(settled.b > 0.7, "después de la entrada la capa está en su sitio y entera")
+        tc.enter = TitleMotion(kind: .reveal, duration: 1)
+        s4.overlays = [tc]
+        let half = s4.render(frames: frames, time: 2.5)
+        let leftHalf = mean(half, CGRect(x: 0.27, y: 0.46, width: 0.08, height: 0.08), size: size)
+        let rightHalf = mean(half, CGRect(x: 0.65, y: 0.46, width: 0.08, height: 0.08), size: size)
+        check(leftHalf.b > 0.7 && rightHalf.r > 0.7, "entrada «escribir»: a mitad se ve la izquierda y aún no la derecha")
+        tc.enter = nil; tc.exit = TitleMotion(kind: .fade, duration: 1)
+        s4.overlays = [tc]
+        let fading = mean(s4.render(frames: frames, time: 7.8), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
+        let shown = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
+        check(fading.b < shown.b - 0.3, "salida «fundido»: al final la capa se va apagando")
+
         // 6) Guardar y cargar: el proyecto conserva keyframes, transiciones y cortes; uno viejo (sin esos campos) abre igual
         var p = Project(id: "prueba-studio", name: "Prueba", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         var layer = VideoLayer(id: 1, kind: .text, start: 3, text: "Hola")
         layer.animation = anim
+        layer.enter = TitleMotion(kind: .wipe, duration: 0.3)
         p.overlays = [layer]
         var br = BRollClip(id: 1, file: "broll/x.mp4", isVideo: true, start: 10)
         br.transitionIn = Transition(kind: .zoom, duration: 0.8)
@@ -127,19 +153,19 @@ enum StudioTests {
             let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
             let data = try enc.encode(p)
             let back = try dec.decode(Project.self, from: data)
-            check(back.overlays.first?.animation == anim && back.brolls.first?.transitionIn?.kind == .zoom
+            check(back.overlays.first?.animation == anim && back.overlays.first?.enter?.kind == .wipe && back.brolls.first?.transitionIn?.kind == .zoom
                   && back.studioVideo.cuts.first?.template == .pip && back.studioVideo.minHold == 3, "guardar y cargar conserva todo lo de Studio · Video")
             check(back.videoTunedInStudio && !Project(id: "x", name: "x", podcastName: nil, createdAt: Date(), importedFrom: "tracks").videoTunedInStudio, "«ajustado en Studio» se detecta solo cuando hay algo")
             // un proyecto sin los campos nuevos
             var obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
             obj["studioVideo"] = nil
-            var ov = obj["overlays"] as! [[String: Any]]; ov[0]["animation"] = nil; obj["overlays"] = ov
+            var ov = obj["overlays"] as! [[String: Any]]; ov[0]["animation"] = nil; ov[0]["enter"] = nil; obj["overlays"] = ov
             var bs = obj["brolls"] as! [[String: Any]]; bs[0]["transitionIn"] = nil; obj["brolls"] = bs
             let old = try dec.decode(Project.self, from: JSONSerialization.data(withJSONObject: obj))
-            check(old.overlays.first?.animation == nil && old.brolls.first?.transitionIn == nil && old.studioVideo.isDefault, "un proyecto viejo abre con los valores de siempre")
+            check(old.overlays.first?.animation == nil && old.overlays.first?.enter == nil && old.brolls.first?.transitionIn == nil && old.studioVideo.isDefault, "un proyecto viejo abre con los valores de siempre")
         } catch { check(false, "guardar/cargar: \(error)") }
 
-        print(ok ? "OK Studio · Video: keyframes, cortes de cámara, permanencia, transiciones y guardado" : "FAIL Studio · Video")
+        print(ok ? "OK Studio · Video: keyframes, cortes de cámara, permanencia, transiciones, entradas de título y guardado" : "FAIL Studio · Video")
         return ok
     }
 }
