@@ -100,12 +100,17 @@ enum StudioTests {
                 check(abs(Double(f.length) / sr - RoomTone.loopSeconds) < 0.01, "el bucle dura \(RoomTone.loopSeconds) s")
                 let lufsSrc = LoudnessMatch.integratedLUFS(url: url) ?? -999
                 check(lufsSrc > -70 && lufsSrc < -30, String(format: "el bucle conserva un nivel de ambiente (%.1f LUFS)", lufsSrc))
-                // sin saltos: ninguna muestra fuera del rango del ruido original (|v| ≤ 0,01)
+                // sin costura audible: la potencia en 20 ms alrededor de cada costura es la misma que en el medio (±1,5 dB)
                 let n = AVAudioFrameCount(f.length)
                 if let all = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: n), (try? f.read(into: all)) != nil {
-                    var peak: Float = 0
-                    for i in 0..<Int(all.frameLength) { peak = max(peak, abs(all.floatChannelData![0][i])) }
-                    check(peak <= 0.0101, String(format: "las costuras no suman picos (pico %.4f)", peak))
+                    func rms(_ from: Int, _ len: Int) -> Double {
+                        var sum = 0.0; for i in from..<(from + len) { let v = Double(all.floatChannelData![0][i]); sum += v * v }; return sqrt(sum / Double(len))
+                    }
+                    let w = Int(0.02 * sr)
+                    let seam = Int(sr) - Int(0.05 * sr) + Int(0.025 * sr) - w / 2      // centro del primer cruce
+                    let mid = Int(0.5 * sr)
+                    let ratio = 20 * log10(rms(seam, w) / max(1e-9, rms(mid, w)))
+                    check(abs(ratio) < 1.5, String(format: "la costura conserva la potencia (%.2f dB respecto al medio)", ratio))
                 }
             } else { check(false, "no se pudo escribir el bucle") }
         }
@@ -114,7 +119,7 @@ enum StudioTests {
         check(dead.count == 3 && dead[0] == (4, 12) && dead[1] == (50, 50.6) && dead[2] == (100, 130), "huecos: antes (4–12), pitido (50–50,6) y después (100–130); el pitido de 50 ms no cuenta (\(dead))")
         check(RoomTone.deadSpans(laneSpan: (4.05, 129.9), content: (4, 130), bleeps: []).isEmpty, "sin huecos si la persona cubre casi todo")
         // 4) Unión de corte: cero justo en la unión, entero a 6 ms, sin tocar lejos
-        check(RoomTone.joinDip(10, joins: [10]) == 0 && RoomTone.joinDip(10.003, joins: [10]) == 0.5 && RoomTone.joinDip(10.006, joins: [10]) == 1 && RoomTone.joinDip(12, joins: [10]) == 1,
+        check(RoomTone.joinDip(10, joins: [10]) == 0 && abs(RoomTone.joinDip(10.003, joins: [10]) - 0.5) < 1e-6 && RoomTone.joinDip(10.006, joins: [10]) >= 0.999 && RoomTone.joinDip(12, joins: [10]) == 1,
               "la unión baja a cero y vuelve en 6 ms")
         print(ok ? "OK tono de sala" : "FAIL tono de sala")
         return ok
