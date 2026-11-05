@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import AudioToolbox
 
 /// Cadena de voz en tiempo real: lo que se oye al mover un control es exactamente lo que se exporta.
@@ -185,6 +186,8 @@ final class VoiceChain: @unchecked Sendable {
 
     func render(into list: UnsafeMutablePointer<AudioBufferList>, frames: UInt32, sampleTime: Double, timelineTime: Double? = nil) -> OSStatus {
         guard prepared, let lim = limUnit else { return noErr }
+        // A/B: con «Sin procesar» encendido el audio pasa tal cual (el buffer ya trae la fuente)
+        if VoiceChainRegistry.shared.bypassAll { return noErr }
         if os_unfair_lock_trylock(&lock) {
             if let p = pending { pending = nil; os_unfair_lock_unlock(&lock); applyNow(p); automated = p.hasAutomation } else { os_unfair_lock_unlock(&lock) }
         }
@@ -257,8 +260,11 @@ final class VoiceChain: @unchecked Sendable {
 
 /// Las cadenas vivas por persona: la vista previa y un export en marcha pueden tener cada uno la suya;
 /// al cambiar un control se actualizan todas (las muertas se descartan solas).
-final class VoiceChainRegistry: @unchecked Sendable {
+final class VoiceChainRegistry: ObservableObject, @unchecked Sendable {
     static let shared = VoiceChainRegistry()
+    /// A/B instantáneo: true = ninguna cadena de voz procesa (se oye la grabación tal cual, con el mismo volumen).
+    /// Solo afecta a la reproducción; el export siempre procesa.
+    @Published var bypassAll = false
     private var lock = os_unfair_lock()
     private var chains: [Int: [WeakChain]] = [:]
     private struct WeakChain { weak var chain: VoiceChain? }

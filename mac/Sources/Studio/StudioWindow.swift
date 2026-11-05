@@ -43,6 +43,7 @@ struct StudioRoot: View {
 struct StudioTransport: View {
     @ObservedObject var session: ProjectSession
     @Binding var tab: StudioTab.Tab
+    @ObservedObject private var chains = VoiceChainRegistry.shared
 
     var body: some View {
         HStack(spacing: 14) {
@@ -68,6 +69,12 @@ struct StudioTransport: View {
                 Text(EditEngine.clock(session.playheadTimeline)).font(.title3.monospacedDigit())
             }
             Spacer()
+            Toggle(isOn: $chains.bypassAll) {
+                Label(chains.bypassAll ? "Sin procesar" : "A/B", systemImage: chains.bypassAll ? "waveform.slash" : "waveform")
+            }
+            .toggleStyle(.button).keyboardShortcut("b", modifiers: [.command, .shift])
+            .tint(chains.bypassAll ? .orange : Theme.accent)
+            .help("A/B instantáneo (⌘⇧B): oír las voces sin ninguna cadena (EQ, compresor, plugins, limitador) mientras suena. Solo al escuchar; el export siempre procesa.")
             MasterBadge(session: session)
             Button("Exportar…") { session.step = .export }
                 .help("Vuelve a la ventana principal, en Exportar")

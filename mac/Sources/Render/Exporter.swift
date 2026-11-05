@@ -46,6 +46,8 @@ enum Exporter {
     static func export(project: Project, format: ExportFormat, window: EditEngine.Span? = nil,
                        baseName: String? = nil, energy: EnergyMap?, layout: LayoutTemplate? = nil,
                        progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        // El A/B («Sin procesar») es solo para escuchar: el export siempre lleva la cadena de voz
+        await MainActor.run { VoiceChainRegistry.shared.bypassAll = false }
         let built = try await CompositionBuilder.build(project: project, format: format, window: window, energy: energy, layoutOverride: layout)
         let folder = ProjectStore.exportsFolder(for: project.id)
         let stamp = DateFormatter.fileStamp.string(from: Date())
