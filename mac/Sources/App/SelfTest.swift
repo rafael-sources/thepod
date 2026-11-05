@@ -607,7 +607,16 @@ enum SelfTest {
                 let first = try band(swept, hz: 7000, third: 0), last = try band(swept, hz: 7000, third: 2)
                 print(String(format: "automatización 0 → −18 dB: primer tercio %.1f dB · último tercio %.1f dB", first, last))
                 ok = ok && (first - last) > 6
-                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización)" : "FAIL")
+                // Filtro K: un seno de 1 kHz a −20 dBFS debe medir −23,0 LUFS (BS.1770)
+                var k = KWeight(sampleRate: 48_000)
+                var tone = [Float](repeating: 0, count: 48_000)
+                for i in tone.indices { tone[i] = Float(0.1 * sin(2 * .pi * 1000 * Double(i) / 48_000)) }
+                _ = tone.withUnsafeBufferPointer { k.meanSquare($0.baseAddress!, 24_000) }   // que asiente el filtro
+                let pwr = tone.withUnsafeBufferPointer { k.meanSquare($0.baseAddress! + 24_000, 24_000) }
+                let lufs = MixLoudness.lufs(pwr)
+                print(String(format: "filtro K: seno 1 kHz a −20 dBFS = %.2f LUFS (esperado −23.0)", lufs))
+                ok = ok && abs(lufs + 23.0) < 0.3
+                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización) y el filtro K mide bien" : "FAIL")
                 try? FileManager.default.removeItem(at: dir)
                 exit(ok ? 0 : 1)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
