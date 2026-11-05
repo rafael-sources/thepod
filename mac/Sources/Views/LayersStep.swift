@@ -353,8 +353,15 @@ struct OverlayHandles: View {
         GeometryReader { geo in
             if case .overlay(let id) = session.selectedTrack,
                let scene = session.built?.scene,
-               let box = scene.overlayBox(id, at: session.player.currentTime().seconds),
+               let rawBox = scene.overlayBox(id, at: session.player.currentTime().seconds),
                let i = session.project.overlays.firstIndex(where: { $0.id == id }) {
+                // Con keyframes, el centro sale del proyecto (la vista previa puede ir un paso atrás)
+                let box: CGRect = {
+                    guard let a = session.project.overlays[i].animation, !a.isEmpty else { return rawBox }
+                    let t = session.playheadTimeline
+                    let cx = a.value(LayerAnimation.x, at: t) ?? Double(rawBox.midX), cy = a.value(LayerAnimation.y, at: t) ?? Double(rawBox.midY)
+                    return CGRect(x: cx - Double(rawBox.width) / 2, y: cy - Double(rawBox.height) / 2, width: rawBox.width, height: rawBox.height)
+                }()
                 let video = fitRect(scene.renderSize, in: geo.size)
                 let w = box.width * video.width * grow, h = box.height * video.height * grow
                 let cx = video.minX + box.midX * video.width + drag.width

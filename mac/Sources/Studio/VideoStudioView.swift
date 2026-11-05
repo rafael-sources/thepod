@@ -280,10 +280,13 @@ struct VideoTracks: View {
 
     private var duration: Double { max(1, session.project.duration) }
 
+    @State private var viewportW: CGFloat = 1200
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
+            GeometryReader { outer in
             ScrollView([.vertical, .horizontal]) {
                 VStack(spacing: 0) {
                     ruler
@@ -304,6 +307,9 @@ struct VideoTracks: View {
                 }
                 .frame(width: labelW + timelineWidth)
             }
+            .onAppear { viewportW = outer.size.width }
+            .onChange(of: outer.size.width) { _, w in viewportW = w }
+            }
         }
     }
 
@@ -314,7 +320,8 @@ struct VideoTracks: View {
         }
     }
 
-    private var timelineWidth: CGFloat { max(900, CGFloat(duration) * 6 * zoom) }
+    /// Zoom 1 = el episodio entero cabe en la ventana; cada paso de zoom lo estira.
+    private var timelineWidth: CGFloat { max(300, viewportW - labelW) * zoom }
 
     private var toolbar: some View {
         HStack(spacing: 8) {
@@ -325,7 +332,7 @@ struct VideoTracks: View {
             Spacer()
             Text("Clic: ir ahí · arrastra un clip para moverlo · clic derecho en Cámaras: fijar").font(.caption).foregroundStyle(Theme.secondary)
             Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
-            Slider(value: $zoom, in: 0.3...8).frame(width: 110)
+            Slider(value: $zoom, in: 1...30).frame(width: 110)
             Image(systemName: "plus.magnifyingglass").foregroundStyle(Theme.secondary)
         }
         .controlSize(.small)
@@ -337,7 +344,8 @@ struct VideoTracks: View {
             Color.clear.frame(width: labelW, height: 20)
             GeometryReader { g in
                 let w = g.size.width
-                let step = duration > 1800 ? 300.0 : duration > 600 ? 60.0 : 30.0
+                let pxPerSec = w / duration
+                let step: Double = pxPerSec > 20 ? 5 : pxPerSec > 8 ? 15 : pxPerSec > 3 ? 30 : pxPerSec > 1 ? 60 : pxPerSec > 0.4 ? 300 : 600
                 ZStack(alignment: .topLeading) {
                     ForEach(Array(stride(from: 0.0, through: duration, by: step)), id: \.self) { t in
                         Text(EditEngine.clock(t)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.secondary)
@@ -467,7 +475,10 @@ struct VideoTracks: View {
 
     /// Los cambios automáticos de cámara, en tiempo del episodio (desde la vista previa armada).
     private func autoBlocks() -> [(start: Double, end: Double, lane: Int)] {
-        guard let b = session.built, let sc = b.scene else { return [] }
+        guard let b = session.built, let sc = b.scene else {
+            // Sin vista previa todavía: una sola cámara (la primera) a lo largo del episodio
+            return session.project.lanes.first.map { [(0, duration, $0.id)] } ?? []
+        }
         let sw = sc.switches
         var out: [(Double, Double, Int)] = []
         for (i, s) in sw.enumerated() {
