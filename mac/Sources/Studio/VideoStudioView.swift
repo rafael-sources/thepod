@@ -436,12 +436,22 @@ struct VideoTracks: View {
     /// Cámaras: los cambios automáticos (atenuados) y los tramos a mano (borde punteado, se arrastran).
     private func camerasRow(_ w: CGFloat) -> some View {
         let auto = autoBlocks()
-        return ZStack(alignment: .topLeading) {
+        return Group {
+            // Fondo con el menú para fijar una cámara en el segundo actual
+            Rectangle().fill(Color.clear).frame(width: w, height: 56).contentShape(Rectangle())
+                .contextMenu {
+                    Section("Fijar cámara en \(EditEngine.clock(session.playheadTimeline))") {
+                        ForEach(session.project.lanes) { l in Button(session.project.laneName(l.id)) { addCut(lane: l.id, template: nil) } }
+                        Divider()
+                        ForEach(LayoutTemplate.allCases.filter { $0 != .auto }) { t in Button("Todas · \(t.title)") { addCut(lane: nil, template: t) } }
+                    }
+                }
             ForEach(Array(auto.enumerated()), id: \.offset) { _, b in
                 let i = session.project.lanes.firstIndex { $0.id == b.lane } ?? 0
-                RoundedRectangle(cornerRadius: 4).fill(EpisodeTimeline.palette[i % EpisodeTimeline.palette.count].opacity(0.18))
+                RoundedRectangle(cornerRadius: 4).fill(EpisodeTimeline.palette[i % EpisodeTimeline.palette.count].opacity(0.22))
                     .overlay(Text(session.project.laneName(b.lane)).font(.caption2).foregroundStyle(Theme.secondary).lineLimit(1).padding(.horizontal, 4), alignment: .leading)
                     .frame(width: max(2, x(b.end - b.start, w)), height: 36).offset(x: x(b.start, w), y: 10)
+                    .allowsHitTesting(false)
             }
             ForEach(session.project.studioVideo.cuts) { c in
                 let name = c.lane.map { session.project.laneName($0) } ?? (c.template?.title ?? "Todas")
@@ -451,14 +461,6 @@ struct VideoTracks: View {
                      onMove: { t in if let i = session.project.studioVideo.cuts.firstIndex(where: { $0.id == c.id }) { let d = c.end - c.start; session.project.studioVideo.cuts[i].start = t; session.project.studioVideo.cuts[i].end = t + d } },
                      onResize: { d in if let i = session.project.studioVideo.cuts.firstIndex(where: { $0.id == c.id }) { session.project.studioVideo.cuts[i].end = c.start + d } })
                 .contextMenu { Button("Quitar (vuelve el automático)", role: .destructive) { session.project.studioVideo.cuts.removeAll { $0.id == c.id }; if selectedCut == c.id { selectedCut = nil } } }
-            }
-        }
-        .frame(width: w, height: 56)
-        .contextMenu {
-            Section("Fijar cámara en \(EditEngine.clock(session.playheadTimeline))") {
-                ForEach(session.project.lanes) { l in Button(session.project.laneName(l.id)) { addCut(lane: l.id, template: nil) } }
-                Divider()
-                ForEach(LayoutTemplate.allCases.filter { $0 != .auto }) { t in Button("Todas · \(t.title)") { addCut(lane: nil, template: t) } }
             }
         }
     }
