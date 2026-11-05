@@ -462,6 +462,34 @@ enum StudioTests {
         return ok
     }
 
+    /// Superficie MIDI: se interpretan los mensajes (UMP 1.0), el mapa por defecto mueve lo que debe, «Aprender»
+    /// asigna el siguiente control y la curva del fader da 0 dB a tres cuartos.
+    @MainActor static func midiTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let m = MIDIControl.shared
+        m.resetToNanoKontrol()
+        var got: [(MIDIControl.Action, Double)] = []
+        m.handler = { got.append(($0, $1)) }
+        func ump(_ status: UInt8, _ d1: UInt8, _ d2: UInt8) -> UInt32 { (0x2 << 28) | (UInt32(status) << 16) | (UInt32(d1) << 8) | UInt32(d2) }
+        m.handle(words: [ump(0xB0, 0, 127), ump(0xB0, 3, 64), ump(0xB0, 48, 127), ump(0xB0, 48, 0), ump(0xB0, 41, 127), ump(0xB0, 45, 127)])
+        check(got.count == 5 && got[0].0 == .fader(0) && abs(got[0].1 - 1) < 1e-9 && got[1].0 == .fader(3) && abs(got[1].1 - 64.0 / 127) < 1e-9,
+              "faders CC 0 y 3 llegan con su valor (\(got.map { $0.0.name }))")
+        check(got[2].0 == .mute(0) && got[3].0 == .play && got[4].0 == .ab, "mute solo al pulsar (no al soltar), play y A/B")
+        got = []
+        m.learning = .solo(2)
+        m.handle(words: [ump(0x90, 60, 100)])
+        check(m.learning == nil && m.map["note:60"] == .solo(2), "«Aprender»: la nota 60 queda como Solo 3")
+        m.handle(words: [ump(0x90, 60, 100), ump(0x80, 60, 0)])
+        check(got.count == 1 && got[0].0 == .solo(2), "la nota aprendida dispara Solo 3 una vez por pulsación")
+        check(MIDIControl.volume(forFader: 0) == 0 && abs(MIDIControl.volume(forFader: 0.79) - 1) < 1e-6 && abs(20 * log10(MIDIControl.volume(forFader: 1)) - 6) < 0.01,
+              "curva del fader: 0 = silencio, 79 % = 0 dB, tope = +6 dB")
+        m.handler = nil
+        m.resetToNanoKontrol()
+        print(ok ? "OK superficie MIDI" : "FAIL MIDI")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

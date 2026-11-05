@@ -36,6 +36,57 @@ struct StudioRoot: View {
         .background(Theme.background)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
+        .onAppear { MIDIControl.shared.start(); wireMIDI() }
+        .onChange(of: app.session?.project.id) { _, _ in wireMIDI() }
+    }
+
+    /// La superficie MIDI mueve lo mismo que la consola: faders (por orden de la consola), M/S, play, A/B.
+    private func wireMIDI() {
+        MIDIControl.shared.handler = { [weak app] action, value in
+            guard let s = app?.session else { return }
+            switch action {
+            case .fader(let i): if i < s.project.lanes.count { s.project.lanes[i].volume = MIDIControl.volume(forFader: value) }
+            case .mute(let i): if i < s.project.lanes.count { s.project.lanes[i].muted.toggle() }
+            case .solo(let i): if i < s.project.lanes.count { s.project.lanes[i].solo.toggle() }
+            case .play: if s.player.rate > 0 { s.player.pause() } else { s.player.play() }
+            case .stop: s.player.pause(); s.seek(timeline: 0, play: false)
+            case .ab: VoiceChainRegistry.shared.bypassAll.toggle()
+            }
+        }
+    }
+}
+
+/// Menú MIDI de la consola: qué aparatos hay, aprender un control, mapa por defecto.
+struct MIDIMenu: View {
+    @ObservedObject var session: ProjectSession
+    @ObservedObject private var midi = MIDIControl.shared
+    var body: some View {
+        Menu {
+            if midi.sources.isEmpty { Text("Ningún controlador MIDI conectado") } else { ForEach(midi.sources, id: \.self) { Text($0) } }
+            Divider()
+            Menu("Aprender…") {
+                ForEach(session.project.lanes.indices, id: \.self) { i in
+                    Menu(session.project.laneName(session.project.lanes[i].id)) {
+                        Button("Fader") { midi.learning = .fader(i) }
+                        Button("Mute") { midi.learning = .mute(i) }
+                        Button("Solo") { midi.learning = .solo(i) }
+                    }
+                }
+                Divider()
+                Button("Reproducir / pausa") { midi.learning = .play }
+                Button("Parar") { midi.learning = .stop }
+                Button("A/B") { midi.learning = .ab }
+            }
+            if let l = midi.learning { Button("Cancelar «\(l.name)»") { midi.learning = nil } }
+            Divider()
+            Button("Mapa nanoKONTROL2 (por defecto)") { midi.resetToNanoKontrol() }
+            Button("Borrar el mapa") { midi.clear() }
+        } label: {
+            Label(midi.learning.map { "Mueve un control para «\($0.name)»" } ?? "MIDI", systemImage: midi.connected ? "pianokeys" : "pianokeys.inverse")
+                .foregroundStyle(midi.learning != nil ? .orange : (midi.connected ? Theme.accent : Theme.secondary))
+        }
+        .menuStyle(.borderlessButton).fixedSize()
+        .help("Superficie de control: faders, M/S, reproducir y A/B desde un controlador MIDI. Por defecto, el mapa de Korg nanoKONTROL2; «Aprender» para cualquier otro.")
     }
 }
 
@@ -123,6 +174,7 @@ struct AudioStudioView: View {
                 Text("inserts antes del volumen · faders en dB · medidor de lo que suena")
                     .font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
+                MIDIMenu(session: session)
             }
             .padding(.horizontal, 16).padding(.top, 10)
             ScrollView(.horizontal) {
