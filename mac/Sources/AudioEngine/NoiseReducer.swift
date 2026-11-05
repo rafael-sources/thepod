@@ -102,8 +102,8 @@ final class NoiseReducer {
                             vDSP_ztoc(&split, 1, cp, 2, vDSP_Length(n / 2))
                         }
                     }
-                    // vDSP devuelve 2× en la ida y n× en la vuelta (4n en total con zrip); y la suma de ventanas
-                    var scale = Float(1) / (Float(4 * n) * olaGain)
+                    // vDSP escala por 2n en ida y vuelta con zrip; y la suma de ventanas
+                    var scale = Float(1) / (Float(2 * n) * olaGain)
                     vDSP_vsmul(out, 1, &scale, &out, 1, vDSP_Length(n))
                 }
             }
