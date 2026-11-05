@@ -281,6 +281,8 @@ struct TimelineModel: Equatable {
     var selectedPoint: UUID?
     var cuts: [ClosedRange<Double>]
     var moments: [Double]
+    struct ReviewMark: Equatable { let t: Double; let resolved: Bool }
+    var reviewMarks: [ReviewMark] = []
     var reels: [ClosedRange<Double>]
     var sponsors: [ClosedRange<Double>]
     var effects: [ClosedRange<Double>]
@@ -298,6 +300,7 @@ struct TimelineModel: Equatable {
         duration = p.duration
         cuts = p.cuts.filter(\.enabled).map { $0.start...max($0.start, $0.end) }
         moments = p.moments.map(\.time)
+        reviewMarks = (p.review?.comments ?? []).map { ReviewMark(t: p.review!.timelineTime($0), resolved: $0.resolved) }
         reels = p.reels.map { $0.start...max($0.start, $0.end) }
         sponsors = (p.showSponsors ? p.sponsorAppearances().map { $0.start...max($0.start, $0.end) } : [])
             + (p.showCintillos ? p.cintillos.map { $0.start...($0.start + $0.duration) } : [])
@@ -360,6 +363,12 @@ private struct TimelineCanvas: View, Equatable {
             let my = rulerH
             for r in model.reels { band(r, y: my + 3, h: marksH - 6, Theme.accent.opacity(0.28)) }
             for r in model.sponsors { band(r, y: my + 3, h: marksH - 6, Color.purple.opacity(0.8)) }
+            // Comentarios de la revisión compartida: una burbuja naranja (gris si ya está resuelto)
+            for rm in model.reviewMarks {
+                let col = rm.resolved ? Color.gray.opacity(0.6) : Color.orange
+                ctx.fill(Path(ellipseIn: CGRect(x: x(rm.t) - 4, y: my + 1, width: 8, height: 8)), with: .color(col))
+                ctx.fill(Path(CGRect(x: x(rm.t), y: my, width: 1, height: size.height - my)), with: .color(col.opacity(0.5)))
+            }
             for m in model.moments {
                 var flag = Path()
                 flag.move(to: CGPoint(x: x(m), y: my + 1)); flag.addLine(to: CGPoint(x: x(m) + 7, y: my + 5))

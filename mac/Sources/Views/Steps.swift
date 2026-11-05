@@ -1563,6 +1563,7 @@ struct ExportStep: View {
                 VStack(alignment: .leading, spacing: 18) {
                     StepHeader(title: "Exportar", subtitle: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto.", step: .export)
                     ExportReviewCard(session: session)
+                    SharedReviewCard(session: session)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(ExportFormat.allCases) { f in
                             Button { select(f) } label: {
@@ -2178,5 +2179,67 @@ struct DeclickRow: View {
                 Text("Si en «Fuerte» se come consonantes (p, t, k), vuelve a Normal.").font(.caption2).foregroundStyle(Theme.secondary)
             }
         }
+    }
+}
+
+
+/// Revisión compartida: un enlace para que el invitado o el cliente escuche y deje comentarios en un segundo
+/// exacto; los comentarios llegan como marcas naranjas a la línea de tiempo.
+struct SharedReviewCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var confirmRevoke = false
+
+    var body: some View {
+        Card {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "bubble.left.and.text.bubble.right").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Revisión compartida").font(.headline)
+                    Text("Sube el episodio (MP3) a postPod y comparte un enlace: quien lo abra escucha, marca un segundo y deja su comentario, sin cuenta. Los comentarios aparecen aquí y en la línea de tiempo.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                    if session.project.postpodSlug == nil {
+                        Text("Este episodio no vino de postPod web, así que no hay dónde subirlo.").font(.caption).foregroundStyle(.orange)
+                    } else if let r = session.project.review {
+                        HStack(spacing: 8) {
+                            TextField("", text: .constant(r.url)).textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 420)
+                            Button("Copiar") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string); session.note = "Enlace copiado." }.controlSize(.small)
+                            Button("Abrir") { if let u = URL(string: r.url) { NSWorkspace.shared.open(u) } }.controlSize(.small)
+                            Button("Traer comentarios") { session.refreshReviewComments() }.controlSize(.small)
+                            Button("Cerrar enlace", role: .destructive) { confirmRevoke = true }.controlSize(.small)
+                        }
+                        let df: DateFormatter = { let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short; return f }()
+                        Text("Enviado el \(df.string(from: r.sentAt))" + (r.fetchedAt.map { " · comentarios al \(df.string(from: $0))" } ?? " · todavía no se han traído comentarios"))
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                        if r.comments.isEmpty {
+                            Text("Sin comentarios por ahora.").font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(r.comments) { c in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Toggle("", isOn: Binding(get: { c.resolved }, set: { session.resolveReviewComment(c.id, $0) })).labelsHidden().controlSize(.mini)
+                                        Button(EditEngine.clock(r.timelineTime(c))) { session.seek(timeline: r.timelineTime(c), play: false) }
+                                            .buttonStyle(.plain).font(.caption.monospacedDigit()).foregroundStyle(c.resolved ? Theme.secondary : .orange)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(c.author.isEmpty ? "Alguien" : c.author).font(.caption2).foregroundStyle(Theme.secondary)
+                                            Text(c.text).font(.caption).strikethrough(c.resolved).foregroundStyle(c.resolved ? Theme.secondary : .primary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Button("Enviar una versión nueva") { session.sendForReview() }.controlSize(.small)
+                            .help("Exporta el MP3 otra vez y crea otro enlace; el anterior sigue abierto hasta que lo cierres")
+                    } else {
+                        Button("Enviar a revisión (MP3)") { session.sendForReview() }
+                            .help("Exporta el episodio en MP3, lo sube a postPod y copia el enlace")
+                    }
+                }
+                Spacer()
+            }
+        }
+        .confirmationDialog("¿Cerrar el enlace de revisión?", isPresented: $confirmRevoke) {
+            Button("Cerrar enlace", role: .destructive) { session.revokeReview() }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Quien lo tenga ya no podrá abrirlo y las marcas de sus comentarios se quitan de la línea de tiempo.") }
     }
 }

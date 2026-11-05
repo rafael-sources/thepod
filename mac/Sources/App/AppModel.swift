@@ -803,6 +803,46 @@ final class ProjectSession: ObservableObject {
             return url
     }
 
+    // MARK: Revisión compartida
+
+    /// Exporta el MP3 completo, lo sube a postPod web y guarda el enlace para compartir.
+    func sendForReview() {
+        guard let slug = project.postpodSlug else { note = "Este episodio no vino de postPod web: no hay dónde subirlo."; return }
+        run("Enviando a revisión") { [self] in
+            let url = try await performExport(format: .audio)
+            report("Subiendo a postPod", url.lastPathComponent, 0.95)
+            let r = try await PostPodWebClient.shared.uploadReview(slug: slug, file: url, title: Exporter.episodeTitle(project))
+            let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts)
+            let intro = project.intro.map { max(1, $0.seconds) } ?? 0
+            project.review = ReviewLink(token: r.token, url: r.url, sentAt: Date(), introDuration: intro, keep: keep)
+            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string)
+            note = "Enlace de revisión copiado al portapapeles."
+        }
+    }
+
+    func refreshReviewComments() {
+        guard let slug = project.postpodSlug, let r = project.review else { return }
+        Task { @MainActor in
+            do {
+                let cs = try await PostPodWebClient.shared.reviewComments(slug: slug, token: r.token)
+                project.review?.comments = cs
+                project.review?.fetchedAt = Date()
+            } catch { note = "No se pudieron traer los comentarios: \(error.localizedDescription)" }
+        }
+    }
+
+    func resolveReviewComment(_ id: Int, _ resolved: Bool) {
+        guard let slug = project.postpodSlug, let r = project.review else { return }
+        if let i = project.review?.comments.firstIndex(where: { $0.id == id }) { project.review?.comments[i].resolved = resolved }
+        Task { try? await PostPodWebClient.shared.resolveReview(slug: slug, token: r.token, id: id, resolved: resolved) }
+    }
+
+    func revokeReview() {
+        guard let slug = project.postpodSlug, let r = project.review else { return }
+        project.review = nil
+        Task { try? await PostPodWebClient.shared.revokeReview(slug: slug, token: r.token) }
+    }
+
     func exportReels() {
         let reels = project.reels.filter(\.selected)
         guard !reels.isEmpty else { return }

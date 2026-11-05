@@ -61,6 +61,7 @@ struct Project: Codable, Identifiable, Equatable {
     var overlays: [VideoLayer] = []        // textos, imágenes y stickers encima del video
     var brolls: [BRollClip] = []           // b-roll: un video o imagen que tapa la pantalla un rato (la voz sigue)
     var studioVideo = StudioVideoSettings() // Studio · Video: cortes de cámara a mano y cómo sigue a quien habla
+    var review: ReviewLink?                 // revisión compartida: enlace y comentarios traídos
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
     var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
     var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
@@ -1189,6 +1190,32 @@ struct StudioVideoSettings: Codable, Equatable {
     func cut(at t: Double) -> CameraCut? { cuts.first { t >= $0.start && t < $0.end } }
 }
 
+// MARK: - Revisión compartida
+
+/// Un comentario dejado desde el enlace de revisión: `t` es el segundo del archivo revisado (video final, con intro).
+struct ReviewComment: Codable, Equatable, Identifiable {
+    var id: Int
+    var t: Double
+    var author: String
+    var text: String
+    var resolved: Bool
+}
+
+/// El enlace de revisión de este episodio y la última lectura de sus comentarios.
+struct ReviewLink: Codable, Equatable {
+    var token: String
+    var url: String
+    var sentAt: Date
+    var introDuration: Double = 0        // el archivo revisado llevaba esta intro: para pasar `t` al episodio
+    var keep: [EditEngine.Span] = []     // y estos tramos
+    var comments: [ReviewComment] = []
+    var fetchedAt: Date?
+    /// Segundo del episodio de un comentario (lo que marca la línea de tiempo).
+    func timelineTime(_ c: ReviewComment) -> Double {
+        keep.isEmpty ? max(0, c.t - introDuration) : EditEngine.toTimeline(max(0, c.t - introDuration), keep: keep)
+    }
+}
+
 /// Cintillo tipo noticiero que el director lanzó durante la grabación.
 struct DirectorCintillo: Codable, Equatable, Identifiable {
     var id: Int
@@ -1332,6 +1359,7 @@ extension Project {
         overlays = try c.decodeIfPresent([VideoLayer].self, forKey: .overlays) ?? []
         brolls = try c.decodeIfPresent([BRollClip].self, forKey: .brolls) ?? []
         studioVideo = try c.decodeIfPresent(StudioVideoSettings.self, forKey: .studioVideo) ?? StudioVideoSettings()
+        review = try c.decodeIfPresent(ReviewLink.self, forKey: .review)
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []

@@ -520,6 +520,36 @@ enum StudioTests {
         return ok
     }
 
+    /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
+    /// enlace con sus comentarios se guarda y se carga con el proyecto.
+    static func reviewTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        var r = ReviewLink(token: "abc", url: "https://postpod.castmedia.space/r/abc", sentAt: Date(), introDuration: 4,
+                           keep: [EditEngine.Span(start: 0, end: 60), EditEngine.Span(start: 90, end: 200)])
+        let c1 = ReviewComment(id: 1, t: 34, author: "Caro", text: "aquí", resolved: false)       // 30 s de contenido → 30 s del episodio
+        let c2 = ReviewComment(id: 2, t: 74, author: "", text: "allá", resolved: true)            // 70 s de contenido → 60 + 10 = 100 s del episodio
+        check(abs(r.timelineTime(c1) - 30) < 1e-9 && abs(r.timelineTime(c2) - 100) < 1e-9, "el segundo del archivo pasa al del episodio saltando intro y cortes (\(r.timelineTime(c1)), \(r.timelineTime(c2)))")
+        check(abs(ReviewLink(token: "x", url: "u", sentAt: Date()).timelineTime(c1) - 34) < 1e-9, "sin intro ni cortes, el mismo segundo")
+        r.comments = [c1, c2]
+        var p = Project(id: "rev", name: "Rev", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
+        p.review = r
+        do {
+            let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+            let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+            let back = try dec.decode(Project.self, from: try enc.encode(p))
+            check(back.review?.token == "abc" && back.review?.comments.count == 2 && back.review?.comments[1].resolved == true, "el enlace y los comentarios se guardan con el proyecto")
+            var obj = try JSONSerialization.jsonObject(with: try enc.encode(p)) as! [String: Any]
+            obj["review"] = nil
+            let old = try dec.decode(Project.self, from: JSONSerialization.data(withJSONObject: obj))
+            check(old.review == nil, "un proyecto sin revisión abre igual")
+        } catch { check(false, "guardar/cargar: \(error)") }
+        let model = TimelineModel(project: p, energy: nil)
+        check(model.reviewMarks.map(\.t) == [30, 100] && model.reviewMarks[1].resolved, "la línea de tiempo recibe las marcas en el segundo del episodio")
+        print(ok ? "OK revisión compartida" : "FAIL revisión compartida")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

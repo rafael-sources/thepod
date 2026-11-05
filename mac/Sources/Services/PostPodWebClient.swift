@@ -118,6 +118,51 @@ actor PostPodWebClient {
         throw Failure(message: "La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo.")
     }
 
+    // MARK: Revisión compartida
+
+    /// Sube una versión (MP3/M4A/MP4) y devuelve el enlace público.
+    func uploadReview(slug: String, file: URL, title: String) async throws -> (token: String, url: String) {
+        if !loggedIn { try await login() }
+        let boundary = "thepod-\(UUID().uuidString)"
+        var req = try request("POST", "/api/projects/\(slug)/review")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
+        field("title", title)
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(file.lastPathComponent)\"\r\nContent-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(try Data(contentsOf: file))
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+        req.timeoutInterval = 1800
+        let (data, resp) = try await session.data(for: req)
+        absorb(resp)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(code) else { throw Failure(message: Self.errorMessage(data, code: code)) }
+        guard let j = try JSONSerialization.jsonObject(with: data) as? [String: Any], let token = j["token"] as? String, let url = j["url"] as? String else {
+            throw Failure(message: "postPod no devolvió el enlace")
+        }
+        return (token, url)
+    }
+
+    func reviewComments(slug: String, token: String) async throws -> [ReviewComment] {
+        let data = try await send("GET", "/api/projects/\(slug)/review/\(token)/comments")
+        let j = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return ((j?["comments"] as? [[String: Any]]) ?? []).compactMap { c in
+            guard let id = c["id"] as? Int, let t = c["t"] as? Double, let text = c["text"] as? String else { return nil }
+            return ReviewComment(id: id, t: t, author: c["author"] as? String ?? "", text: text, resolved: c["resolved"] as? Bool ?? false)
+        }
+    }
+
+    func resolveReview(slug: String, token: String, id: Int, resolved: Bool) async throws {
+        _ = try await send("POST", "/api/projects/\(slug)/review/\(token)/comments/\(id)/resolve", json: ["resolved": resolved])
+    }
+
+    func revokeReview(slug: String, token: String) async throws {
+        _ = try await send("DELETE", "/api/projects/\(slug)/review/\(token)")
+    }
+
     func projects() async throws -> [WebProject] {
         let data = try await send("GET", "/api/projects")
         guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
