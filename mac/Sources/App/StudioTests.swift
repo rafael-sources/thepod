@@ -913,7 +913,11 @@ enum StudioTests {
                 check(r == q, "lo de Studio sobrevive a guardar y volver a abrir")
                 check(r.videoTunedInStudio, "y el proyecto queda «ajustado en Studio»")
             } else { check(false, "no se pudo guardar y volver a abrir") }
-        } else { check(false, "no abre un proyecto de una versión vieja") }
+        } else {
+            var why = ""
+            do { _ = try JSONDecoder().decode(Project.self, from: Data(old.utf8)) } catch { why = "\(error)" }
+            check(false, "no abre un proyecto de una versión vieja: \(why)")
+        }
         print(ok ? "OK pulido: atajos y migración" : "FAIL pulido")
         return ok
     }
