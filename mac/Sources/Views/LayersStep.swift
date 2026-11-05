@@ -99,6 +99,12 @@ struct LayersStep: View {
                 Image(systemName: o.kind == .text ? "textformat" : o.kind == .image ? "photo" : "face.smiling")
                     .frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
                 Text(o.title).lineLimit(1)
+                if o.tunedInStudio {
+                    Text("Ajustado en Studio").font(.caption2).foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6)))
+                        .help("Tiene keyframes: la posición y el tamaño se editan en Studio · Video")
+                }
                 Spacer()
                 Text("\(EditEngine.clock(o.start)) · \(String(format: "%.0f s", o.duration))")
                     .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
@@ -142,6 +148,17 @@ struct OverlayEditor: View {
             Button(role: .destructive) { session.removeOverlay(ov.id) } label: { Image(systemName: "trash") }
                 .buttonStyle(.borderless).help("Quitar")
             Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
+        }
+        if ov.tunedInStudio {
+            HStack(spacing: 10) {
+                Label("Ajustado en Studio: la posición, el tamaño, el giro y la opacidad siguen keyframes.", systemImage: "sparkles")
+                    .font(.caption).foregroundStyle(Theme.accent)
+                Spacer()
+                OpenStudioButton(label: "Abrir", tab: .video).controlSize(.small)
+                Button("Volver al simple") { o.wrappedValue.animation = nil }.controlSize(.small)
+                    .help("Quita los keyframes; la capa vuelve a la posición y el tamaño de aquí")
+            }
+            .padding(8).background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
         }
         switch ov.kind {
         case .text:
@@ -336,7 +353,7 @@ struct OverlayHandles: View {
         GeometryReader { geo in
             if case .overlay(let id) = session.selectedTrack,
                let scene = session.built?.scene,
-               let box = scene.overlayBox(id),
+               let box = scene.overlayBox(id, at: session.player.currentTime().seconds),
                let i = session.project.overlays.firstIndex(where: { $0.id == id }) {
                 let video = fitRect(scene.renderSize, in: geo.size)
                 let w = box.width * video.width * grow, h = box.height * video.height * grow
@@ -351,8 +368,15 @@ struct OverlayHandles: View {
                             .onEnded { g in
                                 let nx = box.midX + g.translation.width / max(1, video.width)
                                 let ny = box.midY + g.translation.height / max(1, video.height)
-                                session.project.overlays[i].x = min(1, max(0, Double(nx)))
-                                session.project.overlays[i].y = min(1, max(0, Double(ny)))
+                                if var a = session.project.overlays[i].animation, a.has(LayerAnimation.x) || a.has(LayerAnimation.y) {
+                                    // Con keyframes de posición, mover sobre el video escribe un keyframe en este segundo
+                                    let t = session.playheadTimeline
+                                    a.write(LayerAnimation.x, t: t, v: Double(nx)); a.write(LayerAnimation.y, t: t, v: Double(ny))
+                                    session.project.overlays[i].animation = a
+                                } else {
+                                    session.project.overlays[i].x = min(1, max(0, Double(nx)))
+                                    session.project.overlays[i].y = min(1, max(0, Double(ny)))
+                                }
                                 drag = .zero
                             })
                     Circle().fill(Theme.accent).frame(width: 14, height: 14)
@@ -365,7 +389,13 @@ struct OverlayHandles: View {
                             }
                             .onEnded { _ in
                                 let s = session.project.overlays[i].scale * Double(grow)
-                                session.project.overlays[i].scale = min(3, max(0.4, s))
+                                if var a = session.project.overlays[i].animation, a.has(LayerAnimation.scale) {
+                                    let cur = a.value(LayerAnimation.scale, at: session.playheadTimeline) ?? session.project.overlays[i].scale
+                                    a.write(LayerAnimation.scale, t: session.playheadTimeline, v: min(4, max(0.2, cur * Double(grow))))
+                                    session.project.overlays[i].animation = a
+                                } else {
+                                    session.project.overlays[i].scale = min(3, max(0.4, s))
+                                }
                                 grow = 1
                             })
                         .help("Arrastra para cambiar el tamaño")

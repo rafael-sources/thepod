@@ -32,7 +32,8 @@ struct PostPodApp: App {
                 OpenProbeButton()
             }
             CommandMenu("Studio") {
-                OpenStudioButton()
+                OpenStudioButton(label: "Audio: consola y cadena de voz", tab: .audio)
+                OpenStudioButton(label: "Video: pistas, keyframes y cámaras", tab: .video)
             }
             CommandGroup(replacing: .help) {
                 Button("Manual de thePod") { Links.open("/docs/postpodapp") }

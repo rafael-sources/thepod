@@ -341,7 +341,26 @@ enum SelfTest {
                     }
                     win.orderOut(nil)
                 }
+                StudioTab.shared.tab = .audio
                 await shoot(StudioRoot(), "estudio", w: 1280, h: 820)
+                // Video: un título con keyframes seleccionado y un tramo de cámara a mano
+                if let first = session.project.overlays.first {
+                    var a = LayerAnimation()
+                    a.write(LayerAnimation.x, t: first.start, v: 0.2); a.write(LayerAnimation.x, t: first.end, v: 0.8)
+                    a.write(LayerAnimation.opacity, t: first.start, v: 0); a.write(LayerAnimation.opacity, t: first.start + 0.5, v: 1)
+                    if let i = session.project.overlays.firstIndex(where: { $0.id == first.id }) { session.project.overlays[i].animation = a }
+                    session.selectedTrack = .overlay(first.id)
+                } else {
+                    let id = session.addOverlay(kind: .text, text: "El proceso que transforma")
+                    var a = LayerAnimation(); a.write(LayerAnimation.y, t: 0, v: 1.1); a.write(LayerAnimation.y, t: 1, v: 0.84)
+                    if let i = session.project.overlays.firstIndex(where: { $0.id == id }) { session.project.overlays[i].animation = a }
+                }
+                if let lane = p.lanes.first { session.project.studioVideo.cuts = [CameraCut(start: 60, end: 90, lane: lane.id, template: nil)] }
+                StudioTab.shared.tab = .video
+                await shoot(StudioRoot(), "studio-video", w: 1440, h: 900)
+                session.step = .look
+                await shoot(ProjectView(session: session), "aspecto", w: 1440, h: 900)
+                StudioTab.shared.tab = .audio
                 if let lane = p.lanes.first {
                     await shoot(InsertEditor(session: session, ref: .init(laneId: lane.id, kind: .eq)), "eq", w: 660, h: 520)
                     await shoot(InsertEditor(session: session, ref: .init(laneId: lane.id, kind: .compressor)), "compresor", w: 660, h: 330)

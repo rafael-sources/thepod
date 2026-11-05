@@ -1224,6 +1224,7 @@ struct BrandsStep: View {
 
 struct LookStep: View {
     @ObservedObject var session: ProjectSession
+    @State private var confirmResetStudioVideo = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
@@ -1281,6 +1282,32 @@ struct LookStep: View {
                                 .font(.caption)
                         }
                     }
+                    Card {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "film.stack").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Studio · Video").font(.headline)
+                                Text("Pistas encima de la plantilla, keyframes en textos y stickers, transiciones en el b-roll y cámaras fijadas a mano. Lo que decidiste aquí ya está dentro como clips; todo lo de arriba sigue funcionando sin entrar.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                                if session.project.videoTunedInStudio {
+                                    HStack(spacing: 10) {
+                                        Label("Ajustado en Studio", systemImage: "sparkles").font(.caption).foregroundStyle(Theme.accent)
+                                        Button("Volver al simple…") { confirmResetStudioVideo = true }.controlSize(.small)
+                                    }
+                                }
+                            }
+                            Spacer()
+                            OpenStudioButton(tab: .video).buttonStyle(.bordered)
+                        }
+                    }
+                    .confirmationDialog("¿Quitar lo hecho en Studio · Video?", isPresented: $confirmResetStudioVideo) {
+                        Button("Quitar keyframes, transiciones y cámaras a mano", role: .destructive) {
+                            for i in session.project.overlays.indices { session.project.overlays[i].animation = nil }
+                            for i in session.project.brolls.indices { session.project.brolls[i].transitionIn = nil }
+                            session.project.studioVideo = StudioVideoSettings()
+                        }
+                        Button("Cancelar", role: .cancel) {}
+                    } message: { Text("Los textos, b-roll y la plantilla se quedan; solo se quita lo que el nivel simple no sabe describir. Se puede deshacer con ⌘Z.") }
                     Card {
                         Text("Fondo virtual").font(.headline)
                         Text("Quita el fondo real de cada persona (se separa en la Mac, sin internet) y pone otro detrás. Tarda más al exportar y la vista previa usa una separación rápida, menos fina.")

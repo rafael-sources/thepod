@@ -3,12 +3,27 @@ import AVFoundation
 
 /// El estudio: ventana aparte con la línea de tiempo y la consola del episodio abierto.
 /// Mismo proyecto, mismo motor: lo que suena aquí es lo que exporta el nivel simple.
+/// Qué pestaña de Studio está abierta (Audio o Video); la cambian los botones y ⌘E / ⌘⇧E.
+final class StudioTab: ObservableObject {
+    static let shared = StudioTab()
+    enum Tab: String, CaseIterable, Identifiable { case audio, video; var id: String { rawValue } }
+    @Published var tab: Tab = .audio
+}
+
 struct StudioRoot: View {
     @EnvironmentObject var app: AppModel
+    @ObservedObject private var tabs = StudioTab.shared
     var body: some View {
         Group {
             if let s = app.session {
-                AudioStudioView(session: s)
+                VStack(spacing: 0) {
+                    StudioTransport(session: s, tab: $tabs.tab)
+                    Divider()
+                    switch tabs.tab {
+                    case .audio: AudioStudioView(session: s)
+                    case .video: VideoStudioView(session: s)
+                    }
+                }
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(Theme.secondary)
@@ -24,48 +39,24 @@ struct StudioRoot: View {
     }
 }
 
-struct AudioStudioView: View {
+/// Transporte común a las dos pestañas: título, Audio/Video, reproducir, reloj, sonoridad y Exportar.
+struct StudioTransport: View {
     @ObservedObject var session: ProjectSession
-    @State private var editingInsert: InsertRef?
-
-    struct InsertRef: Identifiable, Hashable {
-        enum Kind: Hashable { case eq, compressor, deesser, gate }
-        let laneId: Int
-        let kind: Kind
-        var id: String { "\(laneId)-\(kind)" }
-    }
+    @Binding var tab: StudioTab.Tab
 
     var body: some View {
-        VStack(spacing: 0) {
-            transport
-            Divider()
-            ScrollView(.vertical) {
-                EpisodeTimeline(session: session)
-                    .padding(.horizontal, 12).padding(.top, 8)
-                HStack { Text("Automatización").font(.caption.bold()); Spacer() }.padding(.horizontal, 12).padding(.top, 4)
-                AutomationLanes(session: session).padding(.bottom, 8)
-            }
-            .frame(maxHeight: .infinity)
-            Divider()
-            console
-        }
-        .sheet(item: $editingInsert) { ref in
-            InsertEditor(session: session, ref: ref)
-        }
-        .task(id: session.project.episode.prepodSlug) {
-            if let slug = session.project.episode.prepodSlug { await ChainPresets.refresh(podcast: slug) }
-        }
-    }
-
-    // MARK: Transporte
-
-    private var transport: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Studio · \(session.project.name)").font(.headline)
-                Text("Lo que suena aquí es lo que se exporta. Los pasos simples siguen igual.")
+                Text(tab == .audio ? "Lo que suena aquí es lo que se exporta. Los pasos simples siguen igual."
+                     : "Lo que se ve aquí es lo que se exporta. Aspecto, Textos y Reels siguen igual.")
                     .font(.caption).foregroundStyle(Theme.secondary)
             }
+            Picker("", selection: $tab) {
+                Text("Audio").tag(StudioTab.Tab.audio)
+                Text("Video").tag(StudioTab.Tab.video)
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 150)
             Spacer()
             Button {
                 if session.player.rate > 0 { session.player.pause() } else { session.player.play() }
@@ -82,6 +73,38 @@ struct AudioStudioView: View {
                 .help("Vuelve a la ventana principal, en Exportar")
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+}
+
+struct AudioStudioView: View {
+    @ObservedObject var session: ProjectSession
+    @State private var editingInsert: InsertRef?
+
+    struct InsertRef: Identifiable, Hashable {
+        enum Kind: Hashable { case eq, compressor, deesser, gate }
+        let laneId: Int
+        let kind: Kind
+        var id: String { "\(laneId)-\(kind)" }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView(.vertical) {
+                EpisodeTimeline(session: session)
+                    .padding(.horizontal, 12).padding(.top, 8)
+                HStack { Text("Automatización").font(.caption.bold()); Spacer() }.padding(.horizontal, 12).padding(.top, 4)
+                AutomationLanes(session: session).padding(.bottom, 8)
+            }
+            .frame(maxHeight: .infinity)
+            Divider()
+            console
+        }
+        .sheet(item: $editingInsert) { ref in
+            InsertEditor(session: session, ref: ref)
+        }
+        .task(id: session.project.episode.prepodSlug) {
+            if let slug = session.project.episode.prepodSlug { await ChainPresets.refresh(podcast: slug) }
+        }
     }
 
     // MARK: Consola
@@ -638,7 +661,9 @@ struct EQCurve: View {
 struct OpenStudioButton: View {
     @Environment(\.openWindow) private var openWindow
     var label = "Abrir en Studio"
+    var tab: StudioTab.Tab = .audio
     var body: some View {
-        Button(label) { openWindow(id: "estudio") }.keyboardShortcut("e")
+        Button(label) { StudioTab.shared.tab = tab; openWindow(id: "estudio") }
+            .keyboardShortcut("e", modifiers: tab == .audio ? [.command] : [.command, .shift])
     }
 }
