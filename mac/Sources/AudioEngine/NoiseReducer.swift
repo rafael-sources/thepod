@@ -124,7 +124,7 @@ final class NoiseReducer {
     var amount: Float = 0.6
 
     func prepare(channels count: Int) { channels = (0..<max(1, count)).map { _ in Channel() } }
-    var latency: Int { n - hop }
+    var latency: Int { Self.n - Self.hop }
 
     /// Procesa en sitio `frames` muestras de cada canal del buffer (salida retardada `latency` muestras).
     func process(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
