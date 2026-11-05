@@ -119,10 +119,12 @@ enum StudioTests {
         var tc = RenderScene.OverlayCard(id: 9, start: 2, end: 8, image: wide, cx: 0.5, cy: 0.5, animate: true)
         tc.enter = TitleMotion(kind: .rise, duration: 1)
         s4.overlays = [tc]
+        // La capa ocupa 0,417–0,583 del alto en su sitio; a un tercio de la subida va unos 0,04 más abajo:
+        // la franja 0,42–0,45 (su borde superior) está vacía mientras sube y cubierta al llegar.
         let risen = s4.render(frames: frames, time: 2.3)        // un tercio de la subida
-        let centerY = mean(risen, CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
-        let belowY = mean(risen, CGRect(x: 0.45, y: 0.56, width: 0.1, height: 0.08), size: size)
-        check(belowY.b > 0.3 && belowY.b > centerY.b, "entrada «subir»: a un tercio la capa está más abajo que su sitio")
+        let topEdgeRising = mean(risen, CGRect(x: 0.45, y: 0.42, width: 0.1, height: 0.03), size: size)
+        let topEdgeSettled = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.42, width: 0.1, height: 0.03), size: size)
+        check(topEdgeRising.r > 0.6 && topEdgeSettled.b > 0.7, "entrada «subir»: a un tercio la capa está más abajo que su sitio")
         let settled = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
         check(settled.b > 0.7, "después de la entrada la capa está en su sitio y entera")
         tc.enter = TitleMotion(kind: .reveal, duration: 1)
