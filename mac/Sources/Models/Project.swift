@@ -1207,9 +1207,14 @@ struct ReviewLink: Codable, Equatable {
     var url: String
     var sentAt: Date
     var introDuration: Double = 0        // el archivo revisado llevaba esta intro: para pasar `t` al episodio
-    var keep: [EditEngine.Span] = []     // y estos tramos
+    var keepPairs: [[Double]] = []       // y estos tramos [[inicio, fin], …]
     var comments: [ReviewComment] = []
     var fetchedAt: Date?
+    init(token: String, url: String, sentAt: Date, introDuration: Double = 0, keep: [EditEngine.Span] = []) {
+        self.token = token; self.url = url; self.sentAt = sentAt; self.introDuration = introDuration
+        keepPairs = keep.map { [$0.start, $0.end] }
+    }
+    var keep: [EditEngine.Span] { keepPairs.compactMap { $0.count == 2 ? (start: $0[0], end: $0[1]) : nil } }
     /// Segundo del episodio de un comentario (lo que marca la línea de tiempo).
     func timelineTime(_ c: ReviewComment) -> Double {
         keep.isEmpty ? max(0, c.t - introDuration) : EditEngine.toTimeline(max(0, c.t - introDuration), keep: keep)
