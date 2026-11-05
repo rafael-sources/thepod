@@ -150,8 +150,8 @@ enum StudioTests {
         check(pm.audioLane[0].fadeOut == 0 && pm.audioLane[1].fadeIn == 0, "al separarlos, el cruce se quita")
         pm.crossfade(1, with: 2, seconds: 2)
         check(abs(pm.audioLane[1].tlStart - 8) < 1e-9 && abs(pm.audioLane[0].fadeOut - 2) < 1e-9, "«Cruzar con el siguiente» adelanta el segundo clip y pone los fades")
-        let mid = sin(0.5 * Double.pi / 2)
-        check(abs(mid * mid + mid * mid - 1) < 1e-9, "fades de igual potencia: en el medio del cruce las potencias suman 1")
+        let half = sin(0.5 * Double.pi / 2)
+        check(abs(half * half + half * half - 1) < 1e-9, "fades de igual potencia: en el medio del cruce las potencias suman 1")
 
         // 6) Guardar y cargar: el proyecto conserva keyframes, transiciones y cortes; uno viejo (sin esos campos) abre igual
         var p = Project(id: "prueba-studio", name: "Prueba", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
