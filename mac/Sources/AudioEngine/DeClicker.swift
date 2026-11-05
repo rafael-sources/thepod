@@ -41,8 +41,11 @@ final class DeClicker {
                 let x = p[i]
                 // detección sobre la muestra que entra
                 let d2 = abs(x - 2 * c.prev1 + c.prev2)
-                let isSpike = d2 > thr * c.ema && d2 > 1e-3
-                if !isSpike { c.ema += 0.002 * (d2 - c.ema) }          // el nivel típico no aprende de los clics
+                // Los primeros 50 ms solo aprenden el nivel típico; después, un clic es lo que lo supera muchas veces.
+                // Durante un pico se aprende despacio (un cambio sostenido no es un clic y hay que absorberlo).
+                let warm = c.count < 2400
+                let isSpike = !warm && d2 > thr * c.ema && d2 > 1e-3
+                c.ema += (warm ? 0.01 : isSpike ? 0.0003 : 0.002) * (d2 - c.ema)
                 c.prev2 = c.prev1; c.prev1 = x
                 c.ring[c.w] = x
                 if isSpike {
