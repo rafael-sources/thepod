@@ -52,6 +52,9 @@ struct AudioStudioView: View {
         .sheet(item: $editingInsert) { ref in
             InsertEditor(session: session, ref: ref)
         }
+        .task(id: session.project.episode.prepodSlug) {
+            if let slug = session.project.episode.prepodSlug { await ChainPresets.refresh(podcast: slug) }
+        }
     }
 
     // MARK: Transporte
@@ -167,6 +170,7 @@ struct ChannelStrip: View {
 
     private var lane: Lane { session.project.lanes[index] }
     private var chain: ChainSettings { lane.effectiveChain }
+    private var podcastSlug: String? { session.project.episode.prepodSlug }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -207,16 +211,24 @@ struct ChannelStrip: View {
             }
             HStack(spacing: 6) {
                 Menu {
-                    Button("Guardar esta cadena como preset…") { askPresetName = true }
+                    Button(podcastSlug != nil ? "Guardar en el podcast como preset…" : "Guardar en esta Mac como preset…") { askPresetName = true }
+                    let ofPodcast = podcastSlug.map { ChainPresets.all(podcast: $0) } ?? []
                     let mine = ChainPresets.all()
+                    if !ofPodcast.isEmpty {
+                        Divider()
+                        Text("Del podcast")
+                        ForEach(ofPodcast) { p in Button(p.name) { Lane.store(p.chain, in: &session.project.lanes[index]) } }
+                    }
                     if !mine.isEmpty {
                         Divider()
-                        ForEach(mine) { p in
-                            Button(p.name) { Lane.store(p.chain, in: &session.project.lanes[index]) }
-                        }
+                        Text("De esta Mac")
+                        ForEach(mine) { p in Button(p.name) { Lane.store(p.chain, in: &session.project.lanes[index]) } }
+                    }
+                    if !ofPodcast.isEmpty || !mine.isEmpty {
                         Divider()
                         Menu("Borrar un preset") {
-                            ForEach(mine) { p in Button(p.name, role: .destructive) { ChainPresets.remove(p.id); presetsTick += 1 } }
+                            ForEach(ofPodcast) { p in Button(p.name + " (podcast)", role: .destructive) { ChainPresets.remove(p.id, podcast: podcastSlug); presetsTick += 1 } }
+                            ForEach(mine) { p in Button(p.name + " (esta Mac)", role: .destructive) { ChainPresets.remove(p.id); presetsTick += 1 } }
                         }
                     }
                     Divider()
@@ -235,11 +247,13 @@ struct ChannelStrip: View {
                 TextField("Mi cadena de voz", text: $presetName)
                 Button("Guardar") {
                     let n = presetName.trimmingCharacters(in: .whitespaces)
-                    if !n.isEmpty { ChainPresets.add(name: n, chain: lane.effectiveChain); presetsTick += 1 }
+                    if !n.isEmpty { ChainPresets.add(name: n, chain: lane.effectiveChain, podcast: podcastSlug); presetsTick += 1 }
                     presetName = ""
                 }
                 Button("Cancelar", role: .cancel) { presetName = "" }
-            } message: { Text("Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) para usarlos con cualquier voz, en cualquier episodio.") }
+            } message: { Text(podcastSlug != nil
+                              ? "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en el podcast: sirve para cualquier voz y episodio, en cualquier Mac con tu cuenta."
+                              : "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)") }
         }
         .padding(10)
         .frame(width: 190)

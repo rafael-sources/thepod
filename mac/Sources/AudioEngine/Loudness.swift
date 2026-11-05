@@ -182,28 +182,38 @@ final class MixLoudness: @unchecked Sendable {
     }
 }
 
-/// Presets de cadena de voz guardados por la persona («mi cadena para Admin»): viven en esta Mac.
-/// (Sincronizarlos con el podcast en prePod queda para más adelante.)
+/// Presets de cadena de voz. Viven en el podcast (prePod, `voice_presets`) para que viajen a cualquier Mac;
+/// aquí se guarda una copia por podcast para trabajar sin conexión, y los que no son de ningún podcast
+/// («míos») solo en esta Mac.
 enum ChainPresets {
     struct Item: Codable, Identifiable, Equatable {
         var id = UUID()
         var name: String
         var chain: ChainSettings
     }
-    private static let key = "estudio.presets"
+    private static func key(_ slug: String?) -> String { slug.map { "estudio.presets.\($0)" } ?? "estudio.presets" }
 
-    static func all() -> [Item] {
-        guard let d = UserDefaults.standard.data(forKey: key), let v = try? JSONDecoder().decode([Item].self, from: d) else { return [] }
+    static func all(podcast slug: String? = nil) -> [Item] {
+        guard let d = UserDefaults.standard.data(forKey: key(slug)), let v = try? JSONDecoder().decode([Item].self, from: d) else { return [] }
         return v
     }
-    static func save(_ items: [Item]) {
-        if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key) }
+    static func save(_ items: [Item], podcast slug: String? = nil) {
+        if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key(slug)) }
+        if let slug, PrePodClient.isConfigured {
+            Task { try? await PrePodClient.shared.setVoicePresets(slug, items) }
+        }
     }
-    static func add(name: String, chain: ChainSettings) {
+    static func add(name: String, chain: ChainSettings, podcast slug: String? = nil) {
         var c = chain; c.automation = [:]            // el preset es la cadena, no su automatización
-        var items = all().filter { $0.name != name }
+        var items = all(podcast: slug).filter { $0.name != name }
         items.append(Item(name: name, chain: c))
-        save(items)
+        save(items, podcast: slug)
     }
-    static func remove(_ id: UUID) { save(all().filter { $0.id != id }) }
+    static func remove(_ id: UUID, podcast slug: String? = nil) { save(all(podcast: slug).filter { $0.id != id }, podcast: slug) }
+
+    /// Trae los del podcast desde prePod y actualiza la copia local (si prePod no responde, queda la copia).
+    static func refresh(podcast slug: String) async {
+        guard PrePodClient.isConfigured, let items = try? await PrePodClient.shared.voicePresets(slug) else { return }
+        if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key(slug)) }
+    }
 }

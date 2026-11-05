@@ -85,6 +85,18 @@ extension PrePodClient {
 
     // General y branding
     func podcastConfig(_ slug: String) async throws -> PodcastConfig { try dec(PodcastConfig.self, await send("GET", pc(slug))) }
+
+    /// Cadenas de voz del estudio guardadas en el podcast (viajan con él a cualquier Mac).
+    func voicePresets(_ slug: String) async throws -> [ChainPresets.Item] {
+        let d = try await send("GET", pc(slug))
+        guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let raw = o["voice_presets"] as? String, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([ChainPresets.Item].self, from: data)) ?? []
+    }
+    func setVoicePresets(_ slug: String, _ items: [ChainPresets.Item]) async throws {
+        let data = try JSONEncoder().encode(items)
+        _ = try await send("PUT", pc(slug), json: ["voice_presets": String(decoding: data, as: UTF8.self)])
+    }
     func updatePodcast(_ slug: String, _ fields: [String: Any]) async throws -> PodcastConfig {
         try dec(PodcastConfig.self, await send("PUT", pc(slug), json: fields))
     }
