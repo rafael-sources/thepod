@@ -11,6 +11,8 @@ final class VoiceChain: @unchecked Sendable {
     private var eqUnit: AudioUnit?
     private var compUnit: AudioUnit?
     private var limUnit: AudioUnit?
+    private var pluginUnits: [(id: UUID, unit: AudioUnit)] = []
+    private var appliedState: [UUID: Data] = [:]
     private var prepared = false
     private var channels = 0
     private var sampleRate = 48_000.0
@@ -57,11 +59,26 @@ final class VoiceChain: @unchecked Sendable {
             AudioUnitSetProperty(u, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &asbd, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
             AudioUnitSetProperty(u, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &frames, UInt32(MemoryLayout<UInt32>.size))
         }
-        // eq → comp → lim
-        var c1 = AudioUnitConnection(sourceAudioUnit: eq, sourceOutputNumber: 0, destInputNumber: 0)
-        AudioUnitSetProperty(comp, kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &c1, UInt32(MemoryLayout<AudioUnitConnection>.size))
-        var c2 = AudioUnitConnection(sourceAudioUnit: comp, sourceOutputNumber: 0, destInputNumber: 0)
-        AudioUnitSetProperty(lim, kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &c2, UInt32(MemoryLayout<AudioUnitConnection>.size))
+        // Plugins de terceros entre el compresor y el limitador
+        pluginUnits = []
+        for pl in settings.plugins {
+            guard let u = PluginHost.instantiate(pl) else { continue }
+            if PluginHost.configure(u, format: &asbd, maxFrames: frames) {
+                PluginHost.restore(pl.state, into: u)
+                if let st = pl.state { appliedState[pl.id] = st }
+                PluginHost.setBypass(u, !pl.enabled)
+                pluginUnits.append((pl.id, u))
+            } else {
+                AudioComponentInstanceDispose(u)
+            }
+        }
+        // eq → comp → plugins… → lim
+        var order: [AudioUnit] = [eq, comp] + pluginUnits.map(\.unit) + [lim]
+        for i in 1..<order.count {
+            var c = AudioUnitConnection(sourceAudioUnit: order[i - 1], sourceOutputNumber: 0, destInputNumber: 0)
+            AudioUnitSetProperty(order[i], kAudioUnitProperty_MakeConnection, kAudioUnitScope_Input, 0, &c, UInt32(MemoryLayout<AudioUnitConnection>.size))
+        }
+        _ = order.removeAll()
         AudioUnitSetParameter(lim, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, 0, 0)
         AudioUnitSetParameter(lim, kLimiterParam_AttackTime, kAudioUnitScope_Global, 0, 0.005, 0)
         AudioUnitSetParameter(lim, kLimiterParam_DecayTime, kAudioUnitScope_Global, 0, 0.05, 0)
@@ -79,22 +96,33 @@ final class VoiceChain: @unchecked Sendable {
         guard let eq = eqUnit, let comp = compUnit, let lim = limUnit else { return }
         var cb = AURenderCallbackStruct(inputProc: proc, inputProcRefCon: refCon)
         AudioUnitSetProperty(eq, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb, UInt32(MemoryLayout<AURenderCallbackStruct>.size))
-        for u in [eq, comp, lim] { AudioUnitInitialize(u) }
+        for u in [eq, comp] + pluginUnits.map(\.unit) + [lim] { AudioUnitInitialize(u) }
     }
 
     func teardown() {
-        for u in [eqUnit, compUnit, limUnit].compactMap({ $0 }) {
+        for u in [eqUnit, compUnit, limUnit].compactMap({ $0 }) + pluginUnits.map(\.unit) {
             AudioUnitUninitialize(u)
             AudioComponentInstanceDispose(u)
         }
-        eqUnit = nil; compUnit = nil; limUnit = nil
+        eqUnit = nil; compUnit = nil; limUnit = nil; pluginUnits = []
         prepared = false
     }
+
+    /// ¿La lista de plugins (ids y orden) es la que tiene montada esta cadena? Si no, hay que rearmar.
+    func hasPlugins(_ plugins: [PluginInsert]) -> Bool { plugins.map(\.id) == pluginUnits.map(\.id) }
 
     // MARK: Parámetros (desde cualquier hilo mientras suena)
 
     func update(_ c: ChainSettings) {
         os_unfair_lock_lock(&lock); pending = c; settings = c; os_unfair_lock_unlock(&lock)
+        // Estado y bypass de los plugins ya montados: se aplica aquí (hilo normal), no en el de audio
+        if prepared {
+            for pl in c.plugins {
+                guard let u = pluginUnits.first(where: { $0.id == pl.id })?.unit else { continue }
+                PluginHost.setBypass(u, !pl.enabled)
+                if let st = pl.state, appliedState[pl.id] != st { PluginHost.restore(st, into: u); appliedState[pl.id] = st }
+            }
+        }
     }
     func update(_ eq: VoiceEQ) { update(ChainSettings.preset(eq)) }
 

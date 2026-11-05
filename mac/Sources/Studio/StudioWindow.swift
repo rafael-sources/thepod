@@ -191,6 +191,43 @@ struct ChannelStrip: View {
                 insertRow("Compresor", on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
                 insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
                 insertRow("Puerta", on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : "apagada") { openInsert(.gate) }
+                ForEach(chain.plugins) { pl in
+                    HStack(spacing: 6) {
+                        Button {
+                            PluginHost.openEditor(pl, title: "\(session.project.laneName(lane.id)) · \(pl.name)") { data in
+                                edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }) { c.plugins[i].state = data } }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle().fill(pl.enabled ? Theme.good : Color.clear).overlay(Circle().strokeBorder(pl.enabled ? Theme.good : Theme.secondary, lineWidth: 1)).frame(width: 7, height: 7)
+                                Text(pl.name).font(.caption).lineLimit(1)
+                                Spacer()
+                                Image(systemName: "macwindow").font(.caption2).foregroundStyle(Theme.secondary)
+                            }
+                            .padding(.horizontal, 6).frame(height: 22)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
+                        }
+                        .buttonStyle(.plain)
+                        .help("\(pl.vendor) · abrir la ventana del plugin")
+                        .contextMenu {
+                            Button(pl.enabled ? "Apagar" : "Encender") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }) { c.plugins[i].enabled.toggle() } } }
+                            Button("Quitar de la cadena", role: .destructive) { edit { c in c.plugins.removeAll { $0.id == pl.id } } }
+                        }
+                    }
+                }
+                Menu {
+                    let avail = PluginHost.available()
+                    if avail.isEmpty { Text("No hay plugins Audio Unit instalados") }
+                    ForEach(Dictionary(grouping: avail, by: \.vendor).keys.sorted(), id: \.self) { vendor in
+                        Menu(vendor) {
+                            ForEach(avail.filter { $0.vendor == vendor }) { a in
+                                Button(a.name + (a.isV3 ? "" : "  (AUv2, dentro de la app)")) { edit { c in c.plugins.append(a.insert) } }
+                            }
+                        }
+                    }
+                } label: { Text("+ plugin AU").font(.caption) }
+                .menuStyle(.borderlessButton).frame(height: 22)
+                .help("Plugins Audio Unit instalados en esta Mac. Los AUv3 corren aparte: si uno falla no cae la app.")
                 HStack {
                     Text("Limitador").font(.caption)
                     Spacer()

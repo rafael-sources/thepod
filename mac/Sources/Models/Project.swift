@@ -265,10 +265,24 @@ struct AutoPoint: Codable, Equatable, Hashable, Identifiable {
     var v: Double
 }
 
+/// Un plugin Audio Unit de terceros (o del sistema) insertado en la cadena de una persona.
+struct PluginInsert: Codable, Equatable, Identifiable, Hashable {
+    var id = UUID()
+    var type: UInt32          // kAudioUnitType_Effect / MusicEffect
+    var subtype: UInt32
+    var manufacturer: UInt32
+    var name: String
+    var vendor: String = ""
+    var enabled = true
+    var state: Data?          // ClassInfo / fullState del plugin (sus parámetros)
+}
+
 /// La cadena de voz completa de una persona (el estudio). El nivel simple (`VoiceEQ`) es un preset de esto.
 struct ChainSettings: Codable, Equatable {
     static let maxBands = 8
     var bands: [EQBand] = []
+    /// Plugins después del compresor y antes del limitador, en orden.
+    var plugins: [PluginInsert] = []
     /// Automatización por parámetro (`comp.threshold`, `eq.<id de banda>.gain`, …): puntos en tiempo del episodio.
     var automation: [String: [AutoPoint]] = [:]
     var compressorOn = false
@@ -299,6 +313,7 @@ struct ChainSettings: Codable, Equatable {
         gateOn = try c.decodeIfPresent(Bool.self, forKey: .gateOn) ?? false
         gateThreshold = try c.decodeIfPresent(Double.self, forKey: .gateThreshold) ?? -45
         automation = try c.decodeIfPresent([String: [AutoPoint]].self, forKey: .automation) ?? [:]
+        plugins = try c.decodeIfPresent([PluginInsert].self, forKey: .plugins) ?? []
     }
 
     // Parámetros automatizables (id → cómo leerlo y escribirlo)
@@ -406,7 +421,7 @@ struct ChainSettings: Codable, Equatable {
             guard abs(deesserAmount - 0.5) < 0.01 else { return nil }
             e.deess = true
         }
-        guard limiterOn, !gateOn, !hasAutomation else { return nil }
+        guard limiterOn, !gateOn, !hasAutomation, plugins.isEmpty else { return nil }
         return e
     }
 }
