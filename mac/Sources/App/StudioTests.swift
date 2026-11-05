@@ -490,6 +490,29 @@ enum StudioTests {
         return ok
     }
 
+    /// Audiograma: la curva sigue la voz (0 en silencio, ~1 hablando, baja en ~150 ms) y en un cuadro sin cámara
+    /// las barras del centro crecen cuando la persona habla.
+    static func audiogramTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        var e: [Float] = []
+        e += [Float](repeating: -75, count: 20); e += [Float](repeating: -25, count: 20); e += [Float](repeating: -75, count: 20)
+        let c = AudioAnalysis.audiogramCurve(energy: e, keep: [EditEngine.Span(start: 0, end: 6)])
+        check(c.count >= 60 && c[10] < 0.05 && c[30] > 0.85 && c[45] < 0.2, String(format: "curva: callado %.2f · hablando %.2f · poco después %.2f", c[10], c[30], c[45]))
+        let size = CGSize(width: 640, height: 360)
+        var style = CaptionStyle(); style.enabled = false
+        let scene = RenderScene(renderSize: size, format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
+                                switches: [SpeakerSwitch(time: 0, lane: 1)], names: [1: ("Ana", nil)], showNames: false, cropX: [:], logo: nil, background: nil, title: "p")
+        // sin cámara: frames vacío → logo/nombre; con audiograma, barras al 14 % de alto
+        let quiet = mean(scene.render(frames: [:], time: 1), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
+        scene.audiogram = [1: c]
+        let talking = mean(scene.render(frames: [:], time: 3), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
+        let silent = mean(scene.render(frames: [:], time: 1), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
+        check(talking.r > quiet.r + 0.3 && talking.r > silent.r + 0.2, String(format: "las barras del centro crecen al hablar (%.2f → %.2f; callado %.2f)", quiet.r, talking.r, silent.r))
+        print(ok ? "OK audiograma" : "FAIL audiograma")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

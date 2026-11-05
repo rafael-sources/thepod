@@ -100,6 +100,15 @@ final class RenderScene: @unchecked Sendable {
         let y = min(max(my, (1 - CGFloat(cy)) * H - h / 2), max(0, H - h - my))
         return CGRect(x: x, y: y, width: w, height: h)
     }
+    /// Audiograma: nivel de voz 0…1 por persona cada 100 ms (tiempo del contenido). Vacío = apagado.
+    var audiogram: [Int: [Float]] = [:]
+    /// Nivel de la voz en `t` con interpolación entre saltos (para que las ondas no vayan a tirones).
+    func voiceLevel(_ lane: Int, at t: Double) -> CGFloat {
+        guard let arr = audiogram[lane], !arr.isEmpty else { return 0 }
+        let x = max(0, t / 0.1), i = Int(x), f = CGFloat(x - Double(i))
+        let a = arr[min(arr.count - 1, i)], b = arr[min(arr.count - 1, i + 1)]
+        return CGFloat(a) + (CGFloat(b) - CGFloat(a)) * f
+    }
     /// Punch-in dinámico: factor de acercamiento por persona cada 100 ms (tiempo del contenido). Vacío = apagado.
     var punchIn: [Int: [Float]] = [:]
     func punch(_ lane: Int, at t: Double) -> CGFloat {
@@ -405,6 +414,23 @@ final class RenderScene: @unchecked Sendable {
             let who = names[active]?.name ?? title
             if let img = cached("title-\(who)", { TextRenderer.title(who, fontSize: min(W, H) * 0.07, maxWidth: W * 0.8) }) {
                 out = img.transformed(by: .init(translationX: (W - img.extent.width) / 2, y: H * 0.3)).composited(over: out)
+            }
+            // Audiograma: barras simétricas desde el centro que siguen la voz de quien habla; cada barra hacia
+            // afuera muestra el nivel de un poco antes, así la onda «viaja» desde el centro
+            if !audiogram.isEmpty {
+                let bars = 31, gap = W * 0.006
+                let bw = (W * 0.72 - gap * CGFloat(bars - 1)) / CGFloat(bars)
+                let baseY = H * 0.14, maxH = H * 0.11
+                let accent = CIColor(red: 0.957, green: 0.780, blue: 0.439)
+                for k in 0..<bars {
+                    let d = abs(k - bars / 2)
+                    let lvl = voiceLevel(active, at: max(0, t - Double(d) * 0.06))
+                    let h = max(bw * 0.6, maxH * lvl * (1 - CGFloat(d) / CGFloat(bars)))
+                    let x = (W - W * 0.72) / 2 + CGFloat(k) * (bw + gap)
+                    let bar = CIImage(color: accent).cropped(to: CGRect(x: x, y: baseY - h / 2, width: bw, height: h))
+                        .applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.55 + 0.45 * lvl)])
+                    out = bar.composited(over: out)
+                }
             }
         } else {
             let resolved = resolve(cameraSpan(at: t)?.template ?? layout, count: visible.count)

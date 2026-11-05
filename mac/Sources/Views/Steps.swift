@@ -1518,6 +1518,15 @@ struct LookStep: View {
         let l = session.project.layout
         let hasBackground = session.project.backgroundFile != nil
         VStack(alignment: .leading, spacing: 6) {
+            if session.project.lanes.allSatisfy({ l in !(session.project.mediaItem(l.clips.first?.mediaId ?? -1)?.hasVideo ?? false) }) {
+                Toggle(isOn: $session.project.layoutOptions.audiogram) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ondas que siguen la voz")
+                        Text("Este episodio no tiene cámara: sobre el logo y el nombre de quien habla, unas barras se mueven con su voz. Es lo que se publica en redes de un podcast de audio.")
+                            .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
             Toggle(isOn: $session.project.layoutOptions.punchIn) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Acercamiento al hablar")

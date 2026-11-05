@@ -187,6 +187,31 @@ enum AudioAnalysis {
         return out
     }
 
+    /// Audiograma: nivel de la voz 0…1 cada 100 ms del video final, para dibujar ondas que la siguen.
+    /// 0 = 30 dB por debajo del nivel típico de habla, 1 = el nivel típico; sube rápido (50 ms) y baja en 150 ms.
+    static func audiogramCurve(energy: [Float], keep: [EditEngine.Span]) -> [Float] {
+        guard !energy.isEmpty else { return [] }
+        let talking = energy.filter { $0 > -60 }.sorted()
+        guard talking.count > 10 else { return [] }
+        let level = Double(talking[Int(Double(talking.count - 1) * 0.9)])
+        let hop = EnergyMap.hop
+        var smooth = [Float](repeating: 0, count: energy.count)
+        var v = 0.0
+        let aAtt = 1 - exp(-hop / 0.05), aRel = 1 - exp(-hop / 0.15)
+        for i in 0..<energy.count {
+            let raw = max(0, min(1, (Double(energy[i]) - (level - 30)) / 30))
+            v += (raw > v ? aAtt : aRel) * (raw - v)
+            smooth[i] = Float(v)
+        }
+        let n = Int(EditEngine.outputDuration(keep) / hop) + 1
+        var out = [Float](repeating: 0, count: n)
+        for i in 0..<n {
+            let j = Int(EditEngine.toTimeline(Double(i) * hop, keep: keep) / hop)
+            if j >= 0, j < smooth.count { out[i] = smooth[j] }
+        }
+        return out
+    }
+
     /// Los cambios de cámara que ve la pantalla (Studio · Video): con «sigue a quien habla» apagado, una sola
     /// cámara (la plantilla manda); si no, los mismos cambios pero sin cambiar antes de `minHold` segundos.
     static func cameraSwitches(_ switches: [SpeakerSwitch], settings: StudioVideoSettings) -> [SpeakerSwitch] {

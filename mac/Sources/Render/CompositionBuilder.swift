@@ -536,6 +536,11 @@ enum CompositionBuilder {
                     mode: vb.mode, blur: vb.blur, color: TextRenderer.color(vb.color).map { CIColor(color: $0) ?? .black } ?? .black,
                     image: vb.mode == .image ? vb.imageFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id), options: [.applyOrientationProperty: true]) } : nil)
             }
+            if project.layoutOptions.audiogram, let energy, project.lanesOnScreen.allSatisfy({ l in !(project.mediaItem(l.clips.first?.mediaId ?? -1)?.hasVideo ?? false) }) {
+                for lane in project.lanes {
+                    if let e = energy.lanes[lane.id] { s.audiogram[lane.id] = AudioAnalysis.audiogramCurve(energy: e, keep: keep) }
+                }
+            }
             if project.layoutOptions.punchIn, let energy {
                 for lane in project.lanes {
                     if let e = energy.lanes[lane.id] { s.punchIn[lane.id] = AudioAnalysis.punchInCurve(energy: e, keep: keep) }
