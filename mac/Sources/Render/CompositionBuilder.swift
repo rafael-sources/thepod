@@ -543,6 +543,7 @@ enum CompositionBuilder {
             scene = s
         }
 
+        if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("tono de sala: %d personas con ambiente · uniones %d", roomToneTracks, joinTimes.count) }
         var built = BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
                                      keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
         built.meters = meters
