@@ -772,6 +772,28 @@ enum SelfTest {
         if args.contains("--loudness-report-test") { Task { exit(await StudioTests.loudnessReportTest() ? 0 : 1) }; return }
         if args.contains("--title-presets-test") { exit(StudioTests.titlePresetsTest() ? 0 : 1) }
         if args.contains("--proxy-test") { Task { exit(await StudioTests.proxyTest() ? 0 : 1) }; return }
+        if let i = args.firstIndex(of: "--export-bench"), args.count > i + 1 {
+            // Rendimiento con un episodio real: exporta los primeros N segundos (60 de serie) en 16:9 y dice cuánto tardó
+            let slug = args[i + 1]
+            let secs = args.count > i + 2 ? Double(args[i + 2]) ?? 60 : 60
+            Task { @MainActor in
+                do {
+                    let p = try ProjectStore.load(slug: slug)
+                    let energy = AudioAnalysis.loadEnergy(p.id)
+                    let cams = p.lanes.filter { p.laneHasVideo($0.id) }.count
+                    print("Proyecto \(p.name): \(p.lanes.count) personas, \(cams) con cámara, \(p.overlays.count) capas, \(p.brolls.count) b-roll, Studio: \(p.videoTunedInStudio ? "sí" : "no")")
+                    let t0 = Date()
+                    let url = try await Exporter.export(project: p, format: .landscape, window: (0, secs), baseName: "bench-\(Int(secs))s", energy: energy) { _ in }
+                    let wall = Date().timeIntervalSince(t0)
+                    let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+                    print(String(format: "Exportados %.0f s en %.1f s → %.2f× tiempo real · %.1f MB · %@", secs, wall, secs / wall, Double(size) / 1e6, url.lastPathComponent))
+                    try? FileManager.default.removeItem(at: url)
+                    exit(0)
+                } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
+            }
+            return
+        }
+        if args.contains("--polish-test") { exit(StudioTests.polishTest() ? 0 : 1) }
         if args.contains("--color-test") { exit(StudioTests.colorTest() ? 0 : 1) }
         if args.contains("--multicam-test") { exit(StudioTests.multicamTest() ? 0 : 1) }
         if args.contains("--speed-test") { Task { exit(await StudioTests.speedTest() ? 0 : 1) }; return }
@@ -802,6 +824,8 @@ enum SelfTest {
                 guard StudioTests.reviewTest() else { exit(1) }
                 print("== Plantillas de título =="); fflush(stdout)
                 guard StudioTests.titlePresetsTest() else { exit(1) }
+                print("== Pulido: atajos y migración =="); fflush(stdout)
+                guard StudioTests.polishTest() else { exit(1) }
                 print("== Color =="); fflush(stdout)
                 guard StudioTests.colorTest() else { exit(1) }
                 print("== Multicámara =="); fflush(stdout)

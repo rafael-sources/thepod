@@ -127,11 +127,15 @@ struct StudioTransport: View {
             .tint(chains.bypassAll ? .orange : Theme.accent)
             .help("A/B instantáneo (⌘⇧B): oír las voces sin ninguna cadena (EQ, compresor, plugins, limitador) mientras suena. Solo al escuchar; el export siempre procesa.")
             MasterBadge(session: session)
+            Button { showShortcuts.toggle() } label: { Image(systemName: "questionmark.circle") }
+                .keyboardShortcut("?", modifiers: []).help("Atajos de teclado (?)")
+                .popover(isPresented: $showShortcuts) { ShortcutsPopover() }
             Button("Exportar…") { session.step = .export }
                 .help("Vuelve a la ventana principal, en Exportar")
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
+    @State private var showShortcuts = false
 }
 
 struct AudioStudioView: View {
@@ -465,7 +469,8 @@ struct Fader: View {
             }
         }
         .frame(width: 40)
-        .help("Doble clic en el número para escribir dB")
+        .simultaneousGesture(TapGesture().modifiers(.option).onEnded { volume = 1 })   // ⌥ clic: de vuelta a 0 dB
+        .help("Doble clic en el número para escribir dB · ⌥ clic: volver a 0 dB")
     }
 }
 

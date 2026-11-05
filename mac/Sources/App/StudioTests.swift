@@ -880,6 +880,44 @@ enum StudioTests {
         return ok
     }
 
+    /// Pulido: la lista de atajos no repite teclas; un proyecto guardado por una versión vieja (sin nada de Studio) abre
+    /// con todo en su valor por defecto y no dice «ajustado en Studio»; lo de Studio sobrevive a guardar y volver a abrir.
+    static func polishTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        check(StudioShortcuts.duplicates.isEmpty, "los atajos no repiten teclas (\(StudioShortcuts.duplicates))")
+        check(StudioShortcuts.all.count >= 15, "la lista de atajos está completa (\(StudioShortcuts.all.count))")
+        // Un proyecto como lo guardaba 0.3x: sin cadenas, keyframes, color, máscaras, velocidad, cola ni revisión
+        let old = #"""
+        {"id":"viejo","name":"Viejo","podcastName":"P","createdAt":700000000,"importedFrom":"tracks","duration":0,
+         "media":[{"id":1,"originalName":"a.mp4","file":"media/a.mp4","kind":"video","duration":60}],
+         "lanes":[{"id":1,"name":"Ana","clips":[{"mediaId":1,"srcIn":0,"srcOut":60}]}],
+         "overlays":[{"id":1,"kind":"text","start":5,"text":"Hola"}],
+         "brolls":[{"id":1,"file":"broll/b.mp4","start":10}],
+         "audioLane":[{"id":1,"mediaId":1,"tlStart":0,"srcOut":20}],
+         "cuts":[],"words":[]}
+        """#
+        if let p = try? JSONDecoder().decode(Project.self, from: Data(old.utf8)) {
+            check(!p.videoTunedInStudio, "un proyecto viejo no está «ajustado en Studio»")
+            check(p.studioVideo.isDefault && p.grade == nil && p.lanes[0].grade == nil && p.lanes[0].mask == nil && p.lanes[0].chain == nil, "cámaras, color, máscara y cadena en su valor por defecto")
+            check(p.brolls[0].speed == 1 && p.brolls[0].speedEnd == nil && p.brolls[0].transitionIn == nil && p.audioLane[0].speed == 1, "velocidad y transiciones por defecto")
+            check(p.overlays[0].animation == nil && p.overlays[0].enter == nil && p.review == nil && !p.matchVoices && p.fix.roomTone, "capas sin keyframes, sin revisión, tono de sala encendido de serie")
+            // Ida y vuelta con cosas de Studio
+            var q = p
+            q.studioVideo.liveCut(to: 1, at: 10, duration: 60); q.studioVideo.switchTransition = Transition(kind: .zoom, duration: 0.3)
+            var g = ColorGrade(); g.temperature = 20; q.lanes[0].grade = g
+            var m = ShapeMask(); m.feather = 10; q.lanes[0].mask = m
+            q.brolls[0].speed = 2; q.brolls[0].speedEnd = 0.5
+            var a = LayerAnimation(); a.write(LayerAnimation.x, t: 5, v: 0.2); q.overlays[0].animation = a
+            if let d = try? JSONEncoder().encode(q), let r = try? JSONDecoder().decode(Project.self, from: d) {
+                check(r == q, "lo de Studio sobrevive a guardar y volver a abrir")
+                check(r.videoTunedInStudio, "y el proyecto queda «ajustado en Studio»")
+            } else { check(false, "no se pudo guardar y volver a abrir") }
+        } else { check(false, "no abre un proyecto de una versión vieja") }
+        print(ok ? "OK pulido: atajos y migración" : "FAIL pulido")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {
