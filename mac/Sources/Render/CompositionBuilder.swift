@@ -390,24 +390,42 @@ enum CompositionBuilder {
                 guard let v = try? await a.loadTracks(withMediaType: .video).first else { continue }
                 let dur = (try? await a.load(.duration).seconds) ?? 0
                 let srcIn = min(max(0, b.srcIn), max(0, dur - 0.1))
-                let speed = max(0.1, b.speed)
-                // En pantalla ocupa `len`; de la fuente consume `len × velocidad` (si no alcanza, se acorta)
-                let srcLen = min((end - start) * speed, max(0, dur - srcIn))
-                let len = srcLen / speed
+                // En pantalla ocupa `screen`; de la fuente consume lo que diga la velocidad (o la rampa) y, si no
+                // alcanza, se acorta en pantalla. Con rampa, trozos de 0,25 s cada uno con su velocidad.
+                var screen = end - start
+                if b.sourceNeeded(screenLen: screen) > dur - srcIn {
+                    // recortar la pantalla hasta que la fuente alcance
+                    var lo = 0.0, hi = screen
+                    for _ in 0..<24 { let mid = (lo + hi) / 2; if b.sourceNeeded(screenLen: mid) > dur - srcIn { hi = mid } else { lo = mid } }
+                    screen = lo
+                }
+                let segments = b.speedSegments(screenLen: screen)
+                let len = segments.reduce(0) { $0 + $1.screen }
                 guard len > 0.1 else { continue }
                 let track = comp.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                let atrack: AVMutableCompositionTrack? = (b.volume > 0.01) ? comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) : nil
+                let asrc = atrack != nil ? try? await a.loadTracks(withMediaType: .audio).first : nil
+                var stretched = false
                 do {
-                    try track.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(srcLen)), of: v, at: cm(start))
-                    if speed != 1 { track.scaleTimeRange(CMTimeRange(start: cm(start), duration: cm(srcLen)), toDuration: cm(len)) }
-                } catch { comp.removeTrack(track); continue }
-                if b.volume > 0.01, let at = try? await a.loadTracks(withMediaType: .audio).first {
-                    let atrack = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
-                    try? atrack.insertTimeRange(CMTimeRange(start: cm(srcIn), duration: cm(srcLen)), of: at, at: cm(start))
-                    if speed != 1 { atrack.scaleTimeRange(CMTimeRange(start: cm(start), duration: cm(srcLen)), toDuration: cm(len)) }
-                    let p = AVMutableAudioMixInputParameters(track: atrack)
-                    if speed != 1 { p.audioTimePitchAlgorithm = .spectral }
-                    p.setVolume(Float(b.volume), at: .zero)
-                    mixParams.append(p)
+                    var src = srcIn, at = start
+                    for seg in segments {
+                        try track.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(seg.source)), of: v, at: cm(at))
+                        if let atrack, let asrc { try? atrack.insertTimeRange(CMTimeRange(start: cm(src), duration: cm(seg.source)), of: asrc, at: cm(at)) }
+                        if abs(seg.source - seg.screen) > 1e-6 {
+                            track.scaleTimeRange(CMTimeRange(start: cm(at), duration: cm(seg.source)), toDuration: cm(seg.screen))
+                            atrack?.scaleTimeRange(CMTimeRange(start: cm(at), duration: cm(seg.source)), toDuration: cm(seg.screen))
+                            stretched = true
+                        }
+                        src += seg.source; at += seg.screen
+                    }
+                } catch { comp.removeTrack(track); if let atrack { comp.removeTrack(atrack) }; continue }
+                if let atrack {
+                    if asrc == nil { comp.removeTrack(atrack) } else {
+                        let p = AVMutableAudioMixInputParameters(track: atrack)
+                        if stretched { p.audioTimePitchAlgorithm = .spectral }
+                        p.setVolume(Float(b.volume), at: .zero)
+                        mixParams.append(p)
+                    }
                 }
                 // Videos de teléfono vienen grabados "acostados" con una rotación en los metadatos: se aplica al dibujar
                 let xf = (try? await v.load(.preferredTransform)) ?? .identity

@@ -595,8 +595,17 @@ enum StudioTests {
         if let old = try? JSONDecoder().decode(AudioLaneClip.self, from: Data(#"{"id":1,"mediaId":1,"tlStart":0,"srcOut":3}"#.utf8)) {
             check(old.speed == 1 && old.length == 3, "un clip guardado antes abre a 1×")
         } else { check(false, "no decodifica un clip viejo") }
-        if let b = try? JSONDecoder().decode(BRollClip.self, from: Data(#"{"id":1,"file":"x.mp4"}"#.utf8)) { check(b.speed == 1, "un b-roll viejo abre a 1×") }
+        if let b = try? JSONDecoder().decode(BRollClip.self, from: Data(#"{"id":1,"file":"x.mp4"}"#.utf8)) { check(b.speed == 1 && b.speedEnd == nil, "un b-roll viejo abre a 1× y sin rampa") }
         else { check(false, "no decodifica un b-roll viejo") }
+        // Rampa: de 1× a 2× en 4 s de pantalla consume 6 s de fuente (velocidad media 1,5×), en trozos de 0,25 s
+        var br = BRollClip(id: 1, file: "x.mp4", isVideo: true, start: 0, duration: 4)
+        br.speed = 1; br.speedEnd = 2
+        let segs = br.speedSegments(screenLen: 4)
+        check(segs.count == 16 && abs(segs.reduce(0) { $0 + $1.screen } - 4) < 1e-9, "la rampa se parte en 16 trozos que suman 4 s de pantalla")
+        check(abs(br.sourceNeeded(screenLen: 4) - 6) < 0.05, String(format: "la rampa 1×→2× consume 6 s de fuente (%.2f)", br.sourceNeeded(screenLen: 4)))
+        check(segs.first!.source < segs.last!.source && abs(br.speed(at: 0) - 1) < 1e-9 && abs(br.speed(at: 1) - 2) < 1e-9, "empieza lento y termina rápido")
+        br.speedEnd = nil; br.speed = 0.5
+        check(br.speedSegments(screenLen: 4).count == 1 && abs(br.sourceNeeded(screenLen: 4) - 2) < 1e-9, "sin rampa: un solo tramo, 0,5× consume la mitad")
         // Mecanismo real: estirar sin cambiar el tono
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vel-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -1042,9 +1042,33 @@ struct BRollClip: Codable, Identifiable, Equatable {
     var transitionIn: Transition?
     /// Studio · Video: velocidad del video (1 = normal). 0,25–1 cámara lenta, 1–4 acelerado. `duration` sigue siendo lo que ocupa en pantalla.
     var speed: Double = 1
+    /// Rampa de velocidad: si está, el clip va de `speed` al inicio a `speedEnd` al final (suave); nil = velocidad fija.
+    var speedEnd: Double?
     var grade: ColorGrade?              // Studio · Video: color solo de este clip
     var end: Double { start + duration }
-    static let maxSeconds = 10.0        // un b-roll es un apoyo corto, no otro video
+    static let maxSeconds = 10.0
+
+    /// Velocidad en una fracción 0–1 del clip (con la rampa, interpolada suave; sin ella, `speed`).
+    func speed(at f: Double) -> Double {
+        guard let e = speedEnd else { return max(0.1, speed) }
+        let k = min(1, max(0, f)); let ease = k * k * (3 - 2 * k)
+        return max(0.1, speed + (e - speed) * ease)
+    }
+    /// Tramos de la rampa para armar la mezcla: (segundos en pantalla, segundos de la fuente) por trozo, en orden.
+    /// Sin rampa, un solo tramo. `screenLen` es lo que ocupa en pantalla.
+    func speedSegments(screenLen: Double, step: Double = 0.25) -> [(screen: Double, source: Double)] {
+        guard speedEnd != nil, screenLen > step else { return [(screenLen, screenLen * speed(at: 0))] }
+        var out: [(Double, Double)] = []
+        var t = 0.0
+        while t < screenLen - 1e-6 {
+            let d = min(step, screenLen - t)
+            let v = speed(at: (t + d / 2) / screenLen)
+            out.append((d, d * v)); t += d
+        }
+        return out
+    }
+    /// Segundos de fuente que consume la rampa entera en `screenLen` segundos de pantalla.
+    func sourceNeeded(screenLen: Double) -> Double { speedSegments(screenLen: screenLen).reduce(0) { $0 + $1.source } }        // un b-roll es un apoyo corto, no otro video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
 
     init(id: Int, file: String, isVideo: Bool, start: Double, duration: Double = 6) {
@@ -1063,6 +1087,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
         placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "full"
         transitionIn = try c.decodeIfPresent(Transition.self, forKey: .transitionIn)
         speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? 1
+        speedEnd = try c.decodeIfPresent(Double.self, forKey: .speedEnd)
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade)
     }
 }
@@ -1458,7 +1483,7 @@ extension Project {
 
     /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).
     var videoTunedInStudio: Bool {
-        overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil || $0.grade?.isEmpty == false || $0.speed != 1 }
+        overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil || $0.grade?.isEmpty == false || $0.speed != 1 || $0.speedEnd != nil }
             || !studioVideo.isDefault || grade?.isEmpty == false || lanes.contains { $0.grade?.isEmpty == false }
     }
 

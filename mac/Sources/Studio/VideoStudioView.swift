@@ -239,7 +239,15 @@ struct VideoInspector: View {
             Toggle("Llenar la pantalla (recorta)", isOn: $session.project.brolls[i].fill).font(.caption)
             if b.isVideo {
                 HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? "mudo" : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
-                SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono.")
+                SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: b.speedEnd == nil
+                         ? "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono."
+                         : "Velocidad al empezar el clip; abajo, al terminar. Entre las dos, una rampa suave.")
+                HStack {
+                    Toggle("Rampa", isOn: Binding(get: { b.speedEnd != nil }, set: { on in session.project.brolls[i].speedEnd = on ? (b.speed == 1 ? 2 : 1) : nil })).font(.caption).toggleStyle(.checkbox)
+                    if b.speedEnd != nil {
+                        SpeedRow(speed: Binding(get: { b.speedEnd ?? 1 }, set: { session.project.brolls[i].speedEnd = $0 }), range: 0.25...4, note: "")
+                    }
+                }
             }
             Divider()
             ColorPanel(grade: $session.project.brolls[i].grade, title: "Color de este clip")
