@@ -16,6 +16,8 @@ struct BuiltComposition {
     var introDuration: Double = 0
     /// Solo en la vista previa: lo que suena de cada persona (id de pista → medidor), para el medidor del timeline.
     var meters: [Int: ChainTap] = [:]
+    /// Tono de sala: cuántas personas recibieron relleno de ambiente (para contarlo en la interfaz y las pruebas).
+    var roomToneTracks = 0
     /// Solo en la vista previa: volumen que la mezcla le da a cada persona en cada instante del video (0…).
     var gains: [Int: (Double) -> Double] = [:]
     /// Solo en la vista previa: la sonoridad de la mezcla (estimada sumando las pistas con su volumen).
@@ -226,6 +228,11 @@ enum CompositionBuilder {
         let wantVideo = format != .audio
         var meters: [Int: ChainTap] = [:]
         var gains: [Int: (Double) -> Double] = [:]
+        // Tono de sala: uniones de los cortes (tiempo del video final) y cuántas pistas de ambiente se metieron
+        let roomTone = project.fix.roomTone
+        var joinTimes: [Double] = []
+        do { var cursor = 0.0; for k in keep.dropLast() { cursor += k.end - k.start; joinTimes.append(introDur + cursor) } }
+        var roomToneTracks = 0
         for lane in project.lanes {
             var vTrack: AVMutableCompositionTrack?
             var aTrack: AVMutableCompositionTrack?
@@ -266,16 +273,41 @@ enum CompositionBuilder {
                 if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
                     NSLog("lane %d %@ audible=%d base=%.2f span=%.2f-%.2f track=%d", id, lane.name, audible ? 1 : 0, laneBase, span.start, span.end, aTrack.trackID)
                 }
+                // Tono de sala: las uniones de los cortes bajan a cero 6 ms antes y suben 6 ms después (sin clic)
+                let joins: [Double] = roomTone ? joinTimes.filter { $0 > span.start + 0.02 && $0 < span.end - 0.02 } : []
                 let factor: (Double) -> Double = { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
                     if gate { f *= gateGain(id, t) }
                     f *= automationGain(lane, t)
                     if inBleep(id, t) { f = 0 }
+                    if !joins.isEmpty { f *= RoomTone.joinDip(t, joins: joins) }
                     return f
                 }
                 applyEnvelope(p, base: laneBase, span: span,
-                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints(id) : []) + bleepPoints(id) + automationPoints(lane),
+                              points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints(id) : []) + bleepPoints(id) + automationPoints(lane)
+                                + joins.flatMap { [$0 - 0.006, $0, $0 + 0.006] },
                               factor: factor)
+                // Tono de sala: el ambiente de esta persona donde su pista no tiene nada (antes, después, bajo pitidos)
+                if roomTone, audible, let energy, let loopURL = RoomTone.loop(project: project, lane: lane, energy: energy) {
+                    let dead = RoomTone.deadSpans(laneSpan: span, content: (introDur, contentEnd),
+                                                  bleeps: bleepOut.filter { $0.lane == id }.map { ($0.start, $0.end) })
+                    if !dead.isEmpty, let la = Optional(AVURLAsset(url: loopURL)), let lt = try? await la.loadTracks(withMediaType: .audio).first {
+                        let loopDur = (try? await la.load(.duration).seconds) ?? RoomTone.loopSeconds
+                        let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                        for d in dead {
+                            var at = d.start
+                            while at < d.end - 0.01 {
+                                let len = min(loopDur, d.end - at)
+                                try? track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: lt, at: cm(at))
+                                at += len
+                            }
+                        }
+                        let rp = AVMutableAudioMixInputParameters(track: track)
+                        rp.setVolume(Float(laneBase), at: .zero)
+                        mixParams.append(rp)
+                        roomToneTracks += 1
+                    }
+                }
                 // Cadena de voz de la persona (EQ, voz pareja, siseo, limitador) antes del volumen de la mezcla.
                 // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
                 // se le suma la misma curva al leerlo.
@@ -514,6 +546,7 @@ enum CompositionBuilder {
         var built = BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
                                      keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
         built.meters = meters
+        built.roomToneTracks = roomToneTracks
         built.gains = gains
         built.loudness = loudness
         return built

@@ -71,6 +71,55 @@ enum StudioTests {
         return ok
     }
 
+    /// Tono de sala: elige el segundo más quieto que no sea silencio digital, escribe un bucle sin costura,
+    /// calcula los huecos muertos y suaviza las uniones.
+    static func roomToneTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        // 1) Energía: 3 s de voz (−20), 2 s de ambiente (−55), 2 s de silencio digital (−120), 1 s de ambiente inestable
+        var e: [Float] = []
+        e += [Float](repeating: -20, count: 30)
+        e += [Float](repeating: -55, count: 20)
+        e += [Float](repeating: -120, count: 20)
+        e += (0..<10).map { Float(-50 - ($0 % 2) * 9) }
+        let q = RoomTone.quietestWindow(energy: e)
+        check(q != nil && q!.start >= 3.0 && q!.start <= 4.0 && abs(q!.db + 55) < 0.5, "elige el ambiente (−55 dB), no la voz ni el silencio digital ni el tramo inestable (\(q.map { "\($0.start) s" } ?? "nil"))")
+        check(RoomTone.quietestWindow(energy: [Float](repeating: -120, count: 50)) == nil, "una pista en silencio digital no tiene tono de sala")
+        check(RoomTone.quietestWindow(energy: [Float](repeating: -25, count: 50)) == nil, "una pista que siempre habla tampoco")
+        // 2) Bucle: de 1 s de ruido sale un bucle de 4 s con el mismo nivel y sin saltos en las costuras
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tono-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sr = 48_000.0
+        if let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1), let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(sr)) {
+            buf.frameLength = AVAudioFrameCount(sr)
+            var seed: UInt32 = 12345
+            for i in 0..<Int(sr) { seed = seed &* 1664525 &+ 1013904223; buf.floatChannelData![0][i] = (Float(seed % 20000) / 10000 - 1) * 0.01 }
+            let url = RoomTone.writeLoop(from: buf, to: dir.appendingPathComponent("loop.caf"))
+            if let url, let f = try? AVAudioFile(forReading: url) {
+                check(abs(Double(f.length) / sr - RoomTone.loopSeconds) < 0.01, "el bucle dura \(RoomTone.loopSeconds) s")
+                let lufsSrc = LoudnessMatch.integratedLUFS(url: url) ?? -999
+                check(lufsSrc > -70 && lufsSrc < -30, String(format: "el bucle conserva un nivel de ambiente (%.1f LUFS)", lufsSrc))
+                // sin saltos: ninguna muestra fuera del rango del ruido original (|v| ≤ 0,01)
+                let n = AVAudioFrameCount(f.length)
+                if let all = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: n), (try? f.read(into: all)) != nil {
+                    var peak: Float = 0
+                    for i in 0..<Int(all.frameLength) { peak = max(peak, abs(all.floatChannelData![0][i])) }
+                    check(peak <= 0.0101, String(format: "las costuras no suman picos (pico %.4f)", peak))
+                }
+            } else { check(false, "no se pudo escribir el bucle") }
+        }
+        // 3) Huecos muertos: antes y después del tramo de la persona, y bajo un pitido; los de < 150 ms no
+        let dead = RoomTone.deadSpans(laneSpan: (12, 100), content: (4, 130), bleeps: [(50, 50.6), (70, 70.05)])
+        check(dead.count == 3 && dead[0] == (4, 12) && dead[1] == (50, 50.6) && dead[2] == (100, 130), "huecos: antes (4–12), pitido (50–50,6) y después (100–130); el pitido de 50 ms no cuenta (\(dead))")
+        check(RoomTone.deadSpans(laneSpan: (4.05, 129.9), content: (4, 130), bleeps: []).isEmpty, "sin huecos si la persona cubre casi todo")
+        // 4) Unión de corte: cero justo en la unión, entero a 6 ms, sin tocar lejos
+        check(RoomTone.joinDip(10, joins: [10]) == 0 && RoomTone.joinDip(10.003, joins: [10]) == 0.5 && RoomTone.joinDip(10.006, joins: [10]) == 1 && RoomTone.joinDip(12, joins: [10]) == 1,
+              "la unión baja a cero y vuelve en 6 ms")
+        print(ok ? "OK tono de sala" : "FAIL tono de sala")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

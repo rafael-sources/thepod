@@ -217,6 +217,14 @@ struct FixStep: View {
                         Divider()
                         VoicesMatchRow(session: session)
                         Divider()
+                        Toggle(isOn: $session.project.fix.roomTone) {
+                            VStack(alignment: .leading) {
+                                Text("Tono de sala").font(.headline)
+                                Text("Toma un segundo del ambiente propio de cada persona (el aire de su sala) y lo pone donde su pista no tiene nada: antes de que empiece a grabar, después de que termine y bajo los pitidos. Y suaviza cada unión de corte para que no haga clic. Así los cortes no suenan «muertos».")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Divider()
                         Toggle(isOn: $session.project.fix.removeSilences) {
                             VStack(alignment: .leading) {
                                 Text("Quitar silencios").font(.headline)

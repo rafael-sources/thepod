@@ -591,6 +591,7 @@ struct FixSettings: Codable, Equatable {
     var gateDB: Double = 12             // cuánto se baja: 8 suave, 12 normal, 18 fuerte
     var minSilence: Double = 0.8        // seconds of silence before we cut
     var keepPad: Double = 0.18          // breathing room kept around speech
+    var roomTone = true                 // tono de sala: rellena los huecos muertos de cada persona con su propio ambiente y suaviza las uniones de los cortes
     var lastRun: Date?
     init() {}
     init(from decoder: Decoder) throws {
@@ -605,6 +606,7 @@ struct FixSettings: Codable, Equatable {
         gateDB = try c.decodeIfPresent(Double.self, forKey: .gateDB) ?? 12
         minSilence = try c.decodeIfPresent(Double.self, forKey: .minSilence) ?? 0.8
         keepPad = try c.decodeIfPresent(Double.self, forKey: .keepPad) ?? 0.18
+        roomTone = try c.decodeIfPresent(Bool.self, forKey: .roomTone) ?? true
         lastRun = try c.decodeIfPresent(Date.self, forKey: .lastRun)
     }
 }
