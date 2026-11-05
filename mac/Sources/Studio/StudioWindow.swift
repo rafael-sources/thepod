@@ -43,10 +43,9 @@ struct AudioStudioView: View {
                 EpisodeTimeline(session: session)
                     .padding(.horizontal, 12).padding(.top, 8)
             }
-            .frame(height: 360)
+            .frame(maxHeight: .infinity)
             Divider()
             console
-            Spacer(minLength: 0)
         }
         .sheet(item: $editingInsert) { ref in
             InsertEditor(session: session, ref: ref)
