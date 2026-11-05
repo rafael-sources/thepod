@@ -642,6 +642,40 @@ enum StudioTests {
         return ok
     }
 
+    /// Plantillas de título: guardar toma estilo, color, posición, tamaño, entrada y salida (no el texto ni el momento);
+    /// aplicar las pone en otra capa sin tocar su texto; el mismo nombre reemplaza; borrar quita; las de un podcast
+    /// no se mezclan con las de esta Mac; una plantilla guardada con menos campos abre con valores sanos.
+    static func titlePresetsTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let slug = "prueba-plantillas-\(Int(Date().timeIntervalSince1970))"
+        defer { UserDefaults.standard.removeObject(forKey: "estudio.titulos.\(slug)"); UserDefaults.standard.removeObject(forKey: "estudio.titulos.\(slug)-mia") }
+        var a = VideoLayer(id: 1, kind: .text, start: 10)
+        a.text = "Karelia"; a.style = .box; a.color = "#FFCC00"; a.x = 0.2; a.y = 0.85; a.scale = 1.3; a.duration = 6
+        a.enter = TitleMotion(kind: .rise, duration: 0.5); a.exit = TitleMotion(kind: .fade, duration: 0.3)
+        TitlePresets.add(name: "Nombre abajo", from: a, podcast: slug)
+        let saved = TitlePresets.all(podcast: slug)
+        check(saved.count == 1 && saved[0].name == "Nombre abajo" && saved[0].style == .box && saved[0].y == 0.85 && saved[0].enter?.kind == .rise, "se guarda con su estilo, posición y entrada")
+        var b = VideoLayer(id: 2, kind: .text, start: 40)
+        b.text = "Patricio"
+        saved[0].apply(to: &b)
+        check(b.text == "Patricio" && b.start == 40, "aplicar no toca el texto ni el momento")
+        check(b.style == .box && b.color == "#FFCC00" && b.x == 0.2 && b.y == 0.85 && b.scale == 1.3 && b.duration == 6 && b.exit?.kind == .fade, "aplicar pone estilo, color, posición, tamaño, duración y salida")
+        a.color = "#FFFFFF"
+        TitlePresets.add(name: "Nombre abajo", from: a, podcast: slug)
+        check(TitlePresets.all(podcast: slug).count == 1 && TitlePresets.all(podcast: slug)[0].color == "#FFFFFF", "guardar con el mismo nombre reemplaza")
+        check(!TitlePresets.all().contains { $0.name == "Nombre abajo" }, "las del podcast no aparecen entre las de esta Mac")
+        TitlePresets.remove(saved[0].id, podcast: slug)
+        check(TitlePresets.all(podcast: slug).count == 1, "borrar por un id viejo no toca la reemplazada")
+        TitlePresets.remove(TitlePresets.all(podcast: slug)[0].id, podcast: slug)
+        check(TitlePresets.all(podcast: slug).isEmpty, "borrar la deja fuera")
+        if let old = try? JSONDecoder().decode(TitlePresets.Item.self, from: Data(#"{"name":"Vieja","style":"label"}"#.utf8)) {
+            check(old.style == .label && old.x == 0.5 && old.scale == 1 && old.enter == nil, "una plantilla con menos campos abre con valores sanos")
+        } else { check(false, "no decodifica una plantilla con menos campos") }
+        print(ok ? "OK plantillas de título" : "FAIL plantillas de título")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {

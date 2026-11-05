@@ -770,6 +770,7 @@ enum SelfTest {
             exit(0)
         }
         if args.contains("--loudness-report-test") { Task { exit(await StudioTests.loudnessReportTest() ? 0 : 1) }; return }
+        if args.contains("--title-presets-test") { exit(StudioTests.titlePresetsTest() ? 0 : 1) }
         if args.contains("--speed-test") { Task { exit(await StudioTests.speedTest() ? 0 : 1) }; return }
         if args.contains("--export-queue-test") { Task { exit(await StudioTests.exportQueueTest() ? 0 : 1) }; return }
         if args.contains("--delivery-test") { Task { exit(await StudioTests.deliveryTest() ? 0 : 1) }; return }
@@ -796,6 +797,8 @@ enum SelfTest {
                 guard StudioTests.audiogramTest() else { exit(1) }
                 print("== Revisión compartida =="); fflush(stdout)
                 guard StudioTests.reviewTest() else { exit(1) }
+                print("== Plantillas de título =="); fflush(stdout)
+                guard StudioTests.titlePresetsTest() else { exit(1) }
                 print("== Velocidad (time-stretch) =="); fflush(stdout)
                 guard await StudioTests.speedTest() else { exit(1) }
                 print("== Cola de exportación =="); fflush(stdout)

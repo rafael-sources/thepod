@@ -61,6 +61,9 @@ struct VideoStudioView: View {
 struct VideoInspector: View {
     @ObservedObject var session: ProjectSession
     @Binding var selectedCut: UUID?
+    @State private var askTemplateName = false
+    @State private var templateName = ""
+    @State private var templatesTick = 0
 
     var body: some View {
         ScrollView {
@@ -120,10 +123,51 @@ struct VideoInspector: View {
             if o.enter == nil && o.exit == nil {
                 Toggle("Entra y sale con fundido", isOn: $session.project.overlays[i].animate).font(.caption)
             }
+            if o.kind == .text { templateMenu(i) }
             Spacer(minLength: 8)
             Text("En «Textos y stickers» esta capa dirá «Ajustado en Studio» mientras tenga keyframes. Las posiciones son fracciones del cuadro: valen igual en 16:9, 9:16 y 1:1.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// Plantillas de título: estilo, color, posición, tamaño, entrada y salida con nombre; las del podcast viajan con él.
+    private func templateMenu(_ i: Int) -> some View {
+        let slug = session.project.episode.prepodSlug
+        let ofPodcast = slug.map { TitlePresets.all(podcast: $0) } ?? []
+        let mine = TitlePresets.all()
+        return HStack {
+            Menu {
+                Button(slug != nil ? "Guardar en el podcast como plantilla…" : "Guardar en esta Mac como plantilla…") { askTemplateName = true }
+                if !ofPodcast.isEmpty {
+                    Divider(); Text("Del podcast")
+                    ForEach(ofPodcast) { t in Button(t.name) { t.apply(to: &session.project.overlays[i]) } }
+                }
+                if !mine.isEmpty {
+                    Divider(); Text("De esta Mac")
+                    ForEach(mine) { t in Button(t.name) { t.apply(to: &session.project.overlays[i]) } }
+                }
+                if !ofPodcast.isEmpty || !mine.isEmpty {
+                    Divider()
+                    Menu("Borrar una plantilla") {
+                        ForEach(ofPodcast) { t in Button(t.name + " (podcast)", role: .destructive) { TitlePresets.remove(t.id, podcast: slug); templatesTick += 1 } }
+                        ForEach(mine) { t in Button(t.name + " (esta Mac)", role: .destructive) { TitlePresets.remove(t.id); templatesTick += 1 } }
+                    }
+                }
+            } label: { Label("Plantillas de título", systemImage: "square.stack").font(.caption) }
+            .menuStyle(.borderlessButton).fixedSize().id(templatesTick)
+            Spacer()
+        }
+        .alert("Nombre de la plantilla", isPresented: $askTemplateName) {
+            TextField("Nombre abajo a la izquierda", text: $templateName)
+            Button("Guardar") {
+                let n = templateName.trimmingCharacters(in: .whitespaces)
+                if !n.isEmpty { TitlePresets.add(name: n, from: session.project.overlays[i], podcast: slug); templatesTick += 1 }
+                templateName = ""
+            }
+            Button("Cancelar", role: .cancel) { templateName = "" }
+        } message: { Text(slug != nil
+                          ? "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en el podcast (no el texto ni el momento): sirve en cualquier episodio y en cualquier Mac con tu cuenta."
+                          : "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)") }
     }
 
     /// Entrada o salida de una capa: tipo y duración.

@@ -161,7 +161,7 @@ struct AudioStudioView: View {
             InsertEditor(session: session, ref: ref)
         }
         .task(id: session.project.episode.prepodSlug) {
-            if let slug = session.project.episode.prepodSlug { await ChainPresets.refresh(podcast: slug) }
+            if let slug = session.project.episode.prepodSlug { await ChainPresets.refresh(podcast: slug); await TitlePresets.refresh(podcast: slug) }
         }
     }
 

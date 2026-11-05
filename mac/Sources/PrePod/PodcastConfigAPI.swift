@@ -97,6 +97,17 @@ extension PrePodClient {
         let data = try JSONEncoder().encode(items)
         _ = try await send("PUT", pc(slug), json: ["voice_presets": String(decoding: data, as: UTF8.self)])
     }
+    /// Plantillas de título de Studio · Video guardadas en el podcast.
+    func titlePresets(_ slug: String) async throws -> [TitlePresets.Item] {
+        let d = try await send("GET", pc(slug))
+        guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let raw = o["title_presets"] as? String, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([TitlePresets.Item].self, from: data)) ?? []
+    }
+    func setTitlePresets(_ slug: String, _ items: [TitlePresets.Item]) async throws {
+        let data = try JSONEncoder().encode(items)
+        _ = try await send("PUT", pc(slug), json: ["title_presets": String(decoding: data, as: UTF8.self)])
+    }
     func updatePodcast(_ slug: String, _ fields: [String: Any]) async throws -> PodcastConfig {
         try dec(PodcastConfig.self, await send("PUT", pc(slug), json: fields))
     }
