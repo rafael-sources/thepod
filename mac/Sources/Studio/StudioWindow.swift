@@ -102,7 +102,7 @@ struct AudioStudioView: View {
                 .padding(.horizontal, 16).padding(.bottom, 14)
             }
         }
-        .frame(height: 330)
+        .frame(height: 380)
     }
 }
 
@@ -196,7 +196,7 @@ struct ChannelStrip: View {
                 Fader(volume: $session.project.lanes[index].volume)
                 Meter(session: session, laneId: lane.id)
             }
-            .frame(height: 120)
+            .frame(height: 100)
             HStack(spacing: 4) {
                 Toggle("M", isOn: $session.project.lanes[index].muted).toggleStyle(.button).controlSize(.small)
                 Toggle("S", isOn: $session.project.lanes[index].solo).toggleStyle(.button).controlSize(.small)
@@ -330,7 +330,7 @@ struct MasterStrip: View {
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
-        .frame(width: 210, height: 290)
+        .frame(width: 210, height: 330)
         .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panelStrong))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.accent.opacity(0.35)))
     }
