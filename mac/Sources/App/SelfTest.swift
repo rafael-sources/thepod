@@ -318,6 +318,8 @@ enum SelfTest {
                     var c = ChainSettings.preset(VoiceEQ.preset("clear"))
                     c.bands.append(EQBand(kind: .highshelf, freq: 9000, gain: 2.5, q: 0.7))
                     c.compressorOn = true; c.ratio = 4; c.gateOn = true
+                    c.automation[ChainSettings.compThreshold] = [AutoPoint(t: 60, v: -20), AutoPoint(t: 600, v: -32), AutoPoint(t: 1500, v: -18)]
+                    if let hb = c.bands.last { c.automation[ChainSettings.bandGain(hb)] = [AutoPoint(t: 0, v: 2.5), AutoPoint(t: 2400, v: -4)] }
                     p.lanes[0].chain = c
                 }
                 let session = ProjectSession(project: p, app: app)

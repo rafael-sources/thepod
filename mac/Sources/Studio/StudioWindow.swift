@@ -42,6 +42,8 @@ struct AudioStudioView: View {
             ScrollView(.vertical) {
                 EpisodeTimeline(session: session)
                     .padding(.horizontal, 12).padding(.top, 8)
+                HStack { Text("Automatización").font(.caption.bold()); Spacer() }.padding(.horizontal, 12).padding(.top, 4)
+                AutomationLanes(session: session).padding(.bottom, 8)
             }
             .frame(maxHeight: .infinity)
             Divider()
