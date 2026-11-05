@@ -406,12 +406,12 @@ enum StudioTests {
         // ruido: la señal sin tono, por el mismo reductor
         var onlyNoise = [Float](repeating: 0, count: total); for i in 0..<total { onlyNoise[i] = noise() }
         let nOut = run(onlyNoise, amount: 0.6, profile: prof)
-        let lat = NoiseReducer.n - NoiseReducer.hop
+        let lat = NoiseReducer.n
         let nIn = rmsDB(onlyNoise, from: total / 3, to: 2 * total / 3), nO = rmsDB(nOut, from: total / 3 + lat, to: 2 * total / 3 + lat)
         check(nIn - nO >= 9, String(format: "el ruido baja %.1f dB (normal: ≥ 9)", nIn - nO))
         let strong = run(onlyNoise, amount: 0.9, profile: prof)
         check(nIn - rmsDB(strong, from: total / 3 + lat, to: 2 * total / 3 + lat) > nIn - nO, "en «Fuerte» baja más que en «Normal»")
-        // sin huella que restar: reconstrucción (retardada 768 muestras) dentro de 0,2 dB
+        // sin huella que restar: reconstrucción (retardada n muestras), error por debajo de −30 dB
         let clean = run(sig, amount: 0.6, profile: [Float](repeating: 1e-6, count: NoiseReducer.bins))
         var diff = 0.0, ref = 0.0
         for i in (total / 3)..<(2 * total / 3) { let d = Double(clean[i + lat] - sig[i]); diff += d * d; ref += Double(sig[i] * sig[i]) }

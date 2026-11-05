@@ -6,7 +6,7 @@ import AVFoundation
 /// claramente esa huella se atenúan. Ruido constante (aire, ventilador, zumbido) baja; la voz queda.
 ///
 /// STFT de 1024 muestras con salto de 256 y ventana raíz de Hann a la entrada y a la salida (reconstrucción
-/// exacta). Retardo: 768 muestras (16 ms a 48 kHz), el mismo para todo el episodio.
+/// exacta). Retardo: 1024 muestras (21 ms a 48 kHz), el mismo para todo el episodio.
 final class NoiseReducer {
     static let n = 1024
     static let hop = 256
@@ -131,7 +131,9 @@ final class NoiseReducer {
     var amount: Float = 0.6
 
     func prepare(channels count: Int) { channels = (0..<max(1, count)).map { _ in Channel() } }
-    var latency: Int { Self.n - Self.hop }
+    /// Retardo total: la cola de salida se ceba con un salto (para que nunca falte muestra) y el bloque tarda
+    /// n − hop en completarse: n muestras (21 ms a 48 kHz).
+    var latency: Int { Self.n }
 
     /// Procesa en sitio `frames` muestras de cada canal del buffer (salida retardada `latency` muestras).
     func process(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
@@ -144,7 +146,7 @@ final class NoiseReducer {
             let p = data.assumingMemoryBound(to: Float.self)
             let cnt = min(frames, Int(buf.mDataByteSize) / MemoryLayout<Float>.size)
             let c = channels[ci]
-            if !c.primed { c.ready = [Float](repeating: 0, count: latency); c.primed = true }
+            if !c.primed { c.ready = [Float](repeating: 0, count: Self.hop); c.primed = true }
             for i in 0..<cnt {
                 // entra una muestra en el anillo
                 c.inBuf[c.inPos] = p[i]; c.inPos = (c.inPos + 1) % Self.n; c.pendingIn += 1
