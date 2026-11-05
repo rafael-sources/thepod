@@ -63,6 +63,8 @@ struct VideoStudioView: View {
 struct VideoInspector: View {
     @ObservedObject var session: ProjectSession
     @Binding var selectedCut: UUID?
+    @State private var colorScope: Int = 0        // 0 = toda la pista; si no, el id de la cámara
+    @State private var matchRef: Int = 0
     @State private var askTemplateName = false
     @State private var templateName = ""
     @State private var templatesTick = 0
@@ -239,6 +241,8 @@ struct VideoInspector: View {
                 HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? "mudo" : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
                 SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono.")
             }
+            Divider()
+            ColorPanel(grade: $session.project.brolls[i].grade, title: "Color de este clip")
             Spacer(minLength: 8)
             Text("La transición actúa sobre este clip al entrar; lo de abajo (cámaras o el b-roll anterior) sigue hasta que este lo tapa.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
@@ -303,6 +307,41 @@ struct VideoInspector: View {
         }
     }
 
+    /// Color por cámara o de toda la pista, e igualar cámaras tomando una como referencia.
+    private var colorSection: some View {
+        let cams = session.project.lanes.filter { session.project.laneHasVideo($0.id) }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Color").font(.caption.bold())
+                Spacer()
+                Picker("", selection: $colorScope) {
+                    Text("Toda la pista").tag(0)
+                    ForEach(cams) { l in Text(session.project.laneName(l.id)).tag(l.id) }
+                }.labelsHidden().frame(width: 150)
+            }
+            if colorScope == 0 {
+                ColorPanel(grade: $session.project.grade, title: "Toda la pista (todas las cámaras y el b-roll)")
+            } else if let li = session.project.lanes.firstIndex(where: { $0.id == colorScope }) {
+                ColorPanel(grade: $session.project.lanes[li].grade, title: "Cámara · \(session.project.laneName(colorScope))")
+            }
+            if cams.count > 1 {
+                Divider()
+                Text("Igualar cámaras").font(.caption.bold())
+                HStack {
+                    Text("Referencia").font(.caption)
+                    Picker("", selection: $matchRef) {
+                        ForEach(cams) { l in Text(session.project.laneName(l.id)).tag(l.id) }
+                    }.labelsHidden().frame(width: 130)
+                    Button("Igualar") { session.matchCameraColors(reference: matchRef == 0 ? cams.first?.id : matchRef) }
+                        .controlSize(.small).disabled(session.isBusy)
+                }
+                Text("Compara el brillo y el balance de color del centro del cuadro de cada cámara y acerca las demás a la de referencia (exposición y ganancia por canal). Se puede retocar después en cada cámara.")
+                    .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear { if matchRef == 0 { matchRef = cams.first?.id ?? 0 } }
+    }
+
     // Nada seleccionado: cómo decide las cámaras
     private var camerasInspector: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -333,6 +372,8 @@ struct VideoInspector: View {
                     Text(String(format: "%.1f s", tr.duration)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing)
                 }
             }
+            Divider()
+            colorSection
             Divider()
             Text("Clic en un clip para editarlo. En la pista Cámaras, clic derecho para fijar una cámara en ese segundo; arrastra sus bordes para alargar el tramo.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)

@@ -40,6 +40,7 @@ struct Project: Codable, Identifiable, Equatable {
     var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
     var matchColors = false             // igualar el color de las cámaras
     var matchVoices = false             // voces parejas por medición: aplicar `Lane.matchGain`
+    var grade: ColorGrade?              // Studio · Video: color de toda la pista (todas las cámaras)
     var conversationPan = false         // panorama de conversación: cada persona un poco a un lado, como en pantalla
     var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (calculado al activar matchColors)
     var exportHEVC = false              // archivo más liviano (HEVC) en vez de compatible (H.264)
@@ -176,6 +177,7 @@ extension Lane {
         declickAmount = try c.decodeIfPresent(Double.self, forKey: .declickAmount) ?? 0.5
         measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
         matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
+        grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade)
     }
 }
 
@@ -468,6 +470,7 @@ struct Lane: Codable, Identifiable, Equatable {
     var declickAmount: Double = 0.5     // sensibilidad 0…1
     var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
     var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
+    var grade: ColorGrade?              // Studio · Video: color de esta cámara (toda la persona)
 
     /// La cadena que suena: la del estudio si existe, si no el preset del nivel simple.
     var effectiveChain: ChainSettings { chain ?? ChainSettings.preset(eq) }
@@ -1039,6 +1042,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
     var transitionIn: Transition?
     /// Studio · Video: velocidad del video (1 = normal). 0,25–1 cámara lenta, 1–4 acelerado. `duration` sigue siendo lo que ocupa en pantalla.
     var speed: Double = 1
+    var grade: ColorGrade?              // Studio · Video: color solo de este clip
     var end: Double { start + duration }
     static let maxSeconds = 10.0        // un b-roll es un apoyo corto, no otro video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
@@ -1059,6 +1063,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
         placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "full"
         transitionIn = try c.decodeIfPresent(Transition.self, forKey: .transitionIn)
         speed = try c.decodeIfPresent(Double.self, forKey: .speed) ?? 1
+        grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade)
     }
 }
 
@@ -1371,6 +1376,7 @@ extension Project {
         colorLook = try c.decodeIfPresent(String.self, forKey: .colorLook) ?? "none"
         matchColors = try c.decodeIfPresent(Bool.self, forKey: .matchColors) ?? false
         matchVoices = try c.decodeIfPresent(Bool.self, forKey: .matchVoices) ?? false
+        grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade)
         conversationPan = try c.decodeIfPresent(Bool.self, forKey: .conversationPan) ?? false
         laneColorGain = try c.decodeIfPresent([Int: [Double]].self, forKey: .laneColorGain) ?? [:]
         exportHEVC = try c.decodeIfPresent(Bool.self, forKey: .exportHEVC) ?? false
@@ -1452,7 +1458,8 @@ extension Project {
 
     /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).
     var videoTunedInStudio: Bool {
-        overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil } || !studioVideo.isDefault
+        overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil || $0.grade?.isEmpty == false || $0.speed != 1 }
+            || !studioVideo.isDefault || grade?.isEmpty == false || lanes.contains { $0.grade?.isEmpty == false }
     }
 
     /// When each sponsor appears (timeline time) — same rule as postPod web's exporter:

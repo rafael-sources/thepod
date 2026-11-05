@@ -130,6 +130,7 @@ final class RenderScene: @unchecked Sendable {
         let trackID: CMPersistentTrackID?; let image: CIImage?; let start: Double; let end: Double; let fill: Bool; let placement: String
         var transform: CGAffineTransform = .identity     // preferredTransform de la pista (rotación de videos de teléfono)
         var transition: Transition? = nil                // Studio · Video: cómo entra (nil = fundido corto)
+        var grade: ColorGrade? = nil                     // Studio · Video: color solo de este clip
     }
     var brolls: [BRoll] = []
 
@@ -296,6 +297,9 @@ final class RenderScene: @unchecked Sendable {
     /// Color: filtro general y corrección por persona (igualar cámaras)
     var colorLook = "none"
     var laneGain: [Int: [Double]] = [:]
+    /// Studio · Video: color por cámara y de toda la pista
+    var laneGrade: [Int: ColorGrade] = [:]
+    var globalGrade: ColorGrade?
 
     func colored(_ img: CIImage, lane: Int) -> CIImage {
         var out = img
@@ -305,6 +309,8 @@ final class RenderScene: @unchecked Sendable {
                 "inputGVector": CIVector(x: 0, y: g[1], z: 0, w: 0),
                 "inputBVector": CIVector(x: 0, y: 0, z: g[2], w: 0)])
         }
+        if let lg = laneGrade[lane] { out = lg.apply(to: out) }
+        if let gg = globalGrade { out = gg.apply(to: out) }
         func matrix(_ r: Double, _ g: Double, _ b: Double) -> [String: Any] {
             ["inputRVector": CIVector(x: r, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: g, z: 0, w: 0),
              "inputBVector": CIVector(x: 0, y: 0, z: b, w: 0)]
@@ -488,7 +494,7 @@ final class RenderScene: @unchecked Sendable {
                         frame = replacedBackground(frame, buffer: pb, lane: lane, time: time)
                     }
                 }
-                if colorLook != "none" || laneGain[lane] != nil { frame = colored(frame, lane: lane) }
+                if colorLook != "none" || laneGain[lane] != nil || laneGrade[lane] != nil || globalGrade != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
                     let e = frame.extent
@@ -539,6 +545,8 @@ final class RenderScene: @unchecked Sendable {
         for (bi, b) in brolls.enumerated() where t >= b.start && t < b.end {
             var pic: CIImage? = b.image
             if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
+            if let g = b.grade, let p = pic { pic = g.apply(to: p) }
+            if let gg = globalGrade, let p = pic { pic = gg.apply(to: p) }
             guard let pic else { continue }
             // Entrada: la transición de Studio si la hay (corte, fundido, a negro, deslizar, zoom); si no, fundido corto
             let trIn = b.transition
@@ -812,6 +820,8 @@ final class RenderScene: @unchecked Sendable {
         for (i, b) in brolls.enumerated() where t >= b.start && t < b.end && (b.placement == "pipLeft" || b.placement == "pipRight") {
             var pic: CIImage? = b.image
             if let tid = b.trackID { pic = brollFrames[tid].map { oriented($0, b.transform) } }
+            if let g = b.grade, let p = pic { pic = g.apply(to: p) }
+            if let gg = globalGrade, let p = pic { pic = gg.apply(to: p) }
             guard let e = pic?.extent else { continue }
             let ar = e.width > 0 ? e.height / e.width : 9.0 / 16.0
             var w = W * (format.isVertical ? 0.38 : 0.28)

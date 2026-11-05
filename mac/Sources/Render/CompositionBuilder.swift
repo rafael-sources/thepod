@@ -411,10 +411,10 @@ enum CompositionBuilder {
                 }
                 // Videos de teléfono vienen grabados "acostados" con una rotación en los metadatos: se aplica al dibujar
                 let xf = (try? await v.load(.preferredTransform)) ?? .identity
-                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf, transition: b.transitionIn))
+                brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf, transition: b.transitionIn, grade: b.grade))
             } else {
                 guard let img = CIImage(contentsOf: ProjectStore.url(b.file, in: project.id), options: [.applyOrientationProperty: true]) else { continue }
-                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement, transition: b.transitionIn))
+                brollScene.append(RenderScene.BRoll(trackID: nil, image: img, start: start, end: end, fill: b.fill, placement: b.placement, transition: b.transitionIn, grade: b.grade))
             }
         }
 
@@ -561,6 +561,8 @@ enum CompositionBuilder {
             }
             s.colorLook = project.colorLook
             if project.matchColors { s.laneGain = project.laneColorGain }
+            s.globalGrade = project.grade.flatMap { $0.isEmpty ? nil : $0 }
+            for lane in project.lanes { if let g = lane.grade, !g.isEmpty { s.laneGrade[lane.id] = g } }
             s.contentStart = introDur
             s.contentEnd = contentEnd
             s.introImage = intro.flatMap { CIImage(contentsOf: ProjectStore.url($0.imageFile, in: project.id)) }

@@ -979,7 +979,9 @@ final class ProjectSession: ObservableObject {
 
     // MARK: Igualar color de las cámaras
 
-    func matchCameraColors() {
+    /// Igualar cámaras: con `reference`, esa cámara manda y las demás reciben una ganancia por canal (balance) y una
+    /// exposición (brillo) en su color de Studio; sin referencia (botón del paso simple), la primera en pantalla.
+    func matchCameraColors(reference: Int? = nil) {
         run("Igualando el color de las cámaras") { [self] in
             let ctx = CIContext()
             var avg: [Int: [Double]] = [:]
@@ -1003,10 +1005,17 @@ final class ProjectSession: ObservableObject {
                 }
                 if n > 0 { avg[lane.id] = sum.map { max(1, $0 / n) } }
             }
-            guard let refId = project.lanesOnScreen.map(\.id).first(where: { avg[$0] != nil }), let ref = avg[refId] else { return }
+            guard let refId = reference.flatMap({ avg[$0] != nil ? $0 : nil }) ?? project.lanesOnScreen.map(\.id).first(where: { avg[$0] != nil }),
+                  let ref = avg[refId] else { return }
             var gains: [Int: [Double]] = [:]
             for (id, a) in avg where id != refId {
-                gains[id] = (0..<3).map { min(1.25, max(0.8, ref[$0] / a[$0])) }
+                let fix = CameraMatch.fix(camera: a, reference: ref)
+                gains[id] = fix.gain
+                if reference != nil, let li = project.lanes.firstIndex(where: { $0.id == id }) {
+                    var g = project.lanes[li].grade ?? ColorGrade()
+                    g.exposure = fix.exposure
+                    project.lanes[li].grade = g.isEmpty ? nil : g
+                }
             }
             project.laneColorGain = gains
             project.matchColors = true

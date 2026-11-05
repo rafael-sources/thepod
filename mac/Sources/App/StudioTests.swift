@@ -721,6 +721,80 @@ enum StudioTests {
         return ok
     }
 
+    /// Color: exposición, temperatura, saturación y piel hacen lo que dicen sobre un cuadro; un .cube se importa, se
+    /// aplica y su intensidad lo mezcla; el color por cámara y el de toda la pista llegan al cuadro dibujado y al
+    /// b-roll; igualar cámaras propone exposición y ganancia; los proyectos viejos abren sin color.
+    static func colorTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let size = CGSize(width: 64, height: 64)
+        let box = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+        let gray = solid(0.4, 0.4, 0.4, size)
+        var g = ColorGrade(); g.exposure = 1
+        let bright = mean(g.apply(to: gray), box, size: size)
+        check(bright.r > 0.65 && bright.r < 0.95, String(format: "exposición +1 EV: el gris 0,40 pasa a ~0,80 (%.2f)", bright.r))
+        g = ColorGrade(); g.temperature = 60
+        let warm = mean(g.apply(to: gray), box, size: size)
+        check(warm.r > warm.b + 0.04, String(format: "temperatura +60: más rojo que azul (%.2f / %.2f)", warm.r, warm.b))
+        g.temperature = -60
+        let cool = mean(g.apply(to: gray), box, size: size)
+        check(cool.b > cool.r + 0.04, String(format: "temperatura −60: más azul que rojo (%.2f / %.2f)", cool.r, cool.b))
+        let red = solid(0.8, 0.2, 0.2, size)
+        g = ColorGrade(); g.saturation = -100
+        let desat = mean(g.apply(to: red), box, size: size)
+        check(abs(desat.r - desat.g) < 0.05 && abs(desat.g - desat.b) < 0.05, "saturación −100: queda gris")
+        g = ColorGrade(); g.contrast = 50
+        let dark = mean(g.apply(to: solid(0.25, 0.25, 0.25, size)), box, size: size)
+        check(dark.r < 0.22, String(format: "contraste +50: los oscuros bajan (%.2f)", dark.r))
+        check(ColorGrade().isEmpty && !g.isEmpty, "un color sin tocar está vacío")
+        // .cube: un LUT de 2×2×2 que invierte los colores
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lut-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir); LUTLibrary.remove("prueba-invertir.cube") }
+        let cube = dir.appendingPathComponent("prueba-invertir.cube")
+        let rows = (0..<8).map { i -> String in
+            let r = Double(i % 2), gg = Double((i / 2) % 2), b = Double(i / 4)
+            return "\(1 - r) \(1 - gg) \(1 - b)"
+        }
+        try? ("TITLE \"invertir\"\nLUT_3D_SIZE 2\n# comentario\n" + rows.joined(separator: "\n") + "\n").write(to: cube, atomically: true, encoding: .utf8)
+        check(LUTLibrary.parse(cube)?.size == 2, "el .cube se lee (tamaño 2)")
+        check(LUTLibrary.importCube(cube) == "prueba-invertir.cube" && LUTLibrary.names().contains("prueba-invertir.cube"), "importar lo copia a la biblioteca")
+        g = ColorGrade(); g.lut = "prueba-invertir.cube"
+        let inv = mean(g.apply(to: red), box, size: size)
+        check(inv.r < 0.3 && inv.g > 0.7, String(format: "el LUT invierte (rojo → cian: %.2f / %.2f)", inv.r, inv.g))
+        g.amount = 0.5
+        let half = mean(g.apply(to: red), box, size: size)
+        check(half.r > 0.4 && half.r < 0.6, String(format: "intensidad 50 %%: a medio camino (%.2f)", half.r))
+        check(LUTLibrary.parse(dir.appendingPathComponent("no-existe.cube")) == nil, "un archivo que no es LUT no se importa")
+        let bad = dir.appendingPathComponent("malo.cube"); try? "LUT_3D_SIZE 2\n0 0 0\n".write(to: bad, atomically: true, encoding: .utf8)
+        check(LUTLibrary.importCube(bad) == nil, "un .cube incompleto se rechaza")
+        // En la escena: color por cámara y de toda la pista
+        let fsize = CGSize(width: 640, height: 360)
+        let frames: [Int: CIImage] = [1: solid(0.4, 0.4, 0.4, fsize), 2: solid(0.4, 0.4, 0.4, fsize)]
+        let sc = scene(layout: .sideBySide, switches: [SpeakerSwitch(time: 0, lane: 1)])
+        var lg = ColorGrade(); lg.exposure = 1
+        sc.laneGrade = [1: lg]
+        let f = sc.render(frames: frames, time: 1)
+        let left = mean(f, CGRect(x: 0.1, y: 0.4, width: 0.2, height: 0.2), size: fsize), right = mean(f, CGRect(x: 0.7, y: 0.4, width: 0.2, height: 0.2), size: fsize)
+        check(left.r > right.r + 0.25, String(format: "color por cámara: solo la cámara 1 se aclara (%.2f vs %.2f)", left.r, right.r))
+        var gg = ColorGrade(); gg.saturation = -100
+        sc.globalGrade = gg
+        let blue = solid(0.2, 0.2, 0.9, CGSize(width: 320, height: 180))
+        sc.brolls = [RenderScene.BRoll(trackID: nil, image: blue, start: 0, end: 5, fill: true, placement: "full")]
+        let fb = mean(sc.render(frames: frames, time: 2), CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), size: fsize)
+        check(abs(fb.r - fb.b) < 0.08, String(format: "toda la pista: también desatura el b-roll (%.2f / %.2f)", fb.r, fb.b))
+        // Igualar cámaras
+        let fix = CameraMatch.fix(camera: [60, 60, 60], reference: [120, 120, 120])
+        check(abs(fix.exposure - 1) < 0.01 && fix.gain.allSatisfy { abs($0 - 1) < 0.02 }, "cámara a la mitad de brillo: +1 EV y sin cambio de tinte (\(fix))")
+        let tint = CameraMatch.fix(camera: [100, 100, 130], reference: [100, 100, 100])
+        check(abs(tint.exposure) < 0.1 && tint.gain[2] < 0.85 && abs(tint.gain[0] - 1) < 0.06, "cámara azulada: baja el azul, no el brillo (\(tint))")
+        // Proyectos viejos
+        if let old = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(old.grade == nil, "una pista guardada antes abre sin color") }
+        else { check(false, "no decodifica una pista vieja") }
+        print(ok ? "OK color" : "FAIL color")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {
