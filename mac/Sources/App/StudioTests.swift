@@ -843,7 +843,8 @@ enum StudioTests {
             let big = folder.appendingPathComponent("media/grande.mp4"), small = folder.appendingPathComponent("media/chico.mp4")
             _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=red:s=2560x1440:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", big.path])
             _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=blue:s=1280x720:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", small.path])
-            check(await ProxyStore.needsProxy(big) && !(await ProxyStore.needsProxy(small)), "pide proxy el de 1440p, no el de 720p")
+            let needBig = await ProxyStore.needsProxy(big), needSmall = await ProxyStore.needsProxy(small)
+            check(needBig && !needSmall, "pide proxy el de 1440p, no el de 720p")
             var p = Project(id: slug, name: "Proxy", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
             p.media = [SourceMedia(id: 1, originalName: "grande.mp4", file: "media/grande.mp4", kind: .video, duration: 3),
                        SourceMedia(id: 2, originalName: "chico.mp4", file: "media/chico.mp4", kind: .video, duration: 3)]
@@ -856,7 +857,8 @@ enum StudioTests {
             let size = try await pa.loadTracks(withMediaType: .video).first!.load(.naturalSize)
             let dur = try await pa.load(.duration).seconds
             check(size.width <= 960 && abs(dur - 3) < 0.15, String(format: "mide %.0f px de ancho y dura %.2f s", size.width, dur))
-            check(await ProxyStore.pending(project: p).isEmpty, "ya no queda nada pendiente")
+            let left = await ProxyStore.pending(project: p)
+            check(left.isEmpty, "ya no queda nada pendiente")
             // La vista previa usa el proxy; el export, el original
             ProxyStore.enabled = true
             let prev = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
@@ -869,7 +871,8 @@ enum StudioTests {
             check(wp <= 960 && we >= 2560, String(format: "vista previa con proxy (%.0f px), export con el original (%.0f px)", wp, we))
             ProxyStore.enabled = false
             let off = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
-            check(await width(off) >= 2560, "con los proxys apagados la vista previa usa el original")
+            let wo = await width(off)
+            check(wo >= 2560, "con los proxys apagados la vista previa usa el original")
             ProxyStore.removeAll(project: slug)
             check(!ProxyStore.exists(mediaId: 1, project: slug), "borrar los proxys los quita")
         } catch { check(false, "proxys: \(error.localizedDescription)") }
