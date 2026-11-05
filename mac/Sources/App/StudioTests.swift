@@ -523,6 +523,7 @@ enum StudioTests {
     /// Cola de exportación: se procesa de a uno, en orden, sin bloquear la app; un fallo no frena el resto;
     /// no se duplica lo que ya espera; quitar de la cola y cancelar funcionan.
     @MainActor static func exportQueueTest() async -> Bool {
+        setvbuf(stdout, nil, _IONBF, 0)
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         let p = Project(id: "cola", name: "Cola", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
