@@ -1,6 +1,7 @@
 import AVFoundation
 import AudioToolbox
 import AppKit
+import CoreAudioKit
 
 /// Plugins Audio Unit de terceros (y del sistema) en la cadena de voz: buscar los instalados, instanciar,
 /// guardar y restaurar su estado, y abrir su ventana.
