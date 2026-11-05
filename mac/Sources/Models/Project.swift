@@ -40,6 +40,7 @@ struct Project: Codable, Identifiable, Equatable {
     var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
     var matchColors = false             // igualar el color de las cámaras
     var matchVoices = false             // voces parejas por medición: aplicar `Lane.matchGain`
+    var conversationPan = false         // panorama de conversación: cada persona un poco a un lado, como en pantalla
     var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (calculado al activar matchColors)
     var exportHEVC = false              // archivo más liviano (HEVC) en vez de compatible (H.264)
     var normalizeLoudness = true        // ajustar el volumen final a −16 LUFS
@@ -159,6 +160,7 @@ extension Lane {
         muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
+        pan = try c.decodeIfPresent(Double.self, forKey: .pan) ?? 0
         measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
         matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
     }
@@ -444,6 +446,7 @@ struct Lane: Codable, Identifiable, Equatable {
     var muted: Bool = false             // M: esta persona no suena (vista previa y export)
     var solo: Bool = false              // S: solo suenan las personas con solo
     var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
+    var pan: Double = 0                 // panorama: −1 izquierda … 0 centro … 1 derecha (lo pone «Panorama de conversación»)
     var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
     var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
 
@@ -1289,6 +1292,7 @@ extension Project {
         colorLook = try c.decodeIfPresent(String.self, forKey: .colorLook) ?? "none"
         matchColors = try c.decodeIfPresent(Bool.self, forKey: .matchColors) ?? false
         matchVoices = try c.decodeIfPresent(Bool.self, forKey: .matchVoices) ?? false
+        conversationPan = try c.decodeIfPresent(Bool.self, forKey: .conversationPan) ?? false
         laneColorGain = try c.decodeIfPresent([Int: [Double]].self, forKey: .laneColorGain) ?? [:]
         exportHEVC = try c.decodeIfPresent(Bool.self, forKey: .exportHEVC) ?? false
         normalizeLoudness = try c.decodeIfPresent(Bool.self, forKey: .normalizeLoudness) ?? true
@@ -1348,6 +1352,22 @@ extension Project {
         guard let a = audioLane.firstIndex(where: { $0.id == firstId }), let b = audioLane.firstIndex(where: { $0.id == secondId }) else { return }
         audioLane[b].tlStart = max(audioLane[a].tlStart + 0.5, audioLane[a].tlEnd - seconds)
         crossfadeOverlaps(touching: secondId)
+    }
+
+    /// Panorama de conversación: cada persona un poco a un lado, en el orden en que va en pantalla (izquierda →
+    /// derecha), sin pasar de ±0,3 para que en un altavoz mono no se pierda nadie. Una sola persona queda al centro.
+    static func conversationPans(count n: Int) -> [Double] {
+        guard n >= 2 else { return [Double](repeating: 0, count: n) }
+        let spread = min(0.3, 0.2 + 0.05 * Double(n - 2))
+        return (0..<n).map { -spread + 2 * spread * Double($0) / Double(n - 1) }
+    }
+    /// Pone los panoramas de conversación en las personas según su orden en pantalla.
+    mutating func applyConversationPans() {
+        let order = lanesOnScreen.map(\.id)
+        let pans = Self.conversationPans(count: order.count)
+        for (i, id) in order.enumerated() {
+            if let li = lanes.firstIndex(where: { $0.id == id }) { lanes[li].pan = (pans[i] * 100).rounded() / 100 }
+        }
     }
 
     /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).

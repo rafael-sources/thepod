@@ -213,6 +213,64 @@ enum StudioTests {
         return ok
     }
 
+    /// Panorama de conversación: los panoramas por orden en pantalla, y un tono estéreo con pan a la derecha sale
+    /// casi todo por el canal derecho dentro de un export real (mismo tap que la vista previa).
+    static func panTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        check(Project.conversationPans(count: 1) == [0], "una persona: al centro")
+        let two = Project.conversationPans(count: 2)
+        check(two.count == 2 && abs(two[0] + 0.2) < 1e-9 && abs(two[1] - 0.2) < 1e-9, "dos personas: −20 % y +20 % (\(two))")
+        let four = Project.conversationPans(count: 4)
+        check(four.first! >= -0.3 && four.last! <= 0.3 && four == four.sorted(), "cuatro personas: de izquierda a derecha sin pasar de ±30 % (\(four.map { String(format: "%.2f", $0) }))")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pan-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        do {
+            let sr = 48_000.0
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2)!
+            let src = dir.appendingPathComponent("tono.caf")
+            let file = try AVAudioFile(forWriting: src, settings: fmt.settings)
+            let n = AVAudioFrameCount(sr * 2)
+            let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
+            buf.frameLength = n
+            for i in 0..<Int(n) { let v = Float(0.3 * sin(2 * .pi * 440 * Double(i) / sr)); buf.floatChannelData![0][i] = v; buf.floatChannelData![1][i] = v }
+            try file.write(from: buf)
+            func export(pan: Double) async throws -> (l: Double, r: Double) {
+                let asset = AVURLAsset(url: src)
+                let comp = AVMutableComposition()
+                let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
+                let st = try await asset.loadTracks(withMediaType: .audio).first!
+                try track.insertTimeRange(CMTimeRange(start: .zero, duration: try await asset.load(.duration)), of: st, at: .zero)
+                let p = AVMutableAudioMixInputParameters(track: track)
+                let tap = ChainTap(laneId: 1, settings: ChainSettings(), keep: [EditEngine.Span(start: 0, end: 2)], introDuration: 0)
+                tap.pan = pan
+                p.audioTapProcessor = tap.makeProcessor()
+                let mix = AVMutableAudioMix(); mix.inputParameters = [p]
+                let out = dir.appendingPathComponent("out-\(UUID().uuidString).m4a")
+                let s = AVAssetExportSession(asset: comp, presetName: AVAssetExportPresetAppleM4A)!
+                s.audioMix = mix; s.outputURL = out; s.outputFileType = .m4a
+                await s.export()
+                if let e = s.error { throw e }
+                _ = tap
+                let f = try AVAudioFile(forReading: out)
+                let b = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
+                try f.read(into: b)
+                guard f.processingFormat.channelCount >= 2 else { return (0, 0) }
+                var l = 0.0, r = 0.0
+                let m = Int(b.frameLength)
+                for i in (m / 3)..<(2 * m / 3) { l += Double(b.floatChannelData![0][i] * b.floatChannelData![0][i]); r += Double(b.floatChannelData![1][i] * b.floatChannelData![1][i]) }
+                return (sqrt(l / Double(m / 3)), sqrt(r / Double(m / 3)))
+            }
+            let c = try await export(pan: 0), right = try await export(pan: 1), half = try await export(pan: 0.5)
+            check(abs(c.l - c.r) < 0.01 && c.l > 0.15, String(format: "pan 0: igual por los dos lados (%.3f / %.3f)", c.l, c.r))
+            check(right.l < 0.02 && right.r > c.r * 1.3, String(format: "pan +1: casi nada a la izquierda y más a la derecha (%.3f / %.3f)", right.l, right.r))
+            check(half.r > half.l * 1.5 && half.l > 0.05, String(format: "pan +0,5: inclinado a la derecha sin perder la izquierda (%.3f / %.3f)", half.l, half.r))
+        } catch { check(false, "export: \(error.localizedDescription)") }
+        print(ok ? "OK panorama de conversación" : "FAIL panorama")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

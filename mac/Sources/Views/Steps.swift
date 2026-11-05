@@ -217,6 +217,28 @@ struct FixStep: View {
                         Divider()
                         VoicesMatchRow(session: session)
                         Divider()
+                        Toggle(isOn: Binding(get: { session.project.conversationPan }, set: { on in
+                            session.project.conversationPan = on
+                            if on { session.project.applyConversationPans() }
+                        })) {
+                            VStack(alignment: .leading) {
+                                Text("Panorama de conversación").font(.headline)
+                                Text("Cada persona suena un poco hacia el lado en que aparece en pantalla (como máximo un 30 %). En auriculares se distingue mejor quién habla; en un altavoz no se pierde nadie.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .disabled(session.project.lanes.count < 2)
+                        if session.project.conversationPan && session.project.lanes.count >= 2 {
+                            HStack(spacing: 10) {
+                                ForEach(session.project.lanesOnScreen) { lane in
+                                    Text("\(session.project.laneName(lane.id)) \(lane.pan < -0.01 ? "◀" : lane.pan > 0.01 ? "▶" : "●") \(String(format: "%.0f %%", abs(lane.pan) * 100))")
+                                        .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                                }
+                                Spacer()
+                                Button("Según el orden en pantalla") { session.project.applyConversationPans() }.controlSize(.small)
+                            }
+                        }
+                        Divider()
                         Toggle(isOn: $session.project.fix.roomTone) {
                             VStack(alignment: .leading) {
                                 Text("Tono de sala").font(.headline)

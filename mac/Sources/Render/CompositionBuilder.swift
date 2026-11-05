@@ -253,6 +253,9 @@ enum CompositionBuilder {
                 if media.hasAudio {
                     var audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
                     if !FileManager.default.fileExists(atPath: ProjectStore.url(audioRel, in: project.id).path) { audioRel = media.file }
+                    // Panorama: una grabación mono no se puede ladear en la mezcla; se usa una copia estéreo (caché)
+                    if project.conversationPan, abs(lane.pan) > 0.001,
+                       let st = await Self.stereoCopy(project: project, relative: audioRel) { audioRel = st }
                     // El ecualizador, «voz pareja» y «menos siseo» ya no generan archivos: van en la cadena de
                     // voz en tiempo real (ChainTap), igual en la vista previa que en el export.
                     let audioAsset = asset(audioRel)
@@ -312,6 +315,7 @@ enum CompositionBuilder {
                 // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
                 // se le suma la misma curva al leerlo.
                 let chainTap = ChainTap(laneId: id, settings: lane.effectiveChain, keep: keep, introDuration: introDur)
+                chainTap.pan = project.conversationPan ? lane.pan : 0
                 if let proc = chainTap.makeProcessor() { p.audioTapProcessor = proc; chainTap.processor = proc; meters[id] = chainTap }
                 if preview {
                     let base = laneBase
@@ -551,6 +555,21 @@ enum CompositionBuilder {
         built.gains = gains
         built.loudness = loudness
         return built
+    }
+
+    /// Copia estéreo (idéntica en los dos canales) de un audio mono, en la caché del proyecto; nil si ya es estéreo
+    /// o no hay ffmpeg. Devuelve la ruta relativa a la carpeta del proyecto.
+    static func stereoCopy(project: Project, relative: String) async -> String? {
+        let src = ProjectStore.url(relative, in: project.id)
+        guard let f = try? AVAudioFile(forReading: src) else { return nil }
+        if f.processingFormat.channelCount >= 2 { return nil }
+        let name = "estereo-" + ((relative as NSString).lastPathComponent as NSString).deletingPathExtension + ".m4a"
+        let dst = ProjectStore.cacheFolder(for: project.id).appendingPathComponent(name)
+        if !FileManager.default.fileExists(atPath: dst.path) {
+            guard FFmpeg.isAvailable else { return nil }
+            do { _ = try await FFmpeg.run(["-i", src.path, "-ac", "2", "-c:a", "aac", "-b:a", "256k", dst.path]) } catch { return nil }
+        }
+        return "cache/" + name
     }
 
     /// Un archivo de silencio (lo genera ffmpeg una vez por proyecto) para alargar el video bajo el cierre.

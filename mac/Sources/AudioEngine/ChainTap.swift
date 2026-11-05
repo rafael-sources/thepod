@@ -26,6 +26,9 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
     private let keep: [EditEngine.Span]
     private let introDuration: Double
 
+    /// Panorama (−1…1), aplicado después de la cadena con potencia constante; solo hace algo con dos canales.
+    var pan: Double = 0
+
     init(laneId: Int, settings: ChainSettings, keep: [EditEngine.Span] = [], introDuration: Double = 0) {
         self.laneId = laneId
         self.keep = keep
@@ -126,6 +129,20 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
                     _ = st
                 }
                 me.sampleTime += Double(frames)
+                // Panorama de conversación: ganancias L/R de potencia constante sobre el buffer ya procesado
+                if abs(me.pan) > 0.001 {
+                    let list = UnsafeMutableAudioBufferListPointer(bufferList)
+                    let theta = (me.pan + 1) / 2 * Double.pi / 2
+                    let gL = Float(cos(theta)) * Float(2).squareRoot(), gR = Float(sin(theta)) * Float(2).squareRoot()
+                    let n = Int(framesOut.pointee)
+                    if list.count >= 2, let l = list[0].mData, let r = list[1].mData {
+                        let lp = l.assumingMemoryBound(to: Float.self), rp = r.assumingMemoryBound(to: Float.self)
+                        for i in 0..<n { lp[i] *= gL; rp[i] *= gR }
+                    } else if list.count == 1, list[0].mNumberChannels == 2, let d = list[0].mData {
+                        let p = d.assumingMemoryBound(to: Float.self)
+                        for i in 0..<n { p[2 * i] *= gL; p[2 * i + 1] *= gR }
+                    }
+                }
                 me.measure(bufferList)
                 me.loudness.add(bufferList, frames: Int(framesOut.pointee), mediaTime: range.start.isValid ? range.start.seconds : 0)
             })
