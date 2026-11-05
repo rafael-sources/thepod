@@ -39,9 +39,11 @@ struct AudioStudioView: View {
         VStack(spacing: 0) {
             transport
             Divider()
-            EpisodeTimeline(session: session)
-                .frame(minHeight: 220)
-                .padding(.horizontal, 12)
+            ScrollView {
+                EpisodeTimeline(session: session)
+                    .padding(.horizontal, 12).padding(.top, 8)
+            }
+            .frame(maxHeight: .infinity)
             Divider()
             console
         }
@@ -297,6 +299,7 @@ struct InsertEditor: View {
         }
         .padding(20)
         .frame(width: 620)
+        .background(Theme.background)
     }
 
     private var title: String {
