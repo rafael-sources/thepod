@@ -39,11 +39,10 @@ struct AudioStudioView: View {
         VStack(spacing: 0) {
             transport
             Divider()
-            ScrollView {
-                EpisodeTimeline(session: session)
-                    .padding(.horizontal, 12).padding(.top, 8)
-            }
-            .frame(maxHeight: .infinity)
+            EpisodeTimeline(session: session)
+                .padding(.horizontal, 12).padding(.top, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .clipped()
             Divider()
             console
         }
