@@ -311,8 +311,11 @@ enum SelfTest {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         Task { @MainActor in
             do {
+                print("studio-snapshot: arranca"); fflush(stdout)
                 let app = AppModel()
+                print("studio-snapshot: AppModel listo"); fflush(stdout)
                 var p = try ProjectStore.load(slug: slug)
+                print("studio-snapshot: proyecto cargado"); fflush(stdout)
                 // Una voz «ajustada en el estudio» para ver la etiqueta y los inserts encendidos
                 if !p.lanes.isEmpty {
                     var c = ChainSettings.preset(VoiceEQ.preset("clear"))
@@ -322,6 +325,7 @@ enum SelfTest {
                 }
                 let session = ProjectSession(project: p, app: app)
                 app.session = session
+                print("studio-snapshot: sesión lista"); fflush(stdout)
                 func shoot(_ view: some View, _ name: String, w: CGFloat, h: CGFloat) async {
                     let host = NSHostingView(rootView: AnyView(view.environmentObject(app).frame(width: w, height: h).preferredColorScheme(.dark)))
                     host.frame = NSRect(x: 0, y: 0, width: w, height: h)
@@ -330,12 +334,14 @@ enum SelfTest {
                     win.contentView = host
                     win.setFrameOrigin(NSPoint(x: -20000, y: -20000))
                     win.orderFrontRegardless()
+                    print("studio-snapshot: \(name) montada"); fflush(stdout)
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    print("studio-snapshot: \(name) esperó"); fflush(stdout)
                     host.layoutSubtreeIfNeeded()
                     if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                         host.cacheDisplay(in: host.bounds, to: rep)
                         try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
-                        print("snapshot \(name)")
+                        print("snapshot \(name)"); fflush(stdout)
                     }
                     win.orderOut(nil)
                 }
