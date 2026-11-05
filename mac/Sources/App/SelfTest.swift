@@ -735,20 +735,20 @@ enum SelfTest {
         if args.contains("--room-tone-test") { exit(StudioTests.roomToneTest() ? 0 : 1) }
         if args.contains("--delivery-test") { Task { exit(await StudioTests.deliveryTest() ? 0 : 1) }; return }
         if args.contains("--studio-tests") {
-            // Todo Studio seguido: primero video (sin archivos), luego la cadena de voz (export real)
-            print("== Studio · Video =="); fflush(stdout)
-            guard StudioTests.videoStudioTest() else { exit(1) }
-            print("== Voces parejas por medición =="); fflush(stdout)
-            guard StudioTests.loudnessMatchTest() else { exit(1) }
-            print("== Tono de sala =="); fflush(stdout)
-            guard StudioTests.roomToneTest() else { exit(1) }
-            print("== Entrega: subtítulos y capítulos =="); fflush(stdout)
-            let sem = DispatchSemaphore(value: 0); var deliveryOK = false
-            Task { deliveryOK = await StudioTests.deliveryTest(); sem.signal() }
-            while sem.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
-            guard deliveryOK else { exit(1) }
-            print("== Studio · Audio =="); fflush(stdout)
-            voiceChainTest(); return
+            // Todo Studio seguido: primero lo que no necesita archivos, luego la entrega (ffmpeg) y la cadena de voz (export real)
+            Task { @MainActor in
+                print("== Studio · Video =="); fflush(stdout)
+                guard StudioTests.videoStudioTest() else { exit(1) }
+                print("== Voces parejas por medición =="); fflush(stdout)
+                guard StudioTests.loudnessMatchTest() else { exit(1) }
+                print("== Tono de sala =="); fflush(stdout)
+                guard StudioTests.roomToneTest() else { exit(1) }
+                print("== Entrega: subtítulos y capítulos =="); fflush(stdout)
+                guard await StudioTests.deliveryTest() else { exit(1) }
+                print("== Studio · Audio =="); fflush(stdout)
+                voiceChainTest()
+            }
+            return
         }
         if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
             // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
