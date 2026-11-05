@@ -757,6 +757,7 @@ enum SelfTest {
             exit(0)
         }
         if args.contains("--loudness-report-test") { Task { exit(await StudioTests.loudnessReportTest() ? 0 : 1) }; return }
+        if args.contains("--export-queue-test") { Task { exit(await StudioTests.exportQueueTest() ? 0 : 1) }; return }
         if args.contains("--delivery-test") { Task { exit(await StudioTests.deliveryTest() ? 0 : 1) }; return }
         if args.contains("--studio-tests") {
             // Todo Studio seguido: primero lo que no necesita archivos, luego la entrega (ffmpeg) y la cadena de voz (export real)
@@ -781,6 +782,8 @@ enum SelfTest {
                 guard StudioTests.audiogramTest() else { exit(1) }
                 print("== Revisión compartida =="); fflush(stdout)
                 guard StudioTests.reviewTest() else { exit(1) }
+                print("== Cola de exportación =="); fflush(stdout)
+                guard await StudioTests.exportQueueTest() else { exit(1) }
                 print("== Entrega: subtítulos y capítulos =="); fflush(stdout)
                 guard await StudioTests.deliveryTest() else { exit(1) }
                 print("== Panorama de conversación =="); fflush(stdout)

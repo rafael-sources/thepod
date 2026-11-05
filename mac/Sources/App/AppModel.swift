@@ -326,6 +326,12 @@ final class ProjectSession: ObservableObject {
     weak var app: AppModel?
     var energy: EnergyMap?
     private var jobTask: Task<Void, Never>?
+    private var queueJobTask: Task<[URL], Error>?
+    /// Cola de exportación (feature 15): se procesa en segundo plano, de a uno.
+    @Published var exportQueue: [ExportJob] = []
+    var exportQueueTask: Task<Void, Never>?
+    /// Solo para pruebas: reemplaza la exportación real por una función que simula cada trabajo.
+    var exportQueueRunner: ((ExportJob.Kind) async throws -> [URL])?
     private var previewTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
@@ -554,7 +560,14 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    func cancelJob() { jobTask?.cancel() }
+    func cancelJob() { jobTask?.cancel(); queueJobTask?.cancel() }
+
+    /// La cola usa la misma barra de trabajo: mientras exporta, nada más arranca.
+    func startQueueJob(title: String, task: Task<[URL], Error>) {
+        job = JobState(title: title, detail: queueDetail, fraction: 0)
+        queueJobTask = task
+    }
+    func endQueueJob() { queueJobTask = nil; job = nil }
 
     private func report(_ title: String, _ detail: String = "", _ fraction: Double? = nil) {
         job = JobState(title: title, detail: detail, fraction: fraction)

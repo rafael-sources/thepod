@@ -520,6 +520,62 @@ enum StudioTests {
         return ok
     }
 
+    /// Cola de exportación: se procesa de a uno, en orden, sin bloquear la app; un fallo no frena el resto;
+    /// no se duplica lo que ya espera; quitar de la cola y cancelar funcionan.
+    @MainActor static func exportQueueTest() async -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let p = Project(id: "cola", name: "Cola", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
+        let s = ProjectSession(project: p, app: AppModel())
+        var order: [String] = []
+        var running = 0, overlap = false
+        s.exportQueueRunner = { kind in
+            running += 1; if running > 1 { overlap = true }
+            order.append(kind.title)
+            try await Task.sleep(nanoseconds: 60_000_000)
+            running -= 1
+            if case .stems = kind { throw NSError(domain: "cola", code: 1, userInfo: [NSLocalizedDescriptionKey: "sin pistas"]) }
+            return [URL(fileURLWithPath: "/tmp/\(kind.title).mp4")]
+        }
+        check(s.enqueue(.format(.landscape)), "se agrega YouTube")
+        check(s.enqueue(.stems), "se agrega pistas")
+        check(s.enqueue(.format(.audio)), "se agrega MP3")
+        check(!s.enqueue(.format(.audio)), "MP3 ya esperando no se duplica")
+        check(s.exportQueue.count == 3 && s.queuePending == 3, "tres en cola")
+        check(s.isBusy, "la barra de trabajo muestra la cola")
+        // la app sigue respondiendo mientras exporta: el hilo principal no está bloqueado
+        var ticks = 0
+        while s.queuePending > 0 && ticks < 100 { ticks += 1; try? await Task.sleep(nanoseconds: 20_000_000) }
+        check(ticks > 2 && ticks < 100, "terminó en segundo plano mientras el hilo principal seguía libre (\(ticks) vueltas)")
+        check(order == ["YouTube", "Pistas por separado (WAV)", "Solo audio (MP3)"], "orden de llegada: \(order)")
+        check(!overlap, "nunca dos exportaciones a la vez")
+        check(s.exportQueue[0].status == .done([URL(fileURLWithPath: "/tmp/YouTube.mp4")]), "YouTube listo con su archivo")
+        if case .failed(let why) = s.exportQueue[1].status { check(why == "sin pistas", "pistas falló con su motivo") } else { check(false, "pistas debía fallar") }
+        check(s.exportQueue[2].status.isFinished && s.exportQueue[2].files.count == 1, "MP3 salió aunque pistas falló")
+        check(!s.isBusy && s.job == nil, "al terminar se libera la barra")
+        s.clearFinishedExports()
+        check(s.exportQueue.isEmpty, "limpiar deja la cola vacía")
+        // quitar uno que espera y cancelar el que corre vacía el resto
+        s.exportQueueRunner = { kind in try await Task.sleep(nanoseconds: 400_000_000); return [] }
+        s.enqueue(.format(.vertical)); s.enqueue(.format(.square)); s.enqueue(.reels)
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        let sq = s.exportQueue.first { $0.kind == .format(.square) }!
+        s.removeFromQueue(sq.id)
+        check(s.exportQueue.count == 2, "se quita el que esperaba")
+        s.removeFromQueue(s.exportQueue[0].id)
+        check(s.exportQueue.count == 2 && s.exportQueue[0].status == .running, "el que corre no se quita, se cancela")
+        s.cancelJob()
+        ticks = 0
+        while s.queuePending > 0 && ticks < 50 { ticks += 1; try? await Task.sleep(nanoseconds: 20_000_000) }
+        check(s.exportQueue.count == 1 && s.exportQueue[0].status == .failed("Cancelado"), "cancelar para el actual y vacía lo que esperaba")
+        // "Exportar todo" encola YouTube + MP3 (+ reels solo si hay marcados)
+        s.clearFinishedExports()
+        s.exportQueueRunner = { _ in [] }
+        s.enqueueAll()
+        check(s.exportQueue.map(\.kind) == [.format(.landscape), .format(.audio)], "exportar todo sin reels: YouTube y MP3")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {

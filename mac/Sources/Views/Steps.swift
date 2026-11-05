@@ -757,8 +757,9 @@ struct ReelsStep: View {
                     }
                     if !session.project.reels.isEmpty {
                         let n = session.project.reels.filter(\.selected).count
-                        BigButton(title: "Exportar \(n) \(n == 1 ? "reel" : "reels")", symbol: "square.and.arrow.up",
-                                  disabled: n == 0 || session.isBusy) { session.exportReels() }
+                        BigButton(title: (session.isBusy ? "Poner en cola: " : "Exportar ") + "\(n) \(n == 1 ? "reel" : "reels")",
+                                  symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up",
+                                  disabled: n == 0) { if session.isBusy { session.enqueue(.reels) } else { session.exportReels() } }
                     }
                 }
                 .padding(28)
@@ -1630,15 +1631,22 @@ struct ExportStep: View {
                     }
                     Toggle("Ajustar el volumen final: −16 LUFS para Spotify y Apple, −14 para YouTube y redes", isOn: $session.project.normalizeLoudness)
                         .font(.caption)
-                    BigButton(title: "Exportar \(format.title)", symbol: "square.and.arrow.up", disabled: session.isBusy) {
-                        session.export(format: format)
+                    HStack(spacing: 10) {
+                        BigButton(title: session.isBusy ? "Poner en cola: \(format.title)" : "Exportar \(format.title)",
+                                  symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up") {
+                            if session.isBusy { session.enqueue(.format(format)) } else { session.export(format: format) }
+                        }
+                        Button { session.enqueueAll() } label: { Label("Exportar todo", systemImage: "square.stack.3d.up") }
+                            .help("YouTube, MP3 y los reels marcados, uno detrás de otro, mientras sigues trabajando.")
                     }
                     HStack {
-                        Button { session.exportStems() } label: { Label("Pistas por separado (WAV)", systemImage: "square.stack.3d.down.right") }
-                            .controlSize(.small).disabled(session.isBusy)
+                        Button { if session.isBusy { session.enqueue(.stems) } else { session.exportStems() } } label: {
+                            Label(session.isBusy ? "Poner en cola: pistas (WAV)" : "Pistas por separado (WAV)", systemImage: "square.stack.3d.down.right")
+                        }.controlSize(.small)
                         Text("Una por persona (con sus cortes, volumen y pitidos) y la música aparte, para terminar en Logic, Audition o Reaper.")
                             .font(.caption2).foregroundStyle(Theme.secondary)
                     }
+                    if !session.exportQueue.isEmpty { ExportQueueCard(session: session) }
                     if !session.lastExports.isEmpty {
                         Card {
                             Text("Ya exportados").font(.headline)
@@ -2241,5 +2249,48 @@ struct SharedReviewCard: View {
             Button("Cerrar enlace", role: .destructive) { session.revokeReview() }
             Button("Cancelar", role: .cancel) {}
         } message: { Text("Quien lo tenga ya no podrá abrirlo y las marcas de sus comentarios se quitan de la línea de tiempo.") }
+    }
+}
+
+
+/// Cola de exportación: lo que espera, lo que corre y lo que ya salió. No bloquea nada.
+struct ExportQueueCard: View {
+    @ObservedObject var session: ProjectSession
+    var body: some View {
+        Card {
+            HStack {
+                Text("Cola de exportación").font(.headline)
+                if session.queuePending > 0 {
+                    Text("\(session.queuePending) pendiente\(session.queuePending == 1 ? "" : "s")").font(.caption).foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                if session.exportQueue.contains(where: { $0.status.isFinished }) {
+                    Button("Limpiar") { session.clearFinishedExports() }.controlSize(.small)
+                }
+            }
+            ForEach(session.exportQueue) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.kind.symbol).frame(width: 18)
+                    Text(item.title).lineLimit(1)
+                    Spacer()
+                    switch item.status {
+                    case .waiting:
+                        Text("Esperando").font(.caption).foregroundStyle(Theme.secondary)
+                        Button { session.removeFromQueue(item.id) } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.plain).help("Quitar de la cola")
+                    case .running:
+                        ProgressView().controlSize(.small)
+                        Text("Exportando…").font(.caption).foregroundStyle(Theme.secondary)
+                    case .done(let urls):
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        if let u = urls.last { Button("Mostrar") { NSWorkspace.shared.activateFileViewerSelecting([u]) }.controlSize(.small) }
+                    case .failed(let why):
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text(why).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1).help(why)
+                    }
+                }
+                .font(.callout)
+            }
+        }
     }
 }
