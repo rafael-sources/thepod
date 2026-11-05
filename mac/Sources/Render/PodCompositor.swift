@@ -375,7 +375,37 @@ final class RenderScene: @unchecked Sendable {
 
     // MARK: Frame
 
+    /// Multicámara: cómo se pasa de una cámara a otra (nil = corte seco). Fundido: se mezclan el cuadro anterior y el
+    /// nuevo; zoom suave: el nuevo entra un 4 % más grande y se asienta. Vale para cambios automáticos y a mano.
+    var switchTransition: Transition? = nil
+
     func render(frames: [Int: CIImage], buffers: [Int: CVPixelBuffer] = [:], brollFrames: [CMPersistentTrackID: CIImage] = [:], time time: Double) -> CIImage {
+        let now = renderFrame(frames: frames, buffers: buffers, brollFrames: brollFrames, time: time)
+        guard let tr = switchTransition, tr.kind != .cut, tr.duration > 0.01,
+              time >= contentStart, time < contentEnd else { return now }
+        let t = time - contentStart
+        let since = activeLane(at: t).since
+        let span = cameraSpan(at: t)
+        // Momento del último cambio: el de quién habla, o el inicio del tramo a mano (aunque sea solo de plantilla)
+        let lastSpanEnd = cameraSpans.filter { $0.end <= t }.map(\.end).max() ?? -1
+        let change = max(since, span?.start ?? -1, lastSpanEnd)
+        let p = (t - change) / tr.duration
+        guard change > 0.01, p >= 0, p < 1 else { return now }
+        let full = CGRect(origin: .zero, size: renderSize)
+        let e = p * p * (3 - 2 * p)   // suave
+        switch tr.kind {
+        case .zoom:
+            let z = 1 + 0.04 * (1 - e)
+            let cx = full.midX, cy = full.midY
+            return now.transformed(by: CGAffineTransform(translationX: cx, y: cy).scaledBy(x: z, y: z).translatedBy(x: -cx, y: -cy)).cropped(to: full)
+        default:
+            // Fundido: el cuadro como se veía justo antes del cambio, con los mismos cuadros de ahora, mezclado con el nuevo
+            let before = renderFrame(frames: frames, buffers: buffers, brollFrames: brollFrames, time: contentStart + change - 0.001)
+            return now.applyingFilter("CIDissolveTransition", parameters: [kCIInputTargetImageKey: before, kCIInputTimeKey: 1 - e]).cropped(to: full)
+        }
+    }
+
+    private func renderFrame(frames: [Int: CIImage], buffers: [Int: CVPixelBuffer] = [:], brollFrames: [CMPersistentTrackID: CIImage] = [:], time time: Double) -> CIImage {
         let W = renderSize.width, H = renderSize.height
         let full = CGRect(x: 0, y: 0, width: W, height: H)
         let dark = CIImage(color: CIColor(red: 0.02, green: 0.02, blue: 0.03)).cropped(to: full)

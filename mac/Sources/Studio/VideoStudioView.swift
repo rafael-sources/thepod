@@ -18,6 +18,8 @@ struct VideoStudioView: View {
             }
             .frame(height: 440)
             Divider()
+            MulticamStrip(session: session, selectedCut: $selectedCut)
+            Divider()
             VideoTracks(session: session, selectedCut: $selectedCut, zoom: $zoom)
         }
     }
@@ -313,6 +315,24 @@ struct VideoInspector: View {
             }
             Text("Con menos de este tiempo en una cámara no se cambia, para no «picar» en conversaciones rápidas.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Text("Al cambiar").font(.caption)
+                Spacer()
+                Picker("", selection: Binding<Transition.Kind>(
+                    get: { session.project.studioVideo.switchTransition?.kind ?? .cut },
+                    set: { k in session.project.studioVideo.switchTransition = k == .cut ? nil : Transition(kind: k, duration: session.project.studioVideo.switchTransition?.duration ?? 0.2) })) {
+                    Text("Corte").tag(Transition.Kind.cut)
+                    Text("Fundido").tag(Transition.Kind.fade)
+                    Text("Zoom suave").tag(Transition.Kind.zoom)
+                }.labelsHidden().frame(width: 120)
+            }
+            if let tr = session.project.studioVideo.switchTransition {
+                HStack {
+                    Text("Duración").font(.caption)
+                    Slider(value: Binding(get: { tr.duration }, set: { session.project.studioVideo.switchTransition?.duration = $0 }), in: 0.1...1)
+                    Text(String(format: "%.1f s", tr.duration)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing)
+                }
+            }
             Divider()
             Text("Clic en un clip para editarlo. En la pista Cámaras, clic derecho para fijar una cámara en ese segundo; arrastra sus bordes para alargar el tramo.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)

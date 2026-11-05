@@ -94,6 +94,12 @@ struct Project: Codable, Identifiable, Equatable {
         return out
     }
 
+    /// ¿Esta pista tiene cámara (alguno de sus archivos trae video)?
+    func laneHasVideo(_ laneId: Int) -> Bool {
+        guard let lane = lanes.first(where: { $0.id == laneId }) else { return false }
+        return lane.clips.contains { mediaItem($0.mediaId)?.hasVideo == true }
+    }
+
     func laneName(_ laneId: Int) -> String {
         if let lane = lanes.first(where: { $0.id == laneId }) {
             if let pid = lane.participantId, let p = participants.first(where: { $0.id == pid }) {
@@ -1186,16 +1192,33 @@ struct StudioVideoSettings: Codable, Equatable {
     var followSpeaker = true            // cortes automáticos a quien habla (apagado: la plantilla fija del proyecto)
     var minHold = 2.5                   // segundos mínimos en una cámara antes de cambiar (para no «picar»)
     var cuts: [CameraCut] = []          // tramos fijados a mano
-    var isDefault: Bool { followSpeaker && abs(minHold - 2.5) < 1e-9 && cuts.isEmpty }
+    /// Multicámara: cómo se pasa de una cámara a otra (nil = corte seco). Solo fundido o zoom suave tienen sentido aquí.
+    var switchTransition: Transition?
+    var isDefault: Bool { followSpeaker && abs(minHold - 2.5) < 1e-9 && cuts.isEmpty && switchTransition == nil }
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         followSpeaker = try c.decodeIfPresent(Bool.self, forKey: .followSpeaker) ?? true
         minHold = try c.decodeIfPresent(Double.self, forKey: .minHold) ?? 2.5
         cuts = try c.decodeIfPresent([CameraCut].self, forKey: .cuts) ?? []
+        switchTransition = try c.decodeIfPresent(Transition.self, forKey: .switchTransition)
     }
     /// El tramo a mano que cubre `t` (tiempo del episodio), si hay.
     func cut(at t: Double) -> CameraCut? { cuts.first { t >= $0.start && t < $0.end } }
+
+    /// Multicámara en vivo: cortar a `lane` en el segundo `t` (tecla 1–4 o clic en el ángulo). El tramo que cubría `t`
+    /// termina ahí; el nuevo dura hasta el siguiente corte a mano o hasta `duration`. Devuelve el corte creado.
+    @discardableResult
+    mutating func liveCut(to lane: Int, at t: Double, duration: Double) -> CameraCut {
+        for i in cuts.indices where cuts[i].start < t && cuts[i].end > t { cuts[i].end = t }
+        cuts.removeAll { abs($0.start - t) < 0.05 }
+        let next = cuts.map(\.start).filter { $0 > t + 0.05 }.min() ?? duration
+        let c = CameraCut(start: t, end: max(t + 0.1, next), lane: lane, template: nil)
+        cuts.append(c)
+        cuts.removeAll { $0.end - $0.start < 0.05 }
+        cuts.sort { $0.start < $1.start }
+        return c
+    }
 }
 
 // MARK: - Revisión compartida

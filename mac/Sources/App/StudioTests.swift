@@ -676,6 +676,50 @@ enum StudioTests {
         return ok
     }
 
+    /// Multicámara: cortar en vivo (tecla 1–4) crea un tramo a mano hasta el siguiente corte, recorta el que cubría ese
+    /// segundo y reemplaza uno que empiece ahí; al cambiar de cámara, el fundido mezcla y el zoom suave agranda.
+    static func multicamTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        var v = StudioVideoSettings()
+        v.liveCut(to: 2, at: 10, duration: 100)
+        check(v.cuts.count == 1 && v.cuts[0].start == 10 && v.cuts[0].end == 100 && v.cuts[0].lane == 2, "el primer corte en vivo dura hasta el final")
+        v.liveCut(to: 1, at: 30, duration: 100)
+        check(v.cuts.count == 2 && v.cuts[0].end == 30 && v.cuts[1].start == 30 && v.cuts[1].lane == 1, "el siguiente recorta al anterior y sigue hasta el final")
+        v.liveCut(to: 3, at: 20, duration: 100)
+        check(v.cuts.map { [$0.start, $0.end] } == [[10, 20], [20, 30], [30, 100]] && v.cuts[1].lane == 3, "cortar en el medio parte el tramo y termina en el siguiente corte (\(v.cuts.map { "\($0.start)-\($0.end)" }))")
+        v.liveCut(to: 2, at: 20.02, duration: 100)
+        check(v.cuts.count == 3 && v.cuts[1].lane == 2 && v.cuts[1].start == 20.02, "cortar casi en el mismo segundo reemplaza en vez de apilar")
+        if let old = try? JSONDecoder().decode(StudioVideoSettings.self, from: Data(#"{"followSpeaker":true}"#.utf8)) { check(old.switchTransition == nil && old.isDefault, "un proyecto viejo abre con corte seco") }
+        else { check(false, "no decodifica ajustes viejos") }
+        // Transiciones al cambiar: dos cámaras (1 roja, 2 verde), cambio a los 5 s
+        let size = CGSize(width: 640, height: 360)
+        let frames: [Int: CIImage] = [1: solid(1, 0, 0, size), 2: solid(0, 1, 0, size)]
+        let s = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1), SpeakerSwitch(time: 5, lane: 2)])
+        let box = CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2)
+        let seco = mean(s.render(frames: frames, time: 5.05), box, size: size)
+        check(seco.g > 0.9 && seco.r < 0.1, "sin transición: al pasar los 5 s ya se ve la nueva cámara")
+        s.switchTransition = Transition(kind: .fade, duration: 0.4)
+        let mid = mean(s.render(frames: frames, time: 5.2), box, size: size)
+        let after = mean(s.render(frames: frames, time: 5.6), box, size: size)
+        let before = mean(s.render(frames: frames, time: 4.9), box, size: size)
+        check(mid.r > 0.25 && mid.g > 0.25 && mid.r < 0.75 && mid.g < 0.75, String(format: "fundido: a mitad del cambio se mezclan las dos (%.2f rojo, %.2f verde)", mid.r, mid.g))
+        check(after.g > 0.9 && after.r < 0.1 && before.r > 0.9, "fundido: antes del cambio solo la vieja, después solo la nueva")
+        // Un tramo a mano que termina también es un cambio
+        s.cameraSpans = [RenderScene.CameraSpan(start: 6, end: 8, lane: 1, template: nil)]
+        let endSpan = mean(s.render(frames: frames, time: 8.2), box, size: size)
+        check(endSpan.r > 0.25 && endSpan.g > 0.25, "al terminar un tramo a mano también se funde hacia el automático")
+        s.cameraSpans = []
+        s.switchTransition = Transition(kind: .zoom, duration: 0.4)
+        // Zoom suave: un cuadro de 1 = rojo con un borde azul de 40 px; justo al cambiar, la cámara 2 (verde con borde) se ve agrandada: el borde queda fuera
+        let green = solid(0, 1, 0, CGSize(width: 560, height: 280)).transformed(by: .init(translationX: 40, y: 40)).composited(over: solid(0, 0, 1, size))
+        let zoomed = mean(s.render(frames: [1: frames[1]!, 2: green], time: 5.02), CGRect(x: 0, y: 0.45, width: 0.03, height: 0.1), size: size)
+        let settled = mean(s.render(frames: [1: frames[1]!, 2: green], time: 6), CGRect(x: 0, y: 0.45, width: 0.03, height: 0.1), size: size)
+        check(zoomed.b < 0.5 && settled.b > 0.8, String(format: "zoom suave: al cambiar entra más grande (borde azul fuera: %.2f) y luego se asienta (%.2f)", zoomed.b, settled.b))
+        print(ok ? "OK multicámara" : "FAIL multicámara")
+        return ok
+    }
+
     /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
     /// enlace con sus comentarios se guarda y se carga con el proyecto.
     static func reviewTest() -> Bool {

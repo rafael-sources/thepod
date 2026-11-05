@@ -537,6 +537,7 @@ enum CompositionBuilder {
             s.fastSegmentation = preview
             s.brolls = brollScene
             // Studio · Video: tramos de cámara a mano, en tiempo del contenido del video final
+            s.switchTransition = project.studioVideo.switchTransition
             s.cameraSpans = project.studioVideo.cuts.compactMap { c in
                 guard let a = Self.outputStart(c.start, keep: keep) else { return nil }
                 let z = EditEngine.toOutput(c.end, keep: keep) ?? (a + (c.end - c.start))
