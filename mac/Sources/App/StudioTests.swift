@@ -359,6 +359,67 @@ enum StudioTests {
         return ok
     }
 
+    /// Reducción de ruido por huella: con la huella del ruido, el ruido baja ≥ 10 dB y un tono de voz (300 Hz) a
+    /// 20 dB por encima se conserva (±1,5 dB); con una huella casi nula la señal pasa intacta (reconstrucción).
+    static func noiseReducerTest() -> Bool {
+        var ok = true
+        func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
+        let sr = 48_000.0
+        var seed: UInt32 = 4242
+        func noise() -> Float { seed = seed &* 1664525 &+ 1013904223; return (Float(seed % 20000) / 10000 - 1) * 0.02 }   // ≈ −41 dBFS rms
+        // Huella: 1 s solo ruido
+        var only = [Float](repeating: 0, count: Int(sr))
+        for i in only.indices { only[i] = noise() }
+        guard let prof = only.withUnsafeBufferPointer({ NoiseReducer.profile(samples: $0.baseAddress!, count: $0.count) }) else { check(false, "sin huella"); return false }
+        check(prof.count == NoiseReducer.bins && prof.max()! > 0, "la huella tiene \(NoiseReducer.bins) bandas")
+        // Señal: 3 s de ruido + tono de 300 Hz a 0,2 (≈ −17 dBFS), procesada por bloques de 512 como en la mezcla
+        let total = Int(sr * 3)
+        var sig = [Float](repeating: 0, count: total)
+        for i in 0..<total { sig[i] = noise() + 0.2 * Float(sin(2 * .pi * 300 * Double(i) / sr)) }
+        func run(_ input: [Float], amount: Float, profile: [Float]) -> [Float] {
+            let nr = NoiseReducer(); nr.profile = profile; nr.amount = amount; nr.prepare(channels: 1)
+            var out = input
+            out.withUnsafeMutableBufferPointer { op in
+                var abl = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(mNumberChannels: 1, mDataByteSize: 0, mData: nil))
+                var pos = 0
+                while pos < total {
+                    let n = min(512, total - pos)
+                    abl.mBuffers.mData = UnsafeMutableRawPointer(op.baseAddress! + pos)
+                    abl.mBuffers.mDataByteSize = UInt32(n * 4)
+                    nr.process(&abl, frames: n)
+                    pos += n
+                }
+            }
+            return out
+        }
+        /// Potencia de una banda (Goertzel) y potencia total, sobre el segundo central
+        func band(_ x: [Float], hz: Double) -> Double {
+            let a = total / 3, len = total / 3, w = 2 * Double.pi * hz / sr
+            var re = 0.0, im = 0.0
+            for i in 0..<len { let v = Double(x[a + i]); re += v * cos(w * Double(i)); im -= v * sin(w * Double(i)) }
+            return 20 * log10(max(1e-9, sqrt(re * re + im * im) / Double(len) * 2))
+        }
+        func rmsDB(_ x: [Float], from: Int, to: Int) -> Double { var s = 0.0; for i in from..<to { s += Double(x[i] * x[i]) }; return 10 * log10(max(1e-12, s / Double(to - from))) }
+        let out = run(sig, amount: 0.6, profile: prof)
+        let toneIn = band(sig, hz: 300), toneOut = band(out, hz: 300)
+        check(abs(toneOut - toneIn) < 1.5, String(format: "el tono de voz se conserva (%.1f → %.1f dB)", toneIn, toneOut))
+        // ruido: la señal sin tono, por el mismo reductor
+        var onlyNoise = [Float](repeating: 0, count: total); for i in 0..<total { onlyNoise[i] = noise() }
+        let nOut = run(onlyNoise, amount: 0.6, profile: prof)
+        let lat = NoiseReducer.n - NoiseReducer.hop
+        let nIn = rmsDB(onlyNoise, from: total / 3, to: 2 * total / 3), nO = rmsDB(nOut, from: total / 3 + lat, to: 2 * total / 3 + lat)
+        check(nIn - nO >= 9, String(format: "el ruido baja %.1f dB (normal: ≥ 9)", nIn - nO))
+        let strong = run(onlyNoise, amount: 0.9, profile: prof)
+        check(nIn - rmsDB(strong, from: total / 3 + lat, to: 2 * total / 3 + lat) > nIn - nO, "en «Fuerte» baja más que en «Normal»")
+        // sin huella que restar: reconstrucción (retardada 768 muestras) dentro de 0,2 dB
+        let clean = run(sig, amount: 0.6, profile: [Float](repeating: 1e-6, count: NoiseReducer.bins))
+        var diff = 0.0, ref = 0.0
+        for i in (total / 3)..<(2 * total / 3) { let d = Double(clean[i + lat] - sig[i]); diff += d * d; ref += Double(sig[i] * sig[i]) }
+        check(10 * log10(diff / ref) < -30, String(format: "sin ruido que restar la señal pasa intacta (error %.1f dB)", 10 * log10(diff / ref)))
+        print(ok ? "OK reducción de ruido por huella" : "FAIL reducción de ruido")
+        return ok
+    }
+
     static func videoStudioTest() -> Bool {
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, CGSize(width: 1280, height: 720)), 2: solid(0, 1, 0, CGSize(width: 1280, height: 720))]

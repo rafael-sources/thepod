@@ -83,6 +83,18 @@ enum RoomTone {
         return url
     }
 
+    /// Huella de ruido de una persona (para la reducción por huella): el espectro del segundo más quieto.
+    static func noiseProfile(project: Project, lane: Lane, energy: EnergyMap) -> (profile: [Float], at: Double)? {
+        guard let arr = energy.lanes[lane.id], let q = quietestWindow(energy: arr),
+              let placed = lane.placed.first(where: { q.start >= $0.tlStart && q.start + window <= $0.tlEnd }),
+              let media = project.mediaItem(placed.clip.mediaId) else { return nil }
+        let srcT = placed.clip.srcIn + (q.start - placed.tlStart)
+        var rel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
+        if !FileManager.default.fileExists(atPath: ProjectStore.url(rel, in: project.id).path) { rel = media.file }
+        guard let p = NoiseReducer.profile(url: ProjectStore.url(rel, in: project.id), start: srcT, seconds: window) else { return nil }
+        return (p, q.start)
+    }
+
     /// Dónde una persona no tiene nada que suene (tiempo del video final): antes de su primer tramo, después del
     /// último y bajo cada pitido. Los huecos de menos de 150 ms no valen la pena.
     static func deadSpans(laneSpan: (start: Double, end: Double)?, content: (start: Double, end: Double),

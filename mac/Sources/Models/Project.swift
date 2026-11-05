@@ -161,6 +161,10 @@ extension Lane {
         solo = try c.decodeIfPresent(Bool.self, forKey: .solo) ?? false
         volumePoints = try c.decodeIfPresent([VolumePoint].self, forKey: .volumePoints) ?? []
         pan = try c.decodeIfPresent(Double.self, forKey: .pan) ?? 0
+        noiseReduce = try c.decodeIfPresent(Bool.self, forKey: .noiseReduce) ?? false
+        noiseAmount = try c.decodeIfPresent(Double.self, forKey: .noiseAmount) ?? 0.6
+        noiseProfile = try c.decodeIfPresent([Float].self, forKey: .noiseProfile)
+        noiseProfileAt = try c.decodeIfPresent(Double.self, forKey: .noiseProfileAt)
         measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
         matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
     }
@@ -447,6 +451,10 @@ struct Lane: Codable, Identifiable, Equatable {
     var solo: Bool = false              // S: solo suenan las personas con solo
     var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
     var pan: Double = 0                 // panorama: −1 izquierda … 0 centro … 1 derecha (lo pone «Panorama de conversación»)
+    var noiseReduce: Bool = false       // reducción de ruido por huella (resta espectral, sin IA)
+    var noiseAmount: Double = 0.6       // cuánto: 0,3 suave · 0,6 normal · 0,9 fuerte
+    var noiseProfile: [Float]?          // la huella: magnitud media por banda del segundo más quieto
+    var noiseProfileAt: Double?         // de qué segundo del episodio salió la huella
     var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
     var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
 

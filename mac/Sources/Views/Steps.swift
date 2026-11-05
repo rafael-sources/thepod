@@ -215,6 +215,8 @@ struct FixStep: View {
                             .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
                         }
                         Divider()
+                        NoiseProfileRow(session: session)
+                        Divider()
                         VoicesMatchRow(session: session)
                         Divider()
                         Toggle(isOn: Binding(get: { session.project.conversationPan }, set: { on in
@@ -2063,6 +2065,73 @@ struct VoicesMatchRow: View {
                     }
                 }
                 measuring = false
+            }
+        }
+    }
+}
+
+
+/// «Reducir ruido por huella»: toma el espectro del segundo más quieto de cada persona y resta lo que no supere
+/// esa huella. Sin IA; vale para ruido constante (aire, ventilador, zumbido).
+struct NoiseProfileRow: View {
+    @ObservedObject var session: ProjectSession
+    @State private var working = false
+
+    private var anyOn: Bool { session.project.lanes.contains { $0.noiseReduce } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { anyOn }, set: { on in
+                for i in session.project.lanes.indices { session.project.lanes[i].noiseReduce = on }
+                if on { capture() }
+            })) {
+                VStack(alignment: .leading) {
+                    Text("Reducir ruido por huella").font(.headline)
+                    Text("Toma el segundo más quieto de cada persona como «huella» del ruido de su sala y baja lo que no la supera. Sirve para ruido constante (aire acondicionado, ventilador, zumbido) y no toca la voz. Es distinto de «Sonido de estudio»: no usa inteligencia artificial y se puede usar a la vez o en su lugar.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if anyOn {
+                ForEach(session.project.lanes) { lane in
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == lane.id }) {
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: $session.project.lanes[i].noiseReduce).labelsHidden().controlSize(.mini)
+                            Text(session.project.laneName(lane.id)).font(.caption).frame(width: 120, alignment: .leading).lineLimit(1)
+                            Picker("", selection: $session.project.lanes[i].noiseAmount) {
+                                Text("Suave").tag(0.3); Text("Normal").tag(0.6); Text("Fuerte").tag(0.9)
+                            }.pickerStyle(.segmented).labelsHidden().frame(width: 200).disabled(!lane.noiseReduce)
+                            if let at = lane.noiseProfileAt {
+                                Text("huella en \(EditEngine.clock(at))").font(.caption2).foregroundStyle(Theme.secondary)
+                            } else {
+                                Text(working ? "buscando la huella…" : "sin huella: no hay un segundo quieto").font(.caption2).foregroundStyle(working ? Theme.secondary : .orange)
+                            }
+                        }
+                    }
+                }
+                HStack {
+                    Button(working ? "Buscando…" : "Tomar la huella de nuevo") { capture() }.controlSize(.small).disabled(working)
+                    Text("Reproduce y compara con A/B en Studio; si la voz suena «acuosa», baja a Suave.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private func capture() {
+        working = true
+        let p = session.project
+        Task.detached(priority: .userInitiated) {
+            let energy = AudioAnalysis.loadEnergy(p.id)
+            var results: [(Int, [Float], Double)] = []
+            if let energy {
+                for lane in p.lanes { if let r = RoomTone.noiseProfile(project: p, lane: lane, energy: energy) { results.append((lane.id, r.profile, r.at)) } }
+            }
+            await MainActor.run {
+                for (id, prof, at) in results {
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == id }) {
+                        session.project.lanes[i].noiseProfile = prof; session.project.lanes[i].noiseProfileAt = at
+                    }
+                }
+                working = false
             }
         }
     }

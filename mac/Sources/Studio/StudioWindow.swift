@@ -217,6 +217,18 @@ struct ChannelStrip: View {
                 }
             }
             VStack(spacing: 3) {
+                // Reducción de ruido por huella (nivel simple y Studio comparten el mismo ajuste)
+                HStack(spacing: 6) {
+                    Circle().fill(lane.noiseReduce ? Theme.good : Color.clear).overlay(Circle().strokeBorder(lane.noiseReduce ? Theme.good : Theme.secondary, lineWidth: 1)).frame(width: 7, height: 7)
+                    Text("Ruido · huella").font(.caption).lineLimit(1)
+                    Spacer()
+                    Picker("", selection: $session.project.lanes[index].noiseAmount) { Text("S").tag(0.3); Text("N").tag(0.6); Text("F").tag(0.9) }
+                        .pickerStyle(.segmented).labelsHidden().controlSize(.mini).frame(width: 70).disabled(!lane.noiseReduce)
+                    Toggle("", isOn: $session.project.lanes[index].noiseReduce).labelsHidden().toggleStyle(.switch).controlSize(.mini)
+                }
+                .padding(.horizontal, 6).frame(height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
+                .help(lane.noiseProfile == nil ? "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla" : "Resta espectral con la huella del segundo más quieto")
                 insertRow("EQ paramétrico", on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : "\(chain.bands.filter(\.enabled).count) bandas") { openInsert(.eq) }
                 insertRow("Compresor", on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
                 insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
