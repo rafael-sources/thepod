@@ -543,7 +543,8 @@ enum StudioTests {
         check(s.enqueue(.format(.audio)), "se agrega MP3")
         check(!s.enqueue(.format(.audio)), "MP3 ya esperando no se duplica")
         check(s.exportQueue.count == 3 && s.queuePending == 3, "tres en cola")
-        check(s.isBusy, "la barra de trabajo muestra la cola")
+        try? await Task.sleep(nanoseconds: 10_000_000)   // la cola arranca en el siguiente ciclo
+        check(s.isBusy && s.job?.title.hasPrefix("En cola") == true, "la barra de trabajo muestra la cola")
         // la app sigue respondiendo mientras exporta: el hilo principal no está bloqueado
         var ticks = 0
         while s.queuePending > 0 && ticks < 100 { ticks += 1; try? await Task.sleep(nanoseconds: 20_000_000) }
