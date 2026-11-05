@@ -372,7 +372,7 @@ struct TrackInspector: View {
         Divider()
         if lane.tunedInStudio {
             HStack(spacing: 8) {
-                Label("Ajustado en el estudio", systemImage: "waveform.badge.magnifyingglass").foregroundStyle(Theme.accent)
+                Label("Ajustado en Studio", systemImage: "waveform.badge.magnifyingglass").foregroundStyle(Theme.accent)
                 Text("Esta voz tiene una cadena que estos controles no alcanzan a describir.").foregroundStyle(Theme.secondary)
                 Spacer()
                 Button("Volver al preset") { session.project.lanes[i].chain = nil }

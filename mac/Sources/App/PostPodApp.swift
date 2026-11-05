@@ -31,7 +31,7 @@ struct PostPodApp: App {
                 Divider()
                 OpenProbeButton()
             }
-            CommandMenu("Estudio") {
+            CommandMenu("Studio") {
                 OpenStudioButton()
             }
             CommandGroup(replacing: .help) {
@@ -48,7 +48,7 @@ struct PostPodApp: App {
         }
         .windowStyle(.hiddenTitleBar)
 
-        Window("Estudio", id: "estudio") {
+        Window("Studio", id: "estudio") {
             StudioRoot().environmentObject(app)
         }
         .defaultSize(width: 1280, height: 820)

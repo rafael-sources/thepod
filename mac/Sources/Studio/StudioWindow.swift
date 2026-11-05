@@ -12,7 +12,7 @@ struct StudioRoot: View {
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(Theme.secondary)
-                    Text("Abre un episodio para entrar al estudio").foregroundStyle(Theme.secondary)
+                    Text("Abre un episodio para entrar a Studio").foregroundStyle(Theme.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -62,7 +62,7 @@ struct AudioStudioView: View {
     private var transport: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Estudio · \(session.project.name)").font(.headline)
+                Text("Studio · \(session.project.name)").font(.headline)
                 Text("Lo que suena aquí es lo que se exporta. Los pasos simples siguen igual.")
                     .font(.caption).foregroundStyle(Theme.secondary)
             }
@@ -183,7 +183,7 @@ struct ChannelStrip: View {
                 }
                 if lane.tunedInStudio {
                     Image(systemName: "waveform.badge.magnifyingglass").foregroundStyle(Theme.accent)
-                        .help("Ajustado en el estudio: el nivel simple no sabe describir esta cadena")
+                        .help("Ajustado en Studio: el nivel simple no sabe describir esta cadena")
                 }
             }
             VStack(spacing: 3) {
@@ -637,7 +637,7 @@ struct EQCurve: View {
 
 struct OpenStudioButton: View {
     @Environment(\.openWindow) private var openWindow
-    var label = "Abrir en el estudio"
+    var label = "Abrir en Studio"
     var body: some View {
         Button(label) { openWindow(id: "estudio") }.keyboardShortcut("e")
     }
