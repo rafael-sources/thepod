@@ -793,6 +793,28 @@ enum StudioTests {
         sc.brolls = [RenderScene.BRoll(trackID: nil, image: blue, start: 0, end: 5, fill: true, placement: "full")]
         let fb = mean(sc.render(frames: frames, time: 2), CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), size: fsize)
         check(abs(fb.r - fb.b) < 0.08, String(format: "toda la pista: también desatura el b-roll (%.2f / %.2f)", fb.r, fb.b))
+        // Máscara: el color de la cámara solo dentro de la elipse; fuera, oscurecido si se pide; sigue keyframes
+        let sm = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
+        sm.laneGrade = [1: lg]                       // +1 EV
+        var mask = ShapeMask(); mask.shape = .ellipse; mask.x = 0.25; mask.y = 0.5; mask.w = 0.3; mask.h = 0.5; mask.feather = 0
+        sm.laneMask = [1: mask]
+        let fm = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1)
+        let inside = mean(fm, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), outside = mean(fm, CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
+        check(inside.r > outside.r + 0.1, String(format: "máscara: dentro se aclara (%.2f), fuera no (%.2f)", inside.r, outside.r))
+        mask.dimOutside = 1; sm.laneMask = [1: mask]
+        let fd = mean(sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1), CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
+        check(fd.r < outside.r * 0.5, String(format: "oscurecer fuera: lo de afuera baja (%.2f → %.2f)", outside.r, fd.r))
+        mask.dimOutside = 0; mask.invert = true; sm.laneMask = [1: mask]
+        let fi = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1)
+        let insideI = mean(fi, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), outsideI = mean(fi, CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
+        check(outsideI.r > insideI.r + 0.1, "invertida: el color va fuera")
+        mask.invert = false
+        var ma = LayerAnimation(); ma.write(LayerAnimation.x, t: 0, v: 0.25, ease: .linear); ma.write(LayerAnimation.x, t: 10, v: 0.75)
+        mask.animation = ma; sm.laneMask = [1: mask]
+        let f9 = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 9.9)
+        let leftLate = mean(f9, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), rightLate = mean(f9, CGRect(x: 0.72, y: 0.45, width: 0.06, height: 0.1), size: fsize)
+        check(rightLate.r > leftLate.r + 0.1, "la máscara sigue los keyframes: al final está a la derecha")
+        if let oldLane = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(oldLane.mask == nil, "una pista vieja abre sin máscara") }
         // Igualar cámaras
         let fix = CameraMatch.fix(camera: [60, 60, 60], reference: [120, 120, 120])
         check(abs(fix.exposure - 1) < 0.01 && fix.gain.allSatisfy { abs($0 - 1) < 0.02 }, "cámara a la mitad de brillo: +1 EV y sin cambio de tinte (\(fix))")

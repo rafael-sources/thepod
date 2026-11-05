@@ -580,7 +580,13 @@ enum CompositionBuilder {
             s.colorLook = project.colorLook
             if project.matchColors { s.laneGain = project.laneColorGain }
             s.globalGrade = project.grade.flatMap { $0.isEmpty ? nil : $0 }
-            for lane in project.lanes { if let g = lane.grade, !g.isEmpty { s.laneGrade[lane.id] = g } }
+            for lane in project.lanes {
+                if let g = lane.grade, !g.isEmpty { s.laneGrade[lane.id] = g }
+                if var m = lane.mask {
+                    m.animation = m.animation.map { $0.mapped { Self.outputStart($0, keep: keep) } }
+                    s.laneMask[lane.id] = m
+                }
+            }
             s.contentStart = introDur
             s.contentEnd = contentEnd
             s.introImage = intro.flatMap { CIImage(contentsOf: ProjectStore.url($0.imageFile, in: project.id)) }

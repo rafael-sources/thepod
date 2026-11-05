@@ -300,6 +300,33 @@ final class RenderScene: @unchecked Sendable {
     /// Studio · Video: color por cámara y de toda la pista
     var laneGrade: [Int: ColorGrade] = [:]
     var globalGrade: ColorGrade?
+    /// Máscara por cámara (keyframes ya en tiempo del video final)
+    var laneMask: [Int: ShapeMask] = [:]
+
+    /// La máscara dibujada en el recuadro de la persona: blanco dentro (borde suavizado), negro fuera.
+    func maskImage(_ m: ShapeMask, in rect: CGRect, at t: Double) -> CIImage {
+        let p = m.placement(at: t)
+        let w = rect.width * m.w * p.scale, h = rect.height * m.h * p.scale
+        let cx = rect.minX + rect.width * p.x, cy = rect.maxY - rect.height * p.y
+        let feather = max(0, m.feather) * (renderSize.height / 1080)
+        var shape: CIImage
+        if m.shape == .ellipse {
+            // un círculo blanco de borde duro, escalado a elipse; el suavizado lo da el desenfoque de después
+            let r = max(w, h) / 2
+            let gen = CIFilter(name: "CIRadialGradient", parameters: [
+                "inputCenter": CIVector(x: 0, y: 0), "inputRadius0": r - 0.5, "inputRadius1": r + 0.5,
+                "inputColor0": CIColor.white, "inputColor1": CIColor.black])!
+            shape = (gen.outputImage ?? CIImage(color: .black)).cropped(to: CGRect(x: -r - 2, y: -r - 2, width: 2 * r + 4, height: 2 * r + 4))
+                .transformed(by: CGAffineTransform(translationX: cx, y: cy).scaledBy(x: w / (2 * r), y: h / (2 * r)))
+        } else {
+            shape = CIImage(color: .white).cropped(to: CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h))
+        }
+        var out = shape.composited(over: CIImage(color: .black).cropped(to: rect.insetBy(dx: -feather * 3, dy: -feather * 3)))
+        if feather > 0.5 { out = out.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: feather / 2]) }
+        out = out.cropped(to: rect)
+        if m.invert { out = out.applyingFilter("CIColorInvert").cropped(to: rect) }
+        return out
+    }
 
     func colored(_ img: CIImage, lane: Int) -> CIImage {
         var out = img
@@ -494,6 +521,17 @@ final class RenderScene: @unchecked Sendable {
                         frame = replacedBackground(frame, buffer: pb, lane: lane, time: time)
                     }
                 }
+                // Con máscara: el color de la cámara va solo dentro; fuera queda el cuadro sin ese color (quizá oscurecido)
+                var unmasked: CIImage? = laneMask[lane] != nil ? frame : nil
+                if let u = unmasked, laneGain[lane] != nil || globalGrade != nil || colorLook != "none" {
+                    // lo que no es de esta cámara (igualar cámaras, toda la pista, look del simple) sí va en todo el cuadro
+                    var g = u
+                    if let gain = laneGain[lane], gain.count == 3 {
+                        g = g.applyingFilter("CIColorMatrix", parameters: ["inputRVector": CIVector(x: gain[0], y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: gain[1], z: 0, w: 0), "inputBVector": CIVector(x: 0, y: 0, z: gain[2], w: 0)])
+                    }
+                    if let gg = globalGrade { g = gg.apply(to: g) }
+                    unmasked = g
+                }
                 if colorLook != "none" || laneGain[lane] != nil || laneGrade[lane] != nil || globalGrade != nil { frame = colored(frame, lane: lane) }
                 if mirror[lane] == true {
                     // Espejo horizontal, dejando el cuadro donde estaba
@@ -501,11 +539,17 @@ final class RenderScene: @unchecked Sendable {
                     let flip = CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -(e.minX * 2 + e.width), y: 0)
                     frame = frame.transformed(by: flip)
                     cutout = cutout?.transformed(by: flip)
+                    unmasked = unmasked?.transformed(by: flip)
                 }
                 // Punch-in: la persona se acerca un poco cuando su voz sube; se llena un recuadro algo mayor y se recorta
                 let z = punch(lane, at: t)
                 let zRect = z > 1.001 ? rect.insetBy(dx: -rect.width * (z - 1) / 2, dy: -rect.height * (z - 1) / 2) : rect
                 var panel = fill(frame, into: zRect, cropX: cropX[lane] ?? 0.5).cropped(to: rect)
+                if let m = laneMask[lane], let u = unmasked {
+                    var outside = fill(u, into: zRect, cropX: cropX[lane] ?? 0.5).cropped(to: rect)
+                    if m.dimOutside > 0.001 { outside = outside.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: -3 * m.dimOutside]).cropped(to: rect) }
+                    panel = panel.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: outside, kCIInputMaskImageKey: maskImage(m, in: rect, at: t)]).cropped(to: rect)
+                }
                 if let cutout, let bg = background {
                     let behind = fill(bg, into: full, cropX: 0.5).cropped(to: rect)
                     let m = fill(cutout, into: zRect, cropX: cropX[lane] ?? 0.5).cropped(to: rect)

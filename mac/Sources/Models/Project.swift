@@ -178,6 +178,7 @@ extension Lane {
         measuredLUFS = try c.decodeIfPresent(Double.self, forKey: .measuredLUFS)
         matchGain = try c.decodeIfPresent(Double.self, forKey: .matchGain) ?? 0
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade)
+        mask = try c.decodeIfPresent(ShapeMask.self, forKey: .mask)
     }
 }
 
@@ -471,6 +472,7 @@ struct Lane: Codable, Identifiable, Equatable {
     var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
     var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
     var grade: ColorGrade?              // Studio · Video: color de esta cámara (toda la persona)
+    var mask: ShapeMask?                // Studio · Video: dónde se aplica ese color (y qué se oscurece fuera)
 
     /// La cadena que suena: la del estudio si existe, si no el preset del nivel simple.
     var effectiveChain: ChainSettings { chain ?? ChainSettings.preset(eq) }
@@ -1176,6 +1178,42 @@ struct LayerAnimation: Codable, Equatable {
     }
 }
 
+/// Máscara de una cámara (Studio · Video): una elipse o un rectángulo, en fracciones del recuadro de esa persona, con
+/// borde suavizado. Dentro se aplica el color de la cámara; fuera, el cuadro queda como está (o se oscurece).
+/// Sigue el movimiento con keyframes de posición y tamaño (x, y, scale), a mano: ningún reconocimiento automático.
+struct ShapeMask: Codable, Equatable {
+    enum Shape: String, Codable, CaseIterable {
+        case ellipse, rect
+        var name: String { self == .ellipse ? "Elipse" : "Rectángulo" }
+    }
+    var shape: Shape = .ellipse
+    var x: Double = 0.5                 // centro, fracción del recuadro (0 = izquierda)
+    var y: Double = 0.42                // centro, fracción del recuadro (0 = arriba)
+    var w: Double = 0.5                 // ancho, fracción del recuadro
+    var h: Double = 0.7                 // alto, fracción del recuadro
+    var feather: Double = 24            // suavizado del borde, px a 1080p
+    var invert: Bool = false            // el color va fuera, no dentro
+    var dimOutside: Double = 0          // 0…1: oscurecer lo que queda fuera
+    var animation: LayerAnimation?      // x, y, scale en tiempo del episodio
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        shape = try c.decodeIfPresent(Shape.self, forKey: .shape) ?? .ellipse
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.42
+        w = try c.decodeIfPresent(Double.self, forKey: .w) ?? 0.5
+        h = try c.decodeIfPresent(Double.self, forKey: .h) ?? 0.7
+        feather = try c.decodeIfPresent(Double.self, forKey: .feather) ?? 24
+        invert = try c.decodeIfPresent(Bool.self, forKey: .invert) ?? false
+        dimOutside = try c.decodeIfPresent(Double.self, forKey: .dimOutside) ?? 0
+        animation = try c.decodeIfPresent(LayerAnimation.self, forKey: .animation)
+    }
+    /// Dónde está la máscara en `t`: centro y escala con los keyframes si los hay.
+    func placement(at t: Double) -> (x: Double, y: Double, scale: Double) {
+        (animation?.value(LayerAnimation.x, at: t) ?? x, animation?.value(LayerAnimation.y, at: t) ?? y, animation?.value(LayerAnimation.scale, at: t) ?? 1)
+    }
+}
+
 /// Cómo entra un clip desde lo que había antes.
 struct Transition: Codable, Equatable {
     enum Kind: String, Codable, CaseIterable {
@@ -1484,7 +1522,7 @@ extension Project {
     /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).
     var videoTunedInStudio: Bool {
         overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil || $0.grade?.isEmpty == false || $0.speed != 1 || $0.speedEnd != nil }
-            || !studioVideo.isDefault || grade?.isEmpty == false || lanes.contains { $0.grade?.isEmpty == false }
+            || !studioVideo.isDefault || grade?.isEmpty == false || lanes.contains { $0.grade?.isEmpty == false || $0.mask != nil }
     }
 
     /// When each sponsor appears (timeline time) — same rule as postPod web's exporter:

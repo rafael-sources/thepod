@@ -331,6 +331,7 @@ struct VideoInspector: View {
                 ColorPanel(grade: $session.project.grade, title: "Toda la pista (todas las cámaras y el b-roll)")
             } else if let li = session.project.lanes.firstIndex(where: { $0.id == colorScope }) {
                 ColorPanel(grade: $session.project.lanes[li].grade, title: "Cámara · \(session.project.laneName(colorScope))")
+                MaskPanel(session: session, laneIndex: li)
             }
             if cams.count > 1 {
                 Divider()
@@ -818,6 +819,76 @@ struct SpeedRow: View {
                     .foregroundStyle(speed == 1 ? Theme.secondary : Theme.accent).help("Volver a velocidad normal")
             }
             Text(note).font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+
+/// Máscara de una cámara: forma, posición, tamaño, suavizado; el color de la cámara va solo dentro, y fuera se
+/// puede oscurecer. Sigue el movimiento con keyframes de posición y tamaño puestos a mano.
+struct MaskPanel: View {
+    @ObservedObject var session: ProjectSession
+    let laneIndex: Int
+
+    private var m: ShapeMask { session.project.lanes[laneIndex].mask ?? ShapeMask() }
+    private func set(_ f: (inout ShapeMask) -> Void) { var v = m; f(&v); session.project.lanes[laneIndex].mask = v }
+    private var t: Double { session.playheadTimeline }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Toggle("Máscara", isOn: Binding(get: { session.project.lanes[laneIndex].mask != nil },
+                                                set: { on in session.project.lanes[laneIndex].mask = on ? ShapeMask() : nil })).font(.caption.bold()).toggleStyle(.checkbox)
+                Spacer()
+                if session.project.lanes[laneIndex].mask != nil {
+                    Picker("", selection: Binding(get: { m.shape }, set: { v in set { $0.shape = v } })) {
+                        ForEach(ShapeMask.Shape.allCases, id: \.self) { Text($0.name).tag($0) }
+                    }.labelsHidden().frame(width: 110)
+                }
+            }
+            if session.project.lanes[laneIndex].mask != nil {
+                keyRow("Centro X", LayerAnimation.x, value: m.x, range: 0...1) { v in set { $0.x = v } }
+                keyRow("Centro Y", LayerAnimation.y, value: m.y, range: 0...1) { v in set { $0.y = v } }
+                keyRow("Tamaño", LayerAnimation.scale, value: 1, range: 0.3...2.5, fixed: true) { _ in }
+                row("Ancho", value: Binding(get: { m.w }, set: { v in set { $0.w = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row("Alto", value: Binding(get: { m.h }, set: { v in set { $0.h = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row("Suavizado", value: Binding(get: { m.feather }, set: { v in set { $0.feather = v } }), range: 0...120, fmt: { String(format: "%.0f px", $0) })
+                row("Oscurecer fuera", value: Binding(get: { m.dimOutside }, set: { v in set { $0.dimOutside = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                Toggle("Invertir (el color va fuera)", isOn: Binding(get: { m.invert }, set: { v in set { $0.invert = v } })).font(.caption)
+                if let a = m.animation, !a.isEmpty {
+                    Button("Quitar el seguimiento (keyframes)") { set { $0.animation = nil } }.controlSize(.mini)
+                }
+                Text("El color de esta cámara se aplica dentro de la máscara. Para que siga a la persona, mueve el centro en distintos segundos: cada cambio deja un keyframe (rombo lleno) y entre dos se interpola.")
+                    .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Fila con rombo de keyframe: mover el control con la pista animada (o con ⌥) escribe un keyframe en este segundo.
+    private func keyRow(_ label: String, _ param: String, value: Double, range: ClosedRange<Double>, fixed: Bool = false, set staticSet: @escaping (Double) -> Void) -> some View {
+        let anim = m.animation ?? LayerAnimation()
+        let animated = anim.has(param)
+        let hasKey = (anim.tracks[param] ?? []).contains { abs($0.t - t) < 0.04 }
+        let current = anim.value(param, at: t) ?? value
+        return HStack(spacing: 6) {
+            Button {
+                var a = anim
+                if hasKey, let k = (a.tracks[param] ?? []).first(where: { abs($0.t - t) < 0.04 }) { a.remove(param, id: k.id) } else { a.write(param, t: t, v: current) }
+                set { $0.animation = a.isEmpty ? nil : a }
+            } label: { Image(systemName: hasKey ? "diamond.fill" : animated ? "diamond" : "diamond").foregroundStyle(hasKey || animated ? Theme.accent : Theme.secondary).font(.caption) }
+            .buttonStyle(.plain).help(hasKey ? "Quitar el keyframe de aquí" : "Poner un keyframe aquí")
+            Text(label).font(.caption).frame(width: 70, alignment: .leading)
+            Slider(value: Binding(get: { current }, set: { v in
+                if animated || fixed { var a = anim; a.write(param, t: t, v: v); set { $0.animation = a } } else { staticSet(v) }
+            }), in: range)
+            Text(String(format: "%.2f", current)).font(.caption.monospacedDigit()).frame(width: 44, alignment: .trailing)
+        }
+    }
+    private func row(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, fmt: @escaping (Double) -> String) -> some View {
+        HStack {
+            Text(label).font(.caption).frame(width: 94, alignment: .leading)
+            Slider(value: value, in: range)
+            Text(fmt(value.wrappedValue)).font(.caption.monospacedDigit()).frame(width: 44, alignment: .trailing)
         }
     }
 }
