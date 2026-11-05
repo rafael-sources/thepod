@@ -559,14 +559,14 @@ enum SelfTest {
                 }
                 try file.write(from: buf)
 
-                func export(_ eq: VoiceEQ) async throws -> URL {
+                func export(_ chainSettings: ChainSettings) async throws -> URL {
                     let asset = AVURLAsset(url: src)
                     let comp = AVMutableComposition()
                     let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
                     let st = try await asset.loadTracks(withMediaType: .audio).first!
                     try track.insertTimeRange(CMTimeRange(start: .zero, duration: try await asset.load(.duration)), of: st, at: .zero)
                     let p = AVMutableAudioMixInputParameters(track: track)
-                    let tap = ChainTap(laneId: 1, settings: ChainSettings.preset(eq))
+                    let tap = ChainTap(laneId: 1, settings: chainSettings, keep: [EditEngine.Span(start: 0, end: secs)], introDuration: 0)
                     p.audioTapProcessor = tap.makeProcessor()
                     let mix = AVMutableAudioMix(); mix.inputParameters = [p]
                     let out = dir.appendingPathComponent("out-\(UUID().uuidString).m4a")
@@ -578,27 +578,36 @@ enum SelfTest {
                     return out
                 }
                 /// Energía (dB) de una banda, con una DFT directa a esa frecuencia (Goertzel) sobre el segundo central.
-                func band(_ url: URL, hz: Double) throws -> Double {
+                func band(_ url: URL, hz: Double, third: Int = 1) throws -> Double {
                     let f = try AVAudioFile(forReading: url)
                     let b = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
                     try f.read(into: b)
                     let x = b.floatChannelData![0], N = Int(b.frameLength)
-                    let a = N / 3, len = N / 3
+                    let len = N / 3, a = third * len
                     let w = 2 * Double.pi * hz / f.processingFormat.sampleRate
                     var re = 0.0, im = 0.0
                     for i in 0..<len { let v = Double(x[a + i]); re += v * cos(w * Double(i)); im -= v * sin(w * Double(i)) }
                     let mag = sqrt(re * re + im * im) / Double(len) * 2
                     return 20 * log10(max(mag, 1e-9))
                 }
-                let flat = try await export(VoiceEQ())
+                let flat = try await export(ChainSettings())
                 var e = VoiceEQ(); e.high = -12; e.deess = true
-                let cut = try await export(e)
+                let cut = try await export(ChainSettings.preset(e))
                 let lo0 = try band(flat, hz: 300), hi0 = try band(flat, hz: 7000)
                 let lo1 = try band(cut, hz: 300), hi1 = try band(cut, hz: 7000)
                 print(String(format: "plano: 300 Hz %.1f dB · 7 kHz %.1f dB", lo0, hi0))
                 print(String(format: "agudos −12 + siseo: 300 Hz %.1f dB · 7 kHz %.1f dB", lo1, hi1))
-                let ok = abs(lo0 - lo1) < 2 && (hi0 - hi1) > 8 && lo0 > -20
-                print(ok ? "OK la cadena de voz procesa dentro del export" : "FAIL")
+                var ok = abs(lo0 - lo1) < 2 && (hi0 - hi1) > 8 && lo0 > -20
+                // Automatización: la banda de 7 kHz baja de 0 a −18 dB a lo largo de los 3 s
+                var auto = ChainSettings()
+                let hb = EQBand(kind: .peak, freq: 7000, gain: 0, q: 0.8)
+                auto.bands = [hb]
+                auto.automation[ChainSettings.bandGain(hb)] = [AutoPoint(t: 0, v: 0), AutoPoint(t: secs, v: -18)]
+                let swept = try await export(auto)
+                let first = try band(swept, hz: 7000, third: 0), last = try band(swept, hz: 7000, third: 2)
+                print(String(format: "automatización 0 → −18 dB: primer tercio %.1f dB · último tercio %.1f dB", first, last))
+                ok = ok && (first - last) > 6
+                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización)" : "FAIL")
                 try? FileManager.default.removeItem(at: dir)
                 exit(ok ? 0 : 1)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }

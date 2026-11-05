@@ -140,6 +140,9 @@ struct ChannelStrip: View {
                 Circle().fill(color).frame(width: 8, height: 8)
                 Text(session.project.laneName(lane.id)).font(.callout.bold()).lineLimit(1)
                 Spacer()
+                if chain.hasAutomation {
+                    Image(systemName: "a.circle.fill").foregroundStyle(Theme.accent).help("Tiene parámetros automatizados")
+                }
                 if lane.tunedInStudio {
                     Image(systemName: "waveform.badge.magnifyingglass").foregroundStyle(Theme.accent)
                         .help("Ajustado en el estudio: el nivel simple no sabe describir esta cadena")
@@ -275,6 +278,7 @@ struct InsertEditor: View {
     @ObservedObject var session: ProjectSession
     let ref: AudioStudioView.InsertRef
     @Environment(\.dismiss) private var dismiss
+    @State private var writing = false      // «Escribir»: mover un control deja un punto en el segundo actual
 
     private var index: Int? { session.project.lanes.firstIndex { $0.id == ref.laneId } }
     private var chain: Binding<ChainSettings> {
@@ -287,10 +291,17 @@ struct InsertEditor: View {
             HStack {
                 Text(title).font(.title3.bold())
                 Spacer()
+                Toggle(isOn: $writing) { Label("Escribir", systemImage: "record.circle") }
+                    .toggleStyle(.button).tint(.red)
+                    .help("Mientras está encendido, mover un control deja un punto en el segundo donde va el episodio (automatización)")
                 Button("Listo") { dismiss() }.keyboardShortcut(.defaultAction)
             }
+            if writing {
+                Text("Escribiendo en \(EditEngine.clock(session.playheadTimeline)): cada control que muevas queda como punto en ese segundo. Reproduce y ve moviendo.")
+                    .font(.caption).foregroundStyle(.red)
+            }
             switch ref.kind {
-            case .eq: EQEditor(chain: chain)
+            case .eq: EQEditor(chain: chain, writing: writing, playhead: { session.playheadTimeline })
             case .compressor: compressor
             case .deesser: deesser
             case .gate: gate
@@ -315,11 +326,11 @@ struct InsertEditor: View {
     private var compressor: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activo", isOn: chain.compressorOn)
-            param("Umbral", chain.threshold, -60...0, "%.0f dB")
-            param("Relación", chain.ratio, 1...20, "%.1f:1")
+            param("Umbral", chain.threshold, -60...0, "%.0f dB", auto: ChainSettings.compThreshold)
+            param("Relación", chain.ratio, 1...20, "%.1f:1", auto: ChainSettings.compRatio)
             param("Ataque", chain.attack, 0.001...0.1, "%.3f s")
             param("Salida", chain.release, 0.02...1.0, "%.2f s")
-            param("Compensación", chain.makeup, 0...18, "%.0f dB")
+            param("Compensación", chain.makeup, 0...18, "%.0f dB", auto: ChainSettings.compMakeup)
             Text("«Voz pareja» del nivel simple = umbral −20, 3:1, ataque 8 ms, salida 140 ms, +4 dB.").font(.caption2).foregroundStyle(Theme.secondary)
         }
         .disabled(false)
@@ -328,7 +339,7 @@ struct InsertEditor: View {
     private var deesser: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activo", isOn: chain.deesserOn)
-            param("Cantidad", chain.deesserAmount, 0...1, "%.2f")
+            param("Cantidad", chain.deesserAmount, 0...1, "%.2f", auto: ChainSettings.deesserAmount)
             Text("Baja solo lo que silba por encima de 5 kHz. «Menos siseo» del nivel simple = 0,50.").font(.caption2).foregroundStyle(Theme.secondary)
         }
     }
@@ -336,16 +347,36 @@ struct InsertEditor: View {
     private var gate: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activa", isOn: chain.gateOn)
-            param("Umbral", chain.gateThreshold, -80...(-20), "%.0f dB")
+            param("Umbral", chain.gateThreshold, -80...(-20), "%.0f dB", auto: ChainSettings.gateThreshold)
             Text("Por debajo del umbral el sonido baja el doble (expansión 1:2): respiraciones y ruido de fondo entre frases. Distinta de «bajar a quien no habla», que sigue en Limpiar sonido.").font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func param(_ name: String, _ v: Binding<Double>, _ range: ClosedRange<Double>, _ fmt: String) -> some View {
-        HStack {
+    private func param(_ name: String, _ v: Binding<Double>, _ range: ClosedRange<Double>, _ fmt: String, auto: String? = nil) -> some View {
+        let points = auto.flatMap { chain.wrappedValue.automation[$0] } ?? []
+        // Con «Escribir» encendido, mover el control deja un punto en el segundo actual en vez de cambiar la base
+        let bound: Binding<Double> = (writing && auto != nil)
+            ? Binding(get: { chain.wrappedValue.value(of: auto!, at: session.playheadTimeline) ?? v.wrappedValue },
+                      set: { nv in var c = chain.wrappedValue; c.writePoint(auto!, t: session.playheadTimeline, v: nv); chain.wrappedValue = c })
+            : v
+        return HStack {
             Text(name).frame(width: 110, alignment: .leading)
-            Slider(value: v, in: range)
-            Text(String(format: fmt, v.wrappedValue)).font(.callout.monospacedDigit()).frame(width: 74, alignment: .trailing)
+            Slider(value: bound, in: range)
+            Text(String(format: fmt, bound.wrappedValue)).font(.callout.monospacedDigit()).frame(width: 74, alignment: .trailing)
+            if let auto {
+                if points.isEmpty {
+                    Button { var c = chain.wrappedValue; c.writePoint(auto, t: session.playheadTimeline, v: v.wrappedValue); chain.wrappedValue = c } label: { Image(systemName: "a.circle") }
+                        .buttonStyle(.plain).foregroundStyle(Theme.secondary).help("Dejar un punto de automatización en el segundo actual")
+                } else {
+                    Menu {
+                        Button("Punto aquí (\(EditEngine.clock(session.playheadTimeline)))") { var c = chain.wrappedValue; c.writePoint(auto, t: session.playheadTimeline, v: bound.wrappedValue); chain.wrappedValue = c }
+                        Button("Quitar la automatización (\(points.count) puntos)") { var c = chain.wrappedValue; c.automation[auto] = nil; chain.wrappedValue = c }
+                    } label: {
+                        Label("\(points.count)", systemImage: "a.circle.fill").foregroundStyle(Theme.accent)
+                    }
+                    .menuStyle(.borderlessButton).fixedSize().help("Este parámetro sigue una curva: \(points.count) puntos")
+                }
+            }
         }
         .font(.callout)
     }
@@ -354,6 +385,18 @@ struct InsertEditor: View {
 /// Ecualizador paramétrico: hasta 8 bandas, cada una con tipo, frecuencia, ganancia y ancho.
 struct EQEditor: View {
     @Binding var chain: ChainSettings
+    var writing = false
+    var playhead: () -> Double = { 0 }
+
+    private func gainBinding(_ i: Int) -> Binding<Double> {
+        let b = chain.bands[i]
+        let key = ChainSettings.bandGain(b)
+        if writing {
+            return Binding(get: { chain.value(of: key, at: playhead()) ?? b.gain },
+                           set: { nv in chain.writePoint(key, t: playhead(), v: nv) })
+        }
+        return $chain.bands[i].gain
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -370,12 +413,22 @@ struct EQEditor: View {
                     Text(freqLabel(chain.bands[i].freq)).font(.caption.monospacedDigit()).frame(width: 56, alignment: .trailing)
                     if chain.bands[i].kind != .highpass && chain.bands[i].kind != .lowpass {
                         Text("Gan").foregroundStyle(Theme.secondary)
-                        Slider(value: $chain.bands[i].gain, in: -18...18).frame(width: 100)
-                        Text(String(format: "%+.1f", chain.bands[i].gain)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing)
+                        Slider(value: gainBinding(i), in: -18...18).frame(width: 100)
+                        Text(String(format: "%+.1f", gainBinding(i).wrappedValue)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing)
+                        if let pts = chain.automation[ChainSettings.bandGain(chain.bands[i])], !pts.isEmpty {
+                            Menu {
+                                Button("Quitar la automatización (\(pts.count) puntos)") { chain.automation[ChainSettings.bandGain(chain.bands[i])] = nil }
+                            } label: { Label("\(pts.count)", systemImage: "a.circle.fill").foregroundStyle(Theme.accent) }
+                            .menuStyle(.borderlessButton).fixedSize()
+                        }
                     }
                     Text("Q").foregroundStyle(Theme.secondary)
                     Slider(value: $chain.bands[i].q, in: 0.1...4).frame(width: 60)
-                    Button { chain.bands.remove(at: i) } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
+                    Button {
+                        let b = chain.bands[i]
+                        chain.automation[ChainSettings.bandGain(b)] = nil; chain.automation[ChainSettings.bandFreq(b)] = nil
+                        chain.bands.remove(at: i)
+                    } label: { Image(systemName: "minus.circle") }.buttonStyle(.plain).foregroundStyle(Theme.secondary)
                 }
                 .font(.callout)
             }

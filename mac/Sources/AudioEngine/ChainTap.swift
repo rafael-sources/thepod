@@ -11,7 +11,6 @@ final class ChainTap: @unchecked Sendable {
     let chain: VoiceChain
     let laneId: Int
     private var sampleTime: Double = 0
-    private var currentTap: MTAudioProcessingTap?
     private var maxFrames: UInt32 = 4096
 
     // Medidor
@@ -19,11 +18,24 @@ final class ChainTap: @unchecked Sendable {
     private var level: Float = -120
     private var stamp: CFTimeInterval = 0
 
-    init(laneId: Int, settings: ChainSettings) {
+    /// Cómo pasar del segundo del video (lo que ve el tap) al segundo del episodio (la automatización).
+    private let keep: [EditEngine.Span]
+    private let introDuration: Double
+
+    init(laneId: Int, settings: ChainSettings, keep: [EditEngine.Span] = [], introDuration: Double = 0) {
         self.laneId = laneId
+        self.keep = keep
+        self.introDuration = introDuration
         chain = VoiceChain(settings: settings)
         VoiceChainRegistry.shared.register(chain, lane: laneId)
     }
+
+    /// Segundo del episodio para un segundo del video final (nil si no hay mapa).
+    private func timelineTime(output: Double) -> Double? {
+        guard !keep.isEmpty else { return nil }
+        return EditEngine.toTimeline(max(0, output - introDuration), keep: keep)
+    }
+    private var sampleRate: Double = 48_000
 
     /// Nivel reciente en dB, o nil si hace más de `maxAge` s que no pasa audio.
     func recent(maxAge: Double = 0.3) -> Float? {
@@ -51,22 +63,26 @@ final class ChainTap: @unchecked Sendable {
         os_unfair_lock_unlock(&lock)
     }
 
-    // El Audio Unit de entrada pide audio: se lo damos de la pista
-    private static let pull: AURenderCallback = { refCon, flags, _, _, frames, ioData in
+    // El Audio Unit de entrada pide audio: le copiamos el bloque que ya pedimos a la pista en `process`
+    private var sourceList: UnsafeMutablePointer<AudioBufferList>?
+    private var sourceFrames: CMItemCount = 0
+    private static let pull: AURenderCallback = { refCon, _, _, _, frames, ioData in
         let me = Unmanaged<ChainTap>.fromOpaque(refCon).takeUnretainedValue()
-        guard let tap = me.currentTap, let ioData else { return noErr }
-        var got: CMItemCount = 0
-        var tapFlags = MTAudioProcessingTapFlags()
-        let st = MTAudioProcessingTapGetSourceAudio(tap, CMItemCount(frames), ioData, &tapFlags, nil, &got)
-        if st == noErr, got < CMItemCount(frames) {
-            // Fin de la pista: lo que falta va en silencio
-            for buf in UnsafeMutableAudioBufferListPointer(ioData) {
-                guard let d = buf.mData else { continue }
-                let bytes = Int(got) * MemoryLayout<Float>.size
-                if bytes < Int(buf.mDataByteSize) { memset(d + bytes, 0, Int(buf.mDataByteSize) - bytes) }
+        guard let ioData, let src = me.sourceList else { return noErr }
+        let dst = UnsafeMutableAudioBufferListPointer(ioData)
+        let from = UnsafeMutableAudioBufferListPointer(src)
+        for (i, buf) in dst.enumerated() {
+            guard let d = buf.mData else { continue }
+            let want = Int(buf.mDataByteSize)
+            if i < from.count, let s = from[i].mData {
+                let have = min(want, Int(me.sourceFrames) * MemoryLayout<Float>.size, Int(from[i].mDataByteSize))
+                memcpy(d, s, have)
+                if have < want { memset(d + have, 0, want - have) }
+            } else {
+                memset(d, 0, want)
             }
         }
-        return st
+        return noErr
     }
 
     /// El procesador para `AVMutableAudioMixInputParameters.audioTapProcessor`.
@@ -82,6 +98,7 @@ final class ChainTap: @unchecked Sendable {
                 let me = Unmanaged<ChainTap>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
                 me.maxFrames = UInt32(maxFrames)
                 me.sampleTime = 0
+                me.sampleRate = format.pointee.mSampleRate > 0 ? format.pointee.mSampleRate : 48_000
                 me.chain.prepare(format: format.pointee, maxFrames: UInt32(maxFrames))
                 me.chain.setInput(ChainTap.pull, refCon: MTAudioProcessingTapGetStorage(tap))
             },
@@ -90,14 +107,18 @@ final class ChainTap: @unchecked Sendable {
             },
             process: { tap, frames, _, bufferList, framesOut, flagsOut in
                 let me = Unmanaged<ChainTap>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
-                me.currentTap = tap
-                let st = me.chain.render(into: bufferList, frames: UInt32(frames), sampleTime: me.sampleTime)
-                me.currentTap = nil
+                // 1) El audio de la pista y en qué segundo del video va
+                var range = CMTimeRange.zero
+                guard MTAudioProcessingTapGetSourceAudio(tap, frames, bufferList, flagsOut, &range, framesOut) == noErr else { return }
+                let tl = range.start.isValid ? me.timelineTime(output: range.start.seconds) : nil
+                // 2) Por la cadena (el AU de entrada copia de este mismo bloque)
+                me.sourceList = bufferList
+                me.sourceFrames = framesOut.pointee
+                let st = me.chain.render(into: bufferList, frames: UInt32(frames), sampleTime: me.sampleTime, timelineTime: tl)
+                me.sourceList = nil
                 if st != noErr {
-                    // Si la cadena falla, pasa el audio tal cual: nunca dejar la pista muda
-                    _ = MTAudioProcessingTapGetSourceAudio(tap, frames, bufferList, flagsOut, nil, framesOut)
-                } else {
-                    framesOut.pointee = frames
+                    // Si la cadena falla, el audio ya está tal cual en el buffer: nunca se deja la pista muda
+                    _ = st
                 }
                 me.sampleTime += Double(frames)
                 me.measure(bufferList)

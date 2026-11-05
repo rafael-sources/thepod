@@ -27,6 +27,7 @@ final class VoiceChain: @unchecked Sendable {
     private var lock = os_unfair_lock()
     private var pending: ChainSettings?
     private(set) var settings: ChainSettings
+    private var automated = false
 
     private static let bandCount: UInt32 = UInt32(ChainSettings.maxBands)
     // Tipos de filtro de AUNBandEQ
@@ -70,6 +71,7 @@ final class VoiceChain: @unchecked Sendable {
         dsEnv = Array(repeating: 0, count: channels)
         prepared = true
         applyNow(settings)
+        automated = settings.hasAutomation
     }
 
     /// Quién alimenta el primer eslabón (el tap llama con el audio de la pista).
@@ -153,10 +155,34 @@ final class VoiceChain: @unchecked Sendable {
 
     // MARK: Procesar un bloque (hilo de audio)
 
-    func render(into list: UnsafeMutablePointer<AudioBufferList>, frames: UInt32, sampleTime: Double) -> OSStatus {
+    func render(into list: UnsafeMutablePointer<AudioBufferList>, frames: UInt32, sampleTime: Double, timelineTime: Double? = nil) -> OSStatus {
         guard prepared, let lim = limUnit else { return noErr }
         if os_unfair_lock_trylock(&lock) {
-            if let p = pending { pending = nil; os_unfair_lock_unlock(&lock); applyNow(p) } else { os_unfair_lock_unlock(&lock) }
+            if let p = pending { pending = nil; os_unfair_lock_unlock(&lock); applyNow(p); automated = p.hasAutomation } else { os_unfair_lock_unlock(&lock) }
+        }
+        // Automatización: los parámetros que tienen puntos siguen su curva en este segundo del episodio
+        if automated, let t = timelineTime {
+            let c = settings
+            if let eqU = eqUnit, let comp = compUnit {
+                for (param, _) in c.automation {
+                    guard let v = c.value(of: param, at: t) else { continue }
+                    switch param {
+                    case ChainSettings.compThreshold: AudioUnitSetParameter(comp, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, Float(v), 0)
+                    case ChainSettings.compRatio: AudioUnitSetParameter(comp, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, Float(max(0.5, min(40, 18 / max(1, v)))), 0)
+                    case ChainSettings.compMakeup: AudioUnitSetParameter(comp, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, Float(v), 0)
+                    case ChainSettings.gateThreshold: AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionThreshold, kAudioUnitScope_Global, 0, Float(v), 0)
+                    case ChainSettings.deesserAmount:
+                        let a = Float(max(0, min(1, v))); dsFloor = 1 - 0.75 * a; dsThr = 0.08 - 0.06 * a
+                    default:
+                        let parts = param.split(separator: ".")
+                        guard parts.count == 3, let id = UUID(uuidString: String(parts[1])),
+                              let i = c.bands.prefix(ChainSettings.maxBands).firstIndex(where: { $0.id == id }) else { continue }
+                        let b = UInt32(i)
+                        if parts[2] == "gain" { AudioUnitSetParameter(eqU, kAUNBandEQParam_Gain + b, kAudioUnitScope_Global, 0, Float(max(-24, min(24, v))), 0) }
+                        else if parts[2] == "freq" { AudioUnitSetParameter(eqU, kAUNBandEQParam_Frequency + b, kAudioUnitScope_Global, 0, Float(max(20, min(20_000, v))), 0) }
+                    }
+                }
+            }
         }
         var ts = AudioTimeStamp()
         ts.mSampleTime = sampleTime

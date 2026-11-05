@@ -258,10 +258,19 @@ struct EQBand: Codable, Equatable, Identifiable, Hashable {
     }
 }
 
+/// Un punto de automatización: en el segundo `t` del episodio, el parámetro vale `v`.
+struct AutoPoint: Codable, Equatable, Hashable, Identifiable {
+    var id = UUID()
+    var t: Double
+    var v: Double
+}
+
 /// La cadena de voz completa de una persona (el estudio). El nivel simple (`VoiceEQ`) es un preset de esto.
 struct ChainSettings: Codable, Equatable {
     static let maxBands = 8
     var bands: [EQBand] = []
+    /// Automatización por parámetro (`comp.threshold`, `eq.<id de banda>.gain`, …): puntos en tiempo del episodio.
+    var automation: [String: [AutoPoint]] = [:]
     var compressorOn = false
     var threshold: Double = -20          // dB
     var ratio: Double = 3               // :1 (se traduce a «head room» del AU)
@@ -289,6 +298,73 @@ struct ChainSettings: Codable, Equatable {
         limiterOn = try c.decodeIfPresent(Bool.self, forKey: .limiterOn) ?? true
         gateOn = try c.decodeIfPresent(Bool.self, forKey: .gateOn) ?? false
         gateThreshold = try c.decodeIfPresent(Double.self, forKey: .gateThreshold) ?? -45
+        automation = try c.decodeIfPresent([String: [AutoPoint]].self, forKey: .automation) ?? [:]
+    }
+
+    // Parámetros automatizables (id → cómo leerlo y escribirlo)
+    static let compThreshold = "comp.threshold", compRatio = "comp.ratio", compMakeup = "comp.makeup"
+    static let deesserAmount = "deesser.amount", gateThreshold = "gate.threshold"
+    static func bandGain(_ b: EQBand) -> String { "eq.\(b.id.uuidString).gain" }
+    static func bandFreq(_ b: EQBand) -> String { "eq.\(b.id.uuidString).freq" }
+
+    /// Valor actual (sin automatización) de un parámetro.
+    func value(of param: String) -> Double? {
+        switch param {
+        case Self.compThreshold: return threshold
+        case Self.compRatio: return ratio
+        case Self.compMakeup: return makeup
+        case Self.deesserAmount: return deesserAmount
+        case Self.gateThreshold: return gateThreshold
+        default:
+            let parts = param.split(separator: ".")
+            guard parts.count == 3, parts[0] == "eq", let id = UUID(uuidString: String(parts[1])), let b = bands.first(where: { $0.id == id }) else { return nil }
+            return parts[2] == "gain" ? b.gain : (parts[2] == "freq" ? b.freq : nil)
+        }
+    }
+
+    mutating func set(_ param: String, _ v: Double) {
+        switch param {
+        case Self.compThreshold: threshold = v
+        case Self.compRatio: ratio = v
+        case Self.compMakeup: makeup = v
+        case Self.deesserAmount: deesserAmount = v
+        case Self.gateThreshold: gateThreshold = v
+        default:
+            let parts = param.split(separator: ".")
+            guard parts.count == 3, parts[0] == "eq", let id = UUID(uuidString: String(parts[1])), let i = bands.firstIndex(where: { $0.id == id }) else { return }
+            if parts[2] == "gain" { bands[i].gain = v } else if parts[2] == "freq" { bands[i].freq = v }
+        }
+    }
+
+    /// Valor de un parámetro en el segundo `t` del episodio, siguiendo su automatización (lineal entre puntos).
+    func value(of param: String, at t: Double) -> Double? {
+        guard let pts = automation[param], let first = pts.first else { return value(of: param) }
+        let sorted = pts.sorted { $0.t < $1.t }
+        if t <= first.t { return sorted[0].v }
+        if let last = sorted.last, t >= last.t { return last.v }
+        for i in 0..<(sorted.count - 1) where t >= sorted[i].t && t <= sorted[i + 1].t {
+            let a = sorted[i], b = sorted[i + 1]
+            let u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0
+            return a.v + (b.v - a.v) * u
+        }
+        return value(of: param)
+    }
+
+    /// La cadena con todos los parámetros automatizados puestos en su valor de ese segundo.
+    func resolved(at t: Double) -> ChainSettings {
+        var c = self
+        for (param, _) in automation { if let v = value(of: param, at: t) { c.set(param, v) } }
+        c.automation = [:]
+        return c
+    }
+
+    var hasAutomation: Bool { automation.values.contains { !$0.isEmpty } }
+
+    /// Escribe un punto (o mueve el que haya a menos de 0,25 s) y deja el valor base también ahí.
+    mutating func writePoint(_ param: String, t: Double, v: Double) {
+        var pts = automation[param] ?? []
+        if let i = pts.firstIndex(where: { abs($0.t - t) < 0.25 }) { pts[i].v = v } else { pts.append(AutoPoint(t: t, v: v)) }
+        automation[param] = pts.sorted { $0.t < $1.t }
     }
 
     /// Lo que describe el nivel simple, traducido a la cadena.
@@ -330,7 +406,7 @@ struct ChainSettings: Codable, Equatable {
             guard abs(deesserAmount - 0.5) < 0.01 else { return nil }
             e.deess = true
         }
-        guard limiterOn, !gateOn else { return nil }
+        guard limiterOn, !gateOn, !hasAutomation else { return nil }
         return e
     }
 }
