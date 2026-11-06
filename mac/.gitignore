@@ -4,3 +4,4 @@ build.log
 Vendor/
 build.noindex/
 l10n/missing.json
+__pycache__/
