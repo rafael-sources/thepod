@@ -48,13 +48,13 @@ def _hex_to_ass_color(hex_color):
 
 
 def _caption_words_in_output(slug, burn_captions, clips, keep_ranges):
-    """Palabras de los subtítulos en el tiempo del video exportado.
+    """Subtitle words in the time of the exported video.
 
-    Los subtítulos se guardan en el tiempo de la grabación. El video que sale es otra cosa:
-    el clip puede empezar más adentro del archivo, hay cortes (silencios, transcript, saltos)
-    y, al exportar un momento, empieza en ese momento. Cada palabra se lleva
-    grabación → timeline (por los clips que usan ese archivo) → salida (sumando solo los tramos
-    que quedan). Las palabras que caen en un corte no salen. Devuelve None si no hay palabras.
+    Subtitles are stored in recording time. The output video is something else:
+    the clip may start further into the file, there are cuts (silences, transcript, jumps)
+    and, when exporting a moment, it starts at that moment. Each word is mapped
+    recording → timeline (via the clips that use that file) → output (adding only the stretches
+    that remain). Words that fall inside a cut are dropped. Returns None if there are no words.
     """
     if not burn_captions:
         return None
@@ -117,7 +117,7 @@ def _caption_words_in_output(slug, burn_captions, clips, keep_ranges):
 
 
 def _caption_lines(words, max_chars=42, max_words=8, gap=0.7):
-    """Agrupa palabras en renglones de subtítulo (por largo, puntuación o pausa)."""
+    """Groups words into subtitle lines (by length, punctuation or pause)."""
     lines, cur = [], []
     for w in words:
         if cur and (w["s"] - cur[-1]["e"] > gap
@@ -188,14 +188,14 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
     st = style or {}
     _ff = drawtext_fontfile()
     font_file = f":fontfile='{_ff}'" if _ff else ""
-    # En vertical el ancho manda: el renglón tiene que entrar en la pantalla del teléfono.
+    # In vertical, width rules: the line has to fit on the phone screen.
     font_size = max(30, int(min(H * 0.08, W * 0.075)))
     sz = st.get("font_size", "medium")
     if sz == "small":
         font_size = max(24, int(min(H * 0.06, W * 0.06)))
     elif sz == "large":
         font_size = max(36, int(min(H * 0.10, W * 0.09)))
-    # Ancho real de cada palabra con la fuente que se usa (si no hay Pillow, una estimación holgada).
+    # Actual width of each word with the font in use (without Pillow, a generous estimate).
     try:
         from PIL import ImageFont as _IF
         _pil_font = _IF.truetype(_ff, font_size) if _ff else None
@@ -247,7 +247,7 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
     for gi, group in enumerate(groups):
         window_start = group[0]["s"] - seek_offset
         window_end = group[-1]["e"] - seek_offset
-        # Si el siguiente renglón empieza enseguida, este se queda hasta entonces (sin parpadeo).
+        # If the next line starts right away, this one stays until then (no flicker).
         if gi + 1 < len(groups):
             nxt = groups[gi + 1][0]["s"] - seek_offset
             if 0 <= nxt - window_end < 0.6:
@@ -280,8 +280,8 @@ def _build_karaoke_drawtext_chain(slug, burn_captions, style, W, H, video_label,
             ws = w["s"] - seek_offset
             we = w["e"] - seek_offset
             escaped = _escape_drawtext(w["w"])
-            # Dos capas: la palabra en blanco mientras se ve el renglón, y encima en color
-            # solo mientras se dice (fontcolor_expr no evalúa fórmulas: no pintaba nada).
+            # Two layers: the word in white while the line is visible, and on top in color
+            # only while it is spoken (fontcolor_expr does not evaluate formulas: it drew nothing).
             common = (f"text='{escaped}'{font_file}:fontsize={font_size}"
                       f":borderw={max(2, font_size // 18)}:bordercolor=black"
                       f":x={cursor_x}:y={y_expr}+{int(font_size * 0.8)}-ascent")
@@ -1725,21 +1725,21 @@ def _apply_topic_lowerthirds(parts, current_label, segments, total_duration, W, 
 
 
 _CINTILLO_COLORS = {
-    "sponsor": "0xE8A020",   # dorado
-    "banner":  "0xC03428",   # rojo noticiero (podcast)
-    "segment": "0x1D4E89",   # azul
+    "sponsor": "0xE8A020",   # gold
+    "banner":  "0xC03428",   # newscast red (podcast)
+    "segment": "0x1D4E89",   # blue
 }
 
 
 def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
                               heading_font=None):
-    """Cintillos tipo noticiero (mismo diseño que prodPod web y la app de
-    Mac): logo a la izquierda, barra de color con el título en MAYÚSCULAS y
-    barra blanca con el texto, abajo a la izquierda.
+    """News-style lower thirds (same design as prodPod web and the Mac
+    app): logo on the left, color bar with the title in UPPERCASE and
+    white bar with the text, bottom left.
 
-    Solo se dibujan sponsor / banner / segment. Los 'cue' y 'action' son
-    avisos PRIVADOS del director durante la sesión: nunca van al video
-    final (comment/countdown/graphic tampoco — eran elementos del vivo)."""
+    Only sponsor / banner / segment are drawn. 'cue' and 'action' are
+    PRIVATE director notices during the session: they never go into the final
+    video (nor do comment/countdown/graphic — those were live elements)."""
     if not W or not H:
         return current_label
 
@@ -1759,15 +1759,15 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
     font_part = _font_part_for(heading_font, fallback)
     uid = 0
 
-    # Geometría del cintillo (relativa a la altura del video)
-    ts = max(18, int(H * 0.030))       # tamaño del título
-    bs = max(14, int(H * 0.023))       # tamaño del texto
-    pad = max(8, int(H * 0.011))       # padding de las cajas (boxborderw)
+    # Lower-third geometry (relative to the video height)
+    ts = max(18, int(H * 0.030))       # title size
+    bs = max(14, int(H * 0.023))       # text size
+    pad = max(8, int(H * 0.011))       # box padding (boxborderw)
     x0 = int(W * 0.045)
     y_base = int(H * 0.80)
-    logo_box = ts + bs + 4 * pad + 2   # cuadrado del logo = alto de ambas barras
+    logo_box = ts + bs + 4 * pad + 2   # logo square = height of both bars
     logo_inner = logo_box - 2 * max(4, pad // 2)
-    drawn_spans = []                   # [(t0, t1)] — para apilar los simultáneos
+    drawn_spans = []                   # [(t0, t1)] — to stack simultaneous ones
 
     for ev in rows:
         etype = (ev["event_type"] or "").strip().lower()
@@ -1776,8 +1776,8 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
 
         t0 = float(ev["recording_offset_seconds"])
 
-        # Duración: duration_seconds > 0 manda; 0 = hasta removed_at (si nunca
-        # lo quitaron, hasta el final); sin nada, removed_at o 8 s (legacy).
+        # Duration: duration_seconds > 0 wins; 0 = until removed_at (if never
+        # removed, until the end); with neither, removed_at or 8 s (legacy).
         raw_dur = ev["duration_seconds"]
         try:
             raw_dur = float(raw_dur) if raw_dur is not None else None
@@ -1832,14 +1832,14 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
         enable = f"between(t,{t0:.3f},{t1:.3f})"
         color = _CINTILLO_COLORS.get(etype, "0xC03428")
 
-        # Cintillos que coinciden en el tiempo se apilan hacia arriba (igual
-        # que la capa del vivo), en vez de dibujarse uno encima del otro.
+        # Lower thirds that overlap in time stack upward (same
+        # as the live layer), instead of being drawn on top of each other.
         depth = sum(1 for (a, b) in drawn_spans if a < t1 and t0 < b)
         drawn_spans.append((t0, t1))
         y_title = y_base - depth * (logo_box + 10)
         y_text = y_title + ts + 2 * pad + 2
 
-        # Logo (si el evento trae file_path y el archivo existe en el proyecto)
+        # Logo (if the event has a file_path and the file exists in the project)
         logo_path = None
         if ev["file_path"]:
             cand = (PROJECTS_DIR / slug / ev["file_path"]).resolve()
@@ -1851,7 +1851,7 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
         x_text = x0 + (logo_box + 6 if logo_path else 0)
 
         if logo_path:
-            # Caja blanca detrás del logo
+            # White box behind the logo
             uid += 1
             box_lbl = f"dov{uid}"
             parts.append(
@@ -1859,7 +1859,7 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
                 f":color=white@0.96:t=fill:enable='{enable}'[{box_lbl}]"
             )
             current_label = box_lbl
-            # El logo entra al grafo con el filtro movie (no requiere otro -i)
+            # The logo enters the graph via the movie filter (no extra -i needed)
             uid += 1
             src_lbl = f"dovlogo{uid}"
             out_lbl = f"dov{uid}"
@@ -1875,7 +1875,7 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
             )
             current_label = out_lbl
 
-        # Barra de color con el título en MAYÚSCULAS (box=1 se ajusta al texto)
+        # Color bar with the title in UPPERCASE (box=1 fits the text)
         uid += 1
         ti_lbl = f"dov{uid}"
         parts.append(
@@ -1886,7 +1886,7 @@ def _apply_director_overlays(parts, current_label, slug, total_duration, W, H,
         )
         current_label = ti_lbl
 
-        # Barra blanca con el texto
+        # White bar with the text
         if text:
             uid += 1
             tx_lbl = f"dov{uid}"
@@ -2118,8 +2118,8 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
                     clipped.append((cs, ce))
             keep_ranges = clipped if clipped else [(rs, re_)]
 
-    # Subtítulos en el tiempo del video que sale: se calcula AQUÍ, con el timeline original
-    # (más abajo el rango se renumera desde 0 y ya no coincide con los clips).
+    # Subtitles in output-video time: computed HERE, with the original timeline
+    # (further down the range is renumbered from 0 and no longer matches the clips).
     try:
         caption_words_out = _caption_words_in_output(slug, burn_captions, clips, keep_ranges)
     except Exception:
@@ -3039,7 +3039,7 @@ def build_ffmpeg_command(slug: str, preset_id: str, output_path: Path,
             )
             out_words = caption_words_out
             if out_words is not None:
-                # Tiempos ya llevados al video que sale (cortes, rango, clips): nada de corrimientos.
+                # Times already mapped to the output video (cuts, range, clips): no shifting at all.
                 srt_path = None
                 if out_words:
                     import tempfile as _tf
@@ -3154,9 +3154,9 @@ def _fmt_timestamp(seconds: float) -> str:
 
 
 def _youtube_chapters(rows, total: float | None, offset: float = 0.0) -> list[tuple[float, str]]:
-    """Capítulos con las reglas de YouTube para que los muestre (igual que la app de Mac): el primero en
-    0:00, al menos 3 y cada uno de 10 s o más. Los que caen a menos de 10 s del anterior o del final se
-    saltan; si no llegan a 3, no hay capítulos. `offset`: inicio del trozo exportado (si es un rango)."""
+    """Chapters following YouTube's rules so it shows them (same as the Mac app): the first at
+    0:00, at least 3 and each 10 s or longer. Those less than 10 s from the previous one or from the end are
+    skipped; if fewer than 3 remain, there are no chapters. `offset`: start of the exported piece (if it is a range)."""
     raw = []
     for t, label in rows:
         label = (label or "").strip()
@@ -3228,7 +3228,7 @@ def _write_notes_file(slug: str, job_id: int, preset_id: str, exports_dir: Path,
         lines.append(description)
         lines.append("")
 
-    # Sin capítulos válidos para YouTube no se escribe la sección: así lo que se pega queda limpio
+    # Without valid YouTube chapters the section is not written: that way what gets pasted stays clean
     chapters = _youtube_chapters([(r["timeline_seconds"], r["label"]) for r in chap_rows], total, offset)
     if chapters:
         lines.append("Capítulos")

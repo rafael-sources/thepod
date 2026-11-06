@@ -1,160 +1,160 @@
 # postPod
 
-Editor no-destructivo de video y audio para podcast y videocast. Parte del ecosistema **thePod** (prePod → prodPod → **postPod**).
+Non-destructive video and audio editor for podcasts and videocasts. Part of the **thePod** ecosystem (prePod → prodPod → **postPod**).
 
-## Qué hace
+## What it does
 
-postPod recibe las grabaciones de una sesión en vivo (pistas individuales por participante, efectos de sonido, capítulos, overlays del director) y permite editarlas en un timeline multi-pista sin modificar los archivos originales:
+postPod receives the recordings of a live session (individual tracks per participant, sound effects, chapters, director overlays) and lets you edit them on a multi-track timeline without modifying the original files:
 
-- **Timeline multi-pista** con trim, reorder, volumen per-clip y asignación de track
-- **Momentos y operaciones** — marcadores con efectos: cortes, zoom, color, text overlays estilo cómic, switch de cámara, transiciones
-- **Audio lane** — pista paralela para música y efectos de sonido
-- **Transcripción automática** con Whisper (timestamps por palabra)
-- **Editor de transcripción** — selección visual de palabras, eliminación de muletillas, edición inline
-- **Subtítulos estilizados** — personalización de fuente, color, tamaño; karaoke word-by-word para vertical
-- **Detección de silencios** — basada en transcript (gaps entre palabras) o FFmpeg silencedetect
-- **Composición multi-cámara** — 5 layouts: lado a lado, grid 2×2, spotlight (speaker activo), PiP, solo
-- **Banners CNN-style** — participantes, sponsors, temas, overlays del director
-- **Speech enhancement** — highpass + denoise + EQ + compresor + loudnorm
-- **10 presets de export** — YouTube (1080p/4K, 30/60fps), TikTok vertical, Instagram cuadrado, WhatsApp, Podcast MP3/M4A
-- **Análisis con IA** — genera show notes y sugiere clips exportables
+- **Multi-track timeline** with trim, reorder, per-clip volume and track assignment
+- **Moments and operations** — markers with effects: cuts, zoom, color, comic-style text overlays, camera switch, transitions
+- **Audio lane** — parallel track for music and sound effects
+- **Automatic transcription** with Whisper (per-word timestamps)
+- **Transcript editor** — visual word selection, filler-word removal, inline editing
+- **Styled subtitles** — font, color and size customization; word-by-word karaoke for vertical
+- **Silence detection** — transcript-based (gaps between words) or FFmpeg silencedetect
+- **Multi-camera composition** — 5 layouts: side by side, 2×2 grid, spotlight (active speaker), PiP, solo
+- **CNN-style banners** — participants, sponsors, topics, director overlays
+- **Speech enhancement** — highpass + denoise + EQ + compressor + loudnorm
+- **10 export presets** — YouTube (1080p/4K, 30/60fps), TikTok vertical, Instagram square, WhatsApp, Podcast MP3/M4A
+- **AI analysis** — generates show notes and suggests exportable clips
 
-## Layouts de composición
+## Composition layouts
 
-| Layout | Descripción | Participantes |
+| Layout | Description | Participants |
 |--------|-------------|---------------|
-| Lado a lado | `hstack` de las pistas, misma altura | 2 |
-| Grid | Cuadrícula 2×2, panel impar centrado | 3–4 |
-| Spotlight | El speaker activo (detectado por energía RMS) ocupa el área principal | 2+ |
-| PiP | Pista secundaria como picture-in-picture con overlay | 2 |
-| Solo | Una sola pista a pantalla completa | 1 |
+| Side by side | `hstack` of the tracks, same height | 2 |
+| Grid | 2×2 grid, odd panel centered | 3–4 |
+| Spotlight | The active speaker (detected by RMS energy) takes the main area | 2+ |
+| PiP | Secondary track as picture-in-picture with overlay | 2 |
+| Solo | A single track full screen | 1 |
 
-Para exports verticales (TikTok/Reels) existe además el modo **center spotlight**: el speaker activo centrado en 9:16 con subtítulos karaoke word-by-word.
+For vertical exports (TikTok/Reels) there is also the **center spotlight** mode: the active speaker centered in 9:16 with word-by-word karaoke subtitles.
 
-## Operaciones sobre momentos
+## Operations on moments
 
-Cada **momento** (marcador en el timeline) puede tener operaciones que se aplican en el export:
+Each **moment** (marker on the timeline) can have operations that are applied on export:
 
-`color_effect` (grayscale/sepia/invert) · `subtitle` · `text_overlay` (stickers cómic con fuente, rotación y animación) · `remove_silences` · `jump_to_moment` · `switch_track` (cambio de cámara) · `vertical_split` · `audio_mix` / `audio_replace` (SFX) · `zoom_in` / `zoom_out` · `cut_before` / `cut_after` · `insert_clip` · `switch_video` · `to_vertical`
+`color_effect` (grayscale/sepia/invert) · `subtitle` · `text_overlay` (comic stickers with font, rotation and animation) · `remove_silences` · `jump_to_moment` · `switch_track` (camera switch) · `vertical_split` · `audio_mix` / `audio_replace` (SFX) · `zoom_in` / `zoom_out` · `cut_before` / `cut_after` · `insert_clip` · `switch_video` · `to_vertical`
 
-## Presets de export
+## Export presets
 
-| ID | Salida |
+| ID | Output |
 |----|--------|
 | `yt_1080p_30` / `yt_1080p_60` | 1920×1080 mp4 h264, 30/60 fps |
 | `yt_4k_30` / `yt_4k_60` | 3840×2160 mp4 h264, 30/60 fps |
 | `std_hd_24` | 1280×720 mp4, 24 fps |
 | `tiktok_v` | 1080×1920 vertical (Reels/TikTok) |
-| `instagram_sq` | 1080×1080 cuadrado |
-| `whatsapp` | 1280×720 comprimido para compartir |
-| `podcast_mp3` / `podcast_m4a` | Solo audio (MP3 / AAC) |
+| `instagram_sq` | 1080×1080 square |
+| `whatsapp` | 1280×720 compressed for sharing |
+| `podcast_mp3` / `podcast_m4a` | Audio only (MP3 / AAC) |
 
 ## Stack
 
-| Capa | Tecnología |
+| Layer | Technology |
 |------|------------|
 | Backend | Python 3.9+, Flask 3.x, Gunicorn |
-| Frontend | Vue 3.5 (CDN, sin bundler), SweetAlert2 |
-| Base de datos | SQLite (1 DB por proyecto, WAL mode) |
-| Procesamiento | FFmpeg (composición, filtros, encoding) |
-| Transcripción | faster-whisper (modelo `Systran/faster-whisper-medium`) |
-| IA | Claude Sonnet vía proxy OpenAI-compatible |
+| Frontend | Vue 3.5 (CDN, no bundler), SweetAlert2 |
+| Database | SQLite (1 DB per project, WAL mode) |
+| Processing | FFmpeg (composition, filters, encoding) |
+| Transcription | faster-whisper (model `Systran/faster-whisper-medium`) |
+| AI | Claude Sonnet via OpenAI-compatible proxy |
 
-## Requisitos
+## Requirements
 
 - Python 3.9+
-- FFmpeg con libx264, aac, libmp3lame
-- ~2 GB RAM mínimo (más para transcripción con Whisper)
+- FFmpeg with libx264, aac, libmp3lame
+- ~2 GB RAM minimum (more for Whisper transcription)
 
 ```bash
 pip install -r requirements.txt
-# Opcional para transcripción:
+# Optional, for transcription:
 pip install faster-whisper
-# Opcional para análisis IA:
+# Optional, for AI analysis:
 pip install openai
 ```
 
-## Inicio rápido
+## Quick start
 
 ```bash
-# Desarrollo
+# Development
 flask --app 'app:create_app()' run --port 5000 --debug
 
-# Producción
+# Production
 gunicorn --workers 1 --threads 8 --bind 0.0.0.0:5000 --timeout 600 'app:create_app()'
 ```
 
-La primera vez, se crea `~/.podpod/config.json` con claves aleatorias y `~/.podpod/users.db` con usuarios por defecto.
+On first run, `~/.podpod/config.json` is created with random keys and `~/.podpod/users.db` with default users.
 
-Abrir `http://localhost:5000` en el navegador.
+Open `http://localhost:5000` in the browser.
 
-## Atajos de teclado
+## Keyboard shortcuts
 
-| Tecla | Acción |
+| Key | Action |
 |-------|--------|
 | `Space` | Play/Pause |
-| `M` | Crear momento en el tiempo actual |
+| `M` | Create moment at the current time |
 | `←` / `→` | Seek ±5s |
-| `Shift+←/→` | Seek por frame (±1/30s) |
-| `+` / `-` | Zoom del timeline |
-| `Z` | Zoom a la selección |
-| `Esc` | Limpiar selección |
-| `Del` | Borrar palabras seleccionadas (TranscriptEditor) |
+| `Shift+←/→` | Seek by frame (±1/30s) |
+| `+` / `-` | Timeline zoom |
+| `Z` | Zoom to selection |
+| `Esc` | Clear selection |
+| `Del` | Delete selected words (TranscriptEditor) |
 
 ## API
 
-85 endpoints REST en total:
+85 REST endpoints in total:
 
-| Grupo | Cantidad | Auth |
+| Group | Count | Auth |
 |-------|----------|------|
-| Sesión de usuario (proyectos, timeline, momentos, captions, exports, IA) | 62 | Cookie firmada (`@require_auth`) |
-| Server-to-server (webhooks prePod/prodPod) | 14 | Header `X-PodPod-Secret` |
-| Públicos (login, media con HTTP Range, health) | 9 | — |
+| User session (projects, timeline, moments, captions, exports, AI) | 62 | Signed cookie (`@require_auth`) |
+| Server-to-server (prePod/prodPod webhooks) | 14 | `X-PodPod-Secret` header |
+| Public (login, media with HTTP Range, health) | 9 | — |
 
-El detalle completo de cada endpoint (método, ruta, payload) está en [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) §5.
+The full detail of each endpoint (method, route, payload) is in [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) §5.
 
-## Ecosistema thePod
+## thePod ecosystem
 
 ```
-prePod (puerto 5001)          prodPod (puerto 5002)          postPod (puerto 5000)
+prePod (port 5001)            prodPod (port 5002)            postPod (port 5000)
 ─────────────────             ──────────────────             ──────────────────
-Pre-producción:               Producción en vivo:            Post-producción:
-  Branding                      Salas WebRTC (LiveKit)         Timeline multi-pista
-  Kanban de episodios           Grabación por pista            Momentos y efectos
-  Scripts                       Soundboard                     Transcripción
-  Invitados y sponsors          Chat                           Subtítulos y karaoke
-  Landing pages                 Director de overlays           Composición multi-cámara
-                                                               Export FFmpeg
+Pre-production:               Live production:               Post-production:
+  Branding                      WebRTC rooms (LiveKit)         Multi-track timeline
+  Episode Kanban                Per-track recording            Moments and effects
+  Scripts                       Soundboard                     Transcription
+  Guests and sponsors           Chat                           Subtitles and karaoke
+  Landing pages                 Overlay director               Multi-camera composition
+                                                               FFmpeg export
         │                              │
         └──── webhooks ────────────────┘──── webhooks ──────────────┘
               (server-to-server, X-PodPod-Secret)
 ```
 
-Las tres apps comparten autenticación (`~/.podpod/users.db`) y configuración (`~/.podpod/config.json`).
+The three apps share authentication (`~/.podpod/users.db`) and configuration (`~/.podpod/config.json`).
 
-## Estructura del proyecto
+## Project structure
 
 ```
 postpod/
-├── app.py                 # Flask factory, media serving con HTTP Range
-├── auth.py                # Sesiones firmadas, @require_auth
-├── config.py              # Paths, presets de export, fuentes
-├── db.py                  # Schema SQLite (13 tablas), migraciones idempotentes
-├── exporter.py            # Pipeline FFmpeg (3100+ líneas): composición, layouts,
+├── app.py                 # Flask factory, media serving with HTTP Range
+├── auth.py                # Signed sessions, @require_auth
+├── config.py              # Paths, export presets, fonts
+├── db.py                  # SQLite schema (13 tables), idempotent migrations
+├── exporter.py            # FFmpeg pipeline (3100+ lines): composition, layouts,
 │                          #   karaoke, banners, speech enhancement, threading
 ├── files.py               # Upload/download, thumbnails, waveforms
-├── timeline_api.py        # CRUD timeline, momentos, operaciones, silencios
+├── timeline_api.py        # Timeline CRUD, moments, operations, silences
 ├── captions.py            # Whisper, SRT, words.json, subtitle styles
-├── integrations.py        # Webhooks server-to-server (prePod/prodPod)
-├── ai_api.py / ai_engine.py  # Análisis con Claude
-├── projects.py            # CRUD proyectos, participantes, sponsors
+├── integrations.py        # Server-to-server webhooks (prePod/prodPod)
+├── ai_api.py / ai_engine.py  # Analysis with Claude
+├── projects.py            # Projects, participants, sponsors CRUD
 ├── static/
-│   ├── js/app.js          # SPA Vue 3 (19 componentes, ~5100 líneas)
-│   ├── css/style.css      # Tema oscuro "broadcast booth"
-│   └── fonts/             # Fuentes cómic para text overlays
-├── templates/index.html   # Shell HTML
-├── global/audio/          # Librería de efectos de sonido
-└── projects/              # Un directorio por proyecto (gitignored)
+│   ├── js/app.js          # Vue 3 SPA (19 components, ~5100 lines)
+│   ├── css/style.css      # "Broadcast booth" dark theme
+│   └── fonts/             # Comic fonts for text overlays
+├── templates/index.html   # HTML shell
+├── global/audio/          # Sound effects library
+└── projects/              # One directory per project (gitignored)
     └── {slug}/
         ├── proyecto.json / proyecto.sqlite
         ├── media/{video,audio,image}/
@@ -163,11 +163,11 @@ postpod/
         └── director_assets/
 ```
 
-## Documentación adicional
+## Additional documentation
 
-- [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) — Documento técnico completo (1200+ líneas) para portar post-producción a app nativa macOS: schema SQL de las 13 tablas, los 85 endpoints, pipeline FFmpeg, 21 puntos frágiles, spec del bundle portable y apéndice con ejemplos de datos reales (words.json, params de operaciones, payloads de webhooks, comando FFmpeg, tiempos de procesamiento)
-- [`ESTADO.md`](ESTADO.md) — Historial del proyecto fase por fase (Fase 1 auth/proyectos → Fase 12 features CapCut) + cajón de mejoras pendientes
+- [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) — Full technical document (1200+ lines) for porting post-production to a native macOS app: SQL schema of the 13 tables, the 85 endpoints, FFmpeg pipeline, 21 fragile points, portable bundle spec and an appendix with real data examples (words.json, operation params, webhook payloads, FFmpeg command, processing times)
+- [`ESTADO.md`](ESTADO.md) — Project history phase by phase (Phase 1 auth/projects → Phase 12 CapCut features) + backlog of pending improvements
 
-## Licencia
+## License
 
-Proyecto privado.
+Private project.

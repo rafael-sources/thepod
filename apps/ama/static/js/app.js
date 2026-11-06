@@ -1,7 +1,7 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 var LK = window.LivekitClient;
 
-/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+/* thePod mobile: small or touch screen? (reactive) */
 var _touchRef = null;
 function useTouch() {
   if (!_touchRef) {
@@ -132,7 +132,7 @@ var LoginView = {
 
 // ── DashboardView ────────────────────────────────────────────────────
 
-/* Filas «Instalar thePod» y «Avisos» de la hoja «Yo» (usa window.podPWA de pod-base.js) */
+/* «Instalar thePod» and «Avisos» rows of the «Yo» sheet (uses window.podPWA from pod-base.js) */
 var PodPwaRows = {
   setup: function () {
     var P = window.podPWA || { enabled: false };
@@ -372,8 +372,8 @@ var DashboardView = {
 
 // ── HostView ─────────────────────────────────────────────────────────
 
-// Moderación del chat (anfitrión): aprobar, quitar o bloquear a quien escribió. Después avisa por la
-// sala (si hay) para que el público recargue el chat sin esperar.
+// Chat moderation (host): approve, remove or block the author. Then notifies through the
+// room (if any) so the audience reloads the chat without waiting.
 function _chatModeration(eventId, reload, roomRef) {
   function notify() {
     var room = roomRef && roomRef.value;
@@ -411,7 +411,7 @@ var HostView = {
     var pollTimer = ref(null);
     var chatPollTimer = ref(null);
 
-    // Móvil / iPad: una sola sección del panel a la vez
+    // Mobile / iPad: a single panel section at a time
     var sideTab = ref("solicitudes");
     var seenRequests = ref(0);
     var seenChat = ref(0);
@@ -1009,7 +1009,7 @@ var JoinView = {
 
     async function loadEventInfo() {
       loading.value = true;
-      // ¿Ya estabas anotado desde este teléfono? (se recarga la página, se cierra Safari…)
+      // Were you already signed up from this phone? (page reloads, Safari gets closed…)
       try {
         var saved = JSON.parse(localStorage.getItem(KEY) || "null");
         if (saved && saved.access_token) {
@@ -1108,9 +1108,9 @@ var JoinView = {
 };
 
 // ── AudienceChat ─────────────────────────────────────────────────────
-// Chat para quien mira o está en la cola. Quien no se anotó entra con un nombre (la llave queda
-// guardada en este navegador). En modo moderado, lo que escribe lo ve solo esa persona y el
-// anfitrión hasta que el anfitrión lo aprueba.
+// Chat for viewers and people in the queue. Anyone not signed up joins with a name (the key stays
+// stored in this browser). In moderated mode, what they write is visible only to that person and the
+// host until the host approves it.
 
 var AudienceChat = {
   props: { eventId: [Number, String], accessToken: String },
@@ -1255,7 +1255,7 @@ var ParticipantView = {
       } catch (_) {}
     }
 
-    // Pantalla encendida mientras esperas o estás al aire
+    // Keep the screen on while waiting or on air
     var _wake = null;
     async function keepAwake() {
       try { if ("wakeLock" in navigator && !_wake) { _wake = await navigator.wakeLock.request("screen"); _wake.addEventListener("release", function () { _wake = null; }); } } catch (_) {}
@@ -1323,7 +1323,7 @@ var ParticipantView = {
     async function enablePublish() {
       if (!room.value) { lkError.value = "Sin conexión con la sala"; return; }
       try {
-        // Un solo pedido de cámara+micrófono: iOS Safari invalida el primero si se piden por separado.
+        // A single camera+microphone request: iOS Safari invalidates the first one if requested separately.
         var tracks = await LK.createLocalTracks({ audio: true, video: true });
         for (var i = 0; i < tracks.length; i++) await room.value.localParticipant.publishTrack(tracks[i]);
         nextTick(function () {
@@ -1353,7 +1353,7 @@ var ParticipantView = {
       waitingForTap.value = false;
       lkError.value = "";
       keepAwake();
-      // Siempre reconectar desde el toque: iOS suspende las conexiones inactivas.
+      // Always reconnect from the tap: iOS suspends idle connections.
       if (room.value) { try { room.value.disconnect(); } catch (_) {} room.value = null; connected.value = false; }
       await getTokenAndConnect(true);
     }
@@ -1390,7 +1390,7 @@ var ParticipantView = {
   },
   template: `
 <div class="participant-view ama-public" :class="{ 'is-live': showVideo }">
-  <!-- Te toca -->
+  <!-- Your turn -->
   <div v-if="waitingForTap" class="ama-call">
     <div class="ama-call-ring">🎙</div>
     <h2>¡Te toca, {{ pdata && pdata.display_name }}!</h2>
@@ -1399,7 +1399,7 @@ var ParticipantView = {
     <p class="muted">Se activan tu cámara y tu micrófono.</p>
   </div>
 
-  <!-- Al aire -->
+  <!-- On air -->
   <div v-else-if="showVideo" class="ama-onair">
     <div class="ama-onair-top"><span class="on-air-badge">EN VIVO</span><span class="muted">{{ pdata && pdata.display_name }}</span></div>
     <div class="ama-onair-stage">
@@ -1420,7 +1420,7 @@ var ParticipantView = {
     </div>
   </div>
 
-  <!-- Esperando, en la cola, fin -->
+  <!-- Waiting, in queue, finished -->
   <div v-else class="participant-status ama-wait">
     <div class="ama-brand">ama<span class="brand-accent">Pod</span></div>
     <template v-if="state === 'pending'">
@@ -1758,7 +1758,7 @@ var SpectatorView = {
     var _burstId = 0;
     var pollTimer = ref(null);
     var waitTimer = null;
-    var tiles = ref([]);            // [{ id, name }] quién tiene video
+    var tiles = ref([]);            // [{ id, name }] who has video
     var needsAudioTap = ref(false);
     var _tracks = {};
 
@@ -1776,7 +1776,7 @@ var SpectatorView = {
       loading.value = false;
     }
 
-    // Si todavía no empieza, la página se conecta sola cuando empiece.
+    // If it hasn't started yet, the page connects on its own when it starts.
     function waitForStart() {
       if (waitTimer) return;
       waitTimer = setInterval(async function () {
@@ -1807,7 +1807,7 @@ var SpectatorView = {
         var tokenData = await api("/api/events/" + props.eventId + "/spectator-token", { method: "POST" });
         var wsUrl = await getLivekitWsUrl();
         var newRoom = new LK.Room({ adaptiveStream: true, dynacast: true });
-        // El anfitrión avisa por la sala cuando hay mensajes nuevos aprobados: se recarga el chat al toque
+        // The host signals through the room when there are new approved messages: the chat reloads right away
         newRoom.on(LK.RoomEvent.DataReceived, function (payload) {
           var msg = _decodeMsg(payload);
           if (msg && (msg.type === "chat" || msg.type === "chat_refresh")) window.dispatchEvent(new Event("amapod-chat"));

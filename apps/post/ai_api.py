@@ -233,8 +233,8 @@ ONCE_MSG = ("Este episodio ya tiene sus notas y momentos de la IA. Se generan un
 
 def _start_analysis(slug: str, analysis_type: str) -> dict | None:
     """Create a pending ai_analysis row, spawn a daemon thread, return serialized job.
-    Devuelve None si el episodio ya tiene un análisis hecho o en curso (la IA corre una sola vez
-    por episodio para ahorrar; si falló, se puede reintentar)."""
+    Returns None if the episode already has an analysis done or in progress (the AI runs only once
+    per episode to save costs; if it failed, it can be retried)."""
     db = get_db(slug)
     try:
         _ensure_ai_table(db)
@@ -368,11 +368,11 @@ def get_show_notes(slug):
 
 
 # ---------------------------------------------------------------------------
-# App de Mac: notas y momentos de un episodio que vive en la Mac
+# Mac app: notes and moments for an episode that lives on the Mac
 # ---------------------------------------------------------------------------
-# La app manda la transcripción (con [MM:SS] y quién habla) y un identificador del episodio
-# («mac:<id del proyecto>»). Se analiza UNA sola vez por episodio y cuenta: si se vuelve a
-# pedir, se devuelve lo que ya se generó (no se gasta de nuevo). Si falló, se puede reintentar.
+# The app sends the transcript (with [MM:SS] and who is speaking) and an episode identifier
+# («mac:<project id>»). Each episode is analyzed ONLY once and counts: if requested
+# again, what was already generated is returned (nothing is spent again). If it failed, it can be retried.
 
 import re as _re
 import sqlite3 as _sqlite3

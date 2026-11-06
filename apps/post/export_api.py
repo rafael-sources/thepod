@@ -51,7 +51,7 @@ def _serialize_job(row):
 @bp.get("/api/export/presets")
 @require_auth
 def list_presets():
-    # Group by platform for the UI (las versiones 720p del plan Gratis no se listan)
+    # Group by platform for the UI (the 720p versions for the Free plan are not listed)
     return jsonify([p for p in EXPORT_PRESETS if not p.get("hidden")])
 
 
@@ -63,7 +63,7 @@ def create_export(slug):
     preset_id = data.get("preset_id")
     if not preset_id or not find_preset(preset_id):
         return jsonify({"error": "preset_id inválido"}), 400
-    # Plan Gratis: el video sale a 720p (se cambia solo el tamaño, el resto igual)
+    # Free plan: the video is output at 720p (only the size changes, everything else stays the same)
     plan_note = None
     try:
         from plans import limits_for

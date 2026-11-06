@@ -116,7 +116,7 @@ def test_chat_off_rejects(client):
     assert rv.status_code == 403
 
 
-# ── Chat del público (0.29) ──────────────────────────────────────────
+# ── Audience chat (0.29) ──────────────────────────────────────────
 
 def _viewer(_app, eid, name="Ana"):
     c = _app.test_client()
@@ -134,13 +134,13 @@ def test_viewer_chat_moderated_flow(_app):
         rv = viewer.post(f"/api/events/{eid}/chat", json={"message": "Hola!", "chat_token": ct})
         assert rv.status_code == 201 and rv.get_json()["pending"] is True and rv.get_json()["mine"] is True
         mid = rv.get_json()["id"]
-        # el resto del público no lo ve todavía; quien lo escribió sí, y el anfitrión también
+        # the rest of the audience doesn't see it yet; its author does, and so does the host
         assert _app.test_client().get(f"/api/events/{eid}/chat").get_json() == []
         own = viewer.get(f"/api/events/{eid}/chat?chat_token={ct}").get_json()
         assert len(own) == 1 and own[0]["pending"]
         hostlist = host.get(f"/api/events/{eid}/chat").get_json()
         assert len(hostlist) == 1 and hostlist[0]["pending"] and hostlist[0]["can_block"]
-        # aprobado: lo ven todos
+        # approved: everyone sees it
         assert host.post(f"/api/events/{eid}/chat/{mid}/approve").status_code == 200
         pub = _app.test_client().get(f"/api/events/{eid}/chat").get_json()
         assert len(pub) == 1 and not pub[0]["pending"]

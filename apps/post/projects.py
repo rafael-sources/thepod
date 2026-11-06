@@ -228,8 +228,8 @@ def bundle_download(slug):
     if st.get("state") != "ready":
         return jsonify({"error": "el paquete no está listo; pídelo con POST "
                                  "/api/projects/<slug>/bundle y espera state=ready"}), 409
-    # conditional=True hace que Flask responda Range/If-Range con 206,
-    # que es lo que permite reanudar la descarga desde la app de Mac.
+    # conditional=True makes Flask answer Range/If-Range with 206,
+    # which is what allows resuming the download from the Mac app.
     return send_file(
         str(bundle_zip_path(slug)),
         as_attachment=True,

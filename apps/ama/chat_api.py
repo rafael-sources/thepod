@@ -1,9 +1,9 @@
-"""Chat de un evento de amaPod: libre, moderado o sin chat.
+"""Chat for an amaPod event: free, moderated or no chat.
 
-Escriben el anfitrión (sesión), quien se anotó en la cola (`token` de participante) y el público que
-solo mira (`chat_token`, que se pide con un nombre en POST /chat/join). En modo moderado lo del público
-queda esperando hasta que el anfitrión lo aprueba; mientras tanto solo lo ven el anfitrión y quien lo
-escribió. El anfitrión puede aprobar, quitar o no dejar escribir más a alguien.
+Writers are the host (session), whoever signed up in the queue (participant `token`) and the audience that
+only watches (`chat_token`, requested with a name via POST /chat/join). In moderated mode audience messages
+wait until the host approves them; meanwhile only the host and the author
+see them. The host can approve, remove, or block someone from writing further.
 """
 
 import secrets
@@ -16,8 +16,8 @@ from pod_push import notify as push_notify
 
 bp = Blueprint("chat_api", __name__)
 
-MAX_LEN = 300          # caracteres por mensaje
-MIN_GAP_S = 3          # segundos entre mensajes de la misma persona (el anfitrión no tiene límite)
+MAX_LEN = 300          # characters per message
+MIN_GAP_S = 3          # seconds between messages from the same person (the host has no limit)
 MAX_NAME = 40
 
 
@@ -41,7 +41,7 @@ def _arg(name):
 
 
 def _sender(db, ev):
-    """(nombre, es_anfitrión, llave) de quien pide, o (None, False, None)."""
+    """(name, is_host, key) of the requester, or (None, False, None)."""
     username = session.get("username")
     if username:
         return username, ev["host_username"] == username, f"host:{username}"
@@ -66,7 +66,7 @@ def _event(db, eid):
 
 @bp.post("/api/events/<int:eid>/chat/join")
 def join_chat(eid):
-    """El público que solo mira entra al chat con un nombre. Devuelve su llave para escribir."""
+    """Audience members who only watch join the chat with a name. Returns their key for writing."""
     db = get_db()
     try:
         ev = _event(db, eid)
@@ -114,7 +114,7 @@ def send_message(eid):
             if last and last["ago"] is not None and last["ago"] < MIN_GAP_S:
                 return jsonify({"error": "Espera un momento antes de escribir otra vez"}), 429
 
-        # En modo moderado, lo que no escribe el anfitrión espera su aprobación
+        # In moderated mode, anything not written by the host waits for their approval
         is_approved = 0 if (ev["chat_mode"] == "moderated" and not is_host) else 1
         cur = db.execute(
             "INSERT INTO chat_messages (event_id, sender_name, is_host, message, is_approved, sender_key) "
@@ -124,7 +124,7 @@ def send_message(eid):
         db.commit()
         row = db.execute("SELECT * FROM chat_messages WHERE id = ?", (cur.lastrowid,)).fetchone()
         if not is_approved:
-            # Solo si el anfitrión tiene que decidir: un aviso por evento, se reemplaza con el último
+            # Only if the host has to decide: one notification per event, replaced by the latest
             push_notify([ev["host_username"]], "amaPod · " + (ev["title"] or "evento"),
                         sender_name + " escribió en el chat y espera tu aprobación: «" + message[:80] + ("…" if len(message) > 80 else "") + "»",
                         "/ama/", tag="ama-chat-" + str(eid))
@@ -135,8 +135,8 @@ def send_message(eid):
 
 @bp.get("/api/events/<int:eid>/chat")
 def list_messages(eid):
-    """Lo aprobado lo ve cualquiera que mira el evento. El anfitrión ve además lo que espera
-    aprobación; cada persona ve también lo suyo que todavía espera."""
+    """Approved messages are visible to anyone watching the event. The host also sees what awaits
+    approval; each person also sees their own messages still waiting."""
     db = get_db()
     try:
         ev = _event(db, eid)
@@ -155,7 +155,7 @@ def list_messages(eid):
 
 
 def _host_message(db, eid, mid):
-    """(evento, mensaje, error) comprobando que quien pide es el anfitrión."""
+    """(event, message, error) after checking that the requester is the host."""
     ev = _event(db, eid)
     if not ev:
         return None, None, (jsonify({"error": "evento no encontrado"}), 404)
@@ -201,7 +201,7 @@ def delete_message(eid, mid):
 @bp.post("/api/events/<int:eid>/chat/<int:mid>/block")
 @require_auth
 def block_sender(eid, mid):
-    """No deja escribir más a quien escribió este mensaje y quita todo lo suyo."""
+    """Blocks the author of this message from writing further and removes all their messages."""
     db = get_db()
     try:
         _, msg, err = _host_message(db, eid, mid)

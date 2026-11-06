@@ -1,5 +1,5 @@
-"""Idioma de la interfaz: diccionario inglés bien formado (los * coinciden), la página declara el idioma según la
-cookie o el navegador, y el script del idioma y el diccionario se sirven."""
+"""Interface language: English dictionary well formed (the * match), the page declares the language from the
+cookie or the browser, and the language script and the dictionary are served."""
 import json
 import sys
 from pathlib import Path
@@ -13,7 +13,7 @@ def test_dictionary_is_sane():
     assert len(d) > 50
     for k, v in d.items():
         assert isinstance(v, str) and v.strip(), k
-        assert k.count("*") == v.count("*"), f"los * no coinciden en {k!r} → {v!r}"
+        assert k.count("*") == v.count("*"), f"the * do not match in {k!r} → {v!r}"
 
 
 def test_lang_from_cookie_and_browser(client):

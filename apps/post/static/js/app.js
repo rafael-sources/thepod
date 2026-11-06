@@ -1,6 +1,6 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 
-/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+/* thePod mobile: small or touch screen? (reactive) */
 var _touchRef = null;
 function useTouch() {
   if (!_touchRef) {
@@ -349,7 +349,7 @@ var LoginView = {
    Project list
    ========================================================================== */
 
-/* Filas «Instalar thePod» y «Avisos» de la hoja «Yo» (usa window.podPWA de pod-base.js) */
+/* «Instalar thePod» and «Avisos» rows of the «Yo» sheet (uses window.podPWA from pod-base.js) */
 var PodPwaRows = {
   setup: function () {
     var P = window.podPWA || { enabled: false };
@@ -462,8 +462,8 @@ var ProjectListView = {
       }
     }
 
-    // Episodio en proceso: prodPod todavía le está enviando pistas. Se
-    // ignora una marca de más de 6 h (envío que se cortó sin avisar el fin).
+    // Episode in progress: prodPod is still sending it tracks. A flag older
+    // than 6 h is ignored (a transfer that was cut off without signaling the end).
     function isImporting(p) {
       const imp = p && p.importing;
       if (!imp || !imp.started_at) return false;
@@ -487,8 +487,8 @@ var ProjectListView = {
       }
       props.onOpen(p);
     }
-    // Mientras haya alguno en proceso, refrescar la lista para que la
-    // tarjeta vuelva a la normalidad sola cuando termine.
+    // While any is in progress, refresh the list so the card goes back
+    // to normal on its own when it finishes.
     let importPoll = null;
     watch(projects, (list) => {
       const any = (list || []).some(isImporting);
@@ -3032,7 +3032,7 @@ var OperationsPanel = {
    - Drag-select word range → press Delete (or click "Eliminar selección")
      creates a transcript_cut on the server. Deleted words render
      struck-through but stay visible so the user can restore them.
-   - "Filler words" filter: highlights muletillas + batch-delete
+   - "Filler words" filter: highlights fillers + batch-delete
    ========================================================================== */
 
 var FILLER_WORDS = new Set([
@@ -3531,10 +3531,10 @@ var ExportModal = {
   props: {
     slug: String,
     // selectedRange comes from ProjectView's drag-select. When present, the
-    // user can opt into "exportar sólo este rango" (range_start/range_end).
+    // user can opt into "export only this range" (range_start/range_end).
     selectedRange: { type: Object, default: null },
     hasMultitrack: { type: Boolean, default: false },
-    // Abierto con 🎬 desde un momento: vertical, subtítulos y un diseño simple, en un paso.
+    // Opened with 🎬 from a moment: vertical, subtitles and a simple design, in one step.
     reel: { type: Boolean, default: false },
   },
   emits: ["close"],
@@ -3609,7 +3609,7 @@ var ExportModal = {
       } catch (_) {}
     }
 
-    // Revisión antes de exportar (como en la app): lo que conviene mirar antes de sacar el video.
+    // Pre-export review (as in the app): what is worth checking before rendering the video.
     const review = ref(null);       // {items:[{id, level, text, hint}], ok}
     async function loadReview() {
       try { review.value = await api(`/api/projects/${props.slug}/export/review`); }
@@ -3623,7 +3623,7 @@ var ExportModal = {
       if (props.reel && presets.value.some(p => p.id === "tiktok_v")) selectedId.value = "tiktok_v";
     }
 
-    // Diseño del reel: sencillo (solo subtítulos), con el título del momento, o con la marca del podcast.
+    // Reel design: simple (subtitles only), with the moment title, or with the podcast branding.
     const reelDesign = ref(localStorage.getItem("postpod.reelDesign") || "titulo");
     const showAllPresets = ref(!props.reel);
     function applyReelDesign() {
@@ -4328,7 +4328,7 @@ var ProjectView = {
             } else if (op.type === "to_vertical") {
               out.vertical = { cropX: p.crop_x ?? 0.5 };
             } else if (op.type === "vertical_split") {
-              // Live preview of the "two cámaras apiladas" layout. The
+              // Live preview of the "two stacked cameras" layout. The
               // exporter assumes a side-by-side composite as input; here
               // we don't have one, so we synthesize the stack by picking
               // the active clip on each track at the playhead. cropXs are
@@ -4844,7 +4844,7 @@ var ProjectView = {
       videoPlayerRef.value?.seek(start, true);
     }
 
-    // Reel de un momento: la misma ventana de exportar, ya armada para un reel.
+    // Reel of a moment: the same export window, preset for a reel.
     const reelMode = ref(false);
     function reelMoment(m) {
       reelMode.value = true;
@@ -5007,7 +5007,7 @@ var ProjectView = {
       prodpodPrompt.value = null;
     }
 
-    // Celular: una parte del editor por pantalla
+    // Phone: one part of the editor per screen
     const touch = useTouch();
     const mTab = ref("video");
     function mGo(t) { mTab.value = t; if (t !== "clips") { showParticipants.value = false; } if (t !== "clips" && t !== "moments") selectedMomentId.value = null; }

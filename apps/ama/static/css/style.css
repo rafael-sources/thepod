@@ -16,7 +16,7 @@
 
   --paper:       #efe3d0;
   --paper-soft:  #c7b894;
-  --paper-dim:   #9d9078;   /* 5.8:1 sobre --ink (WCAG AA) */
+  --paper-dim:   #9d9078;   /* 5.8:1 on --ink (WCAG AA) */
   --paper-faint: #5c5240;
 
   /* Signal — TEAL "Q&A" */
@@ -682,11 +682,11 @@ label {
 }
 
 /* ==========================================================================
-   Público (preguntar y mirar) — pensado primero para el teléfono
+   Audience (ask and watch) — designed phone-first
    ========================================================================== */
 .ama-public { box-sizing: border-box; overflow-x: hidden; }
 .ama-public *, .ama-public *::before, .ama-public *::after { box-sizing: border-box; }
-.ama-public input, .ama-public textarea { font-size: 16px; width: 100%; }  /* 16px: el iPhone no hace zoom */
+.ama-public input, .ama-public textarea { font-size: 16px; width: 100%; }  /* 16px: the iPhone does not zoom */
 .ama-public textarea { resize: vertical; min-height: 56px; padding: 10px 12px; border-radius: var(--r-md); background: var(--ink-sunken); border: 1px solid var(--ink-line); color: var(--paper); font-family: inherit; }
 .ama-public a.primary, .ama-public a.ghost { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; border-radius: var(--r-md); padding: 12px 18px; font-weight: 600; }
 .ama-public a.primary { background: var(--signal); color: var(--ink); }
@@ -738,7 +738,7 @@ label {
 .ama-call p { color: var(--paper-soft); font-size: 16px; margin: 0 0 12px; }
 .ama-call-btn { font-size: 20px; padding: 18px 44px; border-radius: 14px; }
 
-/* Al aire */
+/* On air */
 .ama-public.is-live { padding: 12px; justify-content: flex-start; }
 .ama-onair { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 10px; min-height: calc(100dvh - 24px); }
 .ama-onair-top { display: flex; align-items: center; gap: 10px; justify-content: center; }
@@ -779,13 +779,13 @@ label {
   .ama-watch-actions .ama-ask { flex: none; }
 }
 @media (max-width: 759px) {
-  /* Al aire en el teléfono: el anfitrión grande, tú en pequeño encima */
+  /* On air on the phone: the host large, you small on top */
   .ama-onair-stage .ama-self-card { position: absolute; right: 8px; top: 8px; width: 34%; aspect-ratio: 3/4; z-index: 3; border: 2px solid rgba(255,255,255,.3); }
   .ama-onair-stage .ama-host-card { aspect-ratio: auto; flex: 1; min-height: 50vh; }
 }
 
 /* ==========================================================================
-   Anfitrión — escritorio + modo de emergencia en celular / iPad
+   Host — desktop + emergency mode on phone / iPad
    ========================================================================== */
 
 .m-only { display: none !important; }
@@ -817,7 +817,7 @@ label {
   input[type=text], input[type=password], textarea, select { font-size: 16px; }
   button { min-height: 40px; }
 
-  /* Login y lista de eventos */
+  /* Login and event list */
   .login-view { min-height: 100dvh; padding: 20px; }
   .login-card { width: 100%; max-width: 380px; padding: 36px 24px; }
   .login-card form button { padding: 13px; font-size: 15px; }
@@ -829,14 +829,14 @@ label {
   .event-card { padding: 16px; }
   .create-modal { width: calc(100vw - 32px); max-width: 440px; padding: 22px; }
 
-  /* Antes de entrar */
+  /* Before joining */
   .ama-prejoin { min-height: 100dvh; padding: calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom)); align-items: flex-start; }
   .ama-prejoin .prejoin-card { grid-template-columns: 1fr; padding: 14px; gap: 14px; max-width: 560px; margin: 0 auto; }
   .ama-prejoin .prejoin-preview { min-height: 0; }
   .ama-prejoin .pj-go { padding: 15px; font-size: 16px; }
   .ama-prejoin .pj-share button { min-height: 44px; }
 
-  /* Sala en vivo: una columna — video, quién está al aire, controles, panel, pestañas */
+  /* Live room: one column — video, who is on air, controls, panel, tabs */
   .ama-host {
     display: grid; height: 100dvh; overflow: hidden;
     grid-template-columns: 100%;
@@ -906,7 +906,7 @@ label {
   .toast-host { top: calc(10px + env(safe-area-inset-top)); left: 12px; right: 12px; align-items: center; }
 }
 
-/* Celular acostado o iPad horizontal: video a la izquierda, panel a la derecha */
+/* Phone in landscape or horizontal iPad: video on the left, panel on the right */
 @media (pointer: coarse) and (orientation: landscape), (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
   .ama-host {
     grid-template-columns: minmax(0, 1fr) clamp(300px, 40%, 440px);
@@ -918,7 +918,7 @@ label {
   .ama-host .host-tabs { border-left: 1px solid var(--ink-line); }
 }
 
-/* Chat del público y moderación (0.29) */
+/* Audience chat and moderation (0.29) */
 .ama-chat { margin: 12px 16px 16px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 12px; display: flex; flex-direction: column; text-align: left; overflow: hidden; }
 .ama-chat-head { padding: 10px 12px; font-weight: 700; font-size: 14px; border-bottom: 1px solid var(--ink-line-2); }
 .ama-chat-list { max-height: 280px; min-height: 90px; overflow-y: auto; padding: 8px 12px; }
@@ -931,12 +931,12 @@ label {
 .chat-mod button { font-size: 11px; padding: 2px 8px; min-height: 0; }
 .chat-msg.pending { background: rgba(255, 196, 0, .06); border-radius: 6px; padding: 4px 6px; }
 @media (max-width: 640px) { .ama-chat { margin: 10px 0 14px; } .ama-chat-list { max-height: 40vh; } .chat-mod button { font-size: 13px; padding: 6px 10px; } }
-/* En la página de ver: el chat ocupa el espacio libre entre el título y los botones */
+/* On the watch page: the chat fills the free space between the title and the buttons */
 .ama-watch-chat { flex: 1 1 auto; min-height: 180px; }
 .ama-watch-chat .ama-chat-list { flex: 1 1 auto; max-height: none; }
 
 /* ==========================================================================
-   thePod móvil · capa compartida (misma que prePod, señal teal)
+   thePod mobile · shared layer (same as prePod, teal accent)
    ========================================================================== */
 @media (max-width: 900px), (pointer: coarse) {
   :root { --m-tab-h: 56px; --m-top-h: 52px; }
@@ -973,7 +973,7 @@ label {
   .m-sheet h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
   .m-sheet .m-opt { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--ink-line); background: transparent; color: var(--paper); font: inherit; font-size: 15px; cursor: pointer; text-align: left; width: 100%; text-decoration: none; }
 
-  /* Estudio del anfitrión: pestañas con icono de trazo y estado accesible */
+  /* Host studio: tabs with stroke icons and accessible state */
   .ama-host .host-tabs button[aria-current="page"] { color: var(--signal-strong); background: rgba(45,212,191,.1); }
   .ama-host .ht-ico { display: inline-flex; width: 24px; height: 24px; }
   .ama-host .ht-ico svg { width: 24px; height: 24px; }

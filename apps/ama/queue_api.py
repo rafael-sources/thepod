@@ -182,7 +182,7 @@ def update_my_questions(eid):
 
 @bp.post("/api/events/<int:eid>/leave")
 def leave_event(eid):
-    """El participante se retira solo (con su token): sale de la cola o termina su turno al aire."""
+    """The participant leaves on their own (with their token): leaves the queue or ends their on-air turn."""
     token = request.args.get("token") or (request.get_json(silent=True) or {}).get("token", "")
     if not token:
         return jsonify({"error": "token requerido"}), 400

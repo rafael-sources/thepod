@@ -1,48 +1,48 @@
 # amaPod
 
-Sesiones AMA (Ask Me Anything) y eventos en vivo con audiencia. Parte del ecosistema **thePod** (prePod → prodPod → postPod → **amaPod**).
+AMA (Ask Me Anything) sessions and live events with an audience. Part of the **thePod** ecosystem (prePod → prodPod → postPod → **amaPod**).
 
-## Qué hace
+## What it does
 
-amaPod permite a un host crear un evento en vivo (sala LiveKit) donde la audiencia solicita participar, espera su turno en una cola gestionada por el host, y sale "al aire" uno a uno para hacer sus preguntas. Los espectadores pueden mirar sin participar, dar likes y chatear.
+amaPod lets a host create a live event (LiveKit room) where the audience requests to participate, waits for their turn in a queue managed by the host, and goes "on air" one by one to ask their questions. Spectators can watch without participating, give likes and chat.
 
-- **Eventos con ciclo de vida** — `created` → `active` → `finished`; plantillas reutilizables (clonar un evento como template y crear nuevos desde él)
-- **Cola de participantes** — la audiencia solicita acceso con solo su nombre (sin registro); el host aprueba/rechaza, reordena la cola con drag & drop, salta a cualquier participante o pasa al siguiente
-- **Turnos al aire** — solo el participante `on_air` puede publicar audio/video; los permisos de LiveKit se actualizan server-side en cada cambio de turno
-- **Preconexión** — los próximos 3 en la cola (`PRECONNECT_COUNT`) se marcan para preconectarse y que el cambio de turno sea instantáneo
-- **Pre-preguntas** — cada participante puede escribir hasta 3 preguntas mientras espera; el host las ve en la cola y durante el turno
-- **Censura** — el host puede mutear y revocar publicación a cualquier participante (y restaurarla)
-- **Modo espectador** — vista pública `/watch/{id}` con token subscribe-only, contador de espectadores y botón de likes
-- **Chat** — tres modos por evento: `free`, `moderated` (mensajes de no-host requieren aprobación) y `off`
-- **Grabación** — LiveKit Egress (room composite → MP4 en `events/{id}/recordings/`), con auto-export a postPod al finalizar el evento
-- **Integraciones** — prodPod puede crear un evento amaPod en caliente (embed durante una grabación); la grabación se exporta a postPod como track de video
+- **Events with a lifecycle** — `created` → `active` → `finished`; reusable templates (clone an event as a template and create new ones from it)
+- **Participant queue** — the audience requests access with just their name (no sign-up); the host approves/rejects, reorders the queue with drag & drop, jumps to any participant or moves to the next one
+- **On-air turns** — only the `on_air` participant can publish audio/video; LiveKit permissions are updated server-side on every turn change
+- **Preconnection** — the next 3 in the queue (`PRECONNECT_COUNT`) are flagged to preconnect so the turn change is instant
+- **Pre-questions** — each participant can write up to 3 questions while waiting; the host sees them in the queue and during the turn
+- **Censorship** — the host can mute and revoke publishing for any participant (and restore it)
+- **Spectator mode** — public view `/watch/{id}` with a subscribe-only token, viewer counter and like button
+- **Chat** — three modes per event: `free`, `moderated` (non-host messages require approval) and `off`
+- **Recording** — LiveKit Egress (room composite → MP4 in `events/{id}/recordings/`), with auto-export to postPod when the event finishes
+- **Integrations** — prodPod can create an amaPod event on the fly (embed during a recording); the recording is exported to postPod as a video track
 
 ## Stack
 
-| Capa | Tecnología |
+| Layer | Technology |
 |------|------------|
 | Backend | Python 3.9+, Flask 3.x, Gunicorn |
-| Frontend | Vue 3 (CDN, sin bundler), SweetAlert2, livekit-client 2.x (UMD en `static/js/vendor/`) |
-| Base de datos | SQLite (`main.sqlite`, WAL mode, migraciones idempotentes) |
-| Video en vivo | LiveKit (rooms, tokens JWT, permisos por participante, Egress) |
+| Frontend | Vue 3 (CDN, no bundler), SweetAlert2, livekit-client 2.x (UMD in `static/js/vendor/`) |
+| Database | SQLite (`main.sqlite`, WAL mode, idempotent migrations) |
+| Live video | LiveKit (rooms, JWT tokens, per-participant permissions, Egress) |
 
-## Inicio rápido
+## Quick start
 
 ```bash
 pip install -r requirements.txt   # Flask, gunicorn, livekit-api, PyJWT
 
-# Desarrollo (puerto 5004)
+# Development (port 5004)
 python app.py
-# o
+# or
 flask --app 'app:create_app()' run --port 5004 --debug
 
-# Producción
+# Production
 gunicorn --workers 1 --threads 8 --bind 0.0.0.0:5004 --timeout 600 'app:create_app()'
 ```
 
-La primera vez se crean `~/.podpod/config.json` (claves aleatorias) y `~/.podpod/users.db` (usuarios por defecto). Abrir `http://localhost:5004`.
+On first run, `~/.podpod/config.json` (random keys) and `~/.podpod/users.db` (default users) are created. Open `http://localhost:5004`.
 
-### Servicio systemd
+### systemd service
 
 ```bash
 sudo cp amapod.service /etc/systemd/system/
@@ -50,74 +50,74 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now amapod.service
 ```
 
-El servicio corre gunicorn en `0.0.0.0:5004` como usuario `admin`, con `ReadWritePaths` limitado a `/srv/thepod/amapod` y `/srv/thepod/.podpod`.
+The service runs gunicorn on `0.0.0.0:5004` as user `admin`, with `ReadWritePaths` limited to `/srv/thepod/amapod` and `/srv/thepod/.podpod`.
 
-## Rutas del SPA
+## SPA routes
 
-| Ruta | Vista | Auth |
+| Route | View | Auth |
 |------|-------|------|
-| `/` | Login → Dashboard → Host studio | Cookie firmada |
-| `/join/{id}` | Participante: solicitar acceso, cola, al aire | Token de acceso (uuid) |
-| `/watch/{id}` | Espectador: ver, likes, chat | Ninguna |
-| `/embed/{id}` | Host embebido (para prodPod) | Cookie firmada |
+| `/` | Login → Dashboard → Host studio | Signed cookie |
+| `/join/{id}` | Participant: request access, queue, on air | Access token (uuid) |
+| `/watch/{id}` | Spectator: watch, likes, chat | None |
+| `/embed/{id}` | Embedded host (for prodPod) | Signed cookie |
 
 ## API
 
-44 endpoints REST en 6 blueprints:
+44 REST endpoints in 6 blueprints:
 
-| Grupo | Endpoints | Auth |
+| Group | Endpoints | Auth |
 |-------|-----------|------|
 | `auth.py` — login/logout/me | 3 | — / cookie |
-| `events_api.py` — CRUD, start/finish, like, spectator-token, templates | 13 | Cookie (`@require_auth`); public-info, like y spectator-token son públicos |
-| `queue_api.py` — request-access, my-status, my-questions, cola, approve/reject, next/skip/reorder, censor/uncensor, remove, tokens LiveKit | 15 | Host por cookie; participante por `?token=` |
-| `recording_api.py` — start/stop/status/download de egress | 4 | Cookie |
-| `chat_api.py` — enviar/listar/aprobar/eliminar mensajes | 4 | Cookie o token de participante |
-| `integrations.py` — create-event desde prodPod, export a postPod, import stub de prePod | 3 | Header `X-PodPod-Secret` (export: cookie) |
+| `events_api.py` — CRUD, start/finish, like, spectator-token, templates | 13 | Cookie (`@require_auth`); public-info, like and spectator-token are public |
+| `queue_api.py` — request-access, my-status, my-questions, queue, approve/reject, next/skip/reorder, censor/uncensor, remove, LiveKit tokens | 15 | Host via cookie; participant via `?token=` |
+| `recording_api.py` — egress start/stop/status/download | 4 | Cookie |
+| `chat_api.py` — send/list/approve/delete messages | 4 | Cookie or participant token |
+| `integrations.py` — create-event from prodPod, export to postPod, prePod import stub | 3 | `X-PodPod-Secret` header (export: cookie) |
 
-Más 2 endpoints de configuración en `app.py` (`/api/config/apps`, `/api/config/livekit`).
+Plus 2 config endpoints in `app.py` (`/api/config/apps`, `/api/config/livekit`).
 
-## Estados
+## States
 
-- **Evento**: `created` → `active` → `finished`
-- **Participante**: `pending` → `in_queue` → `on_air` → `done` (o `rejected` / `left`)
+- **Event**: `created` → `active` → `finished`
+- **Participant**: `pending` → `in_queue` → `on_air` → `done` (or `rejected` / `left`)
 - **Chat**: `free` · `moderated` · `off`
 
-## Ecosistema thePod
+## thePod ecosystem
 
 ```
 prePod (5001)      prodPod (5002)      postPod (5000)      amaPod (5004)
-Pre-producción     Grabación en vivo   Post-producción     Eventos AMA en vivo
+Pre-production     Live recording      Post-production     Live AMA events
 ```
 
-- prodPod → amaPod: `POST /api/integrations/prodpod/create-event` crea un evento activo y devuelve una `embed_url` para incrustar durante una sesión.
-- amaPod → postPod: al finalizar un evento con grabación, se exporta automáticamente el MP4 a postPod (`/api/integrations/prodpod/import-track`) con un `shared_project_id`.
+- prodPod → amaPod: `POST /api/integrations/prodpod/create-event` creates an active event and returns an `embed_url` to embed during a session.
+- amaPod → postPod: when an event with a recording finishes, the MP4 is automatically exported to postPod (`/api/integrations/prodpod/import-track`) with a `shared_project_id`.
 
-**Secretos y usuarios compartidos**: la configuración sensible (SECRET_KEY, INTEGRATION_SECRET, credenciales LiveKit, URLs de las apps, cookie domain) viene de `~/.podpod/config.json` vía `shared_config.py`; los usuarios y perfiles viven en `~/.podpod/users.db` vía `shared_users.py`. El SECRET_KEY compartido da SSO entre las cuatro apps (cookie `podpod_session`).
+**Shared secrets and users**: sensitive configuration (SECRET_KEY, INTEGRATION_SECRET, LiveKit credentials, app URLs, cookie domain) comes from `~/.podpod/config.json` via `shared_config.py`; users and profiles live in `~/.podpod/users.db` via `shared_users.py`. The shared SECRET_KEY provides SSO across the four apps (cookie `podpod_session`).
 
-## Estructura del proyecto
+## Project structure
 
 ```
 amapod/
 ├── app.py               # Flask factory, SPA catch-all, config endpoints
-├── auth.py              # Sesiones signed-cookie, @require_auth (SSO suite)
-├── config.py            # Constantes + carga de shared config/users
-├── db.py                # Schema SQLite (4 tablas) + migraciones idempotentes
-├── events_api.py        # CRUD eventos, ciclo de vida, likes, templates
-├── queue_api.py         # Cola de participantes, turnos, censura, tokens
-├── recording_api.py     # Grabación vía LiveKit Egress
-├── chat_api.py          # Chat free/moderated/off
-├── integrations.py      # Webhooks prodPod/postPod/prePod
-├── livekit_service.py   # Wrapper asyncio del SDK LiveKit
-├── shared_config.py     # ~/.podpod/config.json (compartido con la suite)
-├── shared_users.py      # ~/.podpod/users.db (compartido con la suite)
-├── amapod.service       # Unidad systemd (gunicorn :5004)
+├── auth.py              # Signed-cookie sessions, @require_auth (suite SSO)
+├── config.py            # Constants + loading of shared config/users
+├── db.py                # SQLite schema (4 tables) + idempotent migrations
+├── events_api.py        # Events CRUD, lifecycle, likes, templates
+├── queue_api.py         # Participant queue, turns, censorship, tokens
+├── recording_api.py     # Recording via LiveKit Egress
+├── chat_api.py          # free/moderated/off chat
+├── integrations.py      # prodPod/postPod/prePod webhooks
+├── livekit_service.py   # asyncio wrapper for the LiveKit SDK
+├── shared_config.py     # ~/.podpod/config.json (shared with the suite)
+├── shared_users.py      # ~/.podpod/users.db (shared with the suite)
+├── amapod.service       # systemd unit (gunicorn :5004)
 ├── static/
-│   ├── js/app.js        # SPA Vue 3 (7 vistas)
+│   ├── js/app.js        # Vue 3 SPA (7 views)
 │   ├── js/vendor/       # vue, livekit-client, sweetalert2
-│   └── css/style.css    # Design system de la suite
-├── templates/index.html # Shell HTML
-├── tests/               # 46 tests pytest (db, events, queue, chat, recording, integrations)
-└── events/              # Un directorio por evento: recordings/, chat/ (gitignored)
+│   └── css/style.css    # Suite design system
+├── templates/index.html # HTML shell
+├── tests/               # 46 pytest tests (db, events, queue, chat, recording, integrations)
+└── events/              # One directory per event: recordings/, chat/ (gitignored)
 ```
 
 ## Tests
@@ -126,10 +126,10 @@ amapod/
 pytest tests/
 ```
 
-## Documentación adicional
+## Additional documentation
 
-- [`ESTADO.md`](ESTADO.md) — Historial del proyecto fase por fase + cajón de mejoras pendientes
+- [`ESTADO.md`](ESTADO.md) — Project history phase by phase + backlog of pending improvements
 
-## Licencia
+## License
 
-Proyecto privado.
+Private project.

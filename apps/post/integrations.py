@@ -590,10 +590,10 @@ def _compose_hstack_side_by_side(slug: str) -> dict | None:
 
 
 def _auto_create_from_prodpod(data, spid, src_ep_id, created_by):
-    """Crea el proyecto cuando un push de prodPod (capítulos, sonidos,
-    eventos del director) llega antes que las pistas. Propaga el dueño y
-    los co-hosts del payload para que ELLOS vean el proyecto — sin esto el
-    proyecto nacía sin owner y solo lo veían los admins."""
+    """Creates the project when a push from prodPod (chapters, sounds,
+    director events) arrives before the tracks. Propagates the owner and
+    co-hosts from the payload so that THEY see the project — without this the
+    project was born without an owner and only admins could see it."""
     project_name = (data.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
     src_info = {"app": "prodpod",
                 "received_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -623,9 +623,9 @@ def _auto_create_from_prodpod(data, spid, src_ep_id, created_by):
 
 @bp.post("/api/integrations/prodpod/import-status")
 def import_status_from_prodpod():
-    """prodPod avisa que empieza (state=begin, expected=N pistas) o termina
-    (state=end) de enviar pistas. Mientras tanto el proyecto queda marcado
-    'importing' y el editor advierte que modificarlo puede dañarlo."""
+    """prodPod signals that it starts (state=begin, expected=N tracks) or finishes
+    (state=end) sending tracks. Meanwhile the project stays flagged
+    'importing' and the editor warns that modifying it may damage it."""
     err = _require_shared_secret()
     if err:
         return err
@@ -992,8 +992,8 @@ def import_track_from_prodpod():
         db.close()
 
     # Auto-place on timeline if track_number was provided by prodPod.
-    # "screen" (pantalla compartida) va como pista aparte con su propio
-    # track_number — nunca pisa la cámara de esa persona.
+    # "screen" (screen share) goes as a separate track with its own
+    # track_number — it never overwrites that person's camera.
     track_number = request.form.get("track_number")
     if track_number and track_type in ("video", "screen"):
         try:

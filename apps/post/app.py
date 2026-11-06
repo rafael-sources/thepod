@@ -91,8 +91,8 @@ def create_app():
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     app.config["SECRET_KEY"] = SECRET_KEY
-    # 12 GB: una grabación 1080p de ~50 min pesa ~2.7 GB y el tope anterior
-    # de 2 GB hacía que prodPod recibiera 413 al enviar pistas a postPod.
+    # 12 GB: a ~50 min 1080p recording weighs ~2.7 GB and the previous cap
+    # of 2 GB made prodPod get a 413 when sending tracks to postPod.
     app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024 * 1024
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_NAME"] = "podpod_session"
@@ -194,7 +194,7 @@ def create_app():
         }
 
     def _lang():
-        """Idioma de la interfaz: cookie pod_lang (la pone el switch, compartida por el dominio) o el navegador."""
+        """Interface language: pod_lang cookie (set by the switch, shared across the domain) or the browser."""
         from flask import request as _r
         c = _r.cookies.get("pod_lang")
         if c in ("es", "en"):

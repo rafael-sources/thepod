@@ -1,8 +1,8 @@
-"""Revisión con marcas de tiempo: la Mac sube una versión (MP3 o MP4) y entrega un enlace; quien lo abre
-escucha, marca un segundo y deja un comentario; la Mac se trae los comentarios como marcas en su línea de tiempo.
+"""Timestamped review: the Mac uploads a version (MP3 or MP4) and hands out a link; whoever opens it
+listens, marks a second and leaves a comment; the Mac pulls the comments in as markers on its timeline.
 
-Sin cuenta para quien revisa: el enlace es la llave (token de 22 letras). Los archivos viven en
-projects/<slug>/review/<token>.<ext>; los comentarios en la base del proyecto; el índice token → proyecto en
+No account for the reviewer: the link is the key (22-letter token). Files live in
+projects/<slug>/review/<token>.<ext>; comments in the project database; the token → project index in
 projects/_review_index.json.
 """
 from __future__ import annotations
@@ -66,7 +66,7 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
 
 
 def _version(token: str):
-    """(slug, fila) de la versión, o None."""
+    """(slug, row) of the version, or None."""
     if not TOKEN_RE.match(token or ""):
         return None
     slug = _index().get(token)
@@ -86,7 +86,7 @@ def _serialize(row) -> dict:
     }
 
 
-# ----- Desde la Mac (con sesión) -----
+# ----- From the Mac (with a session) -----
 
 @bp.post("/api/projects/<slug>/review")
 @require_auth
@@ -160,7 +160,7 @@ def revoke(slug, token):
     return jsonify({"ok": True})
 
 
-# ----- Público (el enlace es la llave) -----
+# ----- Public (the link is the key) -----
 
 @bp.get("/r/<token>/media")
 def media(token):

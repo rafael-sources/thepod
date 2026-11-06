@@ -1,5 +1,5 @@
-"""Idioma de la interfaz: el diccionario inglés está bien formado (los * de cada patrón coinciden), la página declara
-el idioma según la cookie o el navegador, y el script del idioma se sirve."""
+"""Interface language: the English dictionary is well formed (the * in each pattern match), the page declares
+the language from the cookie or the browser, and the language script is served."""
 import json
 import sys
 from pathlib import Path
@@ -15,7 +15,7 @@ def test_dictionary_is_sane():
     assert len(d) > 200
     for k, v in d.items():
         assert isinstance(v, str) and v.strip(), k
-        assert k.count("*") == v.count("*"), f"los * no coinciden en {k!r} → {v!r}"
+        assert k.count("*") == v.count("*"), f"the * do not match in {k!r} → {v!r}"
 
 
 @pytest.fixture

@@ -1,18 +1,18 @@
 """
-Pone las palabras de la transcripción donde realmente suenan (misma idea que la app de Mac,
+Places the transcript words where they actually sound (same idea as the Mac app,
 macos/Sources/Services/SubtitleSync.swift).
 
-POR QUÉ
-Los tiempos que da Whisper por palabra salen corridos: la palabra suele figurar entre 0,1 y 0,45 s
-(a veces 0,8 s) ANTES de que se oiga la voz, y los subtítulos aparecen antes de que la persona hable.
+WHY
+Whisper's per-word timings come out shifted: a word usually appears between 0.1 and 0.45 s
+(sometimes 0.8 s) BEFORE the voice is heard, and subtitles show up before the person speaks.
 
-CÓMO
-Se compara "dónde hay palabras" con "dónde suena el audio" (volumen cada 10 ms).
-1. Por tramos de 60 s se busca el corrimiento general (±0,6 s) que mejor hace coincidir las dos cosas.
-2. Cada frase (palabras sin pausa de más de 0,35 s) se afina alrededor de ese corrimiento (±0,6 s).
-   Una frase nunca pasa a la anterior, así el orden se mantiene.
-3. Una palabra estirada sobre una pausa se recorta al pedazo donde suena la voz.
-Las palabras vuelven en el MISMO orden en que llegaron.
+HOW
+It compares "where there are words" with "where the audio sounds" (volume every 10 ms).
+1. Over 60 s chunks, it looks for the overall shift (±0.6 s) that best matches the two.
+2. Each phrase (words with no pause longer than 0.35 s) is fine-tuned around that shift (±0.6 s).
+   A phrase never moves past the previous one, so the order is preserved.
+3. A word stretched over a pause is trimmed to the piece where the voice sounds.
+Words come back in the SAME order they arrived.
 """
 
 from __future__ import annotations
@@ -22,21 +22,21 @@ import wave
 import numpy as np
 
 HOP = 0.01          # 10 ms
-MAX_SHIFT = 0.6     # corrimiento máximo, en segundos
-CHUNK = 60.0        # tramo para el corrimiento general
-PHRASE_GAP = 0.35   # pausa que separa frases
+MAX_SHIFT = 0.6     # maximum shift, in seconds
+CHUNK = 60.0        # chunk for the overall shift
+PHRASE_GAP = 0.35   # pause that separates phrases
 FLOOR_DB = -60.0
 
 
 def envelope_from_wav(path) -> np.ndarray:
-    """Volumen en dB cada 10 ms de un wav PCM de 16 bits (se usa el primer canal)."""
+    """Volume in dB every 10 ms of a 16-bit PCM wav (the first channel is used)."""
     with wave.open(str(path), "rb") as wf:
         rate, ch, width = wf.getframerate(), wf.getnchannels(), wf.getsampwidth()
         if width != 2:
             raise ValueError("se esperaba audio de 16 bits")
         hop_n = max(1, int(round(rate * HOP)))
         out, rest = [], np.zeros(0, dtype=np.float32)
-        block = hop_n * 6000                       # ~1 minuto por lectura
+        block = hop_n * 6000                       # ~1 minute per read
         while True:
             raw = wf.readframes(block)
             if not raw:
@@ -62,7 +62,7 @@ def _bin(t: float, origin: float) -> int:
 
 
 def _window(env: np.ndarray, t0: float, t1: float) -> np.ndarray:
-    """Volumen entre t0 y t1 (índice 0 = t0); fuera del audio queda en −60."""
+    """Volume between t0 and t1 (index 0 = t0); outside the audio it stays at −60."""
     n = max(0, int(np.ceil((t1 - t0) / HOP)))
     out = np.full(n, FLOOR_DB, dtype=np.float32)
     a = _bin(t0, 0)
@@ -79,7 +79,7 @@ def _zscore(v: np.ndarray) -> np.ndarray:
 
 
 def _loudest(env, origin, t0, t1, threshold):
-    """El tramo de voz más largo (sobre `threshold` dB) en [t0, t1]; huecos de menos de 0,15 s no lo cortan."""
+    """The longest voice stretch (above `threshold` dB) in [t0, t1]; gaps under 0.15 s do not break it."""
     a, b = max(0, _bin(t0, origin)), min(len(env), _bin(t1, origin))
     if b - a <= 2:
         return None
@@ -91,14 +91,14 @@ def _loudest(env, origin, t0, t1, threshold):
             last_loud = k
             if best is None or (k - seg_start) > (best[1] - best[0]):
                 best = (seg_start, k + 1)
-    if not best or best[1] - best[0] < 8:          # al menos 80 ms de voz
+    if not best or best[1] - best[0] < 8:          # at least 80 ms of voice
         return None
     return origin + best[0] * HOP, origin + best[1] * HOP
 
 
 def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
-    """`words`: [{"start", "end", ...}] en tiempo del archivo. Devuelve (copias ajustadas, cuántas se
-    movieron más de 30 ms, corrimiento típico en segundos)."""
+    """`words`: [{"start", "end", ...}] in file time. Returns (adjusted copies, how many
+    moved more than 30 ms, typical shift in seconds)."""
     out = [dict(w) for w in words]
     if not words or len(env) < 20:
         return out, 0, 0.0
@@ -122,7 +122,7 @@ def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
         z = _zscore(win)
 
         def best(lst, center):
-            """Corrimiento (s) que mejor junta las palabras de `lst` con la voz, entre center ± 0,6 s."""
+            """Shift (s) that best aligns the words in `lst` with the voice, within center ± 0.6 s."""
             a = _bin(words[lst[0]]["start"], e0) - 30
             b = _bin(words[lst[-1]]["end"], e0) + 30
             if b <= a:
@@ -143,12 +143,12 @@ def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
                     best_score, best_shift = v, sb * HOP
             return best_shift
 
-        # 1. Corrimiento general del tramo (solo si hay habla suficiente para que sea confiable)
+        # 1. Overall shift for the chunk (only if there is enough speech for it to be reliable)
         speech = sum(max(0.0, words[i]["end"] - words[i]["start"]) for i in in_chunk)
         if speech >= 3:
             prior = best(in_chunk, 0.0)
 
-        # 2. Frase por frase
+        # 2. Phrase by phrase
         phrases, cur = [], []
         for i in in_chunk:
             if cur and words[i]["start"] - words[cur[-1]]["end"] > PHRASE_GAP:
@@ -162,7 +162,7 @@ def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
             shift = prior
             if words[l]["end"] - words[f]["start"] >= 0.6:
                 shift = best(ph, prior)
-            shift = max(shift, prev_end + 0.02 - words[f]["start"])     # no pisar la frase anterior
+            shift = max(shift, prev_end + 0.02 - words[f]["start"])     # do not overlap the previous phrase
             for i in ph:
                 s = max(0.0, words[i]["start"] + shift)
                 out[i]["start"] = s
@@ -170,7 +170,7 @@ def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
                 shifts.append(shift)
             prev_end = out[l]["end"]
 
-        # 3. Palabras estiradas sobre una pausa: se deja solo el pedazo donde suena la voz
+        # 3. Words stretched over a pause: keep only the piece where the voice sounds
         floor = float(np.percentile(win, 20))
         for i in in_chunk:
             dur = out[i]["end"] - out[i]["start"]
@@ -188,7 +188,7 @@ def align(words: list[dict], env: np.ndarray) -> tuple[list[dict], int, float]:
 
 
 def align_segments(segments: list[dict], wav_path) -> tuple[list[dict], int, float]:
-    """Ajusta las palabras de los segmentos de Whisper y recalcula el inicio y el fin de cada segmento."""
+    """Adjusts the words of the Whisper segments and recomputes the start and end of each segment."""
     flat, owner = [], []
     for si, seg in enumerate(segments):
         for wi, w in enumerate(seg.get("words") or []):

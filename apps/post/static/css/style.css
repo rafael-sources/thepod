@@ -40,7 +40,7 @@
   /* Text */
   --paper:       #efe3d0;
   --paper-soft:  #c7b894;
-  --paper-dim:   #9d9078;   /* 5.8:1 sobre --ink (WCAG AA) */
+  --paper-dim:   #9d9078;   /* 5.8:1 on --ink (WCAG AA) */
   --paper-faint: #5c5240;
 
   /* Signal palette (limited, high-impact) */
@@ -2724,7 +2724,7 @@ a.mark:hover { opacity: 0.8; }
   border-color: rgba(74, 222, 128, 0.45);
 }
 
-/* Tarjeta de un episodio que todavía recibe pistas desde prodPod */
+/* Card for an episode still receiving tracks from prodPod */
 .project-tile.importing { border: 2px solid #c03428; box-shadow: 0 0 0 3px rgba(192, 52, 40, 0.18); }
 .tile-importing {
   background: #c03428; color: #fff; font-weight: 700; font-size: 13px; line-height: 1.35;
@@ -2732,7 +2732,7 @@ a.mark:hover { opacity: 0.8; }
 }
 .tile-importing span { font-weight: 500; opacity: 0.9; }
 
-/* Revisión antes de exportar */
+/* Pre-export review */
 .review-box { margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(244,199,112,0.35); background: rgba(244,199,112,0.06); border-radius: var(--r-md, 8px); font-size: 12px; }
 .review-box.clean { border-color: rgba(141,179,106,0.45); background: rgba(141,179,106,0.08); }
 .review-ok { color: #8db36a; font-weight: 600; }
@@ -2744,7 +2744,7 @@ a.mark:hover { opacity: 0.8; }
 .review-item.info .review-icon, .review-item.optional .review-icon { color: var(--paper-dim, #999); }
 .review-hint { font-size: 11px; }
 
-/* Reel de un momento */
+/* Reel of a moment */
 .reel-box { margin-bottom: 10px; }
 .reel-designs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .reel-design { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 6px; border: 1px solid var(--ink-line); border-radius: var(--r-md, 8px); background: transparent; color: inherit; cursor: pointer; text-transform: none; letter-spacing: 0; }
@@ -2759,7 +2759,7 @@ a.mark:hover { opacity: 0.8; }
 .reel-thumb.titulo .t, .reel-thumb.marca .t { display: block; }
 
 /* ==========================================================================
-   thePod móvil · capa compartida (misma que prePod/amaPod/prodPod, señal dorada)
+   thePod mobile · shared layer (same as prePod/amaPod/prodPod, gold accent)
    ========================================================================== */
 @media (max-width: 900px), (pointer: coarse) {
   :root { --m-tab-h: 56px; --m-top-h: 52px; }
@@ -2814,7 +2814,7 @@ a.mark:hover { opacity: 0.8; }
   .modal input, .modal textarea, .modal select { font-size: 16px; min-height: 44px; }
   .modal .row.right button { min-height: 48px; }
 
-  /* El editor en el celular: una parte por pantalla, el video siempre arriba */
+  /* The editor on the phone: one part per screen, the video always on top */
   .editor-wide.m-editor { display: flex; flex-direction: column; height: auto; flex: 1; min-height: 0; overflow: hidden; }
   .editor-wide.m-editor > .side, .editor-wide.m-editor > .right-col { flex: 1; min-height: 0; border: 0; padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
   .editor-wide.m-editor > .main { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }

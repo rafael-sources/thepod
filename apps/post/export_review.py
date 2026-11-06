@@ -1,7 +1,7 @@
 """
-Revisión antes de exportar (como en la app de Mac): una lista corta de lo que conviene mirar
-antes de sacar el video. No bloquea nada salvo lo que haría fallar la exportación
-(timeline vacío o un archivo que ya no está).
+Pre-export review (as in the Mac app): a short list of things worth checking
+before rendering the video. It blocks nothing except what would make the export fail
+(empty timeline or a file that is no longer there).
 
 GET /api/projects/<slug>/export/review →
   {"items": [{"id", "level": "block"|"warn"|"info"|"optional", "text", "hint"}], "ok": bool}
@@ -23,7 +23,7 @@ SILENCES_KEY = "silences_cleaned_at"
 
 
 def mark_silences_cleaned(db):
-    """Lo llaman los botones de quitar silencios: así la revisión sabe que ya se limpió."""
+    """Called by the remove-silences buttons: this way the review knows it was already cleaned."""
     db.execute("INSERT OR REPLACE INTO project_meta (key, value) VALUES (?, datetime('now'))", (SILENCES_KEY,))
 
 
@@ -60,7 +60,7 @@ def build_review(slug: str, username: str | None) -> list[dict]:
     finally:
         db.close()
 
-    # 1. Lo que haría fallar la exportación
+    # 1. What would make the export fail
     if not clips:
         items.append({"id": "empty", "level": "block",
                       "text": "El timeline está vacío: no hay nada que exportar.",
@@ -80,7 +80,7 @@ def build_review(slug: str, username: str | None) -> list[dict]:
                       "text": f"Falta un archivo que usa el timeline ({names}).",
                       "hint": "Vuelve a subirlo o quita ese clip del timeline."})
 
-    # 2. Subtítulos
+    # 2. Subtitles
     av = [r for r in clips if r["file_type"] in ("video", "audio") and r["filename"]]
     words, synced = [], []
     for r in {r["media_file_id"]: r for r in av}.values():
@@ -104,13 +104,13 @@ def build_review(slug: str, username: str | None) -> list[dict]:
                       "text": "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche.",
                       "hint": "Vuelve a generarlos; ahora se ajustan solos."})
 
-    # 3. Silencios
+    # 3. Silences
     if not meta.get(SILENCES_KEY) and not cuts:
         items.append({"id": "silences", "level": "optional",
                       "text": "No se quitaron los silencios largos.",
                       "hint": "Usa el botón «🔇 Silencios» de arriba."})
 
-    # 4. IA (una sola vez por episodio)
+    # 4. AI (only once per episode)
     if words and not ai_done:
         items.append({"id": "ai", "level": "optional",
                       "text": "La IA todavía no leyó el episodio (momentos y notas).",

@@ -86,7 +86,7 @@ def _collect_bundle_files(slug: str, db_tmp: Path | None):
             rows = []
         for filename, file_type in rows:
             if (media_dir / file_type / filename).exists():
-                continue  # ya incluido en el walk de media/
+                continue  # already included in the media/ walk
             gsrc = GLOBAL_DIR / file_type / filename
             if gsrc.is_file():
                 arcname = f"media/{file_type}/{filename}"
