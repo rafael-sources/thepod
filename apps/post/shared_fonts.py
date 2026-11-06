@@ -1,1 +1,1 @@
-/srv/thepod/prepod/shared_fonts.py
+../pre/shared_fonts.py
