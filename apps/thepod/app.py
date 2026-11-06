@@ -16,7 +16,7 @@ from flask import Flask, Response, abort, jsonify, redirect, render_template, re
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from shared_config import load_shared_config
-from shared_users import md5, policy_for, touch_last_login, users_passwords
+from shared_users import policy_for, touch_last_login, verify_password
 
 
 def create_app():
@@ -64,9 +64,7 @@ def create_app():
             from shared_users import list_user_rows
             username = next((r["username"] for r in list_user_rows()
                              if (r.get("email") or "").strip().lower() == username), username)
-        passwords = users_passwords()
-        expected = passwords.get(username)
-        if not expected or md5(password) != expected:
+        if not verify_password(username, password):
             return jsonify({"error": "usuario o contraseña inválidos"}), 401
         session.clear()
         session["username"] = username

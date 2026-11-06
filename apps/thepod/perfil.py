@@ -12,6 +12,7 @@ Cambiar el correo o la contraseña pide la contraseña actual.
 import os
 import re
 from pathlib import Path
+from shared_users import check_password, hash_password
 
 from flask import Blueprint, abort, jsonify, render_template, request, send_file, session
 
@@ -96,7 +97,7 @@ def perfil_update():
     if "email" in data:
         email = (data.get("email") or "").strip().lower()
         if email != (user["email"] or "").strip().lower():
-            if md5(data.get("password") or "") != user["password_md5"]:
+            if not check_password(data.get("password") or "", user["password_md5"]):
                 return jsonify({"error": "Para cambiar el correo escribe tu contraseña actual."}), 403
             if email and not _EMAIL_RE.match(email):
                 return jsonify({"error": "Ese correo no parece válido."}), 400
@@ -120,13 +121,13 @@ def perfil_password():
     data = request.get_json(silent=True) or {}
     current = data.get("current") or ""
     new = data.get("new") or ""
-    if md5(current) != user["password_md5"]:
+    if not check_password(current, user["password_md5"]):
         return jsonify({"error": "La contraseña actual no es correcta."}), 403
     if len(new) < 8:
         return jsonify({"error": "La nueva contraseña necesita al menos 8 caracteres."}), 400
     if new == current:
         return jsonify({"error": "La nueva contraseña es igual a la actual."}), 400
-    update_user_fields(user["username"], {"password_md5": md5(new)})
+    update_user_fields(user["username"], {"password_md5": hash_password(new)})
     return jsonify({"ok": True})
 
 
