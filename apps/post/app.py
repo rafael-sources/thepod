@@ -133,11 +133,12 @@ def create_app():
         if _pol(username).get("see_all"):
             return None
         slug = m.group(1)
-        from projects import _read_meta as _rm, LEGACY_OWNER as _LO
+        from projects import _read_meta as _rm
+        from shared_users import default_owner as _default_owner
         meta = _rm(slug)
         if not meta:
             return None
-        owner = meta.get("owner_username") or _LO
+        owner = meta.get("owner_username") or _default_owner()
         extras = meta.get("extra_hosts") or []
         if username != owner and username not in extras:
             return _json({"error": "no autorizado para este proyecto"}), 403

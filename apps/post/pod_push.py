@@ -39,9 +39,10 @@ def notify(usernames, title: str, body: str = "", url: str = "/", tag: str | Non
 def project_hosts(slug: str) -> list[str]:
     """Dueño + hosts adicionales de un proyecto (para avisarles)."""
     try:
-        from projects import _read_meta, LEGACY_OWNER
+        from projects import _read_meta
+        from shared_users import default_owner
         meta = _read_meta(slug) or {}
-        return [meta.get("owner_username") or LEGACY_OWNER] + list(meta.get("extra_hosts") or [])
+        return [meta.get("owner_username") or default_owner()] + list(meta.get("extra_hosts") or [])
     except Exception:
         return []
 

@@ -11,6 +11,7 @@ import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from shared_users import default_owner
 
 from flask import Blueprint, jsonify, request
 
@@ -121,7 +122,7 @@ def import_from_prepod():
         },
     }
 
-    owner = (data.get("owner_username") or "admin").strip().lower() or "admin"
+    owner = (data.get("owner_username") or default_owner()).strip().lower() or default_owner()
     extra_hosts = data.get("extra_hosts") or []
     if not isinstance(extra_hosts, list):
         extra_hosts = []
@@ -888,7 +889,7 @@ def import_track_from_prodpod():
     meta = find_project_by_shared_id(spid, source_episode_id=src_ep_id)
     if not meta:
         project_name = (request.form.get("project_name") or "").strip() or f"Episodio {spid[:8]}"
-        owner = (request.form.get("owner_username") or "admin").strip().lower()
+        owner = (request.form.get("owner_username") or default_owner()).strip().lower()
         extra_hosts_raw = (request.form.get("extra_hosts") or "").strip()
         extra_hosts = [h.strip().lower() for h in extra_hosts_raw.split(",") if h.strip()]
         src_info = {

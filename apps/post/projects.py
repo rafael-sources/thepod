@@ -2,6 +2,7 @@ import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from shared_users import default_owner
 
 from flask import Blueprint, jsonify, request, send_file
 from slugify import slugify
@@ -64,7 +65,6 @@ def _write_meta(slug, data):
     _project_meta_path(slug).write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 
-LEGACY_OWNER = "admin"
 
 
 def _can_see(meta) -> bool:
@@ -74,7 +74,7 @@ def _can_see(meta) -> bool:
     from config import policy_for
     if policy_for(user).get("see_all"):
         return True
-    owner = (meta or {}).get("owner_username") or LEGACY_OWNER
+    owner = (meta or {}).get("owner_username") or default_owner()
     extras = (meta or {}).get("extra_hosts") or []
     return user == owner or user in extras
 
