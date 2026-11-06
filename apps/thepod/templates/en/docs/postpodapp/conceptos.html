@@ -1,0 +1,165 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod for Mac · Concepts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTS</div>
+  <h1>How the app thinks</h1>
+  <p class="lede">A few ideas, well defined. If you get these, you get everything the app does.</p>
+</header>
+
+<section id="proyecto">
+  <h2><span class="num">01</span> Project</h2>
+  <p>
+    Every episode you bring in is a project with its own folder inside <strong>Movies → postPod</strong>:
+    that's where the videos, sound effects, sponsors, branding and everything you export live. Deleting a project from the app sends it to the Trash.
+  </p>
+</section>
+
+<section id="pistas">
+  <h2><span class="num">02</span> Tracks and people</h2>
+  <p>
+    Each recorded person is a <strong>track</strong> with their video and audio. Tracks can start at different
+    times (someone who joined late): the app respects that offset so everything stays in sync.
+    The app knows <strong>who's talking</strong> by measuring the volume of each track, and uses that to switch cameras in the automatic layouts.
+  </p>
+</section>
+
+<section id="cortes">
+  <h2><span class="num">03</span> Non-destructive cuts</h2>
+  <p>
+    Just like in postPod web, nothing is ever really deleted. The silences, filler words and sentences you remove are stored as
+    <strong>cuts</strong> over the original recording time. The preview and the export skip those stretches.
+    You can undo them whenever you want. Muting one person for a stretch (a cough, a bump) isn't a cut: the video doesn't get shorter,
+    only their volume drops there (see <a href="#mezcla">Mix</a>).
+  </p>
+  <table>
+    <thead><tr><th>Type of cut</th><th>Where it comes from</th></tr></thead>
+    <tbody>
+      <tr><td>Silence</td><td>Long pauses where nobody talks (any stretch with audible voice is protected)</td></tr>
+      <tr><td>Filler word</td><td>“uh”, “umm”, “mmm”… and, if you turn it on, “este”, “o sea”, “pues”, “bueno”</td></tr>
+      <tr><td>Sentence</td><td>The ones you cut by hand in Subtitles</td></tr>
+      <tr><td>Imported</td><td>The cuts you already made in the postPod web transcript</td></tr>
+      <tr><td>Stretch</td><td>What you mark by dragging in the timeline and cut “from everyone”</td></tr>
+      <tr><td>Reel only</td><td>The scissors in a reel's text: removed from that reel, not from the episode</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="transcripcion">
+  <h2><span class="num">04</span> Transcription</h2>
+  <p>
+    The app transcribes each track separately, on your Mac and without internet, noting the exact time of every word.
+    Then it merges the tracks and discards the duplicate words that leak from one microphone into another.
+    Subtitles, filler-word cuts and silence detection all come from that transcript.
+  </p>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Moments and reels</h2>
+  <p>
+    <strong>Moments</strong> are the ones you mark in postPod web (the <kbd>M</kbd> key) or live in prodPod.
+    The app doesn't invent reels with AI: each moment becomes a reel, with the same rule the web uses
+    (the moment's length, or up to the next moment). You can also add a moment from the app
+    (<strong>Mark moment</strong>, or the <kbd>M</kbd>, <kbd>I</kbd> and <kbd>O</kbd> keys).
+    Each reel can have its own layout, subtitles, music, b-roll and lower thirds, separate from the episode.
+    Whatever lies outside the reel's stretch doesn't go in it.
+  </p>
+</section>
+
+<section id="layouts">
+  <h2><span class="num">06</span> Formats and layouts</h2>
+  <p>The <strong>format</strong> is the size of the video; the <strong>layout</strong> is how the cameras are arranged inside it.</p>
+  <table>
+    <thead><tr><th>Layout</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Automatic</td><td>Picks the best one for the format</td></tr>
+      <tr><td>Speaker</td><td>Full screen for whoever is talking</td></tr>
+      <tr><td>Side by side</td><td>Everyone at once, next to each other</td></tr>
+      <tr><td>Grid</td><td>Everyone in a grid</td></tr>
+      <tr><td>Lead</td><td>The speaker large, the rest along the side</td></tr>
+      <tr><td>Picture in picture</td><td>The speaker large, someone else in a corner</td></tr>
+      <tr><td>Top and bottom</td><td>One on top and one below (ideal for vertical)</td></tr>
+      <tr><td>Studio</td><td>The cameras in frames over your podcast background</td></tr>
+    </tbody>
+  </table>
+  <p>On top of the layout go, in this order: the video (or the b-roll), the lower thirds, the layers (texts, stickers, images) and, above everything, the subtitles.</p>
+</section>
+
+<section id="capas">
+  <h2><span class="num">07</span> Layers and b-roll</h2>
+  <p>
+    A <strong>layer</strong> is something that shows over the video for a while: a text, a sticker or an image. It has a start, a duration
+    and an in and out animation, and you move it by dragging it over the preview.
+    <strong>B-roll</strong> is a video or a photo that covers the screen for a few seconds (or goes in a <em>small window</em>) while the voice keeps going;
+    if it has sound, it's mixed in; if it's muted, it's only seen. If you cut the stretch where a layer started, it shows up in whatever comes next.
+  </p>
+</section>
+
+<section id="cintillos">
+  <h2><span class="num">08</span> Lower thirds</h2>
+  <p>
+    The news-style texts that slide in at the bottom: title, text and tag (NOW, SEGMENT, SPONSORED BY…), with the podcast or sponsor logo,
+    animation and a short sound. Three styles: <strong>News</strong>, <strong>Clean</strong> and <strong>Sponsor</strong>.
+    The ones the director launched live from prodPod arrive already placed at their second, marked “from the director”, and are edited the same way.
+  </p>
+</section>
+
+<section id="mezcla">
+  <h2><span class="num">09</span> Mix and drawn volume</h2>
+  <p>
+    Each person has their waveform, a meter, <strong>S</strong> (solo) and <strong>M</strong> (mute), and a
+    <strong>yellow line</strong> of volume you draw with points: between points the volume changes gradually.
+    What you draw is added to the automatic stuff (fades, muting whoever isn't talking, bleeps), and yours wins.
+    On export, the final loudness is measured and brought to <strong>−16 LUFS</strong>, which is what Spotify and YouTube ask for.
+    If you want to finish the mix in another program, <em>Separate tracks</em> gives you one WAV per person and another with music and effects.
+  </p>
+</section>
+
+<section id="sensibles">
+  <h2><span class="num">10</span> Sensitive words</h2>
+  <p>
+    Swear words and topics that social networks down-rank (death, drugs, sex, weapons…), found in the transcript.
+    For each one you decide: <strong>bleep on top</strong> (covers the word on every microphone, the original audio is untouched),
+    <strong>change the subtitle</strong> to the euphemism used on social media (“unalive”, “substances”…), both, or leave it as is.
+    Swear words come with a bleep and a softened subtitle; sensitive topics only change the subtitle.
+  </p>
+</section>
+
+<section id="teleprompter">
+  <h2><span class="num">11</span> Teleprompter</h2>
+  <p>
+    A section of the prePod script marked as teleprompter: it says <strong>who reads it</strong> (from the list of hosts and guests),
+    <strong>when it appears</strong> (minutes and seconds from the start of the recording, or <em>after the previous one</em> with a gap),
+    the speed and how much of the screen it takes. In the prod room it fires on its own: everyone sees the heads-up 3 s before and the text shows only to the reader.
+    The director can also launch one by hand from the control room.
+  </p>
+</section>
+
+<section id="plantillas">
+  <h2><span class="num">12</span> Reel templates</h2>
+  <p>
+    The reel design (camera layout, branding, subtitles, order) is saved under a name and applied with one click in any episode.
+    It doesn't save your custom logo or background, because those are files that belong to each episode.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#proyecto">Project</a>
+  <a href="#pistas">Tracks and people</a>
+  <a href="#cortes">Non-destructive cuts</a>
+  <a href="#transcripcion">Transcription</a>
+  <a href="#momentos">Moments and reels</a>
+  <a href="#layouts">Formats and layouts</a>
+  <a href="#capas">Layers and b-roll</a>
+  <a href="#cintillos">Lower thirds</a>
+  <a href="#mezcla">Mix and drawn volume</a>
+  <a href="#sensibles">Sensitive words</a>
+  <a href="#teleprompter">Teleprompter</a>
+  <a href="#plantillas">Reel templates</a>
+</nav>
+{% endblock %}

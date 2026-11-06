@@ -1,0 +1,166 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod for Mac · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Frequently asked questions</h1>
+  <p class="lede">Common questions and how to solve the most frequent problems.</p>
+</header>
+
+<h2 id="faq-h"><span class="num">01</span> Questions</h2>
+<section class="faq" id="faq">
+  <details>
+    <summary>What does the Free plan include?</summary>
+    <div class="ans"><p>2 episodes in total, recordings of up to 15 minutes and video up to 720p. Each recorded room, each new project in postPod web and each recording imported on the Mac counts as an episode. Whatever already counted can keep being used forever. Your plan and how many episodes you have left show in Settings, under “Your thePod account”. The paid plans are Web (9 USD a month: everything in the browser, no limits) and Mac (19 USD a month: the app on top, no limits). You pick them with “Upgrade plan” or at thepod.castmedia.space/planes.</p></div>
+  </details>
+  <details>
+    <summary>Why didn't it remove a “bueno” or an “o sea”?</summary>
+    <div class="ans"><p>Because very often they're part of the sentence (“bueno, empecemos”, “es bueno”). Since 0.20 only clear filler words are removed on their own. The doubtful ones go to <strong>To review</strong>, in Clean sound: you listen and choose Remove or Keep. Until you mark them, nothing gets cut.</p></div>
+  </details>
+
+  <details>
+    <summary>Is my audio uploaded to a server to transcribe it?</summary>
+    <div class="ans"><p>No. Transcription, audio enhancement and rendering happen on your Mac. The only time anything is uploaded is when you tap Publish.</p></div>
+  </details>
+
+  <details>
+    <summary>Does it work on Intel Macs?</summary>
+    <div class="ans"><p>No. The app is built for Apple silicon (M1 or later) and macOS 15 or later.</p></div>
+  </details>
+
+  <details>
+    <summary>“Invalid username or password” or no projects show up in “In postPod web”</summary>
+    <div class="ans">
+      <p>Open Settings, check your username (or your email) and your password, which are the same as on the web, and tap <strong>Save and test</strong>. If the web lets you in with those details, the app should too. If you don't remember your password, tap <strong>Forgot your password?</strong> right there.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>“Bring to the Mac” takes a while to start</summary>
+    <div class="ans"><p>First postPod prepares the episode (you'll see the percentage) and then the download starts. For long episodes the preparation can take a few minutes. If the connection drops or you close the app, <strong>Resume</strong> picks up where it left off.</p></div>
+  </details>
+
+  <details>
+    <summary>The first transcription takes a long time</summary>
+    <div class="ans"><p>The first time, the app gets itself ready to transcribe: it needs internet and takes a few minutes. It only happens once; after that it starts right away and works without internet.</p></div>
+  </details>
+
+  <details>
+    <summary>Can I undo what “Fix everything” did?</summary>
+    <div class="ans"><p>Yes. Cuts don't delete anything: <strong>Undo cuts</strong> removes them all, or you can review them one by one in the list. Studio sound can be turned off and the video goes back to the original audio.</p></div>
+  </details>
+
+  <details>
+    <summary>No reels show up</summary>
+    <div class="ans"><p>Reels come from the moments in postPod. Mark them on the web (the <kbd>M</kbd> key) and use <strong>Bring again</strong>, or add one from the app with <strong>Add a moment from where the video is</strong>.</p></div>
+  </details>
+
+  <details>
+    <summary>Where do my files end up?</summary>
+    <div class="ans"><p>In each project's sidebar, tap <strong>Exports folder</strong> and it opens in the Finder.</p></div>
+  </details>
+
+  <details>
+    <summary>It won't let me publish the audio</summary>
+    <div class="ans"><p>Your podcast has to be set up for publishing in prePod. Do it once there and come back to the app. YouTube works separately: it only needs your channel connected in Networks.</p></div>
+  </details>
+  <details>
+    <summary>In pub a star shows dotted</summary>
+    <div class="ans"><p>That account isn't connected. Tap the star: the browser opens to grant permission and, when you come back, the star is filled in. They can also be connected in pre → Podcast settings → Networks.</p></div>
+  </details>
+  <details>
+    <summary>Instagram won't let me connect</summary>
+    <div class="ans"><p>It has to be a professional account (Creator or Business); you change it in the Instagram app, under Settings → Account type. And while thePod is under Meta review, only accounts added as testers can publish: write to us with your username and we'll add you.</p></div>
+  </details>
+  <details>
+    <summary>I published to TikTok and it doesn't show on my profile</summary>
+    <div class="ans"><p>That's normal: the video lands in your TikTok <strong>inbox</strong> (the “You have a video ready” notification). You open it on your phone, paste the text the app left you and publish it from there. Until TikTok reviews the app, publishing directly to the profile isn't possible.</p></div>
+  </details>
+  <details>
+    <summary>The video uploaded to YouTube but as private</summary>
+    <div class="ans"><p>Until Google verifies the app, everything it uploads stays private. Open it on YouTube and switch it to “Public”. The app marks it as “Uploaded as private” so you don't forget.</p></div>
+  </details>
+  <details>
+    <summary>How do I update the app?</summary>
+    <div class="ans"><p>You don't have to do anything: on launch, thePod checks for a new version and lets you know. Tap <strong>Update</strong> and then <strong>Relaunch and update</strong>. You can also check by hand in Settings → Updates.</p></div>
+  </details>
+
+  <details>
+    <summary>I changed something in pre, does it show on the web?</summary>
+    <div class="ans"><p>Yes. The pre section saves straight to prePod, so you see it on the web as soon as you reload the page. And whatever you change on the web shows in the app when you tap <strong>Refresh</strong>.</p></div>
+  </details>
+
+  <details>
+    <summary>Can I turn off the sound on open and close?</summary>
+    <div class="ans"><p>Yes, in Settings → On open and close.</p></div>
+  </details>
+
+  <details>
+    <summary>The bleep doesn't cover the word / the word is heard underneath</summary>
+    <div class="ans"><p>Since 0.17.1 the bleep silences <strong>every</strong> microphone while it lasts (the word also leaks through the other person's microphone) and starts a little before and ends a little after the word. If you can still hear it, check in Prepare → Sensitive words that the word has <strong>Bleep on top</strong> turned on, and that it isn't marked “It's fine as is”.</p></div>
+  </details>
+
+  <details>
+    <summary>The subtitles show up before (or after) people talk</summary>
+    <div class="ans"><p>In <strong>Subtitles</strong> tap <strong>Align to audio</strong>: each sentence shifts to where the voice is heard and, if you already removed silences, they're searched again. If a reel still doesn't match, in its Subtitles tab tap <strong>Listen to this reel again</strong>: it rewrites only that stretch, without changing the episode.</p></div>
+  </details>
+
+  <details>
+    <summary>Does the bleep or the subtitle change touch my original audio?</summary>
+    <div class="ans"><p>No. Like everything in the app, it's applied on export and in the preview. The recordings stay as they were; turn the bleep off and the word comes back.</p></div>
+  </details>
+
+  <details>
+    <summary>I want to finish the mix in Logic / Audition / Reaper</summary>
+    <div class="ans"><p>In Export tap <strong>Separate tracks (WAV)</strong>: one 24-bit 48 kHz WAV per person (with their cuts, fades, volume line and bleeps) and another with the music and effects, without intro or outro. They end up in the episode's <code>exports/pistas_&lt;fecha&gt;/</code>.</p></div>
+  </details>
+
+  <details>
+    <summary>Who sees the teleprompter in the room?</summary>
+    <div class="ans"><p>Everyone sees the heads-up 3 s before (“Coming up: <em>Script · Name</em> in 3 s”). The text shows only to the person chosen in prePod as the reader. If you didn't choose anyone, it shows to everyone. Guests see it too if the script names them as readers.</p></div>
+  </details>
+
+  <details>
+    <summary>The teleprompter doesn't appear at the seconds I set</summary>
+    <div class="ans"><p>The time counts from the start of the recording (not from when you enter the room). Check in prePod → Script that the section has <strong>Teleprompter</strong> marked and the minutes and seconds filled in; if it uses “after the previous one”, prePod works out the start from the previous one's words and speed, and doesn't react to whether the previous one was paused or closed early.</p></div>
+  </details>
+
+  <details>
+    <summary>The virtual background flickers or leaves a strip</summary>
+    <div class="ans"><p>It's a known limit (see below). Even lighting and a still real background help; in the “Studio” and “Speaker with frame” layouts the strip of podcast background is less noticeable if you pick the <em>Podcast background</em> as the virtual background.</p></div>
+  </details>
+
+  <details>
+    <summary>I put a video in a reel's small window and it looked cropped or didn't move</summary>
+    <div class="ans"><p>Fixed in 0.12: the small window takes the video's shape (doesn't crop it) and videos shot vertically on a phone show upright. If it happens to you on a newer version, check that the b-roll is within the reel's stretch: whatever falls outside doesn't go in.</p></div>
+  </details>
+
+  <details>
+    <summary>My Mac heats up when exporting</summary>
+    <div class="ans"><p>Turn on <strong>Quiet mode</strong> in Export: the render slows down when the Mac heats up. It takes longer, but it doesn't stop. The fine virtual background is the heaviest part (about 9 s per 10 s of video with two people).</p></div>
+  </details>
+</section>
+
+<section id="limites">
+  <h2><span class="num">02</span> What it doesn't do (yet) and known limits</h2>
+  <ul>
+    <li>A chained teleprompter (“after the previous one”) shows at the calculated time; it doesn't react to the previous one ending earlier or later.</li>
+    <li>In 9:16 and square, automatic elements move so they don't overlap; if there's no free room on screen, they stay where they were.</li>
+    <li>The virtual background can flicker with movement and leaves a strip of podcast background behind the person in some layouts.</li>
+    <li>The per-person meter shows the analysis level with the volume applied, not a measurement of the real output.</li>
+    <li>The mix has no VST/AU plugins, MIDI, 5.1 or multiband mastering, on purpose: that's what separate tracks are for.</li>
+    <li>In ama, seeing and hearing the Q&amp;A guest inside the prod room, recording on the Mac if the server's recording fails, and real moderated chat are still missing.</li>
+    <li>There's no iPhone/iPad or Windows app: guests use the web.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#faq">Frequently asked questions</a>
+  <a href="#limites">Known limits</a>
+</nav>
+{% endblock %}

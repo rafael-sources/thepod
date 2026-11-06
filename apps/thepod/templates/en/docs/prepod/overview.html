@@ -1,0 +1,110 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Overview — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>prePod</h1>
+  <p class="lede">
+    Your podcast planning hub. Before you record, you need to define your show's identity,
+    plan the content, coordinate your team and guests, and know the order of every segment.
+    prePod puts all of that in one place.
+  </p>
+</header>
+
+<section id="que-puedes">
+  <h2><span class="num">01</span> What can you do?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">IDENTITY</div>
+      <h4>Branding</h4>
+      <p>Define your podcast's visual identity: name, tagline, colors, logo and cover art. Everything flows automatically into prodPod and your public landing page.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">MANAGEMENT</div>
+      <h4>Episodes and Kanban</h4>
+      <p>Manage your episodes on a visual board with six columns: Idea, Planning, With script, Recorded, Published and Archived. Drag to change the status.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">STRUCTURE</div>
+      <h4>Rundown and script</h4>
+      <p>Build the structure of each episode with blocks (Intro, Segment, Interview, Sponsor, Break, Outro) and write the detailed script with speakers and timings.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">TEAM</div>
+      <h4>Guests and RSVP</h4>
+      <p>Add guests, assign roles (Host, Co-host, Guest) and send invitations by email or link. Each guest confirms with a single click.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">SCHEDULE</div>
+      <h4>Calendar</h4>
+      <p>Schedule episodes with a date and time. See everything on a monthly calendar, drag to reschedule and download .ics files for your own calendar app.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">MONETIZATION</div>
+      <h4>Sponsors</h4>
+      <p>Register advertisers, link them to rundown blocks and generate reports with minutes and episodes per sponsor. Export CSV for your clients.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">REUSE</div>
+      <h4>Templates</h4>
+      <p>Create reusable structures (rundown + base script) for episodes with a recurring format. Save time on every new episode.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">PUBLISH</div>
+      <h4>Landing page and RSS</h4>
+      <p>Publish a web page with your podcast's info, episode list, team and an RSS feed compatible with every podcast platform.</p>
+    </div>
+  </div>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">02</span> Who is it for?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">BASIC</div>
+      <h4>Independent host</h4>
+      <p>You record alone or with the occasional guest. You use prePod to plan your content, keep a clear rundown and publish your landing page with RSS.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">INTERMEDIATE</div>
+      <h4>Small team (2-4)</h4>
+      <p>A host, a co-host and maybe a producer. You use the kanban to coordinate episodes, the script to split up who says what, and RSVP for outside guests.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">ADVANCED</div>
+      <h4>Studio with several shows</h4>
+      <p>Several podcasts with different teams. Each podcast has its own branding, sponsors, landing page and reports. Admins manage users and permissions.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">03</span> What's in here?</h2>
+  <ul>
+    <li><a href="/docs/prepod/quickstart">Getting started</a> — create your first podcast and episode in under 10 minutes.</li>
+    <li><a href="/docs/prepod/conceptos">Concepts</a> — key vocabulary: kanban, rundown, templates, sponsors, RSVP.</li>
+    <li><a href="/docs/prepod/funcionalidades">Features</a> — every tool in detail.</li>
+    <li><a href="/docs/prepod/atajos">Shortcuts</a> — hotkeys and mouse gestures.</li>
+    <li><a href="/docs/prepod/integraciones">Integrations</a> — how prePod connects with <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> and <a class="x-link postpod" href="/docs/postpod">postPod</a>.</li>
+    <li><a href="/docs/prepod/faq">FAQ</a> — frequently asked questions.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="ctag">START HERE</div>
+    <div class="cbody">
+      <p>If this is your first time, go straight to <a href="/docs/prepod/quickstart">Getting started</a>. In 10 minutes you'll have a working podcast.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#que-puedes">What can you do?</a>
+  <a href="#para-quien">Who is it for?</a>
+  <a href="#que-hay-aca">What's in here?</a>
+</nav>
+{% endblock %}

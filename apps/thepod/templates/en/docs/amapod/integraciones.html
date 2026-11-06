@@ -1,0 +1,61 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Integrations — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRATIONS</div>
+  <h1>How amaPod connects with the suite</h1>
+  <p class="lede">amaPod is the audience layer: it brings the public's questions into the studio and hands the recording over to editing.</p>
+</header>
+
+<section id="hacia-prodpod">
+  <h2><span class="num">01</span> Inside prodPod</h2>
+  <p>
+    An amaPod event can be linked to a prodPod recording session. When that happens,
+    the studio shows an embedded <strong>amaPod — Q&amp;A</strong> panel: the host sees the queue of
+    approved questions and puts participants on air without leaving prodPod.
+  </p>
+  <p>
+    Technically, prodPod embeds the event's <code>/embed/&lt;id&gt;</code> view — full moderation
+    is still available in amaPod for a dedicated moderator.
+  </p>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> To postPod</h2>
+  <p>
+    If the event was recorded, when you end it the MP4 recording is exported automatically to postPod
+    as an editing project. From there you can cut out the best moments, generate captions
+    with Whisper and export vertical clips for social networks.
+  </p>
+</section>
+
+<section id="cuentas">
+  <h2><span class="num">03</span> Accounts and access</h2>
+  <ul>
+    <li><strong>Host / moderator</strong>: uses the same thePod account as in the other apps (shared session).</li>
+    <li><strong>Participants</strong>: come in with the public link and their own access token — no account.</li>
+    <li><strong>Viewers</strong>: the viewing page is public, no login.</li>
+  </ul>
+</section>
+
+<section id="prepod">
+  <h2><span class="num">04</span> What about prePod?</h2>
+  <p>
+    For now, amaPod events are created directly in amaPod — they aren't planned from prePod.
+    If your Q&amp;A is part of an episode, plan the episode in prePod as always and create the
+    amaPod event separately, linking it to the prodPod session.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#hacia-prodpod">Inside prodPod</a>
+  <a href="#hacia-postpod">To postPod</a>
+  <a href="#cuentas">Accounts and access</a>
+  <a href="#prepod">What about prePod?</a>
+</nav>
+{% endblock %}

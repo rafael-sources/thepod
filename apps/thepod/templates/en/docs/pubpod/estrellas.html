@@ -1,0 +1,115 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · The stars — Docs · thePod{% endblock %}
+{% block description %}The eight stars of pubPod: what the episode lights up and what a reel lights up, each destination's panel, the “Always at the end” signature and the list of posts.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">THE STARS</div>
+  <h1>Eight destinations</h1>
+  <p class="lede">
+    At the top of pub, in an arc: Spotify, Apple Podcasts, YouTube, Instagram, Shorts, Reels, TikTok and Facebook.
+    A filled star is connected; a dotted one with “Connect” isn't. When you pick what to publish, the ones that apply light up.
+  </p>
+</header>
+
+<section id="arco">
+  <h2><span class="num">01</span> The arc</h2>
+  <div style="position: relative; height: 170px; margin: 8px 0 18px; padding: 10px; border-radius: 14px; background: var(--ink-panel); border: 1px solid var(--ink-line); overflow: hidden;" id="docStars" aria-hidden="true">
+    <div style="position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; color: var(--paper-dim);">Filled: connected · Dotted: tap to connect · Pulsing: publishing</div>
+  </div>
+  <ul>
+    <li>The ends dip down and the middle rises. The outer ones are the first to light up when you open pub.</li>
+    <li>A star <strong>glows</strong> when it lights up and <strong>pulses</strong> while something is being published through it.</li>
+    <li>Tapping a dotted star opens the browser to connect that account. Tapping the name of a lit one opens its panel.</li>
+  </ul>
+</section>
+
+<section id="que-enciende">
+  <h2><span class="num">02</span> What lights up what</h2>
+  <table>
+    <thead><tr><th>You pick</th><th>Lights up</th><th>What gets uploaded</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Full episode</strong></td><td>YouTube · Spotify · Apple Podcasts · Instagram</td><td>The 16:9 video to YouTube; the audio to the feed, with the episode notes; the cover chosen in post → Cover (or a frame from the video) with text to Instagram.</td></tr>
+      <tr><td><strong>Reel</strong></td><td>Shorts · Reels · TikTok</td><td>The 9:16 vertical exactly as it looks in the editor, with the reel's subtitles, music and lower thirds.</td></tr>
+      <tr><td><strong>From your computer</strong></td><td>Shorts · Reels · TikTok</td><td>A video you already have, without going through the editor.</td></tr>
+      <tr><td>Facebook</td><td>—</td><td>Coming very soon.</td></tr>
+    </tbody>
+  </table>
+  <p>Spotify and Apple Podcasts are two stars but a single connection: the podcast feed. Both read the same thing.</p>
+</section>
+
+<section id="panel">
+  <h2><span class="num">03</span> Each star's panel</h2>
+  <p>Tap a star's name, or press and hold it. Its panel opens:</p>
+  <ul>
+    <li><strong>The account</strong>: connected username, “View profile”, and Disconnect or Switch.</li>
+    <li><strong>Always at the end</strong>: a signature or hashtags that get added automatically at the bottom of every text you publish to that destination. You write it once and it applies to every post that follows.</li>
+    <li><strong>Latest</strong>: the last thing that went out through there, with its status and its link.</li>
+    <li><strong>Include / Remove from this post</strong>: to leave a star out this time without disconnecting it.</li>
+  </ul>
+</section>
+
+<section id="texto">
+  <h2><span class="num">04</span> The text for each destination</h2>
+  <p>Below the cards, one tab per lit star. Each network reads its own text:</p>
+  <ul>
+    <li><strong>YouTube</strong>: the description (chapters go in automatically if they follow YouTube's rules).</li>
+    <li><strong>Shorts</strong>: the Short's text; #Shorts is added to it.</li>
+    <li><strong>Instagram and Reels</strong>: the text with your hashtags.</li>
+    <li><strong>Spotify and Apple Podcasts</strong>: the episode notes, the same for both.</li>
+    <li><strong>TikTok</strong>: the text you'll paste when publishing from your phone; “Copy the text” gets it ready.</li>
+  </ul>
+</section>
+
+<section id="publicaciones">
+  <h2><span class="num">05</span> Posts</h2>
+  <p>At the bottom, the list of what went out and what's coming, with the time and status of each one:</p>
+  <table>
+    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td>Scheduled</td><td>Goes out at the time you chose. Can be cancelled until it starts.</td></tr>
+      <tr><td>Publishing…</td><td>Uploading now; the star pulses.</td></tr>
+      <tr><td>Published</td><td>Done, with the link.</td></tr>
+      <tr><td>Uploaded as private</td><td>It's on YouTube but not public yet: open it and switch it to Public.</td></tr>
+      <tr><td>In your TikTok inbox</td><td>The video reached TikTok; finish publishing it from your phone.</td></tr>
+      <tr><td>Not published</td><td>Something failed; “View details…” says what, and “Retry” tries again.</td></tr>
+      <tr><td>Cancelled</td><td>You cancelled it before it went out.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<script>
+  // El arco de la portada de esta página: ocho estrellas, las dos últimas punteadas
+  (function () {
+    var box = document.getElementById("docStars"); if (!box) return;
+    var names = ["Spotify", "Apple", "YouTube", "Instagram", "Shorts", "Reels", "TikTok", "Facebook"];
+    var on = [true, true, true, true, true, true, false, false];
+    function draw() {
+      box.querySelectorAll(".st").forEach(function (e) { e.remove(); });
+      var W = box.clientWidth, slot = (W - 20) / 8;
+      names.forEach(function (n, i) {
+        var t = Math.abs(i - 3.5) / 3.5;
+        var size = Math.round(Math.min(slot - 10, 24 + (1 - t) * 12));
+        var y = Math.round(16 + t * t * 56);
+        var el = document.createElement("div"); el.className = "st";
+        el.style.cssText = "position:absolute;width:" + slot + "px;left:" + (10 + slot * i) + "px;top:" + y + "px;display:flex;flex-direction:column;align-items:center;gap:5px;";
+        el.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 48 48"><polygon points="24,2.5 29.8,17.4 45.5,18.1 33.2,28 37.5,43.5 24,34.7 10.5,43.5 14.8,28 2.5,18.1 18.2,17.4" fill="' + (on[i] ? "#fff" : "none") + '" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"' + (on[i] ? "" : ' stroke-dasharray="4 4"') + '/></svg><span style="font-family:var(--font-mono);font-size:9px;color:var(--paper-dim);white-space:nowrap">' + n + '</span>';
+        box.appendChild(el);
+      });
+    }
+    draw(); window.addEventListener("resize", draw);
+  })();
+</script>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#arco">The arc</a>
+  <a href="#que-enciende">What lights up what</a>
+  <a href="#panel">The panel</a>
+  <a href="#texto">The text</a>
+  <a href="#publicaciones">Posts</a>
+</nav>
+{% endblock %}

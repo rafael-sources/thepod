@@ -1,0 +1,178 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Concepts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTS</div>
+  <h1>The postPod vocabulary</h1>
+  <p class="lede">The key terms you need to know to edit in postPod. If you're coming from another video editor, they'll sound familiar.</p>
+</header>
+
+<section id="proyecto">
+  <h2><span class="num">01</span> Project</h2>
+  <p>
+    Your editing workspace. It holds all the media files, the timeline, the moments and the export history. Each project is independent.
+    If your project comes from <a class="x-link prodpod" href="/docs/prodpod">prodPod</a>, it already includes the recordings and chapter markers.
+  </p>
+</section>
+
+<section id="archivos">
+  <h2><span class="num">02</span> Files (media files)</h2>
+  <p>
+    The video, audio and image files in your project. You upload them manually or they arrive from prodPod.
+    <strong>The original files are never modified</strong> — they're the untouched source your edits are built on.
+  </p>
+  <p>
+    Supported formats: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (image). Maximum size per file: 2 GB.
+  </p>
+</section>
+
+<section id="timeline-clips">
+  <h2><span class="num">03</span> Timeline and clips</h2>
+  <p>
+    The timeline is the sequence of clips that makes up your final result. A <strong>clip</strong> is a reference to a media file
+    (or a portion of it) placed at a specific position. You can reorder, trim and delete clips without touching the original file.
+  </p>
+  <p>
+    Clips can live on different <strong>tracks</strong> (Track 1, Track 2) for multi-camera workflows,
+    letting you switch between camera angles while editing.
+  </p>
+</section>
+
+<section id="audio-lane">
+  <h2><span class="num">04</span> Audio lane</h2>
+  <p>
+    A parallel audio track below the main timeline, ideal for background music, ambience or intro/outro stingers.
+    It plays along with the main content. Each clip in the audio lane has its own volume control and start/end points.
+  </p>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Moments</h2>
+  <p>
+    Timestamps you place on the timeline to anchor operations. A moment can be:
+  </p>
+  <ul>
+    <li><strong>Relative</strong> (default): it moves if you add or remove clips before it. This is the most useful type in most cases.</li>
+    <li><strong>Absolute</strong>: it stays at a fixed time no matter what changes in the timeline.</li>
+  </ul>
+  <p>
+    You can give a moment a <strong>duration</strong> to define a range (start to end) where its operations apply.
+    If your project came from prodPod, the recording's chapter markers already show up as moments.
+  </p>
+</section>
+
+<section id="operaciones">
+  <h2><span class="num">06</span> Operations</h2>
+  <p>
+    Effects and transformations applied at a moment. You can add multiple operations to the same moment.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Operation</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Zoom in / out</td><td>Zooms the image in or out at a specific point</td></tr>
+      <tr><td>Color effect</td><td>Applies black and white, sepia or inverted colors</td></tr>
+      <tr><td>Subtitle</td><td>Text at the top or bottom of the video</td></tr>
+      <tr><td>Audio mix</td><td>Mixes a sound over the main audio</td></tr>
+      <tr><td>Audio replace</td><td>Replaces the audio with another file</td></tr>
+      <tr><td>Switch video</td><td>Switches camera (track) at that point</td></tr>
+      <tr><td>To vertical (9:16)</td><td>Crops the frame to vertical format for TikTok/Reels</td></tr>
+      <tr><td>Vertical split</td><td>Stacks multiple cameras vertically for 9:16</td></tr>
+      <tr><td>Text overlay</td><td>Comic-style text sticker with animation</td></tr>
+      <tr><td>Remove silences</td><td>Detects and cuts silences automatically</td></tr>
+      <tr><td>Jump to moment</td><td>Jumps to another moment (skips the content in between)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="rango">
+  <h2><span class="num">07</span> Selected range</h2>
+  <p>
+    A yellow band on the timeline that you create by dragging across the ruler. It's used for:
+  </p>
+  <ul>
+    <li><strong>Partial export</strong>: export only that portion of the video (ideal for social media clips).</li>
+    <li><strong>Preview loop</strong>: loop that section to review the effects before exporting.</li>
+    <li><strong>Timeline zoom</strong>: press <kbd>Z</kbd> to zoom into the selection and edit with more precision.</li>
+  </ul>
+</section>
+
+<section id="transcript-cuts">
+  <h2><span class="num">08</span> Transcript cuts</h2>
+  <p>
+    Edits made in the Transcript Editor. When you delete text from the transcript, the matching audio/video is cut from the export.
+    It's the most intuitive way to remove filler words, long pauses or sections you don't want.
+    All cuts are non-destructive and reversible.
+  </p>
+</section>
+
+<section id="captions">
+  <h2><span class="num">09</span> Captions</h2>
+  <p>
+    Word-by-word subtitles generated by Whisper (an AI model). Available in multiple languages.
+    They can be shown live during playback, burned into the exported video, or exported as standalone SRT files.
+  </p>
+</section>
+
+<section id="export-jobs">
+  <h2><span class="num">10</span> Export jobs</h2>
+  <p>
+    Every export is a background task. You pick a preset, optionally turn on options
+    (burn captions, audio enhancement, generate notes, partial range), and the job shows its progress until it completes.
+    You can download the result or play it right away.
+  </p>
+</section>
+
+<section id="presets">
+  <h2><span class="num">11</span> Export presets</h2>
+  <p>Preconfigured profiles optimized for each platform:</p>
+  <table>
+    <thead>
+      <tr><th>Preset</th><th>Resolution</th><th>Format</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>YouTube 1080p</td><td>1920x1080</td><td>MP4</td></tr>
+      <tr><td>YouTube 4K</td><td>3840x2160</td><td>MP4</td></tr>
+      <tr><td>TikTok / Reels vertical</td><td>1080x1920</td><td>MP4</td></tr>
+      <tr><td>Instagram square</td><td>1080x1080</td><td>MP4</td></tr>
+      <tr><td>WhatsApp</td><td>1280x720 (compressed)</td><td>MP4</td></tr>
+      <tr><td>Podcast MP3</td><td>Audio only</td><td>MP3</td></tr>
+      <tr><td>Podcast M4A</td><td>Audio only</td><td>M4A</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="no-destructivo">
+  <h2><span class="num">12</span> Non-destructive editing</h2>
+  <p>
+    The core principle of postPod. Your original files stay untouched. Every cut, operation and adjustment is saved
+    as instructions in the project. When you export, all the instructions are applied to generate the final file.
+  </p>
+  <ul>
+    <li>You can change, remove or add operations at any time without losing anything.</li>
+    <li>You can export the same project several times with different presets.</li>
+    <li>If you delete an operation, the effect disappears — there's nothing to restore.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#proyecto">Project</a>
+  <a href="#archivos">Files</a>
+  <a href="#timeline-clips">Timeline and clips</a>
+  <a href="#audio-lane">Audio lane</a>
+  <a href="#momentos">Moments</a>
+  <a href="#operaciones">Operations</a>
+  <a href="#rango">Selected range</a>
+  <a href="#transcript-cuts">Transcript cuts</a>
+  <a href="#captions">Captions</a>
+  <a href="#export-jobs">Export jobs</a>
+  <a href="#presets">Presets</a>
+  <a href="#no-destructivo">Non-destructive</a>
+</nav>
+{% endblock %}

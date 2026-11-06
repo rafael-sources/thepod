@@ -31,6 +31,17 @@ def create_app():
         app.config["SESSION_COOKIE_DOMAIN"] = cfg["cookie_domain"]
     app.permanent_session_lifetime = timedelta(days=7)
 
+    # Idioma de la interfaz (es/en): cookie pod_lang compartida por el dominio, o el navegador.
+    from pod_lang import current_lang
+
+    @app.context_processor
+    def _lang():
+        return {"lang": current_lang(), "cookie_domain": app.config.get("SESSION_COOKIE_DOMAIN") or ""}
+
+    def tpl(name):
+        """La plantilla en el idioma actual: templates/en/<name> si existe y el idioma es inglés; si no, la española."""
+        return [f"en/{name}", name] if current_lang() == "en" else name
+
     @app.get("/")
     def index():
         from perfil import avatar_url as _av
@@ -174,7 +185,7 @@ def create_app():
         prev_section = order[idx - 1] if idx > 0 else None
         next_section = order[idx + 1] if idx + 1 < len(order) else None
         return render_template(
-            f"docs/{app_key}/{section}.html",
+            tpl(f"docs/{app_key}/{section}.html"),
             app_key=app_key,
             app_cfg=cfg,
             apps=DOCS_APPS,
@@ -232,7 +243,7 @@ def create_app():
 
     @app.get("/privacidad")
     def privacidad():
-        return render_template("privacidad.html", username=session.get("username"),
+        return render_template(tpl("privacidad.html"), username=session.get("username"),
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
@@ -243,7 +254,7 @@ def create_app():
 
     @app.get("/terminos")
     def terminos():
-        return render_template("terminos.html", username=session.get("username"),
+        return render_template(tpl("terminos.html"), username=session.get("username"),
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 

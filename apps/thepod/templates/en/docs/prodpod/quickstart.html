@@ -1,0 +1,113 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Getting started — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">GETTING STARTED</div>
+  <h1>Your first recording, step by step</h1>
+  <p class="lede">
+    From opening the session to having your tracks recorded and ready to edit in
+    <a class="x-link postpod" href="/docs/postpod">postPod</a>.
+    If your episode was already sent from <a class="x-link prepod" href="/docs/prepod">prePod</a>,
+    the session will be waiting for you.
+  </p>
+</header>
+
+<section id="abrir-sesion">
+  <h2><span class="num">01</span> Open the session</h2>
+  <p>
+    When you enter prodPod you'll see the list of available sessions. Sessions come in from prePod
+    when the host sends an episode to production. Click the session you want to record to open it.
+  </p>
+  <div class="callout">
+    <div class="ctag">IF YOU DON'T SEE IT</div>
+    <div class="cbody"><p>Check with the host that they sent the episode from prePod by clicking “Send to prodPod”. Only participants on the roster can see the session.</p></div>
+  </div>
+</section>
+
+<section id="prejoin">
+  <h2><span class="num">02</span> Set up your camera and microphone</h2>
+  <p>Before entering the studio, you'll land on the pre-join screen. Here you can:</p>
+  <ul>
+    <li>Pick your <strong>camera</strong> from the dropdown menu.</li>
+    <li>Pick your <strong>microphone</strong> from the dropdown menu.</li>
+    <li>Run the <strong>mic check assistant</strong>: click “Mic check”, talk normally for 10 seconds, and the system analyzes your audio level. When it's done, it suggests a gain adjustment so your voice sounds clear and even.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>The mic check remembers your settings for each microphone. If you always use the same one, you only need to do it once.</p></div>
+  </div>
+</section>
+
+<section id="entrar">
+  <h2><span class="num">03</span> Enter the studio</h2>
+  <p>
+    Click “Enter” to go into the studio. You'll see the video grid with every participant
+    who's already connected. Each tile shows the participant's name and role (host, co-host or guest).
+    Whoever is speaking is highlighted with a colored border.
+  </p>
+</section>
+
+<section id="ready-record">
+  <h2><span class="num">04</span> Start recording</h2>
+  <p>
+    When everyone is set, the host clicks <strong>“Ready”</strong>.
+    This starts a <strong>3-second countdown</strong> that appears in sync on every participant's screen.
+  </p>
+  <p>
+    When it hits zero, recording starts automatically in each person's browser.
+    Audio and video are recorded locally, which means the quality doesn't depend on the internet connection
+    — even if the video call stutters, the local file comes out clean.
+  </p>
+</section>
+
+<section id="durante-grab">
+  <h2><span class="num">05</span> Record your episode</h2>
+  <p>While recording, you can:</p>
+  <ul>
+    <li><strong>Fire sounds</strong> from the soundboard (click a pad or press keys 1-9).</li>
+    <li><strong>Mark chapters</strong> with the chapter button or the <kbd>C</kbd> key.</li>
+    <li><strong>Share your screen</strong> to show content to the participants (recorded as a separate track).</li>
+    <li><strong>Use the chat</strong> to communicate by text (there's a backstage channel just for the host and co-host, invisible to guests).</li>
+    <li><strong>Raise your hand</strong> (<kbd>R</kbd> key) to signal that you want to jump in.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">NOTE</div>
+    <div class="cbody"><p>If a guest briefly loses their connection, their local recording keeps running in their browser. Once they reconnect, they'll see everyone else again.</p></div>
+  </div>
+</section>
+
+<section id="terminar">
+  <h2><span class="num">06</span> Finish and send to postPod</h2>
+  <p>
+    When you're done, the host clicks <strong>“Stop recording”</strong>. The tracks are saved:
+    one audio file and one video file per participant, plus any screen recordings if there were any.
+  </p>
+  <p>
+    From the finished-session screen, click <strong>“Send to postPod”</strong> to create
+    (or update) a project in postPod with:
+  </p>
+  <ul>
+    <li>Each track as a clip, ready for the timeline.</li>
+    <li>The chapter markers as moments.</li>
+    <li>The sound triggers as time references.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">NEXT</div>
+    <div class="cbody"><p>Head over to the <a href="/docs/postpod/quickstart">postPod Quickstart</a> to find out what to do with those tracks.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#abrir-sesion">Open the session</a>
+  <a href="#prejoin">Camera and microphone</a>
+  <a href="#entrar">Enter the studio</a>
+  <a href="#ready-record">Start recording</a>
+  <a href="#durante-grab">While recording</a>
+  <a href="#terminar">Finish and send</a>
+</nav>
+{% endblock %}

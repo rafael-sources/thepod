@@ -1,0 +1,107 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod for Mac · Overview — Docs · thePod{% endblock %}
+{% block description %}thePod for Mac: plan, record, edit and publish your episodes in a single native Mac app.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>thePod for Mac</h1>
+  <p class="lede">
+    The whole suite in one native app for your Mac: <strong>pre</strong> to plan, <strong>prod</strong> to record
+    with other people, <strong>ama</strong> for questions from your audience, <strong>post</strong> to edit and <strong>pub</strong> to publish.
+    Made for people who have never edited a video.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> What is thePod for Mac?</h2>
+  <p class="dropcap">
+    It's the same suite you use on the web, as an app for Macs with Apple silicon. At the top, next to the name, you pick a section:
+    <strong>pre</strong> (the same as <a class="x-link prepod" href="/docs/prepod">prePod</a>),
+    <strong>prod</strong> (the <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> room, recording on your Mac),
+    <strong>ama</strong> (<a class="x-link amapod" href="/docs/amapod">amaPod</a>),
+    <strong>post</strong>, the biggest part: it takes the recording and gets it ready for YouTube, Spotify, reels and TikTok, and
+    <strong>pub</strong>: eight stars, one destination each, where you publish what came out of post, right away or on a schedule.
+  </p>
+  <p>
+    All the heavy lifting happens on your Mac: transcribing, separating people from the background, mixing, rendering. It never sends audio or video
+    to any server, except when you upload a recording to prodPod or tap Publish. It carries its own ffmpeg inside: nothing to install.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> What can you do?</h2>
+  <p><strong>In post</strong> (edit and publish), in three blocks:</p>
+  <ul>
+    <li><strong>Prepare</strong>: review the recording, <em>clean sound</em> (studio sound, no silences, no filler words, equalizer, even voice, less hiss), subtitles sentence by sentence and <em>sensitive words</em> (a bleep on top and a softened subtitle).</li>
+    <li><strong>Build</strong>: look (camera layouts, virtual background, color, branding, intro and outro), texts, stickers and b-roll, music and effects (with synthetic voice), news-style lower thirds and sponsors at their moment.</li>
+    <li><strong>Mix</strong>: waveforms, solo and mute, meters, drawn volume per person, −16 LUFS on export and separate WAV stems.</li>
+    <li><strong>Deliver</strong>: reels with their own layout, subtitles, music, b-roll and lower thirds; the episode <em>cover</em>, found by searching for the seconds where everyone is smiling; export for YouTube, reels, square or MP3; publish a reel to social networks from its card.</li>
+  </ul>
+  <p><strong>In pre</strong>: board, calendar, script (with teleprompter sections: who reads it, when, chained), rundown, guests, ideas, templates, page, team and podcast settings.</p>
+  <p><strong>In prod</strong>: the recording room with countdown, rehearsal, recording on the Mac with chunked upload, automatic teleprompter, soundboard, sponsors, auto-mute, and the director's control room (lower thirds, cues, prompter, whisper in someone's ear).</p>
+  <p><strong>In ama</strong>: events, question queue, on air, moderated chat and recording.</p>
+  <p><strong>In pub</strong>: the full episode to YouTube, Spotify, Apple Podcasts and the cover to Instagram; reels to Shorts, Reels and TikTok. You choose what, write the text for each destination, and “Export and publish”, now or at a set time. Accounts are connected once, in pre → Networks.</p>
+</section>
+
+<section id="actualizar">
+  <h2><span class="num">03</span> How it updates</h2>
+  <p>
+    On launch, the app checks for a new version; you can also check in Settings → <strong>Check now</strong>. It downloads, verifies the file
+    and swaps it in when you relaunch. If anything fails, the previous version stays intact.
+  </p>
+  <div class="callout">
+    <div class="ctag">SIGNED AND NOTARIZED BY APPLE</div>
+    <div class="cbody"><p>Since 0.29.2 the app is signed with a Developer ID and notarized by Apple: it installs and opens without security warnings. If you're coming from an earlier version, the first time you open it it asks again for camera and microphone permission, because the signature changed; after that it won't happen again.</p></div>
+  </div>
+</section>
+
+<section id="donde">
+  <h2><span class="num">04</span> Where things live</h2>
+  <table>
+    <thead><tr><th>What</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Episodes (project, media, cache and the <code>exports/</code> folder)</td><td><code>~/Movies/postPod/&lt;episodio&gt;/</code></td></tr>
+      <tr><td>Room recordings</td><td><code>~/Library/Application Support/postPod/grabaciones/</code></td></tr>
+      <tr><td>Reel templates</td><td><code>~/Library/Application Support/postPod/plantillas-reel.json</code></td></tr>
+      <tr><td>Whisper model for transcribing (downloaded once, ~600 MB)</td><td><code>~/Library/Application Support/postPod/whisper</code></td></tr>
+      <tr><td>Your account (not in the keychain, so it doesn't ask for your Mac password on every update)</td><td><code>~/Library/Application Support/postPod/cuenta.dat</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="requisitos">
+  <h2><span class="num">05</span> Requirements</h2>
+  <ul>
+    <li>A Mac with Apple silicon (M1 or later).</li>
+    <li>macOS 15 or later.</li>
+    <li>Your thePod account.</li>
+    <li>Internet the first time you transcribe (it downloads the model once), to bring and upload recordings, and to publish.</li>
+  </ul>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">06</span> What's in here?</h2>
+  <ul>
+    <li><a href="/docs/postpodapp/quickstart">Quickstart</a> — install, connect your account and make an episode end to end.</li>
+    <li><a href="/docs/postpodapp/conceptos">Concepts</a> — project, tracks, cuts, layers, lower thirds, drawn volume, moments and reels.</li>
+    <li><a href="/docs/postpodapp/funcionalidades">Features</a> — the full manual, screen by screen.</li>
+    <li><a href="/docs/postpodapp/atajos">Shortcuts</a> — keys and gestures in the editor.</li>
+    <li><a href="/docs/postpodapp/integraciones">Integrations</a> — what gets saved in prePod, what arrives from prodPod and postPod, and how publishing works.</li>
+    <li><a href="/docs/postpodapp/faq">FAQ</a> — frequently asked questions and known limits.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#que-es">What is thePod for Mac?</a>
+  <a href="#que-puedes">What can you do?</a>
+  <a href="#actualizar">How it updates</a>
+  <a href="#donde">Where things live</a>
+  <a href="#requisitos">Requirements</a>
+  <a href="#que-hay-aca">What's in here?</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Shortcuts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">KEYBOARD SHORTCUTS</div>
+  <h1>Hotkeys and mouse gestures</h1>
+  <p class="lede">Shortcuts to edit efficiently in postPod without relying on the mouse.</p>
+</header>
+
+<section id="reproductor">
+  <h2><span class="num">01</span> Player and navigation</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>Espacio</kbd></div></td>
+        <td class="desc"><strong>Play / pause</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>←</kbd></div></td>
+        <td class="desc"><strong>Go back 5 seconds</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>→</kbd></div></td>
+        <td class="desc"><strong>Go forward 5 seconds</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd> + <kbd>←</kbd></div></td>
+        <td class="desc"><strong>Go back 1 frame</strong> (1/30 s)</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd> + <kbd>→</kbd></div></td>
+        <td class="desc"><strong>Go forward 1 frame</strong> (1/30 s)</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>M</kbd></div></td>
+        <td class="desc"><strong>Capture a moment</strong> at the current time</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>+</kbd></div></td>
+        <td class="desc"><strong>Zoom in</strong> the timeline 10%</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>-</kbd></div></td>
+        <td class="desc"><strong>Zoom out</strong> the timeline 10%</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Z</kbd></div></td>
+        <td class="desc"><strong>Zoom</strong> to the selected range</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Clear the range selection</strong> / reset zoom</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="timeline-mouse">
+  <h2><span class="num">02</span> Timeline (mouse gestures)</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Gesture</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Click the ruler</div></td>
+        <td class="desc"><strong>Move the playhead</strong> to that point</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Drag across the ruler</div></td>
+        <td class="desc"><strong>Select a range</strong> (yellow band)</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Drag the playhead (red cursor)</div></td>
+        <td class="desc"><strong>Scrub</strong> frame by frame</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Double-click a clip</div></td>
+        <td class="desc"><strong>Open the clip editor</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Click a moment marker</div></td>
+        <td class="desc"><strong>Select that moment</strong> and jump to it</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">03</span> Transcript editor</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Action</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup">Click a word</div></td>
+        <td class="desc"><strong>The player jumps</strong> to that time</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup">Select text and delete (<kbd>Delete</kbd> / <kbd>Backspace</kbd>)</div></td>
+        <td class="desc"><strong>Cuts that section</strong> of the audio/video</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>Z</kbd></div></td>
+        <td class="desc"><strong>Undo the last cut</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Clear selection</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="ctag">NOTE</div>
+    <div class="cbody"><p>Keyboard shortcuts only work when your cursor isn't inside a text field.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#reproductor">Player and navigation</a>
+  <a href="#timeline-mouse">Timeline (mouse)</a>
+  <a href="#transcript">Transcript editor</a>
+</nav>
+{% endblock %}

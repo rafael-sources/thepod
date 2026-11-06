@@ -1,0 +1,107 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Getting started — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">GETTING STARTED</div>
+  <h1>Your first Q&amp;A event</h1>
+  <p class="lede">
+    From zero to a live event with a moderated question queue. Your audience only needs a link.
+  </p>
+</header>
+
+<section id="entrar">
+  <h2><span class="num">01</span> Go into amaPod</h2>
+  <p>
+    Open thePod in your browser and sign in — the same credentials for all four apps
+    (prePod, prodPod, postPod, amaPod). From the hub, click the amaPod card.
+    Only the host needs an account: participants and viewers come in through public links.
+  </p>
+</section>
+
+<section id="crear-evento">
+  <h2><span class="num">02</span> Create the event</h2>
+  <p>Click <strong>+ New event</strong> and fill in:</p>
+  <ul>
+    <li><strong>Title and description</strong>: what the audience will see when they come in.</li>
+    <li><strong>Chat mode</strong>: open, moderated (messages need your approval) or off.</li>
+    <li><strong>Template</strong> (optional): if you saved a previous event's format, use it to pre-fill everything.</li>
+  </ul>
+  <p>The event starts in the <strong>Created</strong> state — it isn't visible as a broadcast yet.</p>
+</section>
+
+<section id="compartir">
+  <h2><span class="num">03</span> Share the links</h2>
+  <ul>
+    <li><strong>Participation link</strong>: whoever opens it can sign up with their name and write up to 3 questions. No sign-up.</li>
+    <li><strong>Viewer link</strong>: a public page to follow the event live and give likes.</li>
+  </ul>
+</section>
+
+<section id="activar">
+  <h2><span class="num">04</span> Activate the event</h2>
+  <p>
+    When you're ready to start, click <strong>Activate</strong>. The live video room is created
+    and the event moves to the <strong>Active</strong> state. From here on, the queue works in real time.
+  </p>
+</section>
+
+<section id="moderar">
+  <h2><span class="num">05</span> Moderate the queue</h2>
+  <p>Requests from the audience arrive as <strong>pending</strong>. For each one you can:</p>
+  <ul>
+    <li><strong>Approve</strong>: the participant enters the queue with a position number.</li>
+    <li><strong>Reject</strong>: the request is discarded.</li>
+    <li><strong>Reorder</strong>: change the positions based on how interesting the questions are.</li>
+  </ul>
+  <p>
+    The first 3 in the queue are <strong>pre-connected</strong> automatically: their camera and microphone
+    are ready before going on air, so there's no waiting between one question and the next.
+  </p>
+</section>
+
+<section id="al-aire">
+  <h2><span class="num">06</span> Put questions on air</h2>
+  <p>
+    Click <strong>On air</strong> on the first in the queue: the participant enters the video room
+    and asks their question live. When they're done, you move to the next one — the previous one is marked as handled.
+    You see each participant's pre-questions before giving them the air.
+  </p>
+</section>
+
+<section id="grabar">
+  <h2><span class="num">07</span> Record (optional)</h2>
+  <p>
+    Turn on recording from the event panel. The server records the room as an MP4 file
+    that you can then download or send to postPod.
+  </p>
+</section>
+
+<section id="finalizar">
+  <h2><span class="num">08</span> End the event</h2>
+  <p>
+    When you click <strong>End</strong>, the room closes and the event moves to the <strong>Ended</strong> state.
+    If there was a recording, it's exported automatically to <a class="x-link postpod" href="/docs/postpod">postPod</a>
+    as an editing project.
+  </p>
+  <div class="callout">
+    <div class="ctag">NEXT</div>
+    <div class="cbody"><p>Going to use the Q&amp;A inside a podcast recording? Check out the <a href="/docs/amapod/integraciones">integrations with prodPod</a>.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#entrar">Go in</a>
+  <a href="#crear-evento">Create event</a>
+  <a href="#compartir">Share links</a>
+  <a href="#activar">Activate</a>
+  <a href="#moderar">Moderate the queue</a>
+  <a href="#al-aire">On air</a>
+  <a href="#grabar">Record</a>
+  <a href="#finalizar">End</a>
+</nav>
+{% endblock %}

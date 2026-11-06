@@ -1,0 +1,88 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Shortcuts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">KEYBOARD SHORTCUTS</div>
+  <h1>Studio hotkeys</h1>
+  <p class="lede">Shortcuts designed for recording without leaving the keyboard — run the studio while you talk.</p>
+</header>
+
+<section id="estudio">
+  <h2><span class="num">01</span> In the studio</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>M</kbd></div></td>
+        <td class="desc"><strong>Mute / unmute microphone</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>V</kbd></div></td>
+        <td class="desc"><strong>Turn camera on / off</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>C</kbd></div></td>
+        <td class="desc"><strong>Create chapter marker</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>R</kbd></div></td>
+        <td class="desc"><strong>Raise / lower hand</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="ctag">NOTE</div>
+    <div class="cbody"><p>Keyboard shortcuts only work when your cursor isn't inside a text field (chat, marker label, etc.).</p></div>
+  </div>
+</section>
+
+<section id="soundboard">
+  <h2><span class="num">02</span> Soundboard</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>1</kbd>–<kbd>9</kbd></div></td>
+        <td class="desc"><strong>Fire the matching pad</strong> — plays and broadcasts to everyone</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Alt</kbd>+click on pad</div></td>
+        <td class="desc"><strong>Preview (cue)</strong> — only in your headphones, not broadcast</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Stop all sounds</strong> that are playing</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="chat">
+  <h2><span class="num">03</span> Chat</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Key</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>Enter</kbd></div></td>
+        <td class="desc"><strong>Send message</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd>+<kbd>Enter</kbd></div></td>
+        <td class="desc"><strong>New line</strong> without sending</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#estudio">In the studio</a>
+  <a href="#soundboard">Soundboard</a>
+  <a href="#chat">Chat</a>
+</nav>
+{% endblock %}

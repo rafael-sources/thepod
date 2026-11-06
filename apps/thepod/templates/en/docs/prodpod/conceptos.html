@@ -1,0 +1,155 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Concepts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTS</div>
+  <h1>The prodPod vocabulary</h1>
+  <p class="lede">The key terms you need to know to record in prodPod.</p>
+</header>
+
+<section id="sesion">
+  <h2><span class="num">01</span> Session</h2>
+  <p>A recording session. It moves through these states:</p>
+  <ol>
+    <li><strong>Preparing</strong>: it's being set up, participants haven't joined yet.</li>
+    <li><strong>Live</strong>: participants are connected to the studio.</li>
+    <li><strong>Recording</strong>: recording is active in every browser.</li>
+    <li><strong>Finished</strong>: recording has ended, the tracks are ready.</li>
+    <li><strong>Archived</strong>: the session was archived after being sent to postPod.</li>
+  </ol>
+</section>
+
+<section id="participante">
+  <h2><span class="num">02</span> Participant</h2>
+  <p>Someone connected to the session. There are three roles:</p>
+  <ul>
+    <li><strong>Host</strong>: controls the session (starts/stops recording, soundboard, streaming, invitations).</li>
+    <li><strong>Co-host</strong>: can assist the host and has access to the backstage chat.</li>
+    <li><strong>Guest</strong>: takes part in the recording without admin controls.</li>
+  </ul>
+  <p>Guests get a special link to join without needing a thePod account.</p>
+</section>
+
+<section id="grabacion-local">
+  <h2><span class="num">03</span> Local recording</h2>
+  <p>
+    Each participant records their own audio and video directly in their browser.
+    This means the recording quality <strong>doesn't depend on internet speed</strong>.
+    Even if the video call looks laggy or pixelated, the local recording stays clean and in high quality.
+  </p>
+  <p>
+    While you record, the chunks are uploaded to the server in the background — there's no long
+    upload wait when you finish, and if the browser closes by accident, whatever was already uploaded isn't lost.
+  </p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>If you briefly lose your connection, your local recording keeps running. Once you reconnect, you'll see everyone else again.</p></div>
+  </div>
+</section>
+
+<section id="mic-check">
+  <h2><span class="num">04</span> Mic check (microphone level)</h2>
+  <p>
+    An assistant that listens to your microphone for 10 seconds, measures the level and suggests an optimal gain.
+    The goal is for you to speak at a comfortable, even volume.
+    Your settings are remembered for that specific microphone — if you always use the same one, you only need to do it once.
+  </p>
+</section>
+
+<section id="soundboard">
+  <h2><span class="num">05</span> Soundboard</h2>
+  <p>
+    A panel of pads with sounds and effects. You set it up in prePod and it arrives in the session automatically.
+    When the host fires a sound, every participant hears it.
+    Triggers are logged with their exact time so postPod can place them on the timeline.
+  </p>
+  <div class="callout">
+    <div class="ctag">CUE</div>
+    <div class="cbody"><p><kbd>Alt</kbd>+click on a pad plays it <strong>only in your headphones</strong> (it isn't broadcast). Handy for checking a sound before firing it live.</p></div>
+  </div>
+</section>
+
+<section id="marcadores">
+  <h2><span class="num">06</span> Chapter markers</h2>
+  <p>Timestamps you drop while recording to flag chapters or important sections. There are two kinds:</p>
+  <ul>
+    <li><strong>Planned</strong>: they come from the prePod rundown. They show up in a list so you can activate them when you reach that point.</li>
+    <li><strong>Live</strong>: you create them on the fly while recording.</li>
+  </ul>
+  <p>Both become moments when the recording reaches postPod.</p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">07</span> Chat</h2>
+  <p>Two communication channels:</p>
+  <ul>
+    <li><strong>Studio chat</strong>: visible to every participant.</li>
+    <li><strong>Backstage</strong>: visible only to the host and co-hosts. Perfect for coordinating (“let's wrap up”, “skip this topic”) without guests seeing it.</li>
+  </ul>
+  <p>Messages are saved in the session history.</p>
+</section>
+
+<section id="countdown">
+  <h2><span class="num">08</span> Countdown</h2>
+  <p>
+    A synchronized 3-second count that appears on every participant's screen.
+    When it hits zero, recording starts simultaneously in every browser,
+    making sure there's no offset between the tracks.
+  </p>
+</section>
+
+<section id="screen-share">
+  <h2><span class="num">09</span> Screen sharing</h2>
+  <p>
+    One participant at a time can share their screen, a window or a tab.
+    The shared screen is recorded as a separate track.
+  </p>
+</section>
+
+<section id="rtmp">
+  <h2><span class="num">10</span> RTMP streaming</h2>
+  <p>
+    Live streaming to YouTube, Twitch or any custom RTMP server.
+    It runs alongside the local recording: you get both the high-quality files
+    and the live broadcast at the same time.
+  </p>
+</section>
+
+<section id="practica">
+  <h2><span class="num">11</span> Practice mode</h2>
+  <p>
+    A rehearsal mode that works exactly like a real session but <strong>without recording</strong>.
+    Use it to test audio levels, practice with the soundboard, check screen sharing
+    and make sure everything works before the real take.
+  </p>
+</section>
+
+<section id="pistas">
+  <h2><span class="num">12</span> Tracks</h2>
+  <p>
+    The resulting recordings: one audio file and one video file per participant,
+    plus the screen-share recordings. All tracks are synchronized and go to postPod
+    as separate files so you can edit with precision.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#sesion">Session</a>
+  <a href="#participante">Participant</a>
+  <a href="#grabacion-local">Local recording</a>
+  <a href="#mic-check">Mic check</a>
+  <a href="#soundboard">Soundboard</a>
+  <a href="#marcadores">Markers</a>
+  <a href="#chat">Chat</a>
+  <a href="#countdown">Countdown</a>
+  <a href="#screen-share">Screen sharing</a>
+  <a href="#rtmp">RTMP streaming</a>
+  <a href="#practica">Practice mode</a>
+  <a href="#pistas">Tracks</a>
+</nav>
+{% endblock %}

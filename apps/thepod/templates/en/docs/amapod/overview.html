@@ -1,0 +1,99 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Overview — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>amaPod</h1>
+  <p class="lede">
+    Questions from your audience, live and in order. amaPod runs Q&amp;A (AMA) events where
+    viewers send in questions, a moderator builds the queue, and each participant goes on air
+    by video when it's their turn — integrated with the prodPod studio.
+  </p>
+</header>
+
+<section id="que-puedes">
+  <h2><span class="num">01</span> What can you do?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">EVENTS</div>
+      <h4>Q&amp;A events</h4>
+      <p>Create an event with a title, description and chat mode. Activate it when the broadcast starts and end it when you're done. Reuse formats with templates.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">MODERATION</div>
+      <h4>Question queue</h4>
+      <p>Participants sign up with their name and up to 3 questions. You decide who gets into the queue, in what order, and who goes on air.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">FRICTIONLESS</div>
+      <h4>Participants without an account</h4>
+      <p>The audience joins with a simple link — no need to sign up for thePod. Each participant gets their own access token.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">FLOW</div>
+      <h4>Pre-connection</h4>
+      <p>The next 3 in the queue pre-connect to the room before going on air: camera and microphone ready, zero wait between questions.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">COMMUNITY</div>
+      <h4>Chat and viewers</h4>
+      <p>Open, moderated or off chat. Viewers follow the event from a public page and can give likes.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">ARCHIVE</div>
+      <h4>Recording</h4>
+      <p>Record the event as an MP4 file on the server. When it ends, it's exported automatically to postPod for editing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">02</span> Who is it for?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">CREATORS</div>
+      <h4>Podcasters with an active audience</h4>
+      <p>Turn your listeners into the stars: an AMA episode where the audience asks on video, in order and without chaos.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">EVENTS</div>
+      <h4>Launches and live sessions</h4>
+      <p>Presentations, webinars or post-event Q&amp;A rounds with full moderation and automatic recording.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">PRODUCTION</div>
+      <h4>Shows in prodPod</h4>
+      <p>The amaPod panel is embedded inside the prodPod studio: the host sees the queue and puts questions on air without switching apps.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">03</span> What's in here?</h2>
+  <ul>
+    <li><a href="/docs/amapod/quickstart">Getting started</a> — create your first Q&amp;A event in minutes.</li>
+    <li><a href="/docs/amapod/conceptos">Concepts</a> — key vocabulary: event, queue, pre-connection, chat modes.</li>
+    <li><a href="/docs/amapod/funcionalidades">Features</a> — every tool in detail.</li>
+    <li><a href="/docs/amapod/integraciones">Integrations</a> — how amaPod connects with <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> and <a class="x-link postpod" href="/docs/postpod">postPod</a>.</li>
+    <li><a href="/docs/amapod/faq">FAQ</a> — frequently asked questions.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="ctag">START HERE</div>
+    <div class="cbody">
+      <p>If it's your first time, go straight to <a href="/docs/amapod/quickstart">Getting started</a>. In a few minutes you'll have an event ready to take questions.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#que-puedes">What can you do?</a>
+  <a href="#para-quien">Who is it for?</a>
+  <a href="#que-hay-aca">What's in here?</a>
+</nav>
+{% endblock %}

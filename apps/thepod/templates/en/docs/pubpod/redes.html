@@ -1,0 +1,77 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · What each network asks for — Docs · thePod{% endblock %}
+{% block description %}What each network asks for to publish from pubPod: an Instagram professional account, the TikTok inbox, private videos on YouTube, the feed for Spotify and Apple Podcasts.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">WHAT EACH NETWORK ASKS FOR</div>
+  <h1>The rules of each star</h1>
+  <p class="lede">
+    Each network has its own conditions, and some change once thePod finishes the Meta, TikTok and Google reviews. Here's what applies today.
+  </p>
+</header>
+
+<section id="conectar">
+  <h2><span class="num">01</span> Connecting, in general</h2>
+  <p>
+    You connect just once, in <a class="x-link prepod" href="/docs/prepod/funcionalidades#redes">prePod → Set up podcast → Networks</a> or by tapping
+    a dotted star in pub. The network opens in the browser, you grant the permission to publish on your behalf, and you come back. thePod keeps that permission,
+    never your password; “Disconnect” removes it. If the permission expires, the star goes back to dotted and you connect it again.
+  </p>
+</section>
+
+<section id="instagram">
+  <h2><span class="num">02</span> Instagram and Reels</h2>
+  <ul>
+    <li>Requires a <strong>professional account</strong>: Creator or Business. You switch it in the Instagram app: Settings → Account type. A personal account can't be connected.</li>
+    <li>While thePod is under Meta review, only accounts added as <strong>testers</strong> can publish. If you're a beta tester, write to us with your username and we'll add you; you'll get an invitation to accept in Instagram, under Settings → Websites and apps.</li>
+    <li>Reels go out as a Reel; the full episode goes out as an image (a frame from the video) with the text.</li>
+    <li>The text supports hashtags and mentions. Instagram may take a few seconds to process the video before publishing it; pub waits on its own.</li>
+  </ul>
+</section>
+
+<section id="tiktok">
+  <h2><span class="num">03</span> TikTok</h2>
+  <ul>
+    <li>The video <strong>isn't published directly</strong>: it lands in your TikTok <strong>inbox</strong> (the “You have a video ready” notification). You open it on your phone, paste the text pub left you with “Copy the text”, and publish it from there. That's TikTok's rule until it reviews the app.</li>
+    <li>Up to <strong>5 pending videos</strong> in the inbox per day.</li>
+    <li>While the app is in testing, only accounts added as testers; write to us and we'll tell you how.</li>
+  </ul>
+</section>
+
+<section id="youtube">
+  <h2><span class="num">04</span> YouTube and Shorts</h2>
+  <ul>
+    <li>It's the same connection as prePod's YouTube upload. Shorts is the same channel: pub sends the vertical with #Shorts and YouTube treats it as a Short.</li>
+    <li>Until Google verifies the app, everything uploads <strong>as private</strong>. Pub marks it “Uploaded as private”; open it on YouTube and switch it to Public.</li>
+    <li>The description includes the chapters if they follow YouTube's rules (the first at 00:00, at least three, 10 s or more apart).</li>
+  </ul>
+</section>
+
+<section id="feed">
+  <h2><span class="num">05</span> Spotify and Apple Podcasts</h2>
+  <ul>
+    <li>They don't get connected: they read the podcast's <strong>feed</strong>. They light up when the podcast is set up to publish in prePod.</li>
+    <li>Pub uploads the audio to the feed with the episode notes; Spotify and Apple show it on their own, usually within minutes (Apple sometimes takes longer).</li>
+    <li>The first time, the feed has to be submitted to Spotify and Apple from prePod → Distribution. After that, no more.</li>
+  </ul>
+</section>
+
+<section id="facebook">
+  <h2><span class="num">06</span> Facebook</h2>
+  <p>The eighth star. It's in the arc, but for now it shows as “coming very soon”.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#conectar">Connecting</a>
+  <a href="#instagram">Instagram and Reels</a>
+  <a href="#tiktok">TikTok</a>
+  <a href="#youtube">YouTube and Shorts</a>
+  <a href="#feed">Spotify and Apple</a>
+  <a href="#facebook">Facebook</a>
+</nav>
+{% endblock %}

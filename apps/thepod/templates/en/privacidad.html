@@ -1,0 +1,51 @@
+{% extends "docs/_base.html" %}
+{% block title %}Privacy · thePod{% endblock %}
+{% block description %}What data thePod keeps, what for, and how to delete it.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">Privacy</div>
+  <h1>Your data in thePod</h1>
+  <p class="lede">What we keep, what for, who it's shared with and how to ask us to delete it. Last updated: October 12, 2026.</p>
+</header>
+
+<h2><span class="num">01</span> What we keep</h2>
+<ul>
+  <li><strong>Your account:</strong> name, username, email and your encrypted password (we never see it in plain text). Also when you last signed in.</li>
+  <li><strong>What you create on the web:</strong> podcasts, episodes, scripts, guests, logos and backgrounds (prePod); room recordings (prodPod); editing projects, transcripts and exported files (postPod); questions and messages from events (amaPod).</li>
+  <li><strong>Guests and audience:</strong> anyone who enters a room or an event with a link leaves the name they type, their camera and microphone while recording, and their questions or messages. They don't need an account.</li>
+  <li><strong>A session cookie</strong> so you don't have to sign in on every page. We don't use advertising or tracking cookies.</li>
+</ul>
+
+<h2><span class="num">02</span> The Mac app</h2>
+<ul>
+  <li>It edits on your Mac: transcription, audio cleanup and video are done on your computer, without uploading anything.</li>
+  <li>It connects to our servers only to sign in with your account, fetch or send projects when you ask it to, record in a room and check for updates.</li>
+  <li>The first time, it downloads the speech model for transcribing; that download carries no data of yours.</li>
+</ul>
+
+<h2><span class="num">03</span> Who it's shared with</h2>
+<ul>
+  <li><strong>Nobody buys or receives your data for advertising.</strong></li>
+  <li><strong>Artificial intelligence:</strong> if you use the automatic notes or moments (on the web or in the Mac app), that episode's text is sent to Anthropic (Claude) to generate them, once per episode. Never the audio or the video. The app asks for permission the first time.</li>
+  <li><strong>What you publish:</strong> if you connect YouTube, Instagram or TikTok, or publish the feed for Spotify and Apple Podcasts, only what you choose to publish is sent to those services, when you choose to.</li>
+  <li><strong>Email:</strong> notices (invitations, confirming your account, changing your password) go out through our email provider.</li>
+  <li>Recording rooms and files are on our own servers.</li>
+</ul>
+
+<h2><span class="num">04</span> Connected networks</h2>
+<ul>
+<li>When you connect Instagram, TikTok or YouTube, that network gives us a permission to publish on your behalf. We keep that permission and your account name; we don't keep your password for the network and we don't read your messages, followers or statistics.</li>
+<li>We only publish the reels and videos you choose, on the date you choose. We never publish on our own.</li>
+<li>The video you're going to publish stays on our servers only until the network receives it (at most 7 days) and is then deleted.</li>
+<li>You can disconnect a network whenever you want from prePod → Networks, or revoke thePod's permission from that network's settings. When you disconnect, we delete the stored permission.</li>
+</ul>
+<h2><span class="num">05</span> How long</h2>
+<p>As long as you have the account. If you delete it, we remove your data and files within 30 days, except for what the law requires us to keep. Sign-up requests that aren't confirmed are deleted after 2 days.</p>
+
+<h2><span class="num">06</span> Your rights</h2>
+<p>You can request a copy of your data, correct it or delete your account by writing to <a href="mailto:thepod@castmedia.space">thepod@castmedia.space</a> from your account's email. We reply within 30 days at most.</p>
+
+<h2><span class="num">07</span> Changes</h2>
+<p>If we change something important on this page, we'll let you know by email or when you sign in.</p>
+{% endblock %}

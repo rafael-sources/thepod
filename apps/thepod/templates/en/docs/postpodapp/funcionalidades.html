@@ -1,0 +1,308 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod for Mac · Features — Docs · thePod{% endblock %}
+{% block description %}The complete manual for thePod for Mac: post (prepare, build, mix, deliver), pre, prod, ama and settings.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FEATURES · COMPLETE MANUAL</div>
+  <h1>Every screen, in detail</h1>
+  <p class="lede">
+    Everything the app does today, section by section, in the same order as the sidebar.
+    At the top, next to “thePod”, you switch between <strong>pre</strong> (plan), <strong>prod</strong> (record),
+    <strong>ama</strong> (audience questions), <strong>post</strong> (edit) and <strong>pub</strong> (publish). The biggest part is post.
+    Keyboard shortcuts have their <a href="/docs/postpodapp/atajos">own page</a>.
+  </p>
+</header>
+
+<section id="post-la-pantalla">
+  <h2><span class="num">01</span> post · The screen</h2>
+<p>On the left, the sidebar with three blocks: <strong>Prepare</strong>, <strong>Build</strong> and <strong>Deliver</strong>. Each section gets a check when it's done and, at the bottom, the “Ready to export” box sums up what's missing. To the right of each section: the video (preview) and, at the very bottom, the <strong>timeline</strong>. Each section has a “?” next to its title with a short explanation and the list of shortcuts.</p>
+<h3>The clock and the preview</h3>
+<p>Above the video there's a big clock, <code>0:04:59.4 / 0:49:10</code>: where the episode is parked and how long it runs. It runs while playing. The keyboard button lets you type a time and jump there. The preview and the final video come from the same composition: what you see is what you get. The player controls are the macOS ones (speed, full screen).</p>
+<h3>The timeline</h3>
+<p>At the bottom, always visible, with zoom. Rows: time ruler, moments and reels (gold) and sponsors (purple), one row per person with their <strong>waveform</strong>, the effects and music row, and the texts and b-roll row.</p>
+<ul>
+<li>Click: jump to that moment. Drag: mark a stretch (“Listen”, “Mute only X”, “−6 dB on X”, “Cut from everyone” appear).</li>
+<li>Next to each person: <strong>S</strong> (solo: only that one is heard) and <strong>M</strong> (mute), and a level meter that runs while playing.</li>
+<li>Yellow line over each person: their <strong>drawn volume</strong> (see Mix).</li>
+<li>At the top: “Final loudness: −16 LUFS on export” or “no adjustment”.</li>
+<li>Tapping a person's name or a music track opens its panel below the video.</li>
+</ul>
+<h3>Keyboard shortcuts</h3>
+<p>They work when you're not typing in a field.</p>
+<table class="shortcuts">
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><div class="kgroup"><kbd>Espacio</kbd> / <kbd>K</kbd></div></td>
+<td class="desc">Play / pause</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>← →</kbd></div></td>
+<td class="desc">One second back / forward (with ⇧, five)</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>J</kbd> / <kbd>L</kbd></div></td>
+<td class="desc">Five seconds back / forward</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>M</kbd></div></td>
+<td class="desc">Mark moment (creates a 60 s reel from here)</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>I</kbd></div></td>
+<td class="desc">Mark the start of a reel at the clock</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>O</kbd></div></td>
+<td class="desc">Mark the end and create the reel; while viewing a reel, O adjusts its end</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>Suprimir</kbd></div></td>
+<td class="desc">Remove the selected volume point</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></div></td>
+<td class="desc">Undo / redo</td>
+</tr>
+<tr>
+<td><div class="kgroup"><kbd>⌘O</kbd></div></td>
+<td class="desc">Import recording</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Undo</strong> covers any change to the episode (cuts, deletions, texts, lower thirds, reels, layout), up to 120 steps; consecutive changes (dragging a control) count as one. Inside a text field, ⌘Z is the text's own undo.</p>
+</section>
+
+<section id="post-preparar">
+  <h2><span class="num">02</span> post · Prepare</h2>
+<h3>3.1 Recording</h3>
+<p>The tracks that arrived: one per person. Give each one a name (it shows in the video). If someone is missing, import them with ⌘O. How the episode arrives:</p>
+<ul>
+<li><strong>Bring to the Mac</strong> from the episode list: downloads the package from postPod web, shows the percentage and resumes if it drops. If the episode is still arriving from prodPod it shows in red (“Episode in progress”) and can't be brought over until it's ready on the web, because it would be incomplete; the list refreshes on its own.</li>
+<li>Drag the <code>.zip</code> that postPod exports, the folder with the prodPod tracks, or loose video and audio files.</li>
+<li>WebM files are converted once to MP4 H.264 by hardware. If a track lost its first block, it's repaired with the header of another track from the same recording. If a track starts late, it's padded so they all stay in sync.</li>
+</ul>
+<p>The package also brings the prePod side (episode name and summary, script, sponsors with their minute, background and logo) and the prodPod side (moments, triggered sounds, the director's lower thirds, marked sponsors). If the package doesn't include it, the app looks it up in prePod by podcast name.</p>
+<p><strong>Track panel</strong> (when you tap the name in the timeline): volume, drawn volume (how many points it has and “Remove the line”), Solo and Mute, fade in and fade out, <strong>offset</strong> (with “−” the person sounds earlier, skipping the start of their recording; with “+” they sound later; 1 s and tenth-of-a-second buttons, a field to type the seconds, for example −9, and “Original”; every change tells you where it ended up, for example “sounds 9 s earlier”), mirror, on-screen position (1 = left or top), and the voice: Warm / Clear / Remove boom / Original, bass, mids and treble (±8 dB), <strong>Even voice</strong> (gentle compressor) and <strong>Less hiss</strong> (de-esser). Voice changes are applied with “Apply”: they process that person's audio once (a few seconds per minute) and are cached.</p>
+<h3>3.2 Clean sound</h3>
+<p>One button, <strong>Fix everything</strong>, does three things:</p>
+<ol>
+<li><strong>Studio sound</strong>: removes noise with Apple's voice isolator (the same one Final Cut uses): keys, dog, street, fan. Works without internet and takes about 3 seconds per minute of audio. <strong>How much to clean</strong>: Natural, Normal or Maximum; in Normal and Maximum it also lowers what little is left between words. Each voice ends up at an even level with a fixed gain (voices aren't compressed individually: that used to raise the noise). Typing from the person who's talking while they type gets lower, but doesn't fully disappear; typing from whoever is listening is handled by “Mute whoever isn't talking”. On Macs without the isolator, neural-network cleanup is used.</li>
+<li><strong>Remove long silences</strong> (configurable minimum, with a margin kept around the voice).</li>
+<li><strong>Remove filler words</strong>: “uh”, “mmm” and the like, always. With the words option, “este”, “o sea” and “tipo” only when they stand alone between pauses, are repeated or sit next to an “uh”. “Bueno”, “pues” and “digamos” are never removed on their own, and if the word is a real one (“es bueno”, “este tema”, “tipo de”) it isn't even flagged.</li>
+</ol>
+<p><strong>To review</strong>: whatever isn't clear is kept as a suggestion, without removing it. These are doubtful filler words, repeated sentences or false starts (“es que, es que…”) and sounds without words. The list shows under the button: ▶ to listen from a bit earlier, and <strong>Remove</strong> or <strong>Keep</strong>, one by one or all at once. If you fix everything again, what you already decided is respected.</p>
+<p>Nothing is actually deleted: every cut stays in the list with its reason and can be turned off or on. Also: <strong>Mute whoever isn't talking</strong> (lowers the track of whoever isn't speaking, in the preview and in the export; it ducks and rises smoothly, doesn't close on short pauses, and <strong>How much to lower</strong> picks Soft, Normal or Strong) and cutting by hand by dragging in the timeline. Transcription happens here or in Subtitles, on the Mac, without internet (WhisperKit).</p>
+<h3>3.3 Subtitles</h3>
+<p>Pick a style (several presets, colors, size, position, uppercase, word-by-word karaoke). Over the video a yellow “Subtitles” box appears that you can drag anywhere; “Back to bottom” undoes the free position. In the list: double-click a word to fix it; the scissors remove the sentence from the video (it's just another cut). Tap a sentence to hear it. <strong>Save .srt</strong> and <strong>Save transcript (.txt)</strong>; the .srt is also in Export.</p>
+<p><strong>Keeping them in sync with the voice.</strong> The transcript tends to mark words a little before they're said, and sometimes glues a pause onto a word; when you removed silences, that showed up as subtitles running early. <strong>Align to audio</strong> shifts each sentence to where that person's voice is heard, without changing the text; if you already removed silences, they're searched again with the new timings. New transcripts already come aligned; older projects show a notice until you do it. <strong>Listen to everything again</strong> writes the transcript from scratch (hand-made corrections are lost). When you fix a sentence, the words you didn't change keep their exact timing.</p>
+<h3>3.4 Sensitive words</h3>
+<p>Searches the transcript for two things:</p>
+<ul>
+<li><strong>Swear words</strong> (several regions: coño, verga, marico, pendejo, boludo, gilipollas, chingar, hostia…).</li>
+<li><strong>Sensitive topics</strong> that social networks down-rank: death, suicide, drugs, sex, weapons, abuse, depression, alcohol…</li>
+</ul>
+<p>For each word found: listen around it, <strong>Bleep on top</strong> (the word isn't heard: everyone goes silent for that stretch, slightly wider than the word, and a 1 kHz tone plays at −6 dB; applies to the preview, the video and the MP3) and <strong>Change subtitle to</strong> the euphemism used on social media (unalive, intimacy, substances, low…), editable. “It's fine as is” lets it through. Buttons for all of them: bleep swear words, bleep all, no bleep; change the subtitles or not. By default: swear words with bleep and softened subtitle; sensitive topics subtitle only. <strong>My words</strong>: add your own (names, brands); they're covered like swear words. Subtitle changes also go into the .srt and the transcript. The original audio is untouched.</p>
+</section>
+
+<section id="post-armar">
+  <h2><span class="num">03</span> post · Build</h2>
+<h3>4.1 Look</h3>
+<p>How the video looks. Applies to YouTube, reels and square; each format adapts on its own.</p>
+<ul>
+<li><strong>Layouts</strong>: Speaker (full screen for whoever is talking; with optional “studio frame”), Side by side, Grid (with the speaker large), Lead, Picture in picture (with “speaker large”), Top and bottom (no stretching), Studio. Who's talking comes from the sound analysis (0.3 s smoothing, 1 s minimum).</li>
+<li><strong>On-screen order</strong>: arrows, or “Position 1/2/…” in the track panel.</li>
+<li><strong>Mirror</strong> per person.</li>
+<li><strong>Virtual background per person</strong>: the real background is removed and behind goes Blurred (with a control), the Podcast background, a Color or your own Image. Apple Vision does it on the Mac. Preview with fast separation, export with the fine one (about 9 s per 10 s of video with two people). Small holes get filled (headphones, hands) and the edge is soft; where the person is still the edge doesn't shake and when they move it leaves no trail. With “Podcast background” the person is cut out over the same background that surrounds the frames, seamlessly. <strong>With a green screen</strong>: the app detects it on its own, keys by color (exact edge) and removes the green spill from hair and shoulders.</li>
+<li><strong>Color</strong>: Original, Warm, Cool, Cinema, B/W, Vivid, and “Match the cameras' color” (uses whoever is first as reference).</li>
+<li><strong>Podcast branding</strong>: background, logo (top right corner), names. They come from prePod; otherwise, you pick them by hand.</li>
+<li><strong>Intro and outro</strong>: a still image for 1 to 15 s, with optional music and fade. The episode's music and effects never play inside the intro or the outro.</li>
+</ul>
+<h3>4.2 Texts, stickers and b-roll</h3>
+<p>Layers on top of the video, for a while. Each one has a start (h:mm:ss field, −1 s / +1 s, “Here”), a duration (1 to 30 s) and an animated in and out (can be turned off).</p>
+<ul>
+<li><strong>Texts</strong> in 3 styles: Title (big outlined letters), Box (over a dark background), Tag (colored background). Seven colors.</li>
+<li><strong>Images</strong>: PNG with transparency, JPG, HEIC, GIF (still frame).</li>
+<li><strong>Stickers</strong>: 14 emojis one click away, or any other by pasting it.</li>
+<li>They move with the mouse over the preview (drag; the corner resizes), plus 9 quick positions and size. They go above the video and the lower thirds and below the subtitles. In reels (9:16) and in square, what the app places on its own (subtitles, sponsors, b-roll in a small window, lower thirds, names) moves out of the way of your layers, the logo and the rest; what you placed by hand doesn't move. If the stretch where a layer starts is cut, it shows up in whatever comes next.</li>
+<li><strong>B-roll</strong>: a video or a photo that covers the screen for a few seconds while the voice keeps going. Full screen, or a <strong>small window</strong> at the bottom left or right (with a frame, it grows in; it takes the video's shape, doesn't crop it). You choose which second of the video it starts from, whether it fills the screen or shows whole with borders, and whether it has sound or is muted. Cap of 10 s. Videos shot vertically on a phone show upright.</li>
+</ul>
+<h3>4.3 Music and effects</h3>
+<p>Music and effects from the podcast soundboard, your own files and <strong>synthetic voice</strong> (“Add voice…”: you type a text and the Mac reads it with one of its Spanish voices, without internet; you preview it first and pick the speed; enhanced voices are downloaded in System Settings → Accessibility → Spoken Content).</p>
+<p>Each music track or effect goes on its own track with: volume, <strong>duck automatically when someone talks</strong> (6 to 24 dB, 12 by default; comes on for music longer than 8 s), <strong>loop until the end</strong> (fades out when finishing), fades, and moving: exact time h:mm:ss, “At the start” and “At the end” (right after the intro and right before the outro), “Here”, ±1 s. Music longer than the episode is trimmed with a 1.5 s fade: the episode lasts as long as the recordings do. Effects triggered in prodPod arrive already placed at their moment.</p>
+<h3>4.4 Lower thirds</h3>
+<p>The news-style texts that slide in at the bottom. Three styles:</p>
+<ul>
+<li><strong>News</strong>: two bars, logo on the left, tag (NOW, SEGMENT, SPONSORED BY, LIVE, FACT, custom or none) and title over color, text over white.</li>
+<li><strong>Clean</strong>: colored line, big title, small text, no boxes.</li>
+<li><strong>Sponsor</strong>: card with the sponsor's logo large, SPONSORED BY and the tagline; the color comes from the logo.</li>
+</ul>
+<p>Automatic color (the dominant one in the podcast logo; for sponsors, the sponsor's logo) or one of six. Animation: the logo box bounces in, the bars unfold to the right, the text fades in (0.9 s); it exits to the left. Sound: a short, quiet whoosh (−24 dB) on entry and a tap on exit, can be turned off per lower third. One button per prePod sponsor creates the lower third with its logo and tagline. The director's arrive from prodPod marked “from the director” and are edited the same way. Panel: style, title, text, tag, color, logo (podcast's, choose, no logo), when it starts (h:mm:ss), how long it lasts (2 to 20 s), sound, View. Barlow Condensed and Barlow fonts, included.</p>
+<h3>4.5 Sponsors and brands</h3>
+<p>Sponsors from the prePod script appear at the minute they were planned for, with their logo; here you turn them off or change the moment. The director's lower thirds are listed with their exact second (stacked if they coincide). To create new lower thirds, see the Lower thirds section.</p>
+</section>
+
+<section id="post-mezcla">
+  <h2><span class="num">04</span> post · Mix</h2>
+<p>It's not a section: it lives in the timeline and in each track's panel.</p>
+<ul>
+<li><strong>Waveforms</strong>: a real waveform per person, from the sound analysis (done even with a single person).</li>
+<li><strong>Solo / Mute</strong> per person (S and M in the timeline; also in the panel). They apply to the preview and the export; a muted track shows gray.</li>
+<li><strong>Meter</strong> per person: while playing, it shows what's actually heard from that person, with their volume, fades, mute whoever isn't talking, volume line and bleeps. When paused it's an estimate.</li>
+<li><strong>Drawn volume</strong>: the yellow line. Double-click over a person adds a point <em>at the volume they already had</em> (not at the click height: that way a double-click near the bottom edge doesn't mute anyone); drag up or down (−60 to +12 dB, in 1 dB steps, the value shows above while you drag) and sideways; click selects it, Delete removes it; ⌘Z undoes. Between points the volume changes gradually. It blends with the automatic stuff (fades, mute whoever isn't talking, bleeps): yours wins. If the line lowers someone's voice, their panel flags it in orange with “Remove the line” next to it.</li>
+<li><strong>Single-person stretches</strong>: when dragging over one person, “Mute only X” (a cough, a bump) and “−6 dB on X” (they shouted) put four points on their line; the video doesn't get shorter and the others keep going. “Cut from everyone” is the usual cut.</li>
+<li><strong>Voice</strong>: three-band equalizer with presets, Even voice (gentle compressor: the quiet parts come up, the loud ones don't hit) and Less hiss (de-esser), per person, with “Apply”.</li>
+<li><strong>Final loudness</strong>: on export it's measured and adjusted to −16 LUFS (what Spotify and YouTube ask for); can be turned off in Export.</li>
+<li><strong>Separate tracks</strong>: in Export, 24-bit 48 kHz WAV per person (with their cuts, fades, volume line and bleeps) and another with the music and effects, without intro or outro, to finish in Logic, Audition or Reaper.</li>
+</ul>
+<p>Left out on purpose: recording inside the editor (that's prodPod), 5.1, multiband mastering. AU plugins and MIDI are in: in <a href="#studio">Studio</a>.</p>
+</section>
+
+<section id="studio">
+  <h2><span class="num">05</span> Studio · the DAW and the video editor</h2>
+<p>Studio is the advanced window: a full audio console and video editor for those who need them. <strong>If you don't open it, you don't see it</strong>: the simple steps stay the same. It opens with “Open in Studio” inside Clean sound, Look or Texts, or with <kbd>⌘</kbd><kbd>E</kbd> (Audio) and <kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd> (Video). A single window with two tabs. House rule: <strong>what you hear and see in Studio is exactly what gets exported</strong>; the simple controls are presets of Studio's, and if you touch something in Studio that the simple step can't express, that step shows “Adjusted in Studio” and a button to go back. Nothing in Studio depends on artificial intelligence.</p>
+
+<h3>Audio</h3>
+<ul>
+<li><strong>Console</strong>: one channel per person with a fader in dB, meter, solo and mute, pan, and the <strong>voice chain</strong>: 8-band parametric equalizer with a curve, full compressor, gate, de-esser and limiter. All of it runs inside the mix, the same in the preview and in the export.</li>
+<li><strong>Audio Unit plugins</strong>: “+ AU plugin” lists the effects installed on your Mac (AUv3 out of process, AUv2 in process with a warning), with their own window; the state is saved with the project. Chain presets saved in the podcast (they travel to any Mac with your account) or on this Mac.</li>
+<li><strong>Automation</strong>: lanes drawn under the timeline for volume and parameters; “Write” mode while playing. <strong>Live LUFS</strong> of the mix.</li>
+<li><strong>A/B</strong> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>B</kbd>): hear the voices with no chain at all while playing. Just for listening; the export always processes.</li>
+<li><strong>MIDI surface</strong>: a controller with faders (nanoKONTROL2 out of the box, or any other with “Learn”) moves the volumes; the buttons do solo and mute.</li>
+<li>In Clean sound, with the same engine: <strong>measured even voices</strong> (BS.1770 per person), <strong>room tone</strong> (fills the gaps with each voice's real ambience, no jumps), <strong>noise reduction by fingerprint</strong>, <strong>remove clicks</strong>, <strong>conversation panning</strong>.</li>
+</ul>
+
+<h3>Video</h3>
+<ul>
+<li><strong>Tracks</strong>: Texts, B-roll, Cameras, Lower thirds, Voices, Music, with zoom and dragging. <strong>Snap to the beat</strong>: the app extracts the tempo and beats from the music, and clips, keyframes and cuts snap to them when dragging.</li>
+<li><strong>Keyframes</strong> for position, size, rotation and opacity on any layer (diamonds next to each control; linear, smooth or hold curves). Positions are fractions of the frame: they work the same in 16:9, 9:16 and 1:1.</li>
+<li><strong>Titles</strong> with ins and outs (rise, drop, fade, type, grow, wipe) and <strong>title templates</strong> saved in the podcast.</li>
+<li><strong>B-roll</strong>: entry transition (cut, fade, to black, slide, zoom), <strong>speed</strong> 0.25×–4× with <strong>ramps</strong> (from one speed to another, smoothly) and its own color. Music supports 0.5×–2× without changing pitch.</li>
+<li><strong>Multicam</strong>: a strip with the angles; click or the <kbd>1</kbd>–<kbd>4</kbd> keys cut to that camera at the current second; the cut stays as a manual stretch until the next one. “Cameras follow the speaker” with minimum dwell; “On switch”: cut, fade or soft zoom. Manual stretches apply to reels too.</li>
+<li><strong>Color</strong>: per clip, per camera or the whole track. Exposure, contrast, temperature, saturation and skin; built-in looks and imported <code>.cube</code> looks with intensity. <strong>Match cameras</strong> against a reference one. <strong>Masks</strong> per camera (ellipse or rectangle with a feathered edge): the color goes only inside, the outside can be darkened; they follow the person with hand-placed keyframes.</li>
+<li><strong>Punch-in</strong> (zoom in when talking) and <strong>audiogram</strong> for audio-only episodes, in Look.</li>
+<li><strong>Proxies</strong>: recordings above 1080p get a lightweight copy so the preview runs smoothly; they're prepared on their own. The export always uses the originals.</li>
+</ul>
+
+<h3>Deliver from Studio</h3>
+<ul>
+<li><strong>Export queue</strong>: if something is already exporting, the button turns into “Queue it”; “Export all” queues YouTube, MP3 and the checked reels. They run one at a time, in the background, with a system notification when done.</li>
+<li><strong>Shared review</strong>: “Send for review” uploads the MP3 to postPod and copies a link that opens without an account; whoever listens leaves comments at the exact second, which show up as marks in the timeline.</li>
+<li>With every export: <code>.srt</code>, <code>.vtt</code> and chapters next to the file, subtitles inside the MP4, transcript inside the MP3 and the <strong>loudness report</strong> as a PDF (whether it meets what Spotify, Apple, YouTube and radio ask for).</li>
+</ul>
+</section>
+
+<section id="post-entregar">
+  <h2><span class="num">06</span> post · Deliver</h2>
+<h3>6.1 Reels</h3>
+<p>Every marked moment (in postPod web, with “Mark moment” under the video, with M, or with I and O) is a vertical 9:16 video with subtitles. AI doesn't pick reels: they come from your moments. “Restore from moments” creates them again.</p>
+<p><strong>Each reel's card</strong> (left): title, starts and ends (h:mm:ss, ±1 s), quick duration 30/60/90 s, View, delete, the download button that exports only that reel and <strong>✈️ Publish to social</strong>: exports the reel just as it looks, you pick Instagram, YouTube Shorts or TikTok and the text for each, and thePod publishes it even if you close the app (the same thing <a href="#pub">pub</a> does, without leaving the editor).</p>
+<p><strong>Tabs</strong> (right, under the video): what you select is edited inside its tab.</p>
+<ul>
+<li><strong>Layout</strong>: the same layouts as Look with their options, custom order (“Custom”), branding (background, logo, names), reel-only logo and background, “Episode music and effects” (turning it off gives the reel its own music) and <strong>Hook title</strong>: a big line at the top for the first 3 seconds. For all reels or, with “This reel has its own”, just for one. <strong>Templates</strong>: save the design under a name and apply it with one click in any episode (doesn't save the custom logo or background, which are episode files).</li>
+<li><strong>Subtitles</strong>: at the top, how they look: whether they show in reels, and “Custom style for reels” (presets, colors, size, highlight word, draggable position over the video); otherwise they use the episode style adapted to vertical. For all reels or just the one you're viewing. Below, the reel's text: double-click fixes a word (applies to the episode), the scissors remove the sentence from that reel only; the reel's own cuts are undone with a button. <strong>Listen to this reel again</strong> rewrites only that reel's text, aligned to the voice: the reel ends up with its own text (what you fix there no longer changes the episode) and “Use the episode text” brings it back.</li>
+<li><strong>Music</strong>: “Music for this reel · Add…”: starts at the beginning of the reel, loops if it's shorter, and can be edited (volume, duck under the voice, fades, move). It only plays in that reel. Also: “Clean sound” just in the reel if the episode wasn't cleaned, “Remove silences only in this reel” and its own “Mute whoever isn't talking”.</li>
+<li><strong>B-roll</strong>: b-roll only in that reel (always shorter than the reel).</li>
+<li><strong>Lower thirds</strong>: lower thirds only for that reel, with the three styles and the sponsors; the episode's ones that fall within its stretch also show.</li>
+</ul>
+<p><strong>Find moments with AI</strong>: thePod's AI reads the episode, proposes the best moments (each one becomes a reel, with a title and why it works) and writes the notes: the summary and the highlights. The notes copy with one tap and go into the description when publishing. It runs once per episode; “Bring its moments back” recovers the ones you deleted without spending again. The first time it asks for permission, because the episode text is sent (never the audio or the video). It needs your account connected in Settings.</p>
+<p>“Export N reels” exports the checked ones. Whatever lies outside the reel's stretch (b-roll, texts, lower thirds, episode sponsors) doesn't go in.</p>
+<h3>6.2 Cover</h3>
+<p>The episode image: it's the cover pub sends to Instagram with the full episode and it serves as the YouTube thumbnail. <strong>Find the best frames</strong> scans the video and proposes the seconds where everyone is <strong>smiling, eyes open and in focus</strong> (it looks at each camera separately and a second is worth as much as its worst person: if someone isn't smiling, that second doesn't win). It takes about a minute per half hour. The frames show in a carousel with the second and a mark when everyone is smiling: click to pick one, double-click to jump to that second, the × to discard it. <strong>Capture here</strong> adds the second where the episode is parked, to choose by hand. The cover comes out with the episode's layout, logo and background, in 16:9; <strong>Save cover (.jpg)</strong> puts it in the exports folder. If you don't pick one, the usual one is used: one second after the first reel or, if there's none, a quarter of the way into the episode.</p>
+<h3>6.3 Export video</h3>
+<p><strong>Before exporting</strong>: at the top you see what's worth checking, each item with its button to fix it right there. It can be uncleaned sound, subtitles not aligned to the voice (“Align”), unreviewed suggestions (“View” or “Leave as they are”), sensitive words not searched, or checked reels you haven't watched. If everything's done, it says “All set”. It's just a heads-up: you can export anyway.</p>
+<p>Formats: YouTube 16:9 (in <strong>1080p or 4K</strong>: 4K weighs about 4 times more and takes longer, but YouTube shows it sharper even if you recorded in 1080p; it's in the plans that include the app), Reels/TikTok/Shorts 9:16, Instagram square 1:1, audio only (MP3 with title and artist). What to include: subtitles, sponsors at their moment, the director's lower thirds. File: <strong>Compatible (H.264)</strong>, plays everywhere, or <strong>Lightweight (HEVC)</strong>, half the size and faster. “Adjust final loudness (−16 LUFS)”. <strong>Separate tracks (WAV)</strong>. Quiet mode: if the Mac heats up, the render slows down. The files land in the exports folder (button at the bottom left) and open in the Finder.</p>
+<p><strong>Chapters</strong>: they come from the script and the moments, with the intro already subtracted. They follow YouTube's rules so it shows them (the first at 00:00, at least three, 10 seconds or more apart); if the rules aren't met, the description goes out without chapters instead of with ones YouTube ignores. They also go inside the exported video and MP3, for QuickTime, Apple Podcasts and other players.</p>
+<h3>6.4 Publish</h3>
+<p>Links the project to its prePod episode (once) and publishes the audio to the feed (Spotify and Apple Podcasts) or uploads the video to YouTube, with real progress. If something's missing, the notice says what to configure in prePod. To choose destinations, schedule or publish reels to social networks, there's the <a href="#pub">pub</a> section.</p>
+</section>
+
+<section id="pub">
+  <h2><span class="num">07</span> pub</h2>
+<p>Where what comes out of post gets published. The section is white. At the top, <strong>eight destinations in an arc</strong>: Spotify, Apple Podcasts, YouTube, Instagram, Shorts, Reels, TikTok and Facebook. A filled star is connected; a dotted one with “Connect” isn't, and tapping it opens the browser to grant permission (the app notices on its own when you're done).</p>
+<h3>What you publish</h3>
+<p>On the left, the episodes you have in post. When you pick one, cards with real thumbnails appear: <strong>Full episode</strong>, each <strong>reel</strong> and <strong>From the computer</strong> (a video you already have). Depending on what you choose, the matching stars light up:</p>
+<ul>
+<li><strong>Full episode</strong>: YouTube (the 16:9 video), Spotify and Apple Podcasts (the audio to the feed, with the episode notes) and the cover to Instagram (the one chosen in post → Cover, with text).</li>
+<li><strong>Reel</strong>: Shorts, Reels and TikTok (vertical 9:16, just as it looks in the editor).</li>
+<li>Facebook, coming soon.</li>
+</ul>
+<p>Every lit star can be turned off for this publication. Below, the text: one tab per destination (YouTube description, Short text, text with hashtags for Instagram, episode notes for the feed, and the text to paste into TikTok). <strong>Now</strong> or <strong>Schedule</strong> with a date and time, and <strong>Export and publish</strong>: the app exports whatever's missing and uploads everything; if you close the app, thePod keeps going on its own.</p>
+<h3>Each star's panel</h3>
+<p>Tap a star's name (or press and hold it): you see the connected account, “View profile”, <strong>Latest</strong> that went out there, Include or Remove from this publication, and <strong>Always at the end</strong>: a signature or hashtags that get added automatically at the foot of every text you publish to that destination.</p>
+<h3>Publications</h3>
+<p>The list of what went out and what's about to, with its status: Scheduled, Publishing, Published (with the link), Uploaded as private, In your TikTok inbox, Not published (with Retry) or Canceled. A scheduled one can be canceled until it starts.</p>
+<h3>What each network requires</h3>
+<ul>
+<li><strong>Instagram</strong>: a professional account (Creator or Business). While the thePod app is under Meta review, only accounts added as testers can publish.</li>
+<li><strong>TikTok</strong>: the video lands in your TikTok <strong>inbox</strong> with the text ready to paste; you finish publishing from the phone app. Up to 5 pending videos per day.</li>
+<li><strong>YouTube and Shorts</strong>: until Google verifies the app, videos are uploaded <strong>as private</strong>; open it on YouTube and switch it to “Public”.</li>
+<li><strong>Spotify and Apple Podcasts</strong>: they read the podcast feed; they light up once the podcast is set up for publishing in pre.</li>
+</ul>
+<p>Accounts are connected once, in <strong>pre → Podcast settings → Networks</strong> or from the star itself.</p>
+</section>
+
+<section id="pre">
+  <h2><span class="num">08</span> pre</h2>
+<p>Episode board (columns by status), calendar, script, rundown, guests (with RSVP and photo), ideas with votes, templates, podcast page, team, publishing, and podcast settings: branding (background, logo, colors), sponsors (logo, tagline, link), soundboard, distribution (feed, YouTube), <strong>Networks</strong> and hosts and directors.</p>
+<p><strong>Networks</strong>: only for connecting the podcast's accounts, once: the feed (Spotify and Apple Podcasts), YouTube (YouTube and Shorts), Instagram (Instagram and Reels), TikTok and Facebook. Next to each account you see the stars it lights up in <a href="#pub">pub</a>, which is where publishing happens. Connect opens the browser to grant permission and the app notices on its own when you're done; Disconnect removes the permission.</p>
+<p><strong>Script</strong>: sections with who's speaking (free label), text, notes and duration (“lasts”, in minutes). Each section can be marked <strong>Teleprompter</strong>: who reads it (list: hosts by user and the episode's guests; if you don't pick anyone, it shows to everyone), appears at <code>min</code> <code>seg</code> (or <strong>after the previous one</strong> with a gap in seconds: prePod works out when the previous one ends from its words and speed), speed (slow, normal, fast) and how much it takes up (¼, ½, full screen). “Suggest” sets the minute by adding up the previous sections. “Go record” opens the room.</p>
+<p><strong>Same as on the web</strong>: “Add to my calendar” (in the calendar view) downloads the episodes for your Mac calendar; in the podcast settings, “Export podcast (.zip)” saves a full copy and each sponsor has a “Report” with its mentions per episode, which you can save as a spreadsheet; on the podcast page, “Open the full editor” opens the web editor.</p>
+</section>
+
+<section id="prod">
+  <h2><span class="num">09</span> prod</h2>
+<p>Any host and the director can be on the Mac or the web, mixed; guests always via the web; up to 4 in the room; recording up to 1080p (an initial test measures the connection and decides 1080p or 720p).</p>
+<p><strong>Pre-flight screen</strong>: camera, microphone, headphones or speakers (with headphones the microphone is recorded directly; with speakers, the voice without echo), connection test.</p>
+<p><strong>Test microphone (10 s)</strong>: talk the way you will in the episode and thePod tells you if your voice comes in low or too loud and how much to raise or lower it. “Apply” saves it for that microphone: it changes how the room hears you, your recording stays the same. “Remove” goes back to how it was.</p>
+<p><strong>Room</strong>: “Speaker” or grid view, ready, countdown, rehearsal (recorded only on your Mac), recording on the Mac with safe chunked upload while you record, separate takes, moments, soundboard, sponsors (heads-up 60 s before and when it arrives, “postpone 90 s”), screen sharing (or just recording it), chat, raise hand, <strong>live auto-mute</strong> (button next to the microphone: when you're not talking the room doesn't hear your noises; your recording is untouched). The microphone is recorded raw.</p>
+<p><strong>Live streaming</strong> (whoever created the room, or a director): “Start streaming…”, you pick YouTube, Twitch or another, paste the stream key and the view (“Speaker” or “Everyone equal”). thePod remembers the platform, the address and the view; not the key, because it's secret. If the platform rejects the stream (bad key, live not enabled on your channel) or it drops, within a few seconds a notice appears with the reason.</p>
+<p><strong>When you finish</strong>: the recording stops at that instant for everyone, “Recording finished · Turning off camera and microphone in 3, 2, 1” appears and only then do they turn off. Each person sees how much they still have to upload and how long it'll take (“120 MB left · about 3 minutes”) until “Done”. Stay on the screen until your track says Done. Once every track finishes uploading, the episode is sent to postPod on its own (admins also have “Send to post now”).</p>
+<p><strong>Teleprompter</strong>: the ones from the prePod script fire on their own at the marked minute: everyone sees the heads-up 3 s before, “Coming up: <em>Script · Name</em> in 3 s · HEADS UP NAME”, and the text shows only to the reader. The text scrolls on its own at the chosen pace, with Pause, From the start and close; it goes away on its own when done. If the reader pauses or closes early, the next chained one still shows at the calculated time.</p>
+<p><strong>Director</strong> (control room): tabs Lower thirds (Sponsor, Podcast, Segment, with time on screen), Cues (quick: wrap up, next, pause, faster, slower, read ad; and typed; to everyone or to one person; guests see them if you enable it), Room (people, ready, mute, remove, tracks), Director chat, Sounds, and <strong>Prompter</strong> (for whom, free text or a prePod sponsor's tagline, speed, size, 0/3/5/10 s advance warning, Launch, Remove). Whisper in someone's ear (press and hold) to one person or to all the hosts.</p>
+</section>
+
+<section id="ama">
+  <h2><span class="num">10</span> ama</h2>
+<p>Events and templates, the host's studio: requests with questions, drag-to-reorder queue, on air, mute and hide, chat, server recording, links.</p>
+<p><strong>Moderated chat</strong>: the audience writes from the event's viewing page (with their name) and while waiting their turn in the queue. In an event with moderated chat, every message reaches you first with Approve, Remove and Block; while it waits only you and whoever wrote it can see it, and whoever gets blocked can't write again in that event. Up to 300 characters per message and one every 3 seconds per person.</p>
+<p>Pending: seeing and hearing the Q&amp;A guest inside the prodPod room, and recording on the Mac if the server's recording fails.</p>
+</section>
+
+<section id="ajustes">
+  <h2><span class="num">11</span> Settings</h2>
+<p><strong>Your thePod account</strong>: the same one as on the web. Sign in with your username or your email. “Forgot your password?” opens the web on the recovery screen, and <strong>Sign out</strong> forgets the password on this Mac without touching your episodes. “My profile” opens the web to change your photo, name, email or password; if you change the password, type it here too. The server addresses are folded under “Servers”. Also: “Check now” for updates, default camera and microphone, room quality, and the optional Claude key for suggestions.</p>
+<p><strong>Language</strong>: the app comes in Spanish and English. “Like the system” follows your Mac’s language; if you pick one by hand, the app relaunches on its own (your episodes are untouched) and opens in that language. On the web the switch is the ES/EN button at the bottom right, and it applies to all five apps and this manual.</p>
+<p>The <strong>Help</strong> menu takes you to the manual, the FAQ, the privacy page and to write to us.</p>
+</section>
+
+<section id="logos-y-entrada">
+  <h2><span class="num">12</span> Logos and intro</h2>
+<p>The intro shows the thePod logo with the official four-note sound: with each note two of the eight stars appear (like the flag), from the tips to the center, and at the end they shine together. The brand kit (logos as transparent PNG and PDF, GIF and video of the intro in 16:9, 1:1 and 9:16, with and without background) is generated from the app: <code>thePod --brand-kit &lt;carpeta&gt;</code> and <code>thePod --intro-frames &lt;carpeta&gt; &lt;ancho&gt; &lt;alto&gt; &lt;0|1|2&gt;</code>.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#post-la-pantalla">post · The screen</a>
+  <a href="#post-preparar">post · Prepare</a>
+  <a href="#post-armar">post · Build</a>
+  <a href="#post-mezcla">post · Mix</a>
+  <a href="#studio">Studio</a>
+  <a href="#post-entregar">post · Deliver</a>
+  <a href="#pub">pub</a>
+  <a href="#pre">pre</a>
+  <a href="#prod">prod</a>
+  <a href="#ama">ama</a>
+  <a href="#ajustes">Settings</a>
+  <a href="#logos-y-entrada">Logos and intro</a>
+</nav>
+{% endblock %}

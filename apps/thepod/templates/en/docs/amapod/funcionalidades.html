@@ -1,0 +1,121 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Features — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FEATURES</div>
+  <h1>Every tool in detail</h1>
+  <p class="lede">A detailed guide to amaPod's moderation and broadcast tools.</p>
+</header>
+
+<section id="eventos">
+  <h2><span class="num">01</span> Event management</h2>
+  <p>The main screen lists your events with their state (Created, Active, Ended). For each event:</p>
+  <ul>
+    <li><strong>Create</strong>: title, description and chat mode. Optionally from a template.</li>
+    <li><strong>Edit</strong>: adjust the details as long as the event hasn't ended.</li>
+    <li><strong>Activate</strong>: opens the video room and enables the real-time queue.</li>
+    <li><strong>End</strong>: closes the room and triggers the export to postPod if there was a recording.</li>
+    <li><strong>Delete</strong>: only available in the Created state — an active or ended event keeps its history.</li>
+  </ul>
+</section>
+
+<section id="plantillas">
+  <h2><span class="num">02</span> Templates</h2>
+  <p>
+    Save an event's settings as a template (title, description, chat mode, branding)
+    and create recurring events in one click. Ideal for weekly formats.
+  </p>
+</section>
+
+<section id="cola-moderacion">
+  <h2><span class="num">03</span> Moderation queue</h2>
+  <p>The central panel during an active event. It's divided into:</p>
+  <ul>
+    <li><strong>Pending</strong>: new requests with name and pre-questions. Buttons to approve or reject.</li>
+    <li><strong>In queue</strong>: approved participants, ordered by position. You can reorder them at any time — positions renumber themselves.</li>
+    <li><strong>On air</strong>: whoever is asking their question right now. When you move to the next one, the current one is marked as handled.</li>
+  </ul>
+  <p>Each card shows the participant's pre-questions so the host knows what's coming.</p>
+</section>
+
+<section id="pre-preguntas">
+  <h2><span class="num">04</span> Pre-questions</h2>
+  <p>
+    When signing up, each participant can write up to <strong>3 questions</strong> and edit them while they wait.
+    The moderator sees them in the queue — they're useful for filtering, ordering by interest and preparing the host.
+  </p>
+</section>
+
+<section id="preconexion">
+  <h2><span class="num">05</span> Automatic pre-connection</h2>
+  <p>
+    The first 3 in the queue get the pre-connection signal: their browser connects to the room
+    (camera and microphone ready) without going on air yet. When the moderator advances the queue,
+    the pre-connection flags are recalculated automatically.
+  </p>
+</section>
+
+<section id="censurar">
+  <h2><span class="num">06</span> Censor a participant</h2>
+  <p>
+    Cuts the audio and video of the participant on air immediately. The event goes on —
+    only that person is neutralized. They're marked as censored in the history.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">07</span> Chat</h2>
+  <p>Configurable per event:</p>
+  <ul>
+    <li><strong>Open</strong>: messages visible instantly to everyone.</li>
+    <li><strong>Moderated</strong>: messages from the audience go into an approval inbox; the host decides which ones get posted. The host's messages are posted directly.</li>
+    <li><strong>Off</strong>: no chat.</li>
+  </ul>
+</section>
+
+<section id="espectadores">
+  <h2><span class="num">08</span> Viewers' page</h2>
+  <p>
+    Each event has a public viewing page. The audience follows the broadcast without an account,
+    sees the question queue and can give <strong>likes</strong> — the counter is shown live.
+    From there they can also ask to participate, moving into the pending queue.
+  </p>
+</section>
+
+<section id="grabacion">
+  <h2><span class="num">09</span> Recording</h2>
+  <p>Recording controls from the event panel:</p>
+  <ul>
+    <li><strong>Start / stop</strong>: records the composite room as an MP4 file on the server.</li>
+    <li><strong>Status</strong>: indicator for a recording in progress.</li>
+    <li><strong>Download</strong>: get the MP4 once the recording has finished.</li>
+  </ul>
+  <p>Unlike prodPod (which records separate tracks per participant), amaPod records the event's <strong>composite view</strong> — meant for archiving and clips, not for multitrack editing.</p>
+</section>
+
+<section id="export-postpod">
+  <h2><span class="num">10</span> Export to postPod</h2>
+  <p>
+    When an event with a recording ends, amaPod creates (or updates) a project in postPod with the event's MP4,
+    ready to cut out the best moments and publish them as clips.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#eventos">Events</a>
+  <a href="#plantillas">Templates</a>
+  <a href="#cola-moderacion">Moderation queue</a>
+  <a href="#pre-preguntas">Pre-questions</a>
+  <a href="#preconexion">Pre-connection</a>
+  <a href="#censurar">Censor</a>
+  <a href="#chat">Chat</a>
+  <a href="#espectadores">Viewers</a>
+  <a href="#grabacion">Recording</a>
+  <a href="#export-postpod">Export to postPod</a>
+</nav>
+{% endblock %}
