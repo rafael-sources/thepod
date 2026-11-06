@@ -296,10 +296,10 @@ struct ChannelStrip: View {
                 .padding(.horizontal, 6).frame(height: 22)
                 .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
                 .help(lane.noiseProfile == nil ? String(localized: "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla") : String(localized: "Resta espectral con la huella del segundo más quieto"))
-                insertRow(String(localized: "EQ paramétrico"), on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : String(localized: "\(chain.bands.filter(\.enabled).count) bandas")) { openInsert(.eq) }
-                insertRow(String(localized: "Compresor"), on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
-                insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
-                insertRow(String(localized: "Puerta"), on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : "apagada") { openInsert(.gate) }
+                insertRow(String(localized: "EQ paramétrico"), on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? String(localized: "plano") : String(localized: "\(chain.bands.filter(\.enabled).count) bandas")) { openInsert(.eq) }
+                insertRow(String(localized: "Compresor"), on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : String(localized: "apagado")) { openInsert(.compressor) }
+                insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : String(localized: "apagado")) { openInsert(.deesser) }
+                insertRow(String(localized: "Puerta"), on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : String(localized: "apagada")) { openInsert(.gate) }
                 ForEach(chain.plugins) { pl in
                     HStack(spacing: 6) {
                         Button {

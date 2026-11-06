@@ -225,7 +225,7 @@ struct WebProjectsSection: View {
                     if let o = w.owner { Label(o, systemImage: "person") }
                     if local != nil { Label("Ya está en esta Mac", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good) }
                     if let n = w.importing {
-                        Label(n > 0 ? String(localized: "Episodio en proceso · llegando \(n) \(n == 1 ? "pista" : "pistas") desde prodPod") : String(localized: "Episodio en proceso en la web"),
+                        Label(n > 0 ? String(localized: "Episodio en proceso · llegando \(n) \(n == 1 ? String(localized: "pista") : String(localized: "pistas")) desde prodPod") : String(localized: "Episodio en proceso en la web"),
                               systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                     }
                     if let partial {

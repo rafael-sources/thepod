@@ -55,7 +55,7 @@ struct PreEpisode: Decodable, Identifiable, Hashable {
         guard let raw = scheduledAt ?? scheduledDate, raw.count >= 10 else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "es"); f.dateFormat = "yyyy-MM-dd"
         guard let d = f.date(from: String(raw.prefix(10))) else { return raw }
-        let out = DateFormatter(); out.locale = Locale(identifier: "es"); out.dateFormat = "EEE d MMM"
+        let out = DateFormatter(); out.locale = AppLanguage.locale; out.dateFormat = "EEE d MMM"
         var s = out.string(from: d)
         if raw.count >= 16, raw.dropFirst(10).first == "T" { s += " · " + raw.dropFirst(11).prefix(5) }
         return s

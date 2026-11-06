@@ -62,7 +62,7 @@ enum Exporter {
             // Volumen final para Spotify/Apple (−16 LUFS): se mide y se corrige en la misma conversión a MP3
             var af: [String] = []
             if project.normalizeLoudness, let lufs = await AudioAnalysis.loudness(m4a), abs(lufs + 16) > 0.7 {
-                af = ["-af", String(format: String(localized: "volume=%.2fdB,alimiter=limit=0.89:level=0"), -16 - lufs)]
+                af = ["-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs)]
             }
             // Capítulos dentro del MP3 (Apple Podcasts y otros los muestran)
             let chap = window == nil ? chapterFile(chapterList(project: project, keep: built.keep, introDuration: 0,
@@ -97,7 +97,7 @@ enum Exporter {
             let fixed = folder.appendingPathComponent(name + "_vol.mp4")
             do {
                 try await FFmpeg.run(["-i", url.path, "-map", "0", "-c:v", "copy",
-                                      "-af", String(format: String(localized: "volume=%.2fdB,alimiter=limit=0.89:level=0"), target - lufs),
+                                      "-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", target - lufs),
                                       "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", fixed.path])
                 try FileManager.default.removeItem(at: url)
                 try FileManager.default.moveItem(at: fixed, to: url)

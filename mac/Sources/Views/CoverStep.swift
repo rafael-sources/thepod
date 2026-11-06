@@ -194,7 +194,7 @@ struct CoverCandidateCard: View {
                     .foregroundStyle(selected ? Theme.accent : .primary)
                 Spacer()
                 if candidate.faces > 0 {
-                    Text(candidate.allSmiling ? String(localized: "sonríen") : "\(candidate.faces) \(candidate.faces == 1 ? "cara" : "caras")")
+                    Text(candidate.allSmiling ? String(localized: "sonríen") : "\(candidate.faces) \(candidate.faces == 1 ? String(localized: "cara") : String(localized: "caras"))")
                         .font(.caption2).foregroundStyle(Theme.secondary)
                 } else {
                     Text("a mano").font(.caption2).foregroundStyle(Theme.secondary)

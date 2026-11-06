@@ -20,24 +20,24 @@ struct Shortcut: Identifiable, Equatable {
 
 enum StudioShortcuts {
     static let all: [Shortcut] = [
-        Shortcut(keys: "Espacio · K", what: String(localized: "Reproducir / pausar"), scope: .everywhere),
+        Shortcut(keys: String(localized: "Espacio · K"), what: String(localized: "Reproducir / pausar"), scope: .everywhere),
         Shortcut(keys: "← →", what: String(localized: "Un segundo atrás / adelante (con ⇧, cinco)"), scope: .everywhere),
         Shortcut(keys: "J · L", what: String(localized: "Cinco segundos atrás / adelante"), scope: .everywhere),
         Shortcut(keys: "M", what: String(localized: "Marcar momento (reel de 60 s desde aquí)"), scope: .everywhere),
         Shortcut(keys: "I · O", what: String(localized: "Marcar inicio y fin de un reel"), scope: .everywhere),
         Shortcut(keys: "⌘Z · ⇧⌘Z", what: String(localized: "Deshacer / rehacer"), scope: .everywhere),
-        Shortcut(keys: "Suprimir", what: String(localized: "Quitar el punto de volumen elegido"), scope: .everywhere),
+        Shortcut(keys: String(localized: "Suprimir"), what: String(localized: "Quitar el punto de volumen elegido"), scope: .everywhere),
         Shortcut(keys: "⌘O", what: String(localized: "Importar grabación"), scope: .everywhere),
         Shortcut(keys: "⌘E", what: String(localized: "Abrir Studio · Audio"), scope: .everywhere),
         Shortcut(keys: "⇧⌘E", what: String(localized: "Abrir Studio · Video"), scope: .everywhere),
         Shortcut(keys: "⇧⌘B", what: String(localized: "A/B: oír las voces sin cadena mientras suena"), scope: .studio),
         Shortcut(keys: "?", what: String(localized: "Esta lista de atajos"), scope: .studio),
         Shortcut(keys: "1 · 2 · 3 · 4", what: String(localized: "Multicámara: cortar a esa cámara en este segundo"), scope: .video),
-        Shortcut(keys: "Clic derecho en Cámaras", what: String(localized: "Fijar una cámara o una plantilla en ese segundo"), scope: .video),
-        Shortcut(keys: "Arrastrar un clip", what: String(localized: "Moverlo; con el imán al ritmo, se engancha a los beats"), scope: .video),
-        Shortcut(keys: "Rombo junto a un control", what: String(localized: "Poner o quitar un keyframe en este segundo"), scope: .video),
-        Shortcut(keys: "Doble clic en un carril", what: String(localized: "Borrar ese punto de automatización"), scope: .audio),
-        Shortcut(keys: "⌥ clic en un fader", what: String(localized: "Volver ese fader a 0 dB"), scope: .audio),
+        Shortcut(keys: String(localized: "Clic derecho en Cámaras"), what: String(localized: "Fijar una cámara o una plantilla en ese segundo"), scope: .video),
+        Shortcut(keys: String(localized: "Arrastrar un clip"), what: String(localized: "Moverlo; con el imán al ritmo, se engancha a los beats"), scope: .video),
+        Shortcut(keys: String(localized: "Rombo junto a un control"), what: String(localized: "Poner o quitar un keyframe en este segundo"), scope: .video),
+        Shortcut(keys: String(localized: "Doble clic en un carril"), what: String(localized: "Borrar ese punto de automatización"), scope: .audio),
+        Shortcut(keys: String(localized: "⌥ clic en un fader"), what: String(localized: "Volver ese fader a 0 dB"), scope: .audio),
     ]
 
     /// Teclas repetidas dentro del mismo ámbito (para la prueba automática).

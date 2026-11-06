@@ -70,7 +70,7 @@ enum LoudnessReport {
         text(String(localized: "INFORME DE SONORIDAD"), size: 10, bold: true, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 26
         text(Exporter.episodeTitle(p), size: 18, bold: true, at: y); y -= 20
         text((p.podcastName ?? "") + " · " + format.title, size: 11, color: NSColor(white: 0.35, alpha: 1), at: y); y -= 16
-        let df = DateFormatter(); df.dateStyle = .long; df.timeStyle = .short; df.locale = Locale(identifier: "es")
+        let df = DateFormatter(); df.dateStyle = .long; df.timeStyle = .short; df.locale = AppLanguage.locale
         text(String(localized: "Archivo: \(file.lastPathComponent) · ") + df.string(from: Date()), size: 10, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 24
         rule(y); y -= 30
         // Medidas grandes

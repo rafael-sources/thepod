@@ -619,7 +619,7 @@ final class ProjectSession: ObservableObject {
             if settings.removeFillers { parts.append(String(localized: "\(removedFillers) muletillas")) }
             fixSummary = String(localized: "Listo. Quitamos \(parts.joined(separator: " y ")) — tu episodio ahora dura \(EditEngine.clock(p.duration - saved)) (antes \(EditEngine.clock(p.duration))).")
                 + (settings.enhanceAudio ? String(localized: " El audio quedó con sonido de estudio.") : "")
-                + (pending > 0 ? String(localized: " Te dejamos \(pending) \(pending == 1 ? "sugerencia" : "sugerencias") para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques.") : "")
+                + (pending > 0 ? String(localized: " Te dejamos \(pending) \(pending == 1 ? String(localized: "sugerencia") : String(localized: "sugerencias")) para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques.") : "")
     }
 
     /// Silencios y muletillas que quita "Arreglar", con los ajustes del proyecto (no los agrega).
@@ -772,7 +772,7 @@ final class ProjectSession: ObservableObject {
         p.aiAnalyzedAt = p.aiAnalyzedAt ?? Date()
         project = p
         aiNote = added > 0
-            ? String(localized: "La IA encontró \(added) \(added == 1 ? "momento" : "momentos") y escribió las notas del episodio.")
+            ? String(localized: "La IA encontró \(added) \(added == 1 ? String(localized: "momento") : String(localized: "momentos")) y escribió las notas del episodio.")
             : (first ? String(localized: "La IA escribió las notas; no encontró momentos claros.") : String(localized: "Ya estaban todos los momentos de la IA."))
     }
 
@@ -947,7 +947,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
         panel.allowsMultipleSelection = false
-        panel.message = String(localized: "Elige la música del \(isIntro ? "intro" : "cierre")")
+        panel.message = String(localized: "Elige la música del \(isIntro ? String(localized: "intro") : String(localized: "cierre"))")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
         try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)

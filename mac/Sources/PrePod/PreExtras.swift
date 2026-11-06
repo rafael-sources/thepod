@@ -196,7 +196,7 @@ struct PreCalendarView: View {
     @ObservedObject var model: PreModel
     @State private var dropDay: Date?
     @State private var month = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date())) ?? Date()
-    private let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.locale = Locale(identifier: "es"); c.firstWeekday = 2; return c }()
+    private let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.locale = AppLanguage.locale; c.firstWeekday = 2; return c }()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -272,7 +272,7 @@ struct PreCalendarView: View {
     }
 
     private var title: String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "es"); f.dateFormat = "LLLL yyyy"
+        let f = DateFormatter(); f.locale = AppLanguage.locale; f.dateFormat = "LLLL yyyy"
         return f.string(from: month).capitalized
     }
     /// Pone la fecha de grabación; si ya tenía hora, la conserva.

@@ -212,7 +212,7 @@ final class DirectorStudio: NSObject, ObservableObject {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { exportResult = e; return }
                 let n = r["exported"] as? Int ?? 0, f = r["failed"] as? Int ?? 0
-                exportResult = n == 0 && f == 0 ? String(localized: "Ya estaba en postPod.") : String(localized: "Enviado a postPod: \(n) \(n == 1 ? "pista" : "pistas")") + (f > 0 ? String(localized: " · \(f) fallaron") : "")
+                exportResult = n == 0 && f == 0 ? String(localized: "Ya estaba en postPod.") : String(localized: "Enviado a postPod: \(n) \(n == 1 ? String(localized: "pista") : String(localized: "pistas"))") + (f > 0 ? String(localized: " · \(f) fallaron") : "")
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -224,7 +224,7 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     // MARK: Avisos privados
 
-    static let cues = ["CERRAR TEMA", String(localized: "SIGUIENTE TEMA"), String(localized: "PAUSA"), String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
+    static let cues = [String(localized: "CERRAR TEMA"), String(localized: "SIGUIENTE TEMA"), String(localized: "PAUSA"), String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
 
     func sendCue(_ cue: String, text: String = "", target: String = "all") {
         Task {

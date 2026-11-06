@@ -331,7 +331,7 @@ extension ProdStudio {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { exportState = e; return }
                 let n = r["exported"] as? Int ?? 0
-                exportState = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post, tócalo en “En postPod web” → Traer a la Mac.")
+                exportState = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? String(localized: "pista") : String(localized: "pistas"))). En post, tócalo en “En postPod web” → Traer a la Mac.")
                                     : String(localized: "Ya estaba en postPod (se envía solo cuando terminan de subir todas las pistas).")
             } catch { self.error = error.localizedDescription }
         }

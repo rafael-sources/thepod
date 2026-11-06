@@ -277,7 +277,7 @@ struct PubHomeView: View {
                 Button { select(p) } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(p.name).font(.system(size: 15, weight: .bold)).lineLimit(2).multilineTextAlignment(.leading)
-                        Text("\(p.reels.count) \(p.reels.count == 1 ? "reel" : "reels") · \(EditEngine.clock(p.duration))")
+                        Text("\(p.reels.count) \(p.reels.count == 1 ? String(localized: "reel") : String(localized: "reels")) · \(EditEngine.clock(p.duration))")
                             .font(.system(size: 13)).foregroundStyle(Theme.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

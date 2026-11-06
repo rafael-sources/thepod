@@ -250,9 +250,9 @@ struct VoiceEQ: Codable, Equatable {
     var ffmpegFilter: String {
         var f: [String] = []
         if rumbleCut { f += ["highpass=f=120", String(localized: "equalizer=f=250:t=q:w=1:g=-3")] }
-        if abs(low) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=120:t=q:w=0.8:g=%.1f"), low)) }
-        if abs(mid) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=1000:t=q:w=1:g=%.1f"), mid)) }
-        if abs(high) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=6000:t=q:w=0.8:g=%.1f"), high)) }
+        if abs(low) >= 0.1 { f.append(String(format: "equalizer=f=120:t=q:w=0.8:g=%.1f", low)) }
+        if abs(mid) >= 0.1 { f.append(String(format: "equalizer=f=1000:t=q:w=1:g=%.1f", mid)) }
+        if abs(high) >= 0.1 { f.append(String(format: "equalizer=f=6000:t=q:w=0.8:g=%.1f", high)) }
         if deess { f.append(String(localized: "deesser=i=0.5:m=0.5:f=0.5")) }
         if compress { f.append(String(localized: "acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4")) }
         f.append(String(localized: "alimiter=limit=0.95:level=0"))

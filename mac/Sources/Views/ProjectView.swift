@@ -70,7 +70,7 @@ struct ProjectView: View {
                 .font(.headline)
                 .lineLimit(3)
                 .padding(.bottom, 4)
-            Text("\(EditEngine.clock(session.project.duration)) · \(session.project.lanes.count) \(session.project.lanes.count == 1 ? "persona" : "personas")")
+            Text("\(EditEngine.clock(session.project.duration)) · \(session.project.lanes.count) \(session.project.lanes.count == 1 ? String(localized: "persona") : String(localized: "personas"))")
                 .font(.caption)
                 .foregroundStyle(Theme.secondary)
                 .padding(.bottom, 18)

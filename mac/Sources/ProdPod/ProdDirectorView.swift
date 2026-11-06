@@ -234,7 +234,7 @@ struct DirectorView: View {
         let tiles: [Tile] = dir.feeds.flatMap { f -> [Tile] in
             var t = [Tile(id: f.id, name: f.name, video: f.camera, speaking: f.speaking, micOn: f.micOn,
                           ready: dir.readyMap[f.id] == true, isScreen: false)]
-            if let s = f.screen { t.append(Tile(id: f.id + "-screen", name: "Pantalla de \(f.name)", video: s, speaking: false, micOn: true, ready: false, isScreen: true)) }
+            if let s = f.screen { t.append(Tile(id: f.id + "-screen", name: String(localized: "Pantalla de \(f.name)"), video: s, speaking: false, micOn: true, ready: false, isScreen: true)) }
             return t
         }
         let cols = tiles.count <= 1 ? 1 : 2

@@ -34,7 +34,7 @@ struct SoundsStep: View {
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
                 } else {
-                    Text(String(localized: "\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? "sonido" : "sonidos"). Toca la hora para oírlo; “Editar” abre volumen, fades y posición bajo el video."))
+                    Text(String(localized: "\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? String(localized: "sonido") : String(localized: "sonidos")). Toca la hora para oírlo; “Editar” abre volumen, fades y posición bajo el video."))
                         .font(.caption).foregroundStyle(Theme.secondary)
                     ScrollView {
                         LazyVStack(spacing: 6) {

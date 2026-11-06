@@ -27,6 +27,9 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         return code.hasPrefix("en") ? "en" : "es"
     }
 
+    /// Locale para fechas y números en pantalla: el del idioma con el que corre la app.
+    static var locale: Locale { Locale(identifier: running == "en" ? "en_US" : "es") }
+
     /// Guarda la elección y deja `AppleLanguages` como toca. Devuelve true si hace falta relanzar.
     @discardableResult
     static func apply(_ lang: AppLanguage) -> Bool {

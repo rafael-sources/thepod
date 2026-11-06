@@ -757,7 +757,7 @@ struct ReelsStep: View {
                     }
                     if !session.project.reels.isEmpty {
                         let n = session.project.reels.filter(\.selected).count
-                        BigButton(title: (session.isBusy ? String(localized: "Poner en cola: ") : String(localized: "Exportar ")) + "\(n) \(n == 1 ? "reel" : "reels")",
+                        BigButton(title: (session.isBusy ? String(localized: "Poner en cola: ") : String(localized: "Exportar ")) + "\(n) \(n == 1 ? String(localized: "reel") : String(localized: "reels"))",
                                   symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up",
                                   disabled: n == 0) { if session.isBusy { session.enqueue(.reels) } else { session.exportReels() } }
                     }
@@ -1046,7 +1046,7 @@ struct ReelLookCard: View {
                                 Image(systemName: "music.note").frame(width: 18).foregroundStyle(sel ? Theme.accent : .white)
                                 Text(session.project.mediaItem(m.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Música")).lineLimit(1).font(.caption)
                                 Spacer()
-                                Text("\(EditEngine.clock(m.tlStart))\(m.loop ? " · bucle" : "") · \(Int(m.volume * 100)) %").font(.caption2).monospacedDigit().foregroundStyle(Theme.secondary)
+                                Text("\(EditEngine.clock(m.tlStart))\(m.loop ? String(localized: " · bucle") : "") · \(Int(m.volume * 100)) %").font(.caption2).monospacedDigit().foregroundStyle(Theme.secondary)
                             }
                             .padding(6)
                             .background(RoundedRectangle(cornerRadius: 6).fill(sel ? Theme.panelStrong : Theme.panel))
@@ -1458,7 +1458,7 @@ struct LookStep: View {
                             Button("Quitar música") { var nb = b; nb.musicFile = nil; session.setBumper(isIntro: isIntro, nb) }.controlSize(.small)
                         } else {
                             Button("Agregar música…") { session.chooseBumperMusic(isIntro: isIntro) }.controlSize(.small)
-                            Text("se corta al largo del \(isIntro ? "intro" : "cierre") y baja al final").font(.caption2).foregroundStyle(Theme.secondary)
+                            Text("se corta al largo del \(isIntro ? String(localized: "intro") : String(localized: "cierre")) y baja al final").font(.caption2).foregroundStyle(Theme.secondary)
                         }
                     }
                 }
@@ -1613,7 +1613,7 @@ struct ExportStep: View {
                             Divider()
                             HStack(spacing: 6) {
                                 Image(systemName: "rectangle.3.group").foregroundStyle(Theme.secondary)
-                                Text("Aspecto: \(session.project.layout.title)\(session.project.showBackground && session.project.backgroundFile != nil ? " · fondo" : "")\(session.project.showLogo && session.project.logoFile != nil ? " · logo" : "")\(session.project.intro != nil ? " · intro" : "")\(session.project.outro != nil ? " · cierre" : "")")
+                                Text("Aspecto: \(session.project.layout.title)\(session.project.showBackground && session.project.backgroundFile != nil ? String(localized: " · fondo") : "")\(session.project.showLogo && session.project.logoFile != nil ? String(localized: " · logo") : "")\(session.project.intro != nil ? String(localized: " · intro") : "")\(session.project.outro != nil ? String(localized: " · cierre") : "")")
                                     .font(.caption).foregroundStyle(Theme.secondary)
                                 Spacer()
                                 Button("Cambiar") { session.step = .look }.controlSize(.small)
@@ -1762,7 +1762,7 @@ struct ReelTextCard: View {
                 }
                 if !reel.cuts.isEmpty {
                     HStack {
-                        Text(String(localized: "\(reel.cuts.count) \(reel.cuts.count == 1 ? "corte propio" : "cortes propios") en este reel")).font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(String(localized: "\(reel.cuts.count) \(reel.cuts.count == 1 ? String(localized: "corte propio") : String(localized: "cortes propios")) en este reel")).font(.caption2).foregroundStyle(Theme.secondary)
                         Spacer()
                         Button("Deshacer todos") {
                             if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i].cuts = [] }
@@ -1902,7 +1902,7 @@ struct ReelCintilloCard: View {
                         Image(systemName: "rectangle.bottomthird.inset.filled").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
                         Text(c.title.isEmpty ? c.text : c.title).lineLimit(1)
                         Spacer()
-                        Text("\(c.style == "clean" ? "Limpio" : c.style == "sponsor" ? "Sponsor" : "Noticiero") · \(EditEngine.clock(c.start)) · \(String(format: "%.0f s", c.duration))")
+                        Text("\(c.style == "clean" ? String(localized: "Limpio") : c.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Noticiero")) · \(EditEngine.clock(c.start)) · \(String(format: "%.0f s", c.duration))")
                             .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
                     }
                     .padding(8)
@@ -1936,14 +1936,14 @@ struct ExportReviewCard: View {
         }
         if !p.isTranscribed {
             out.append(Item(id: "words", text: String(localized: "No hay transcripción: el video sale sin subtítulos"), optional: true,
-                            actions: [("Ir a subtítulos", { session.step = .captions })]))
+                            actions: [(String(localized: "Ir a subtítulos"), { session.step = .captions })]))
         } else if !p.wordsSynced {
             out.append(Item(id: "sync", text: String(localized: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche"), optional: false,
                             actions: [("Ajustar", { session.syncSubtitles() })]))
         }
         let pending = session.pendingSuggestions.count
         if pending > 0 {
-            out.append(Item(id: "sugg", text: String(localized: "\(pending) \(pending == 1 ? "sugerencia" : "sugerencias") sin revisar (muletillas dudosas o frases repetidas)"), optional: false,
+            out.append(Item(id: "sugg", text: String(localized: "\(pending) \(pending == 1 ? String(localized: "sugerencia") : String(localized: "sugerencias")) sin revisar (muletillas dudosas o frases repetidas)"), optional: false,
                             actions: [("Ver", { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
         }
         if p.isTranscribed, !p.sensitiveScanned {
@@ -1952,8 +1952,8 @@ struct ExportReviewCard: View {
         }
         let unseen = p.reels.filter { $0.selected && $0.seen != true }.count
         if unseen > 0 {
-            out.append(Item(id: "reels", text: "\(unseen) \(unseen == 1 ? "reel elegido que no miraste" : "reels elegidos que no miraste")", optional: true,
-                            actions: [("Ver reels", { session.step = .reels })]))
+            out.append(Item(id: "reels", text: "\(unseen) \(unseen == 1 ? String(localized: "reel elegido que no miraste") : String(localized: "reels elegidos que no miraste"))", optional: true,
+                            actions: [(String(localized: "Ver reels"), { session.step = .reels })]))
         }
         return out
     }
@@ -2057,7 +2057,7 @@ struct VoicesMatchRow: View {
                     HStack(spacing: 10) {
                         Text(session.project.laneName(lane.id)).font(.caption).frame(width: 140, alignment: .leading).lineLimit(1)
                         if let l = lane.measuredLUFS {
-                            Text(String(format: String(localized: "%.1f LUFS"), l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
+                            Text(String(format: "%.1f LUFS", l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
                             Text(String(format: "%@%.1f dB", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption.monospacedDigit().bold())
                                 .foregroundStyle(abs(lane.matchGain) < 0.05 ? Theme.secondary : Theme.accent).frame(width: 64, alignment: .trailing)
                         } else {

@@ -135,7 +135,7 @@ private struct SessionCard: View {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { result = e; return }
                 let n = r["exported"] as? Int ?? 0
-                result = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post: “En postPod web” → Traer a la Mac.")
+                result = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? String(localized: "pista") : String(localized: "pistas"))). En post: “En postPod web” → Traer a la Mac.")
                                : String(localized: "Ya estaba en postPod.")
             } catch { result = error.localizedDescription }
         }
@@ -158,7 +158,7 @@ private struct SessionCard: View {
             }
             Text(session.title).font(.headline).lineLimit(3).fixedSize(horizontal: false, vertical: true)
             if let live = session.live_participants, !live.isEmpty {
-                Label("\(live.joined(separator: ", ")) \(live.count == 1 ? "está" : "están") en la sala", systemImage: "person.wave.2.fill")
+                Label("\(live.joined(separator: ", ")) \(live.count == 1 ? String(localized: "está") : String(localized: "están")) en la sala", systemImage: "person.wave.2.fill")
                     .font(.caption).foregroundStyle(Color.prodPod)
             }
             if let r = result { Text(r).font(.caption).foregroundStyle(Theme.good) }
@@ -688,7 +688,7 @@ struct StudioView: View {
             }
             ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
                 let name = studio.people.first(where: { $0.id == id })?.name ?? String(localized: "Otra persona")
-                Text(String(localized: "\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))"))
+                Text(String(localized: "\(name): \(u.state == "done" ? String(localized: "✓ Listo") : (u.state == "error" ? String(localized: "problema al subir, reintentando") : String(localized: "subiendo… ") + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))"))
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
             if studio.canExport && role.isAdmin {

@@ -570,7 +570,7 @@ struct NextUpCard: View {
             Spacer()
             HStack(spacing: 10) {
                 check(String(localized: "Guion"), sections.map { $0 == 0 ? String(localized: "vacío") : plural($0, String(localized: "sección"), "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
-                check(String(localized: "Rundown"), blocks.map { $0 == 0 ? String(localized: "vacío") : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
+                check(String(localized: "Rundown"), blocks.map { $0 == 0 ? String(localized: "vacío") : plural($0, String(localized: "bloque"), String(localized: "bloques")) + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
                 check(String(localized: "Invitados"), guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
             }
             Button { model.open = episode } label: {
@@ -793,7 +793,7 @@ struct PreEpisodeView: View {
         if let ss { c[0] = ss.isEmpty ? String(localized: "Vacío") : plural(ss.count, String(localized: "sección"), "secciones"); if ss.contains(where: { !$0.content.isEmpty }) { d.insert(0) } }
         if let bb {
             let m = Int(bb.compactMap(\.durationEstimate).reduce(0, +).rounded())
-            c[1] = bb.isEmpty ? String(localized: "Vacío") : plural(bb.count, "bloque", "bloques") + (m > 0 ? String(localized: " · \(m) min") : "")
+            c[1] = bb.isEmpty ? String(localized: "Vacío") : plural(bb.count, String(localized: "bloque"), String(localized: "bloques")) + (m > 0 ? String(localized: " · \(m) min") : "")
             if !bb.isEmpty { d.insert(1) }
         }
         if let gg {
@@ -1095,7 +1095,7 @@ struct RundownTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(plural(blocks.count, "bloque", "bloques") + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(blocks.count, String(localized: "bloque"), String(localized: "bloques")) + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
                 Menu {
                     ForEach(BlockKind.allCases) { k in Button { add(k) } label: { Label(k.title, systemImage: k.symbol) } }

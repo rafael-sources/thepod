@@ -107,7 +107,7 @@ struct VideoInspector: View {
         let o = session.project.overlays[i]
         let t = session.playheadTimeline
         return VStack(alignment: .leading, spacing: 10) {
-            header(o.title, "\(o.kind == .text ? "Texto" : o.kind == .sticker ? "Sticker" : "Imagen") · \(EditEngine.clock(o.start)) → \(EditEngine.clock(o.end))", color: VideoTracks.textColor)
+            header(o.title, "\(o.kind == .text ? String(localized: "Texto") : o.kind == .sticker ? String(localized: "Sticker") : String(localized: "Imagen")) · \(EditEngine.clock(o.start)) → \(EditEngine.clock(o.end))", color: VideoTracks.textColor)
             KeyParamRow(session: session, index: i, param: LayerAnimation.x, label: String(localized: "Posición X"), range: -0.5...1.5, format: { String(format: "%.2f", $0) },
                         staticValue: Binding(get: { session.project.overlays[i].x }, set: { session.project.overlays[i].x = $0 }))
             KeyParamRow(session: session, index: i, param: LayerAnimation.y, label: String(localized: "Posición Y"), range: -0.5...1.5, format: { String(format: "%.2f", $0) },
@@ -472,12 +472,12 @@ struct VideoTracks: View {
             ScrollView([.vertical, .horizontal]) {
                 VStack(spacing: 0) {
                     ruler
-                    track("Textos y stickers", color: Self.textColor, height: 56) { w in overlaysRow(w) }
-                    track("B-roll e imágenes", color: Self.brollColor, height: 56) { w in brollsRow(w) }
-                    track("Cámaras", color: EpisodeTimeline.palette[0], height: 56, sub: session.project.studioVideo.followSpeaker ? String(localized: "sigue a quien habla") : String(localized: "plantilla fija")) { w in camerasRow(w) }
-                    track("Cintillos y marcas", color: Self.cintilloColor, height: 40) { w in cintillosRow(w) }
-                    track("Voces", color: EpisodeTimeline.palette[0], height: 36, sub: String(localized: "\(session.project.lanes.count) · pestaña Audio")) { w in vocesRow(w) }
-                    track("Música y efectos", color: Self.musicColor, height: 44) { w in musicRow(w) }
+                    track(String(localized: "Textos y stickers"), color: Self.textColor, height: 56) { w in overlaysRow(w) }
+                    track(String(localized: "B-roll e imágenes"), color: Self.brollColor, height: 56) { w in brollsRow(w) }
+                    track(String(localized: "Cámaras"), color: EpisodeTimeline.palette[0], height: 56, sub: session.project.studioVideo.followSpeaker ? String(localized: "sigue a quien habla") : String(localized: "plantilla fija")) { w in camerasRow(w) }
+                    track(String(localized: "Cintillos y marcas"), color: Self.cintilloColor, height: 40) { w in cintillosRow(w) }
+                    track(String(localized: "Voces"), color: EpisodeTimeline.palette[0], height: 36, sub: String(localized: "\(session.project.lanes.count) · pestaña Audio")) { w in vocesRow(w) }
+                    track(String(localized: "Música y efectos"), color: Self.musicColor, height: 44) { w in musicRow(w) }
                     if case .overlay(let id) = session.selectedTrack, let i = session.project.overlays.firstIndex(where: { $0.id == id }),
                        let a = session.project.overlays[i].animation, !a.isEmpty {
                         ForEach(LayerAnimation.params.filter { a.has($0) }, id: \.self) { p in

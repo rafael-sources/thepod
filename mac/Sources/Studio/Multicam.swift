@@ -20,7 +20,7 @@ struct MulticamStrip: View {
                 Text("Multicámara").font(.caption.bold())
                 Text(String(localized: "clic o tecla 1–\(min(4, max(1, cams.count))) corta aquí")).font(.caption2).foregroundStyle(Theme.secondary)
                 if let tr = session.project.studioVideo.switchTransition, tr.kind != .cut {
-                    Text("al cambiar: \(tr.kind == .zoom ? "zoom suave" : "fundido") \(String(format: "%.1f s", tr.duration))").font(.caption2).foregroundStyle(Theme.secondary)
+                    Text("al cambiar: \(tr.kind == .zoom ? String(localized: "zoom suave") : String(localized: "fundido")) \(String(format: "%.1f s", tr.duration))").font(.caption2).foregroundStyle(Theme.secondary)
                 }
             }
             .frame(width: 150, alignment: .leading)
