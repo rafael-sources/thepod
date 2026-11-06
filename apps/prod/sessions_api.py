@@ -1240,7 +1240,7 @@ def start_ama(sid):
             json={
                 "host_username": current_user(),
                 "title": f"Q&A — {sess['title']}",
-                "shared_project_id": sess.get("shared_project_id"),
+                "shared_project_id": sess["shared_project_id"],
                 "prodpod_session_id": sid,
             },
             headers={"X-PodPod-Secret": integration_secret},

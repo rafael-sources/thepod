@@ -787,10 +787,6 @@ var VideoPlayer = {
       if (Math.abs(v.volume - target) > 0.001) v.volume = target;
     }
 
-    // When active clip changes, volume is edited, or multitrack state changes, re-apply.
-    watch(() => [activeClip.value?.volume, props.playerState.volume, activeClip.value?.id, isMultitrackSplit.value], () => {
-      if (videoEl.value) _unmute(videoEl.value);
-    });
 
     function togglePlay() {
       const v = videoEl.value;
@@ -1070,6 +1066,11 @@ var VideoPlayer = {
       return srcs.some(s => s && s.url);
     });
     const isMultitrackSplit = computed(() => isVerticalSplit.value && !!props.multitrackPreview);
+    // Declared after isMultitrackSplit: watching it earlier hit the const before initialization.
+    // When active clip changes, volume is edited, or multitrack state changes, re-apply.
+    watch(() => [activeClip.value?.volume, props.playerState.volume, activeClip.value?.id, isMultitrackSplit.value], () => {
+      if (videoEl.value) _unmute(videoEl.value);
+    });
     const isVertical = computed(() =>
       !!props.effects?.vertical || (isVerticalSplit.value && !isMultitrackSplit.value)
     );

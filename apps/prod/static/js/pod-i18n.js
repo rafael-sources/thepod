@@ -66,14 +66,18 @@
       return;
     }
     if (node.nodeType !== 1) return;
-    if (SKIP[node.nodeName] || node.getAttribute("data-i18n") === "off") return;
+    // A <textarea> keeps its typed content untouched, but its placeholder/title still get translated.
+    if ((SKIP[node.nodeName] && node.nodeName !== "TEXTAREA") || node.getAttribute("data-i18n") === "off") return;
     for (var i = 0; i < ATTRS.length; i++) {
       var a = ATTRS[i];
-      if (node.hasAttribute(a)) { var v2 = apply(node.getAttribute(a)); if (v2 !== null) node.setAttribute(a, v2); }
+      // Only write when the text actually changes: rewriting an identical value fires the
+      // attribute observer again and loops forever.
+      if (node.hasAttribute(a)) { var v2 = apply(node.getAttribute(a)); if (v2 !== null && v2 !== node.getAttribute(a)) node.setAttribute(a, v2); }
     }
     if (node.nodeName === "INPUT" && (node.type === "button" || node.type === "submit") && node.value) {
-      var v3 = apply(node.value); if (v3 !== null) node.value = v3;
+      var v3 = apply(node.value); if (v3 !== null && v3 !== node.value) node.value = v3;
     }
+    if (node.nodeName === "TEXTAREA") return;
     for (var c = node.firstChild; c; c = c.nextSibling) walk(c);
   }
   var pending = false;

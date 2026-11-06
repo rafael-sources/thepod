@@ -688,5 +688,14 @@
 "📊 ESTADO DE LA SALA Sesión que mira el diagnóstico: #* — * URL actual del navegador: * ID que tu UI cree estar mostrando: #* Sala LiveKit (DB): * Sala LiveKit a la que tu navegador conectó: * Estado actual del Room en tu navegador: * Flag 'connected' en tu UI: * 👤 Participantes en la base de datos: • * 🎥 Participantes que LiveKit ve en la sala (lo que importa): * 👁 Lo que tu navegador ve como remotos en este momento: *": "📊 ROOM STATUS Session the diagnostics is looking at: #* — * Current browser URL: * ID your UI thinks it's showing: #* LiveKit room (DB): * LiveKit room your browser connected to: * Current Room state in your browser: * 'connected' flag in your UI: * 👤 Participants in the database: • * 🎥 Participants LiveKit sees in the room (what matters): * 👁 What your browser sees as remote right now: *",
 "sesión no encontrada: *": "session not found: *",
 "falta session.sqlite en el ZIP": "session.sqlite is missing from the ZIP",
-"no hay sesión en el archivo importado": "there's no session in the imported file"
+"no hay sesión en el archivo importado": "there's no session in the imported file",
+"El compositor de LiveKit arma una grilla con los participantes y la empuja a YouTube/Twitch/etc. Los participantes deben estar conectados antes de iniciar.": "LiveKit's compositor builds a grid with the participants and pushes it to YouTube/Twitch/etc. Participants must be connected before starting.",
+"Aplauso (A) — Alt+click para cue": "Applause (A) — Alt+click for cue",
+"Risa (R) — Alt+click para cue": "Laugh (R) — Alt+click for cue",
+"Bajos (B) — Alt+click para cue": "Bass (B) — Alt+click for cue",
+"Impacto (I) — Alt+click para cue": "Impact (I) — Alt+click for cue",
+"Explosión (E) — Alt+click para cue": "Explosion (E) — Alt+click for cue",
+"Triste 1 (T) — Alt+click para cue": "Sad 1 (T) — Alt+click for cue",
+"Triste 2 (S) — Alt+click para cue": "Sad 2 (S) — Alt+click for cue",
+"Ronquido (Z) — Alt+click para cue": "Snore (Z) — Alt+click for cue"
 }
