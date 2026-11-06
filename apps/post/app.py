@@ -188,16 +188,27 @@ def create_app():
             ],
         }
 
+    def _lang():
+        """Idioma de la interfaz: cookie pod_lang (la pone el switch, compartida por el dominio) o el navegador."""
+        from flask import request as _r
+        c = _r.cookies.get("pod_lang")
+        if c in ("es", "en"):
+            return c
+        return "en" if (_r.accept_languages.best_match(["es", "en"]) == "en") else "es"
+
+    def _index():
+        return render_template("index.html", cache_bust=int(time.time()), lang=_lang(), cookie_domain=SESSION_COOKIE_DOMAIN or "")
+
     @app.get("/")
     def index():
-        return render_template("index.html", cache_bust=int(time.time()))
+        return _index()
 
     # SPA catch-all for any client-side route that isn't an API or media URL
     @app.get("/<path:path>")
     def spa(path):
         if path.startswith(("api/", "media/", "static/")):
             abort(404)
-        return render_template("index.html", cache_bust=int(time.time()))
+        return _index()
 
     return app
 
