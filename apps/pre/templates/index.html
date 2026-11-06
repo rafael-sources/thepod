@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/pwa/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0B0F1A">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/prepod.svg') }}">
+  <title>prePod — green room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=Bricolage+Grotesque:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@400;600;700&family=Space+Grotesk:wght@400;500;600&family=DM+Serif+Display&family=Archivo:wght@400;600;700&family=Archivo+Black&family=Montserrat:wght@300;400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Work+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Bebas+Neue&family=Anton&family=Oswald:wght@400;500;600;700&family=Bangers&family=Titan+One&family=Permanent+Marker&family=Fira+Code:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ cache_bust }}">
+</head>
+<body>
+  <div id="app"></div>
+  <script>window.POD_BASE = {{ request.script_root|tojson }}; window.POD_COOKIE_DOMAIN = {{ cookie_domain|tojson }};</script>
+  <script src="{{ url_for('static', filename='js/pod-base.js') }}?v={{ cache_bust }}"></script>
+  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}?v={{ cache_bust }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/vue.global.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/sweetalert2.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/podswal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/editorjs.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/header.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/paragraph.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/list.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/quote.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/delimiter.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/image.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/embed.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/marker.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/inline-code.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/vendor/editorjs/alignment.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_bust }}"></script>
+</body>
+</html>

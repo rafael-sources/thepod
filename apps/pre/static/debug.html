@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>prePod debug</title>
+<style>body{font-family:monospace;background:#111;color:#eee;padding:20px;} .err{color:#f55;} .ok{color:#5f5;}</style>
+</head><body>
+<h2>prePod Debug v2</h2>
+<div id="log"></div>
+<script>
+function log(msg, cls) {
+  var d = document.createElement('div');
+  d.className = cls || '';
+  d.textContent = msg;
+  document.getElementById('log').appendChild(d);
+}
+window.onerror = function(msg, url, line, col, err) {
+  log('JS ERROR: ' + msg, 'err');
+  log('  file: ' + url, 'err');
+  log('  line: ' + line + ' col: ' + col, 'err');
+  if (err && err.stack) log('  stack: ' + err.stack.substring(0, 500), 'err');
+  return true;
+};
+log('Step 1: loading Vue...');
+</script>
+<script src="/static/js/vendor/vue.global.js"></script>
+<script>
+if (typeof Vue !== 'undefined') {
+  log('Step 2: Vue v' + Vue.version + ' OK', 'ok');
+} else {
+  log('Step 2: Vue MISSING', 'err');
+}
+log('Step 3: loading app.js with cache bust...');
+var s = document.createElement('script');
+s.src = '/static/js/app.js?nocache=' + Date.now();
+s.onload = function() {
+  log('Step 4: app.js loaded OK', 'ok');
+  setTimeout(function() {
+    var el = document.getElementById('app');
+    if (el) {
+      log('Step 5: #app exists, innerHTML length = ' + el.innerHTML.length, el.innerHTML.length > 0 ? 'ok' : 'err');
+    } else {
+      log('Step 5: #app NOT FOUND (expected - debug page has no #app div)', '');
+    }
+  }, 1000);
+};
+s.onerror = function(e) {
+  log('Step 4: app.js FAILED to load!', 'err');
+};
+document.body.appendChild(s);
+</script>
+</body></html>

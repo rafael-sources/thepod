@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>debug3</title>
+<style>body{font-family:monospace;background:#111;color:#eee;padding:20px;} .err{color:#f55;} .ok{color:#5f5;}</style>
+</head><body>
+<h2>Debug v3 - mount test</h2>
+<div id="log"></div>
+<div id="app"></div>
+<script>
+var logEl = document.getElementById('log');
+function log(msg, cls) {
+  var d = document.createElement('div');
+  d.className = cls || '';
+  d.textContent = msg;
+  logEl.appendChild(d);
+}
+window.onerror = function(msg, url, line, col, err) {
+  log('ERROR: ' + msg + ' @ line:' + line, 'err');
+  if (err && err.stack) log(err.stack.substring(0, 800), 'err');
+  return true;
+};
+</script>
+<script src="/static/js/vendor/vue.global.js"></script>
+<script>
+log('Vue: ' + (typeof Vue !== 'undefined' ? 'v' + Vue.version : 'MISSING'), typeof Vue !== 'undefined' ? 'ok' : 'err');
+</script>
+<script>
+// Load app.js dynamically with no-cache
+var s = document.createElement('script');
+s.src = '/static/js/app.js?z=' + Date.now();
+s.onload = function() {
+  log('app.js loaded', 'ok');
+  var el = document.getElementById('app');
+  log('#app innerHTML length: ' + (el ? el.innerHTML.length : 'NO ELEMENT'), el && el.innerHTML.length > 0 ? 'ok' : 'err');
+  if (el && el.innerHTML.length === 0) {
+    log('Vue app did NOT mount. Trying manual mount...', 'err');
+    try {
+      // Check if App exists
+      log('typeof App: ' + typeof App);
+      if (typeof App !== 'undefined' && typeof Vue !== 'undefined') {
+        Vue.createApp(App).mount('#app');
+        log('#app after manual mount: ' + el.innerHTML.length + ' chars', el.innerHTML.length > 0 ? 'ok' : 'err');
+      }
+    } catch(e) {
+      log('Manual mount error: ' + e.message, 'err');
+      log(e.stack ? e.stack.substring(0, 500) : '', 'err');
+    }
+  }
+};
+s.onerror = function() { log('app.js FAILED to load', 'err'); };
+document.body.appendChild(s);
+</script>
+</body></html>

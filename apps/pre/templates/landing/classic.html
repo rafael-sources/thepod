@@ -1,0 +1,205 @@
+{% include "landing/_base.html" %}
+<body>
+<style>
+  :root {
+    --p: {{ podcast.color_primary or '#5a8bff' }};
+    --s: {{ podcast.color_secondary or '#1e2a54' }};
+    --a: {{ podcast.color_accent or '#f4c770' }};
+    --bg: {{ podcast.color_bg or '#f6f3ec' }};
+    --tx: {{ podcast.color_text or '#1a1715' }};
+    --tx-dim: color-mix(in srgb, var(--tx) 65%, var(--bg));
+    --tx-soft: color-mix(in srgb, var(--tx) 40%, var(--bg));
+    --fh: '{{ podcast.font_heading or "Fraunces" }}', Georgia, serif;
+    --fb: '{{ podcast.font_body or "Bricolage Grotesque" }}', -apple-system, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--tx); font-family: var(--fb); line-height: 1.6; text-align: {{ podcast.color_text_align or 'left' }}; }
+  .container { max-width: 1080px; margin: 0 auto; padding: 40px 28px; }
+  .masthead {
+    text-align: center;
+    padding: 48px 20px 40px;
+    border-top: 6px double var(--tx);
+    border-bottom: 1px solid var(--tx);
+    margin-bottom: 48px;
+  }
+  .masthead .date-line {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 12px;
+  }
+  h1 { font-family: var(--fh); font-size: 68px; font-weight: 700; letter-spacing: -0.02em; margin: 0; line-height: 0.95; }
+  h1 .accent { color: var(--p);  font-weight: 400; }
+  .tagline { font-family: var(--fh);  font-size: 20px; color: var(--tx-dim); margin-top: 10px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 280px; gap: 60px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+  .main-col { min-width: 0; }
+  .sidebar {
+    border-left: 1px solid color-mix(in srgb, var(--tx) 18%, transparent);
+    padding-left: 28px;
+  }
+  @media (max-width: 800px) { .sidebar { border-left: 0; padding-left: 0; border-top: 1px solid color-mix(in srgb, var(--tx) 18%, transparent); padding-top: 40px; margin-top: 40px; } }
+
+  .article { margin-bottom: 44px; padding-bottom: 44px; border-bottom: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); }
+  .article:last-child { border-bottom: 0; }
+  .article .byline {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 8px;
+  }
+  .article h2 { font-family: var(--fh); font-size: 36px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 12px; }
+  .article h2 a { color: var(--tx); text-decoration: none; }
+  .article h2 a:hover { color: var(--p); }
+  .article .dek { font-family: var(--fh);  font-size: 19px; color: var(--tx); margin-bottom: 14px; line-height: 1.4; }
+  .yt-card { display: block; margin: 14px 0; text-decoration: none; }
+  .yt-thumb {
+    position: relative; width: 100%;
+    aspect-ratio: 16/9;
+    background-size: cover; background-position: center;
+    background-color: #000;
+    border-radius: 8px; overflow: hidden;
+    transition: transform .15s ease;
+  }
+  .yt-thumb:hover { transform: translateY(-2px); }
+  .yt-play {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(255,0,0,0.92); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .article .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .article .links a {
+    font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--p); text-decoration: none; padding: 3px 0;
+    border-bottom: 1.5px solid var(--p);
+  }
+
+  .sidebar-section { margin-bottom: 32px; }
+  .sidebar-section h3 {
+    font-family: var(--fb);
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    font-weight: 600;
+    border-bottom: 1px solid color-mix(in srgb, var(--tx) 22%, transparent);
+    padding-bottom: 6px;
+    margin: 0 0 12px;
+  }
+  .about p { font-size: 14px; color: var(--tx); margin: 0 0 10px; }
+  .logo-badge { width: 160px; height: 160px; border-radius: 8px; background-size: contain; background-repeat: no-repeat; background-position: center; margin: 0 0 18px; background-color: var(--s); border: 1px solid color-mix(in srgb, var(--tx) 18%, transparent); }
+
+  .sub-list { list-style: none; padding: 0; margin: 0; }
+  .sub-list li { margin-bottom: 6px; }
+  .sub-list a { display: inline-flex; align-items: center; gap: 8px; color: var(--tx); text-decoration: none; font-size: 14px; }
+  .sub-list a:hover { color: var(--p); }
+  .sub-list .rss { font-family: var(--fb); font-weight: 600; color: var(--p); }
+
+  .team-row { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px dotted color-mix(in srgb, var(--tx) 18%, transparent); }
+  .team-row:last-child { border-bottom: 0; }
+  .team-row .avatar { width: 44px; height: 44px; border-radius: 50%; background-size: cover; background-color: var(--s); flex-shrink: 0; }
+  .team-row .info .name { font-family: var(--fh); font-size: 15px; font-weight: 600; }
+  .team-row .info .role { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tx-dim); }
+
+  footer { text-align: center; padding: 40px 20px; color: var(--tx-dim); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; border-top: 6px double var(--tx); margin-top: 40px; }
+  footer a { color: var(--p); }
+  {% if landing.custom_css %}{{ landing.custom_css | safe }}{% endif %}
+</style>
+
+<div class="container">
+  <div class="masthead">
+    <div class="date-line">Crónicas · Entrevistas · Relatos</div>
+    <h1 {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.name"{% endif %}>{{ podcast.name }}</h1>
+    {% if edit_mode or podcast.tagline %}<div class="tagline" {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.tagline"{% endif %}>{{ podcast.tagline or '(sin tagline)' if edit_mode else podcast.tagline }}</div>{% endif %}
+  </div>
+
+  {% if blocks_html %}
+  <div class="ej-body">{{ blocks_html | safe }}</div>
+  {% endif %}
+
+  <div class="layout">
+    <div class="main-col">
+      {% if episodes %}
+        {% for ep in episodes %}
+        <article class="article" id="ep{{ ep.id }}">
+          <div class="byline">
+            Episodio {{ ep.episode_number }}
+            {% if ep.scheduled_date %} · {{ ep.scheduled_date }}{% endif %}
+            {% if ep.duration_estimate %} · {{ ep.duration_estimate | int }} min{% endif %}
+          </div>
+          <h2><a href="#ep{{ ep.id }}" {% if edit_mode %}contenteditable="plaintext-only" data-edit="episode.{{ ep.id }}.title" onclick="return false;"{% endif %}>{{ ep.title }}</a></h2>
+          {% if edit_mode or ep.description %}<div class="dek" {% if edit_mode %}contenteditable="plaintext-only" data-edit="episode.{{ ep.id }}.description"{% endif %}>{% if edit_mode and not ep.description %}(sin descripción){% else %}{{ ep.description | safe }}{% endif %}</div>{% endif %}
+          {% set yt_link = ep.links | selectattr('kind', 'equalto', 'youtube') | first %}
+          {% if yt_link %}
+          <a class="yt-card" href="{{ yt_link.url }}" target="_blank" rel="noopener">
+            <div class="yt-thumb" style="background-image: url('{{ yt_link.thumb_url }}');">
+              <div class="yt-play">▶</div>
+            </div>
+          </a>
+          {% endif %}
+          {% if ep.links %}
+          <div class="links">
+            {% for l in ep.links if l.kind != 'youtube' %}<a href="{{ l.url }}" target="_blank" rel="noopener">→ {{ l.platform.replace('_', ' ') }}</a>{% endfor %}
+          </div>
+          {% endif %}
+        </article>
+        {% endfor %}
+      {% else %}
+        <p class="dek">Aún no hay episodios publicados.</p>
+      {% endif %}
+    </div>
+
+    <aside class="sidebar">
+      <div class="sidebar-section about">
+        {% if logo_url %}<div class="logo-badge" style="background-image: url('{{ logo_url }}');"></div>{% endif %}
+        <h3>Sobre el podcast</h3>
+        <p {% if edit_mode %}contenteditable="plaintext-only" data-edit="podcast.description"{% endif %}>{% if edit_mode and not podcast.description %}(sin descripción){% else %}{{ (podcast.description or '') | safe }}{% endif %}</p>
+      </div>
+
+      {% if socials or rss_url %}
+      <div class="sidebar-section">
+        <h3>Suscribite</h3>
+        <ul class="sub-list">
+          {% for s in socials %}<li><a href="{{ s.url }}" target="_blank" rel="noopener">· {{ s.label }}</a></li>{% endfor %}
+          <li><a class="rss" href="{{ rss_url }}">· RSS feed</a></li>
+        </ul>
+      </div>
+      {% endif %}
+
+      {% if team %}
+      <div class="sidebar-section">
+        <h3>Equipo</h3>
+        {% for m in team %}
+        <div class="team-row">
+          {% if m.image_filename %}<div class="avatar" style="background-image: url('/media/podcasts/{{ slug }}/branding/{{ m.image_filename }}');"></div>{% else %}<div class="avatar"></div>{% endif %}
+          <div class="info">
+            <div class="name">{{ m.name }}</div>
+            {% if m.role %}<div class="role">{{ m.role }}</div>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+
+  <footer>
+    {{ podcast.name }} · <a href="{{ rss_url }}">RSS</a>
+  </footer>
+</div>
+
+{% if edit_mode %}
+<div class="epod-edit-banner">✏️ MODO EDICIÓN — click en cualquier texto para editarlo · escape para cancelar · click afuera para guardar</div>
+<script src="/static/landing-edit.js"></script>
+{% endif %}
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/prepod.svg') }}">
+  <title>{% if podcast %}RSVP · {{ podcast.name }}{% else %}RSVP{% endif %}</title>
+  <style>
+    :root {
+      {% if podcast %}
+      --primary: {{ podcast.color_primary }};
+      --secondary: {{ podcast.color_secondary }};
+      --accent: {{ podcast.color_accent }};
+      --bg: {{ podcast.color_bg }};
+      --text: {{ podcast.color_text }};
+      {% else %}
+      --primary: #5a8bff;
+      --secondary: #1e2a54;
+      --accent: #f4c770;
+      --bg: #0d1226;
+      --text: #ffffff;
+      {% endif %}
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; line-height: 1.5; }
+    .wrap { max-width: 540px; margin: 0 auto; padding: 56px 22px 64px; }
+    .eyebrow { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; }
+    h1 { margin: 12px 0 6px; font-size: 28px; line-height: 1.15; font-weight: 500; }
+    .ep-meta { opacity: 0.85; font-size: 14px; margin-top: 18px; }
+    .ep-desc { margin-top: 18px; opacity: 0.92; white-space: pre-wrap; }
+    .actions { display: grid; gap: 10px; margin-top: 28px; }
+    .actions button {
+      width: 100%; padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.04); color: var(--text); font: inherit; font-weight: 500;
+      cursor: pointer; transition: transform 0.06s ease, background 0.18s ease, border-color 0.18s ease;
+    }
+    .actions button:hover { background: rgba(255,255,255,0.08); }
+    .actions button.yes { background: var(--primary); border-color: transparent; color: #fff; }
+    .actions button.maybe { background: var(--accent); border-color: transparent; color: #1a1a1a; }
+    .actions button.no { background: rgba(255,80,80,0.18); border-color: rgba(255,120,120,0.45); }
+    .actions button:active { transform: translateY(1px); }
+    .actions button:disabled { opacity: 0.5; cursor: default; }
+    .pill {
+      display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px;
+      letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600;
+    }
+    .pill.yes     { background: var(--primary); color: #fff; }
+    .pill.maybe   { background: var(--accent); color: #1a1a1a; }
+    .pill.no      { background: rgba(255,80,80,0.25); color: #fff; }
+    .pill.pending { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); }
+    .ical-link {
+      display: inline-block; margin-top: 20px; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.18); color: var(--text); text-decoration: none; font-size: 13px;
+    }
+    .ical-link:hover { background: rgba(255,255,255,0.06); }
+    .feedback { margin-top: 20px; padding: 14px; border-radius: 10px; background: rgba(0,0,0,0.18); font-size: 14px; }
+    .err {
+      margin-top: 28px; padding: 22px; border-radius: 10px;
+      background: rgba(255,80,80,0.12); border: 1px solid rgba(255,80,80,0.35);
+    }
+    .actions button.chosen { outline: 3px solid rgba(255,255,255,0.85); outline-offset: 2px; }
+    .actions.answered button:not(.chosen) { opacity: 0.55; }
+    .actions button { font-size: 17px; min-height: 54px; }
+    .when-box { margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); }
+    .when-box #when { font-size: 18px; font-weight: 600; display: block; margin-top: 2px; }
+    .feedback { font-size: 16px; text-align: center; }
+    .ical-link { font-size: 15px; padding: 12px 16px; }
+    @media (max-width: 600px) {
+      .wrap { padding: calc(28px + env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom)); }
+      h1 { font-size: 26px; }
+      .ical-link { display: block; text-align: center; }
+    }
+    .footer { margin-top: 36px; opacity: 0.45; font-size: 11px; text-align: center; letter-spacing: 0.1em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {% if error %}
+      <div class="err">
+        <strong>{{ error }}</strong>
+        <div style="margin-top: 8px; opacity: 0.85;">Si crees que es un error, contacta al equipo del podcast.</div>
+      </div>
+    {% else %}
+      <div class="eyebrow">{{ podcast.name }} · invitación</div>
+      <h1>{% if episode.number %}Ep {{ episode.number }} · {% endif %}{{ episode.title }}</h1>
+
+      <div class="ep-meta">
+        Hola <strong>{{ guest.name }}</strong>, te invitamos a participar.
+        {% if episode.scheduled_at or episode.scheduled_date %}
+          <div class="when-box">
+            <span class="eyebrow">Cuándo</span>
+            <span id="when">{{ episode.scheduled_at or episode.scheduled_date }}</span>
+            {% if episode.duration_estimate %}<span style="opacity:0.75;">Dura aprox. {{ episode.duration_estimate|int }} min</span>{% endif %}
+          </div>
+        {% endif %}
+        <div style="margin-top: 12px;">
+          <span class="eyebrow">Tu respuesta</span>
+          <span id="status-pill" class="pill {{ guest.rsvp_status }}">{{ {"pending": "Sin responder", "yes": "Confirmado", "maybe": "Tal vez", "no": "No puedo"}.get(guest.rsvp_status, guest.rsvp_status) }}</span>
+        </div>
+      </div>
+
+      {% if episode.description %}
+        <div class="ep-desc">{{ episode.description }}</div>
+      {% endif %}
+
+      <div class="actions{% if guest.rsvp_status != 'pending' %} answered{% endif %}" data-current="{{ guest.rsvp_status }}">
+        <button class="yes"   data-action="yes">✓ Confirmo, ahí estoy</button>
+        <button class="maybe" data-action="maybe">? Tal vez, no estoy seguro</button>
+        <button class="no"    data-action="no">✕ No puedo</button>
+      </div>
+
+      {% if episode.scheduled_at or episode.scheduled_date %}
+        <a class="ical-link" href="/rsvp/{{ guest.rsvp_token }}/calendar.ics">📅 Agregar a mi calendario</a>
+      {% endif %}
+
+      <div id="feedback" class="feedback" style="display: none;"></div>
+    {% endif %}
+
+    <div class="footer">prePod</div>
+  </div>
+
+  {% if not error %}
+  <script>
+    (function () {
+      var token = {{ guest.rsvp_token | tojson }};
+      var pill = document.getElementById("status-pill");
+      var feedback = document.getElementById("feedback");
+      var buttons = document.querySelectorAll(".actions button");
+
+      var LABELS = { pending: "Sin responder", yes: "Confirmado", maybe: "Tal vez", no: "No puedo" };
+      var actionsBox = document.querySelector(".actions");
+      function setPill(status) {
+        pill.className = "pill " + status;
+        pill.textContent = LABELS[status] || status;
+        buttons.forEach(function (b) { b.classList.toggle("chosen", b.getAttribute("data-action") === status); });
+        actionsBox.classList.toggle("answered", status !== "pending");
+      }
+      setPill(actionsBox.getAttribute("data-current") || "pending");
+
+      function showFeedback(text) {
+        feedback.textContent = text;
+        feedback.style.display = "block";
+      }
+
+      function lockButtons(disabled) {
+        buttons.forEach(function (b) { b.disabled = disabled; });
+      }
+
+      buttons.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var action = btn.getAttribute("data-action");
+          lockButtons(true);
+          fetch("/api/rsvp/" + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: action }),
+          }).then(function (r) {
+            if (!r.ok) throw new Error("fallo al guardar");
+            return r.json();
+          }).then(function (j) {
+            setPill(j.rsvp_status);
+            showFeedback(
+              j.rsvp_status === "yes"   ? "¡Gracias! Te esperamos." :
+              j.rsvp_status === "maybe" ? "Anotado como tentativo. Confirma cuando puedas." :
+                                          "Anotado. Gracias por avisar."
+            );
+          }).catch(function () {
+            showFeedback("Hubo un error guardando tu respuesta. Reintenta en un momento.");
+          }).finally(function () {
+            lockButtons(false);
+          });
+        });
+      });
+
+      // Try to render the date in the user's locale.
+      var when = document.getElementById("when");
+      if (when) {
+        var raw = when.textContent.trim();
+        var dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+        var d = new Date(dateOnly ? raw + "T12:00" : raw);
+        if (!isNaN(d.getTime())) {
+          var opts = { weekday: "long", day: "numeric", month: "long" };
+          if (!dateOnly) { opts.hour = "numeric"; opts.minute = "2-digit"; }
+          var txt = d.toLocaleString("es", opts);
+          when.textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+        }
+      }
+    })();
+  </script>
+  {% endif %}
+</body>
+</html>

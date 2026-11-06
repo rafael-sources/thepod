@@ -1,0 +1,568 @@
+"""Tests for mac_publish.py — chunked uploads and publish jobs for the Mac app."""
+
+import io
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from flask import Flask
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import config
+import db as db_mod
+import mac_publish
+
+
+@pytest.fixture
+def client(tmp_path):
+    """Flask test client with mac_publish registered and PODCASTS_DIR sandboxed."""
+    podcasts_dir = tmp_path / "podcasts"
+    podcasts_dir.mkdir()
+
+    orig_cfg = config.PODCASTS_DIR
+    orig_db = db_mod.PODCASTS_DIR
+    orig_mac = mac_publish.PODCASTS_DIR
+    config.PODCASTS_DIR = podcasts_dir
+    db_mod.PODCASTS_DIR = podcasts_dir
+    mac_publish.PODCASTS_DIR = podcasts_dir
+
+    app = Flask(__name__)
+    app.secret_key = "test"
+    app.register_blueprint(mac_publish.bp)
+
+    with app.test_client() as c:
+        with c.session_transaction() as s:
+            s["username"] = "tester"
+        yield c
+
+    config.PODCASTS_DIR = orig_cfg
+    db_mod.PODCASTS_DIR = orig_db
+    mac_publish.PODCASTS_DIR = orig_mac
+    mac_publish._jobs.clear()
+
+
+def _init_upload(client, filename="episodio.mp3", size=10):
+    resp = client.post("/api/mac/uploads", json={"filename": filename, "size": size})
+    assert resp.status_code == 200, resp.get_json()
+    return resp.get_json()["upload_id"]
+
+
+def test_upload_requires_auth(client):
+    with client.session_transaction() as s:
+        s.clear()
+    resp = client.post("/api/mac/uploads", json={"filename": "a.mp3", "size": 1})
+    assert resp.status_code == 401
+
+
+def test_upload_init_validates_payload(client):
+    resp = client.post("/api/mac/uploads", json={"filename": "", "size": 0})
+    assert resp.status_code == 400
+
+
+def test_chunked_upload_flow(client):
+    data = b"0123456789"
+    upload_id = _init_upload(client, filename="episodio.mp3", size=len(data))
+
+    r1 = client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=data[:6])
+    assert r1.status_code == 200
+    assert r1.get_json()["received"] == 6
+
+    r2 = client.put(f"/api/mac/uploads/{upload_id}/chunk?index=1", data=data[6:])
+    assert r2.status_code == 200
+    assert r2.get_json()["received"] == 10
+
+    rf = client.post(f"/api/mac/uploads/{upload_id}/finish")
+    assert rf.status_code == 200
+    assert rf.get_json()["ok"] is True
+
+    # Stored file keeps the original suffix so downstream naming/mimetypes work.
+    stored = mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.mp3"
+    assert stored.read_bytes() == data
+
+
+def test_chunk_out_of_order_is_rejected(client):
+    upload_id = _init_upload(client, size=4)
+    resp = client.put(f"/api/mac/uploads/{upload_id}/chunk?index=1", data=b"ab")
+    assert resp.status_code == 409
+
+
+def test_chunk_unknown_upload_is_404(client):
+    nonexistent_id = "a" * 32  # valid format but no upload exists
+    resp = client.put(f"/api/mac/uploads/{nonexistent_id}/chunk?index=0", data=b"ab")
+    assert resp.status_code == 404
+
+
+def test_finish_size_mismatch_is_rejected(client):
+    upload_id = _init_upload(client, size=99)
+    client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=b"ab")
+    resp = client.post(f"/api/mac/uploads/{upload_id}/finish")
+    assert resp.status_code == 400
+    assert "tamaño" in resp.get_json()["error"].lower()
+
+
+def test_stale_uploads_are_cleaned_on_init(client):
+    uploads = mac_publish.PODCASTS_DIR / "_uploads"
+    uploads.mkdir(exist_ok=True)
+    old = uploads / "deadbeef.part"
+    old.write_bytes(b"x")
+    old_meta = uploads / "deadbeef.json"
+    old_meta.write_text("{}")
+    stale = time.time() - (25 * 3600)
+    os.utime(old, (stale, stale))
+    os.utime(old_meta, (stale, stale))
+
+    fresh = uploads / "cafebabe.part"
+    fresh.write_bytes(b"y")
+
+    _init_upload(client)
+
+    assert not old.exists()
+    assert not old_meta.exists()
+    assert fresh.exists()
+
+
+def test_upload_size_over_cap_is_rejected(client):
+    resp = client.post("/api/mac/uploads",
+                       json={"filename": "big.mp4", "size": mac_publish.UPLOAD_MAX + 1})
+    assert resp.status_code == 413
+
+
+def test_weird_suffix_falls_back_to_bin(client):
+    data = b"xx"
+    upload_id = _init_upload(client, filename="raro.mp3 x", size=len(data))
+    client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=data)
+    resp = client.post(f"/api/mac/uploads/{upload_id}/finish")
+    assert resp.status_code == 200
+    stored = mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.bin"
+    assert stored.read_bytes() == data
+
+
+def test_job_lifecycle_helpers(client):
+    job_id = mac_publish._create_job()
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body == {"status": "queued", "progress": 0.0, "result": None, "error": None}
+
+    mac_publish._update_job(job_id, status="running", progress=0.5)
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body["status"] == "running"
+    assert body["progress"] == 0.5
+
+    mac_publish._update_job(job_id, status="done", progress=1.0,
+                            result={"media_url": "https://x/y.mp3"})
+    body = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert body["status"] == "done"
+    assert body["result"]["media_url"] == "https://x/y.mp3"
+
+
+def test_unknown_job_is_404(client):
+    assert client.get("/api/mac/jobs/nope").status_code == 404
+
+
+def _make_podcast(slug="test-pod", ep_title="Ep 1", ep_number=7):
+    """Create a podcast dir + DB with one episode. PODCASTS_DIR must already be patched."""
+    pod_dir = config.PODCASTS_DIR / slug
+    pod_dir.mkdir(parents=True, exist_ok=True)
+    conn = db_mod.get_db(slug)
+    conn.execute(
+        "INSERT INTO podcast_meta (name, slug, description, owner_username) VALUES (?, ?, 'desc', 'tester')",
+        (slug, slug),
+    )
+    conn.execute(
+        "INSERT INTO episodes (title, status, episode_number) VALUES (?, 'recorded', ?)",
+        (ep_title, ep_number),
+    )
+    ep_id = conn.execute("SELECT id FROM episodes ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    conn.commit()
+    conn.close()
+    return slug, ep_id
+
+
+def test_upload_episode_media_success(client, tmp_path):
+    import episodes
+    slug, ep_id = _make_podcast()
+    media = tmp_path / "final.mp3"
+    media.write_bytes(b"mp3data")
+
+    with patch("hosting.upload_file",
+               return_value={"ok": True, "url": "https://media.example/test-pod/ep007-test-pod.mp3"}) as up:
+        result = episodes.upload_episode_media(slug, ep_id, media)
+
+    assert result["ok"] is True
+    assert result["media_url"].endswith("ep007-test-pod.mp3")
+    # Same filename convention as the existing publish endpoint.
+    assert up.call_args[0][2] == "ep007-test-pod.mp3"
+
+    conn = db_mod.get_db(slug)
+    row = conn.execute("SELECT status, media_url FROM episodes WHERE id=?", (ep_id,)).fetchone()
+    conn.close()
+    assert row["status"] == "published"
+    assert row["media_url"] == result["media_url"]
+
+
+def test_upload_episode_media_missing_episode(client, tmp_path):
+    import episodes
+    slug, _ = _make_podcast()
+    media = tmp_path / "final.mp3"
+    media.write_bytes(b"x")
+    result = episodes.upload_episode_media(slug, 999, media)
+    assert result["ok"] is False
+    assert "no encontrado" in result["error"]
+
+
+def test_upload_episode_media_missing_file(client, tmp_path):
+    import episodes
+    slug, ep_id = _make_podcast()
+    result = episodes.upload_episode_media(slug, ep_id, tmp_path / "no-existe.mp3")
+    assert result["ok"] is False
+    assert result["error"].startswith("Archivo no encontrado")
+
+
+class _InlineThread:
+    """Replaces threading.Thread so jobs run synchronously in tests."""
+
+    def __init__(self, target=None, daemon=None, name=None):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+
+def _finished_upload(client, content=b"mp3data", filename="final.mp3"):
+    upload_id = _init_upload(client, filename=filename, size=len(content))
+    client.put(f"/api/mac/uploads/{upload_id}/chunk?index=0", data=content)
+    assert client.post(f"/api/mac/uploads/{upload_id}/finish").status_code == 200
+    return upload_id
+
+
+def test_publish_audio_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file",
+               return_value={"ok": True, "url": "https://media.example/test-pod/ep007-test-pod.mp3"}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+
+    assert resp.status_code == 202
+    job_id = resp.get_json()["job_id"]
+
+    job = client.get(f"/api/mac/jobs/{job_id}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["media_url"].endswith(".mp3")
+
+    conn = db_mod.get_db(slug)
+    row = conn.execute("SELECT status, media_url FROM episodes WHERE id=?", (ep_id,)).fetchone()
+    conn.close()
+    assert row["status"] == "published"
+
+    # Upload consumed after a successful publish.
+    assert not (mac_publish.PODCASTS_DIR / "_uploads" / f"{upload_id}.mp3").exists()
+
+
+def test_publish_audio_job_error(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file", return_value={"ok": False, "error": "rsync falló"}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "error"
+    assert "rsync" in job["error"]
+
+
+def test_publish_audio_requires_finished_upload(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _init_upload(client)  # never finished
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+    assert resp.status_code == 404
+
+
+def test_publish_audio_denies_foreign_podcast(client):
+    slug, ep_id = _make_podcast()
+    conn = db_mod.get_db(slug)
+    conn.execute("UPDATE podcast_meta SET owner_username='otra' WHERE slug=?", (slug,))
+    conn.commit()
+    conn.close()
+    upload_id = _finished_upload(client)
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": upload_id})
+    assert resp.status_code == 403
+
+
+class _NoopThread:
+    """Thread that never runs, so the upload stays claimed."""
+
+    def __init__(self, target=None, daemon=None, name=None):
+        pass
+
+    def start(self):
+        pass
+
+
+def test_publish_audio_conflict_when_already_claimed(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _NoopThread):
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+        resp = client.post("/api/mac/publish/audio", json=payload)
+    assert resp.status_code == 409
+
+
+def test_publish_audio_error_releases_claim(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client)
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("hosting.upload_file", return_value={"ok": False, "error": "rsync falló"}):
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+        # Claim released on error: retry is accepted, not 409.
+        assert client.post("/api/mac/publish/audio", json=payload).status_code == 202
+
+
+def test_upload_video_not_configured(tmp_path):
+    import youtube_publish
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"vid")
+    with patch("youtube_publish.load_shared_config", return_value={}):
+        result = youtube_publish._upload_video("pod", f, "title")
+    assert result["ok"] is False
+    assert "no configurado" in result["error"].lower()
+
+
+def test_upload_video_not_connected(tmp_path):
+    import youtube_publish
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"vid")
+    with patch("youtube_publish.load_shared_config",
+               return_value={"youtube": {"client_id": "x", "client_secret": "y", "redirect_uri": "z"}}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        result = youtube_publish._upload_video("pod", f, "title")
+    assert result["ok"] is False
+    assert "no conectado" in result["error"].lower()
+
+
+def test_upload_video_missing_file():
+    import youtube_publish
+    with patch("youtube_publish.load_shared_config",
+               return_value={"youtube": {"client_id": "x", "client_secret": "y", "redirect_uri": "z"}}), \
+         patch("youtube_publish._get_stored_tokens", return_value={"access_token": "a", "refresh_token": "r"}):
+        result = youtube_publish._upload_video("pod", "/no/existe.mp4", "title")
+    assert result["ok"] is False
+    assert "no encontrado" in result["error"].lower()
+
+
+def test_publish_youtube_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, content=b"videodata", filename="final.mp4")
+
+    def fake_upload(slug_, path, title, description="", privacy="public",
+                    category="22", progress_cb=None):
+        if progress_cb:
+            progress_cb(0.5)
+        return {"ok": True, "video_id": "abc123",
+                "url": "https://www.youtube.com/watch?v=abc123"}
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("youtube_publish._upload_video", side_effect=fake_upload):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+            "title": "Mi episodio", "description": "desc", "privacy": "unlisted",
+        })
+
+    assert resp.status_code == 202
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["video_url"] == "https://www.youtube.com/watch?v=abc123"
+
+    conn = db_mod.get_db(slug)
+    link = conn.execute(
+        "SELECT url FROM episode_links WHERE episode_id=? AND platform='youtube'", (ep_id,)
+    ).fetchone()
+    conn.close()
+    assert link["url"] == "https://www.youtube.com/watch?v=abc123"
+
+
+def test_publish_youtube_link_is_upserted(client):
+    slug, ep_id = _make_podcast()
+    conn = db_mod.get_db(slug)
+    conn.execute("INSERT INTO episode_links (episode_id, platform, url) VALUES (?, 'youtube', 'https://old')", (ep_id,))
+    conn.commit()
+    conn.close()
+
+    mac_publish._save_episode_link(slug, ep_id, "youtube", "https://new")
+
+    conn = db_mod.get_db(slug)
+    rows = conn.execute(
+        "SELECT url FROM episode_links WHERE episode_id=? AND platform='youtube'", (ep_id,)
+    ).fetchall()
+    conn.close()
+    assert len(rows) == 1
+    assert rows[0]["url"] == "https://new"
+
+
+def test_publish_youtube_validates_privacy(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+            "title": "t", "privacy": "secreto",
+        })
+    assert resp.status_code == 400
+
+
+def test_publish_youtube_requires_title(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+        })
+    assert resp.status_code == 400
+
+
+def test_publish_youtube_400_does_not_claim_upload(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+        })
+        assert resp.status_code == 400
+        # Upload must remain publishable after a validation error.
+        with patch("mac_publish.threading.Thread", _NoopThread):
+            resp2 = client.post("/api/mac/publish/youtube", json={
+                "slug": slug, "episode_id": ep_id, "upload_id": upload_id,
+                "title": "t",
+            })
+    assert resp2.status_code == 202
+
+
+def test_publish_youtube_error_releases_claim(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+    payload = {"slug": slug, "episode_id": ep_id, "upload_id": upload_id, "title": "t"}
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("youtube_publish._upload_video", return_value={"ok": False, "error": "cuota superada"}):
+        assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202
+        assert client.post("/api/mac/publish/youtube", json=payload).status_code == 202
+
+
+def test_publish_youtube_link_failure_still_completes_job(client):
+    slug, ep_id = _make_podcast()
+    upload_id = _finished_upload(client, filename="v.mp4")
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("mac_publish.threading.Thread", _InlineThread), \
+         patch("mac_publish._save_episode_link", side_effect=RuntimeError("db bloqueada")), \
+         patch("youtube_publish._upload_video",
+               return_value={"ok": True, "video_id": "abc", "url": "https://www.youtube.com/watch?v=abc"}):
+        resp = client.post("/api/mac/publish/youtube", json={
+            "slug": slug, "episode_id": ep_id, "upload_id": upload_id, "title": "t",
+        })
+
+    job = client.get(f"/api/mac/jobs/{resp.get_json()['job_id']}").get_json()
+    assert job["status"] == "done"
+    assert job["result"]["video_url"].endswith("abc")
+    assert "link no guardado" in job["result"]["warning"]
+
+
+def test_publish_status(client):
+    slug, ep_id = _make_podcast()
+
+    conn = db_mod.get_db(slug)
+    import distribution
+    distribution._ensure_distribution_table(conn)
+    conn.execute(
+        "INSERT INTO distribution_platforms (platform, status, external_url) VALUES ('spotify', 'connected', 'https://open.spotify.com/show/x')"
+    )
+    conn.execute(
+        "UPDATE episodes SET media_url='https://media/x.mp3', status='published' WHERE id=?", (ep_id,)
+    )
+    conn.execute(
+        "INSERT INTO episode_links (episode_id, platform, url) VALUES (?, 'youtube', 'https://youtu.be/x')", (ep_id,)
+    )
+    conn.commit()
+    conn.close()
+
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config",
+               return_value={"hosting": {"host": "1.2.3.4", "user": "u", "base_url": "https://m", "upload_path": "/x/"}}), \
+         patch("youtube_publish._get_stored_tokens",
+               return_value={"access_token": "a", "refresh_token": "r", "channel_name": "Mi Canal"}), \
+         patch("shared_config.load_shared_config", return_value={}):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status?episode_id={ep_id}")
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["feed_url"].endswith(f"/landing/{slug}/feed.xml")
+    assert body["hosting_configured"] is True
+    platforms = {p["platform"]: p for p in body["distribution"]}
+    assert set(platforms) == {"spotify", "apple", "youtube"}
+    assert platforms["spotify"]["status"] == "connected"
+    assert platforms["spotify"]["external_url"] == "https://open.spotify.com/show/x"
+    assert platforms["apple"]["status"] == "not_configured"
+    assert body["youtube"] == {"connected": True, "channel_name": "Mi Canal"}
+    ep = body["episode"]
+    assert ep["title"] == "Ep 1"
+    assert ep["number"] == 7
+    assert ep["status"] == "published"
+    assert ep["media_url"] == "https://media/x.mp3"
+    assert ep["links"] == [{"platform": "youtube", "url": "https://youtu.be/x"}]
+
+
+def test_publish_status_without_episode(client):
+    slug, _ = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config", return_value={}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status")
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["hosting_configured"] is False
+    assert body["youtube"]["connected"] is False
+    assert "episode" not in body
+
+
+def test_publish_status_unknown_episode(client):
+    slug, _ = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}), \
+         patch("hosting.load_shared_config", return_value={}), \
+         patch("youtube_publish._get_stored_tokens", return_value=None):
+        resp = client.get(f"/api/mac/podcasts/{slug}/publish-status?episode_id=999")
+    assert resp.status_code == 404
+
+
+def test_upload_id_format_rejected_on_chunk_and_finish(client):
+    assert client.put("/api/mac/uploads/..%2Fevil/chunk?index=0", data=b"x").status_code in (400, 404)
+    assert client.put("/api/mac/uploads/AAAA1111/chunk?index=0", data=b"x").status_code == 400
+    assert client.post("/api/mac/uploads/AAAA1111/finish").status_code == 400
+
+
+def test_publish_rejects_traversal_upload_id(client):
+    slug, ep_id = _make_podcast()
+    with patch("mac_publish.policy_for", return_value={}):
+        resp = client.post("/api/mac/publish/audio",
+                           json={"slug": slug, "episode_id": ep_id, "upload_id": "../../etc/passwd"})
+    assert resp.status_code == 400

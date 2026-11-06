@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>prePod debug v3</title>
+<style>body{font-family:monospace;background:#111;color:#eee;padding:20px;white-space:pre-wrap;word-wrap:break-word;} .err{color:#f55;} .ok{color:#5f5;}</style>
+</head><body>
+<h2>prePod Debug v3 — file inspection</h2>
+<div id="log"></div>
+<script>
+var logEl = document.getElementById('log');
+function log(msg, cls) {
+  var d = document.createElement('div');
+  d.className = cls || '';
+  d.textContent = msg;
+  logEl.appendChild(d);
+}
+
+var url = '/static/js/app.js?t=' + Date.now();
+log('Fetching: ' + url);
+
+fetch(url, {cache: 'no-store'}).then(function(r) {
+  log('HTTP status: ' + r.status);
+  log('Content-Length: ' + r.headers.get('content-length'));
+  log('ETag: ' + r.headers.get('etag'));
+  return r.text();
+}).then(function(text) {
+  log('Total chars: ' + text.length);
+  var lines = text.split('\n');
+  log('Total lines: ' + lines.length);
+  
+  log('\n--- Lines around 1088-1092 ---', 'ok');
+  for (var i = 1085; i < 1095 && i < lines.length; i++) {
+    log((i+1) + ': ' + lines[i]);
+  }
+  
+  log('\n--- Search for EpisodeIntegrationBar definition ---', 'ok');
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf('const EpisodeIntegrationBar') !== -1) {
+      log('FOUND at line ' + (i+1) + ': ' + lines[i], 'ok');
+    }
+  }
+  
+  log('\n--- Search for EpisodeDetail definition ---', 'ok');
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf('const EpisodeDetail') !== -1) {
+      log('FOUND at line ' + (i+1) + ': ' + lines[i], 'ok');
+    }
+  }
+  
+  log('\n--- All "const " definitions order ---', 'ok');
+  for (var i = 0; i < lines.length; i++) {
+    if (/^const /.test(lines[i])) {
+      log((i+1) + ': ' + lines[i].substring(0, 80));
+    }
+  }
+}).catch(function(e) {
+  log('FETCH ERROR: ' + e.message, 'err');
+});
+</script>
+</body></html>
