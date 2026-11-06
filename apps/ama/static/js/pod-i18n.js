@@ -31,7 +31,7 @@
     });
   }
   function translate(text) {
-    var t = text.trim();
+    var t = text.replace(/\s+/g, " ").trim();
     if (!t || !dict) return null;
     if (cache.hasOwnProperty(t)) return cache[t];
     var r = dict[t] || null;
