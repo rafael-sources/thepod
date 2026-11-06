@@ -1,0 +1,89 @@
+import AVFoundation
+import AudioToolbox
+
+/// Aislador de voz de Apple (el mismo efecto que usa Final Cut, «AUSoundIsolation»): una red neuronal que
+/// deja la voz y saca teclas, perro, calle, ventilador. Trabaja en la Mac, sin internet, sobre un archivo.
+enum VoiceIsolation {
+    private static let desc = AudioComponentDescription(
+        componentType: kAudioUnitType_Effect, componentSubType: 0x766f6973 /* 'vois' */,
+        componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
+
+    /// Si esta Mac lo trae (macOS reciente).
+    static var isAvailable: Bool {
+        var d = desc
+        return AudioComponentFindNext(nil, &d) != nil
+    }
+
+    enum Failure: LocalizedError {
+        case unavailable, render
+        var errorDescription: String? {
+            switch self {
+            case .unavailable: return String(localized: "Esta Mac no trae el aislador de voz.")
+            case .render: return String(localized: "No se pudo separar la voz del ruido.")
+            }
+        }
+    }
+
+    /// Procesa `input` (WAV) y escribe `output` (WAV). `wet` 0…1: cuánto de la voz aislada (el resto es el original).
+    /// Compensa el atraso propio del efecto para que la voz siga pegada a los labios.
+    static func process(input: URL, output: URL, wet: Double, progress: @escaping @Sendable (Double) -> Void) async throws {
+        guard isAvailable else { throw Failure.unavailable }
+        try await Task.detached(priority: .userInitiated) {
+            let file = try AVAudioFile(forReading: input)
+            let fmt = file.processingFormat
+            let engine = AVAudioEngine()
+            let player = AVAudioPlayerNode()
+            let iso = AVAudioUnitEffect(audioComponentDescription: desc)
+            engine.attach(player); engine.attach(iso)
+            engine.connect(player, to: iso, format: fmt)
+            engine.connect(iso, to: engine.mainMixerNode, format: fmt)
+            if let p = iso.auAudioUnit.parameterTree?.allParameters.first(where: { $0.displayName.lowercased().contains("wet") }) {
+                p.value = AUValue(max(0, min(1, wet)) * 100)
+            }
+            let chunk: AVAudioFrameCount = 4096
+            try engine.enableManualRenderingMode(.offline, format: fmt, maximumFrameCount: chunk)
+            try engine.start()
+            player.scheduleFile(file, at: nil)
+            player.play()
+            // El efecto entrega la voz un poco tarde: se descartan esas primeras muestras y se procesa ese tanto de más al final
+            let latency = AVAudioFramePosition((iso.auAudioUnit.latency * fmt.sampleRate).rounded())
+            let total = file.length + latency
+            let out = try AVAudioFile(forWriting: output, settings: fmt.settings)
+            guard let buf = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: chunk) else { throw Failure.render }
+            var skip = latency
+            var last = Date.distantPast
+            while engine.manualRenderingSampleTime < total {
+                let n = AVAudioFrameCount(min(AVAudioFramePosition(chunk), total - engine.manualRenderingSampleTime))
+                switch try engine.renderOffline(n, to: buf) {
+                case .success:
+                    if skip >= AVAudioFramePosition(buf.frameLength) {
+                        skip -= AVAudioFramePosition(buf.frameLength)
+                    } else if skip > 0 {
+                        // Escribir solo lo que viene después del atraso
+                        let rest = AVAudioFrameCount(AVAudioFramePosition(buf.frameLength) - skip)
+                        if let tail = AVAudioPCMBuffer(pcmFormat: buf.format, frameCapacity: rest) {
+                            tail.frameLength = rest
+                            for ch in 0..<Int(buf.format.channelCount) {
+                                if let s = buf.floatChannelData?[ch], let d = tail.floatChannelData?[ch] {
+                                    d.update(from: s + Int(skip), count: Int(rest))
+                                }
+                            }
+                            try out.write(from: tail)
+                        }
+                        skip = 0
+                    } else {
+                        try out.write(from: buf)
+                    }
+                case .error: throw Failure.render
+                default: break
+                }
+                if Date().timeIntervalSince(last) > 0.25 {
+                    last = Date()
+                    progress(Double(engine.manualRenderingSampleTime) / Double(max(1, total)))
+                }
+            }
+            engine.stop()
+            progress(1)
+        }.value
+    }
+}

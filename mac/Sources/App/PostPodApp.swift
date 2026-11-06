@@ -1,0 +1,159 @@
+import SwiftUI
+import UniformTypeIdentifiers
+import AppKit
+
+@main
+struct PostPodApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var app = AppModel()
+
+    init() {
+        Keychain.migrateLegacy()
+        TextRenderer.registerBundledFonts()
+        if SelfTest.isRequested {
+            DispatchQueue.main.async { SelfTest.run() }
+        }
+    }
+
+    var body: some Scene {
+        WindowGroup("thePod") {
+            RootView()
+                .environmentObject(app)
+                .frame(minWidth: 1100, minHeight: 720)
+                .preferredColorScheme(.dark)
+                .tint(Theme.accent)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("Importar grabación…") { Panels.chooseImport { app.importItems($0) } }
+                    .keyboardShortcut("o")
+                Divider()
+                OpenProbeButton()
+            }
+            CommandMenu("Studio") {
+                OpenStudioButton(label: String(localized: "Audio: consola y cadena de voz"), tab: .audio)
+                OpenStudioButton(label: String(localized: "Video: pistas, keyframes y cámaras"), tab: .video)
+            }
+            CommandGroup(replacing: .help) {
+                Button("Manual de thePod") { Links.open("/docs/postpodapp") }
+                Button("Preguntas frecuentes") { Links.open("/docs/postpodapp/faq") }
+                Divider()
+                Button("Privacidad") { Links.open("/privacidad") }
+                Button("Escribirnos…") { NSWorkspace.shared.open(URL(string: "mailto:thepod@castmedia.space")!) }
+            }
+        }
+
+        Window(String(localized: "Prueba de sala"), id: "prueba-sala") {
+            RoomProbeView()
+        }
+        .windowStyle(.hiddenTitleBar)
+
+        Window(String(localized: "Studio"), id: "estudio") {
+            StudioRoot().environmentObject(app)
+        }
+        .defaultSize(width: 1280, height: 820)
+
+        Settings {
+            SettingsView()
+                .preferredColorScheme(.dark)
+        }
+    }
+}
+
+struct RootView: View {
+    @EnvironmentObject var app: AppModel
+    @AppStorage("introAlAbrir") private var introEnabled = true
+    @State private var showIntro = !SelfTest.isRequested
+
+    var body: some View {
+        ZStack {
+            content
+            VStack { Spacer(); HStack { Spacer(); UpdateBanner() } }
+            if showIntro && introEnabled {
+                IntroView {
+                    withAnimation(.easeOut(duration: 0.45)) { showIntro = false }
+                    app.introDone = true
+                    if Updater.checkOnLaunch { Updater.shared.check(quiet: true) }
+                }
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+        }
+        .onAppear {
+            if !(showIntro && introEnabled), Updater.checkOnLaunch, !SelfTest.isRequested { Updater.shared.check(quiet: true) }
+            // El plan de la cuenta (Gratis o Completo), para aplicarlo al exportar, grabar e importar
+            if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refresh() }
+        }
+        // Al volver a la app (por ejemplo, después de pagar en el navegador) se vuelve a mirar el plan.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refreshIfStale() }
+        }
+    }
+
+    private var content: some View {
+        Group {
+            if app.section == .pre {
+                PreHomeView()
+            } else if app.section == .prod {
+                ProdHomeView()
+            } else if app.section == .ama {
+                AmaHomeView()
+            } else if app.section == .pub {
+                PubHomeView()
+            } else if let session = app.session {
+                ProjectView(session: session)
+                    .id(session.project.id)
+            } else {
+                HomeView()
+            }
+        }
+        .background(Theme.background)
+        .alert("Algo salió mal", isPresented: Binding(get: { app.errorMessage != nil }, set: { if !$0 { app.errorMessage = nil } })) {
+            Button("Entendido", role: .cancel) {}
+        } message: {
+            Text(app.errorMessage ?? "")
+        }
+    }
+}
+
+enum Theme {
+    static let accent = Color(red: 0.957, green: 0.780, blue: 0.439)   // #F4C770, color de postPod en thePod
+    static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
+    static let panel = Color(white: 1, opacity: 0.05)
+    static let panelStrong = Color(white: 1, opacity: 0.09)
+    static let stroke = Color(white: 1, opacity: 0.1)
+    static let secondary = Color(white: 1, opacity: 0.6)
+    static let good = Color(red: 0.35, green: 0.85, blue: 0.55)
+}
+
+enum Panels {
+    static func chooseImport(_ done: @escaping ([URL]) -> Void) {
+        let panel = NSOpenPanel()
+        panel.title = String(localized: "Elige tu grabación")
+        panel.message = String(localized: "El paquete de postPod, la carpeta con las pistas, o los videos y audios sueltos")
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.zip, .movie, .audio, .folder, .mpeg4Movie, .quickTimeMovie]
+        panel.allowsOtherFileTypes = true
+        if panel.runModal() == .OK { done(panel.urls) }
+    }
+}
+
+/// Archivo → Prueba de sala… (abre la ventana de prueba de prodPod)
+struct OpenProbeButton: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Prueba de sala…") { openWindow(id: "prueba-sala") }
+    }
+}
+
+
+/// Páginas de thePod en la web (manual, privacidad), con la misma dirección que usan las actualizaciones.
+@MainActor enum Links {
+    static func url(_ path: String) -> URL? {
+        URL(string: Updater.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)
+    }
+    static func open(_ path: String) { if let u = url(path) { NSWorkspace.shared.open(u) } }
+}

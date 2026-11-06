@@ -1,0 +1,252 @@
+import SwiftUI
+
+// MARK: - Cintillos (textos tipo noticiero que entran abajo, con animación y sonido)
+
+struct CintillosStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: String(localized: "Cintillos"),
+                               subtitle: String(localized: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar."), step: .cintillos)
+                    Card {
+                        Text("Agregar donde está el video").font(.headline)
+                        HStack(spacing: 10) {
+                            styleButton(String(localized: "Noticiero"), help: String(localized: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.")) {
+                                _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: String(localized: "AHORA"))
+                            } preview: { newsPreview }
+                            styleButton(String(localized: "Limpio"), help: String(localized: "Una línea de color, título grande y texto chico. Sin cajas.")) {
+                                _ = session.addCintillo(style: "clean", kind: "comment")
+                            } preview: { cleanPreview }
+                            styleButton(String(localized: "Sponsor"), help: String(localized: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.")) {
+                                _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: String(localized: "PATROCINA"))
+                            } preview: { sponsorPreview }
+                        }
+                        if !session.project.sponsors.isEmpty {
+                            HStack(spacing: 8) {
+                                Text("De un sponsor de prePod:").font(.caption).foregroundStyle(Theme.secondary)
+                                ForEach(session.project.sponsors) { sp in
+                                    Button(sp.name) { session.addSponsorCintillo(sp) }.controlSize(.small)
+                                }
+                            }
+                        }
+                    }
+                    Card {
+                        HStack {
+                            Text(session.project.cintillos.isEmpty ? String(localized: "Todavía no hay cintillos") : String(localized: "En este episodio")).font(.headline)
+                            Spacer()
+                            if !session.project.cintillos.isEmpty {
+                                Toggle("Mostrar", isOn: $session.project.showCintillos).toggleStyle(.switch).controlSize(.mini).font(.caption)
+                            }
+                        }
+                        if session.project.cintillos.isEmpty {
+                            Text("Cada cintillo entra abajo a la izquierda, se queda los segundos que digas y se va solo. Al tocarlo se edita debajo del video.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                        ForEach(session.project.cintillos.sorted { $0.start < $1.start }) { c in
+                            row(c)
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+    }
+
+    private func styleButton<P: View>(_ title: String, help: String, _ action: @escaping () -> Void, @ViewBuilder preview: () -> P) -> some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                preview().frame(width: 72, height: 26)
+                Text(title).font(.callout.bold())
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panelStrong))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private var newsPreview: some View {
+        HStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#F2EDE6")).frame(width: 22)
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#D64545"))
+                RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#F2EDE6"))
+            }
+        }
+    }
+    private var cleanPreview: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 26, height: 4)
+            RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#F2EDE6")).frame(height: 9)
+            RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#8A8278")).frame(width: 46, height: 6)
+        }
+    }
+    private var sponsorPreview: some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 3).fill(Color(hex: "#F2EDE6")).frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                RoundedRectangle(cornerRadius: 2).fill(Theme.accent).frame(width: 20, height: 5)
+                RoundedRectangle(cornerRadius: 2).fill(Color(hex: "#F2EDE6")).frame(height: 12)
+            }
+        }
+        .padding(3).background(RoundedRectangle(cornerRadius: 4).fill(Color.black.opacity(0.5)))
+    }
+
+    private func row(_ c: DirectorCintillo) -> some View {
+        let sel = session.selectedTrack == .cintillo(c.id)
+        return Button {
+            session.selectedTrack = .cintillo(c.id)
+            session.seek(timeline: max(0, c.start - 0.5), play: false)
+        } label: {
+            HStack(spacing: 10) {
+                Group {
+                    switch c.style {
+                    case "clean": cleanPreview
+                    case "sponsor": sponsorPreview
+                    default: newsPreview
+                    }
+                }
+                .frame(width: 40, height: 16)
+                Text(c.title.isEmpty ? c.text : c.title).lineLimit(1)
+                if c.fromDirector { Text("del director").font(.caption2).foregroundStyle(Theme.secondary) }
+                Spacer()
+                Text("\(EditEngine.clock(c.start)) · \(String(format: "%.0f s", c.duration))")
+                    .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(sel ? Theme.accent : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Panel bajo el video para el cintillo elegido.
+struct CintilloEditor: View {
+    @ObservedObject var session: ProjectSession
+    let sel: ProjectSession.TrackSel
+
+    static let colors = ["#D64545", "#6B8FE6", "#E8B85A", "#2E9E6B", "#7C2D3D", "#111111"]
+    static let tags = ["AHORA", String(localized: "SEGMENTO"), String(localized: "PATROCINA"), String(localized: "EN VIVO"), String(localized: "DATO"), ""]
+
+    private var reel: Reel? { if case .reelCintillo(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }
+    private var c: Binding<DirectorCintillo> {
+        session.cintilloBinding(sel) ?? .constant(DirectorCintillo(id: 0, kind: "banner", title: "", text: "", start: 0, duration: 6))
+    }
+
+    var body: some View {
+        if let b = session.cintilloBinding(sel) { editor(b.wrappedValue) }
+    }
+
+    @ViewBuilder
+    private func editor(_ cin: DirectorCintillo) -> some View {
+        let lo = reel?.start ?? 0
+        let hi = reel?.end ?? session.project.duration
+        HStack {
+            Label((reel != nil ? String(localized: "Cintillo del reel · ") : String(localized: "Cintillo · ")) + (cin.style == "clean" ? String(localized: "Limpio") : cin.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Noticiero")), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
+            if cin.fromDirector { Text("del director").font(.caption).foregroundStyle(Theme.secondary) }
+            Spacer()
+            if reel == nil {
+                Button { session.duplicateCintillo(cin.id) } label: { Image(systemName: "plus.square.on.square") }.buttonStyle(.borderless).help("Duplicar donde está el video")
+            }
+            Button(role: .destructive) { session.removeCintillo(sel) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
+            Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
+        }
+        HStack(spacing: 8) {
+            Text("Estilo").frame(width: 72, alignment: .leading)
+            Picker("", selection: c.style) {
+                Text("Noticiero").tag("news"); Text("Limpio").tag("clean"); Text("Sponsor").tag("sponsor")
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 260)
+        }
+        .font(.callout)
+        HStack(spacing: 8) {
+            Text(cin.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Título")).frame(width: 72, alignment: .leading)
+            TextField("", text: c.title).textFieldStyle(.roundedBorder)
+        }
+        .font(.callout)
+        HStack(spacing: 8) {
+            Text("Texto").frame(width: 72, alignment: .leading)
+            TextField("", text: c.text).textFieldStyle(.roundedBorder)
+        }
+        .font(.callout)
+        if cin.style != "clean" {
+            HStack(spacing: 6) {
+                Text("Etiqueta").frame(width: 72, alignment: .leading)
+                ForEach(Self.tags, id: \.self) { t in
+                    Button(t.isEmpty ? String(localized: "Sin etiqueta") : t) { c.wrappedValue.tag = t }
+                        .buttonStyle(.bordered).controlSize(.mini)
+                        .tint(cin.tagText == t ? Theme.accent : nil)
+                }
+                TextField("Otra…", text: Binding(get: { Self.tags.contains(cin.tagText) ? "" : cin.tagText },
+                                                  set: { c.wrappedValue.tag = $0.uppercased() }))
+                    .textFieldStyle(.roundedBorder).frame(width: 90).controlSize(.small)
+            }
+            .font(.callout)
+        }
+        HStack(spacing: 8) {
+            Text("Color").frame(width: 72, alignment: .leading)
+            Button { c.wrappedValue.color = nil } label: {
+                Text("Del podcast").font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(cin.color == nil ? Theme.accent.opacity(0.35) : Theme.panelStrong))
+            }
+            .buttonStyle(.plain)
+            ForEach(Self.colors, id: \.self) { col in
+                Button { c.wrappedValue.color = col } label: {
+                    Circle().fill(Color(hex: col)).frame(width: 18, height: 18)
+                        .overlay(Circle().strokeBorder(cin.color == col ? Theme.accent : Color.white.opacity(0.3), lineWidth: cin.color == col ? 2.5 : 1))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(.callout)
+        if cin.style != "clean" {
+            HStack(spacing: 8) {
+                Text("Logo").frame(width: 72, alignment: .leading)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4).fill(Theme.panelStrong)
+                    if let f = cin.logoFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).padding(2)
+                    } else {
+                        Text(String(cin.title.prefix(1)).uppercased()).font(.caption.bold())
+                    }
+                }
+                .frame(width: 36, height: 26)
+                if let pl = session.project.logoFile {
+                    Button("Del podcast") { c.wrappedValue.logoFile = pl }.controlSize(.small)
+                }
+                Button("Elegir…") { session.chooseCintilloLogo(sel) }.controlSize(.small)
+                Button("Sin logo") { c.wrappedValue.logoFile = nil }.controlSize(.small)
+                Text(cin.logoFile == nil ? String(localized: "Sin logo sale la inicial del título.") : "").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            .font(.callout)
+        }
+        HStack(spacing: 6) {
+            Text("Empieza").frame(width: 72, alignment: .leading)
+            TimecodeField(seconds: c.start, range: lo...max(lo, hi - 2))
+            Button("−1 s") { c.wrappedValue.start = max(lo, cin.start - 1) }
+            Button("+1 s") { c.wrappedValue.start = min(max(lo, hi - 2), cin.start + 1) }
+            Button("Aquí") { c.wrappedValue.start = min(max(lo, session.playheadTimeline), max(lo, hi - 2)) }.help("Donde está el video ahora")
+            Spacer().frame(width: 10)
+            Text("Dura").frame(width: 36)
+            Slider(value: c.duration, in: 2...20, step: 0.5).frame(maxWidth: 160)
+            Text(String(format: "%.0f s", cin.duration)).monospacedDigit().frame(width: 32, alignment: .trailing)
+        }
+        .font(.callout).controlSize(.small)
+        HStack {
+            Toggle("Sonido al entrar y salir (bajo)", isOn: c.sound).toggleStyle(.checkbox).font(.callout)
+            Spacer()
+            Button { session.seek(timeline: max(0, cin.start - 0.5), play: true) } label: { Label("Ver", systemImage: "play.fill") }.controlSize(.small)
+        }
+        Text((reel != nil ? String(localized: "Solo en este reel. ") : "") + String(localized: "Abajo a la izquierda, encima del video y debajo de los subtítulos. Entra con el logo, se despliegan las barras y aparece el texto; sale a la izquierda. Si hay dos a la vez, el segundo sube."))
+            .font(.caption2).foregroundStyle(Theme.secondary)
+    }
+}

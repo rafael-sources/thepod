@@ -1,0 +1,63 @@
+name: PostPodApp
+options:
+  bundleIdPrefix: space.aitism
+  developmentLanguage: es
+  knownRegions: [es, en]
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    from: 1.1.0
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    exactVersion: 2.17.0
+
+targets:
+  PostPodApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      # ffmpeg/ffprobe propios (scripts/build-ffmpeg.sh) → Contents/MacOS, firmados al copiar
+      - path: Vendor/ffmpeg
+        optional: true
+        buildPhase:
+          copyFiles:
+            destination: executables
+        attributes: [CodeSignOnCopy]
+      - path: Vendor/licenses
+        optional: true
+        buildPhase: resources
+    dependencies:
+      - package: WhisperKit
+        product: WhisperKit
+      - package: LiveKit
+        product: LiveKit
+    settings:
+      base:
+        PRODUCT_NAME: thePod
+        PRODUCT_BUNDLE_IDENTIFIER: space.aitism.thepod
+        MARKETING_VERSION: "0.80.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        INFOPLIST_KEY_CFBundleAllowMixedLocalizations: YES
+        INFOPLIST_KEY_CFBundleDisplayName: thePod
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
+        INFOPLIST_KEY_NSCameraUsageDescription: "thePod usa la cámara para grabarte y mostrarte en la sala de prodPod."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "thePod usa el micrófono para grabarte y para que te oigan en la sala de prodPod."
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 aitism.space · thePod"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

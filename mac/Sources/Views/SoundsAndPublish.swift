@@ -1,0 +1,501 @@
+import SwiftUI
+import AVFoundation
+import UniformTypeIdentifiers
+
+// MARK: - Efectos de sonido
+
+struct SoundsStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var previewPlayer: AVAudioPlayer?
+    @State private var filter = ""
+
+    private var library: [String] {
+        session.project.sfxLibrary.filter { filter.isEmpty || name($0).localizedCaseInsensitiveContains(filter) }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            VStack(alignment: .leading, spacing: 14) {
+                StepHeader(title: String(localized: "Efectos y música"),
+                           subtitle: String(localized: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras."), step: .sounds)
+                    .sheet(isPresented: $session.voiceSheet) { VoiceSheet(session: session) }
+                HStack {
+                    Text("En tu episodio").font(.headline)
+                    Spacer()
+                    Button { session.voiceSheet = true } label: { Label("Agregar voz…", systemImage: "waveform.and.mic") }
+                        .help("Escribe un texto y la Mac lo lee con una voz; se pone donde está el video")
+                    Button { session.importSounds(placeAt: session.playheadTimeline) } label: { Label("Agregar música aquí…", systemImage: "music.note.list") }
+                        .help("Elige un mp3/wav/m4a: se pone donde está el video y luego lo mueves con los botones")
+                }
+                if session.project.audioLane.isEmpty {
+                    Card {
+                        Label("Este episodio no tiene efectos puestos en postPod", systemImage: "speaker.slash")
+                        Text("Los sonidos que se tocan en vivo en prodPod, o que pones en la línea de audio de postPod, llegan aquí solos en su momento. Si los agregas en la web, usa “Traer de nuevo”.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                    }
+                } else {
+                    Text(String(localized: "\(session.project.audioLane.count) \(session.project.audioLane.count == 1 ? String(localized: "sonido") : String(localized: "sonidos")). Toca la hora para oírlo; “Editar” abre volumen, fades y posición bajo el video."))
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                    ScrollView {
+                        LazyVStack(spacing: 6) {
+                            ForEach(session.project.audioLane) { clip in
+                                let sel = session.selectedTrack == .sound(clip.id)
+                                HStack {
+                                    Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
+                                        .buttonStyle(.link).monospacedDigit()
+                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Sonido")).lineLimit(1)
+                                    Spacer()
+                                    if clip.volume == 0 { Image(systemName: "speaker.slash.fill").foregroundStyle(Theme.secondary) }
+                                    Text("\(Int(clip.volume * 100)) %").font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                                    Button(sel ? String(localized: "Editando…") : String(localized: "Editar")) { session.selectedTrack = sel ? nil : .sound(clip.id) }
+                                        .controlSize(.small)
+                                        .help("Volumen, fades y posición en el panel bajo el video")
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                                .contentShape(Rectangle())
+                                .onTapGesture { session.selectedTrack = .sound(clip.id) }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 260)
+                }
+
+                if !session.project.sfxLibrary.isEmpty {
+                    DisclosureGroup("Agregar otro efecto") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Pon el video donde lo quieres, elige un sonido y toca “Poner aquí”.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                            TextField("Buscar sonido…", text: $filter).textFieldStyle(.roundedBorder)
+                            ScrollView {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                                    ForEach(library, id: \.self) { rel in
+                                        VStack(spacing: 8) {
+                                            Text(name(rel)).font(.callout.bold()).lineLimit(1)
+                                            HStack(spacing: 6) {
+                                                Button { preview(rel) } label: { Image(systemName: "play.fill") }
+                                                    .help("Escuchar")
+                                                Button("Poner aquí") {
+                                                    let t = session.playheadTimeline
+                                                    Task { await session.addSound(rel, at: t) }
+                                                }
+                                                .buttonStyle(.borderedProminent)
+                                            }
+                                            .controlSize(.small)
+                                        }
+                                        .padding(10)
+                                        .frame(maxWidth: .infinity)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 260)
+                        }
+                        .padding(.top, 6)
+                    }
+                    .font(.headline)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 28).padding(.vertical, 28)
+            .frame(minWidth: 460, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: .landscape) }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            Task {
+                for p in providers {
+                    guard let url = try? await p.loadFileURL(),
+                          ["mp3", "wav", "m4a", "aac"].contains(url.pathExtension.lowercased()) else { continue }
+                    let dest = ProjectStore.folder(for: session.project.id).appendingPathComponent("sfx", isDirectory: true)
+                    try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+                    let to = dest.appendingPathComponent(url.lastPathComponent)
+                    if !FileManager.default.fileExists(atPath: to.path) { try? FileManager.default.copyItem(at: url, to: to) }
+                    await MainActor.run {
+                        let rel = "sfx/\(url.lastPathComponent)"
+                        if !session.project.sfxLibrary.contains(rel) { session.project.sfxLibrary.insert(rel, at: 0) }
+                    }
+                }
+            }
+            return true
+        }
+    }
+
+    private func name(_ rel: String) -> String {
+        if let n = session.project.sfxNames[rel] { return n }
+        return ((rel as NSString).lastPathComponent as NSString).deletingPathExtension
+            .replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    private func preview(_ rel: String) {
+        previewPlayer?.stop()
+        previewPlayer = try? AVAudioPlayer(contentsOf: ProjectStore.url(rel, in: session.project.id))
+        previewPlayer?.play()
+    }
+}
+
+// MARK: - Publicar
+
+struct PublishStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var podcasts: [PrePodClient.PodcastRef] = []
+    @State private var episodes: [PrePodClient.EpisodeRef] = []
+    @State private var pickSlug = ""
+    @State private var pickEpisode = 0
+    @State private var ytTitle = ""
+    @State private var ytDescription = ""
+    @State private var privacy = "unlisted"
+    @State private var loadError: String?
+
+    var linked: Bool { session.project.episode.prepodSlug != nil && session.project.episode.prepodEpisodeId != nil }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                StepHeader(title: String(localized: "Publicar"), subtitle: String(localized: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube."), step: .publish)
+                if !PrePodClient.isConfigured {
+                    Card {
+                        Label("Conecta la app con prePod", systemImage: "person.badge.key").font(.headline)
+                        Text("Abre Ajustes (⌘,) y escribe la dirección de prePod, tu usuario y tu contraseña.")
+                            .foregroundStyle(Theme.secondary)
+                        SettingsLink { Text("Abrir Ajustes") }.buttonStyle(.borderedProminent)
+                    }
+                } else if !linked {
+                    linkCard
+                } else {
+                    statusCard
+                    audioCard
+                    youtubeCard
+                }
+                if let n = session.publishNote ?? loadError {
+                    Label(n, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.callout)
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 760, alignment: .leading)
+        }
+        .onAppear {
+            session.refreshExports()
+            session.loadPublishStatus()
+            if ytTitle.isEmpty { ytTitle = Exporter.episodeTitle(session.project) }
+            if ytDescription.isEmpty {
+                let keep = EditEngine.keepRanges(duration: session.project.duration, cuts: session.project.cuts)
+                let p = session.project
+                ytDescription = Exporter.notes(project: p, keep: keep, introDuration: p.intro.map { max(1, $0.seconds) } ?? 0)
+            }
+            if !linked && PrePodClient.isConfigured { loadPodcasts() }
+        }
+    }
+
+    // Episode not linked (came straight from prodPod or loose files): pick it from prePod.
+    private var linkCard: some View {
+        Card {
+            Label("¿A qué episodio de prePod corresponde?", systemImage: "link").font(.headline)
+            Text("Este paquete no dice de qué episodio de prePod viene. Elígelo una vez y queda guardado.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            Picker("Podcast", selection: $pickSlug) {
+                Text("Elige…").tag("")
+                ForEach(podcasts) { Text($0.name).tag($0.slug) }
+            }
+            .onChange(of: pickSlug) { _, slug in loadEpisodes(slug) }
+            Picker("Episodio", selection: $pickEpisode) {
+                Text("Elige…").tag(0)
+                ForEach(episodes) { Text($0.label).tag($0.id) }
+            }
+            .disabled(episodes.isEmpty)
+            Button("Vincular") {
+                session.project.episode.prepodSlug = pickSlug
+                session.project.episode.prepodEpisodeId = pickEpisode
+                session.loadPublishStatus()
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(pickSlug.isEmpty || pickEpisode == 0)
+        }
+    }
+
+    private var statusCard: some View {
+        Card {
+            HStack {
+                Text("Estado en prePod").font(.headline)
+                Spacer()
+                Button { session.loadPublishStatus() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.borderless)
+            }
+            if let s = session.publishStatus {
+                if let ep = s.episode {
+                    Text("\(ep.number.map { "Ep \($0) · " } ?? "")\(ep.title ?? "") — \(ep.status ?? "")").foregroundStyle(Theme.secondary)
+                }
+                ForEach(s.distribution, id: \.platform) { p in
+                    HStack {
+                        Image(systemName: p.status == "connected" ? "checkmark.circle.fill" : p.status == "pending" ? "clock" : "circle")
+                            .foregroundStyle(p.status == "connected" ? Theme.good : Theme.secondary)
+                        Text(platformName(p.platform)).bold()
+                        Text(statusName(p.status)).foregroundStyle(Theme.secondary)
+                        Spacer()
+                        if let u = p.external_url, let url = URL(string: u) { Link("Abrir", destination: url) }
+                    }
+                }
+                if !s.hosting_configured {
+                    Label("Tu podcast todavía no está configurado para publicar en prePod. Hazlo allí una vez y vuelve.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+    }
+
+    private var audioCard: some View {
+        Card {
+            Label("Spotify y Apple Podcasts", systemImage: "waveform").font(.headline)
+            Text("Publica el episodio en tu podcast. Spotify y Apple Podcasts lo muestran solos en unos minutos u horas.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            if let u = session.project.episode.publishedAudioURL ?? session.publishStatus?.episode?.media_url {
+                Label("Publicado: \(u)", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Theme.good).lineLimit(1)
+            }
+            HStack {
+                Button { session.publishAudio() } label: { Label("Publicar audio", systemImage: "paperplane.fill") }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(session.isBusy || session.publishStatus?.hosting_configured == false)
+                if let f = session.latestExport(suffix: "audio", ext: "mp3") {
+                    Text("Usará \(f.lastPathComponent)").font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
+                } else {
+                    Text("Primero exportaremos el MP3").font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private var youtubeCard: some View {
+        Card {
+            Label("YouTube", systemImage: "play.rectangle.fill").font(.headline)
+            if let yt = session.publishStatus?.youtube, !yt.connected {
+                Text("Tu canal no está conectado en prePod. Conéctalo allí una vez (Distribución → YouTube) y vuelve.")
+                    .font(.caption).foregroundStyle(.orange)
+            } else if let yt = session.publishStatus?.youtube {
+                Text("Canal: \(yt.channel_name)").font(.caption).foregroundStyle(Theme.secondary)
+            }
+            TextField("Título", text: $ytTitle).textFieldStyle(.roundedBorder)
+            TextEditor(text: $ytDescription)
+                .font(.callout)
+                .frame(minHeight: 120, maxHeight: 200)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.stroke))
+            Picker("Visibilidad", selection: $privacy) {
+                Text("Oculto (con link)").tag("unlisted")
+                Text("Público").tag("public")
+                Text("Privado").tag("private")
+            }
+            .pickerStyle(.segmented)
+            if let u = session.project.episode.publishedYouTubeURL, let url = URL(string: u) {
+                Link("Ver en YouTube: \(u)", destination: url).font(.caption)
+            }
+            HStack {
+                Button { session.publishYouTube(title: ytTitle, description: ytDescription, privacy: privacy) } label: {
+                    Label("Subir a YouTube", systemImage: "icloud.and.arrow.up.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(session.isBusy || ytTitle.isEmpty || session.publishStatus?.youtube.connected == false)
+                if let f = session.latestExport(suffix: "youtube", ext: "mp4") {
+                    Text("Usará \(f.lastPathComponent)").font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
+                } else {
+                    Text("Primero exportaremos el video 16:9").font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private func platformName(_ p: String) -> String {
+        ["spotify": String(localized: "Spotify"), "apple": String(localized: "Apple Podcasts"), "youtube": String(localized: "YouTube")][p] ?? p.capitalized
+    }
+    private func statusName(_ s: String) -> String {
+        ["connected": "conectado", "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s
+    }
+
+    private func loadPodcasts() {
+        Task {
+            do { podcasts = try await PrePodClient.shared.podcasts(); loadError = nil }
+            catch { loadError = error.localizedDescription }
+        }
+    }
+    private func loadEpisodes(_ slug: String) {
+        episodes = []
+        pickEpisode = 0
+        guard !slug.isEmpty else { return }
+        Task {
+            do { episodes = try await PrePodClient.shared.episodes(slug: slug); loadError = nil }
+            catch { loadError = error.localizedDescription }
+        }
+    }
+}
+
+// MARK: - Ajustes: prePod
+
+struct PrePodSettingsSection: View {
+    @State private var url = PrePodClient.baseURL
+    @State private var postURL = PostPodWebClient.baseURL
+    @State private var user = PrePodClient.username
+    @State private var password = Keychain.get("prepod-password") ?? ""
+    @State private var result: String?
+    @State private var ok = false
+    @State private var confirmLogout = false
+    @State private var showServers = false
+    @ObservedObject private var role = AccountRole.shared
+
+    var body: some View {
+        Section("Tu cuenta de thePod") {
+            TextField("Usuario o correo", text: $user)
+            SecureField("Contraseña", text: $password)
+            HStack {
+                Button("Guardar y probar") { saveAndTest() }
+                if let result { Text(result).font(.caption).foregroundStyle(ok ? Theme.good : .orange) }
+            }
+            HStack(spacing: 14) {
+                Button("¿Olvidaste tu contraseña?") {
+                    let base = url.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                    if let u = URL(string: base + "/?olvide=1") { NSWorkspace.shared.open(u) }
+                }
+                .buttonStyle(.link)
+                if !PrePodClient.username.isEmpty {
+                    Button("Mi perfil") { Links.open("/perfil") }.buttonStyle(.link)
+                        .help("Tu foto, tu nombre, tu correo y tu contraseña. Si cambias la contraseña, escríbela aquí también.")
+                }
+                Button("Privacidad") { Links.open("/privacidad") }.buttonStyle(.link)
+                Spacer()
+                if !PrePodClient.username.isEmpty {
+                    Button("Cerrar sesión", role: .destructive) { confirmLogout = true }
+                }
+            }
+            .font(.caption)
+            if let plan = role.planSummary {
+                HStack {
+                    Label(plan, systemImage: Plan.includesApp ? "checkmark.seal" : "gift")
+                        .font(.caption).foregroundStyle(Plan.includesApp ? Theme.good : Theme.accent)
+                    Spacer()
+                    Button(Plan.includesApp && !Plan.isFree ? String(localized: "Ver planes") : String(localized: "Mejorar plan")) { Links.open("/planes") }
+                        .controlSize(.small)
+                }
+            }
+            Text("Es la misma cuenta de la web. La contraseña queda guardada en esta Mac, solo para tu usuario.")
+                .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup("Servidores", isExpanded: $showServers) {
+                TextField("Dirección de prePod", text: $url)
+                TextField("Dirección de postPod", text: $postURL)
+            }
+            .font(.caption)
+        }
+        .confirmationDialog("¿Cerrar sesión en esta Mac?", isPresented: $confirmLogout) {
+            Button("Cerrar sesión", role: .destructive) { logout() }
+        } message: {
+            Text("Tus episodios en esta Mac no se tocan. Para grabar, traer o publicar vas a tener que entrar de nuevo.")
+        }
+    }
+
+    private func saveAndTest() {
+        PrePodClient.baseURL = url
+        PostPodWebClient.baseURL = postURL
+        PrePodClient.username = user.trimmingCharacters(in: .whitespaces)
+        Keychain.set(password, for: "prepod-password")
+        Task {
+            await resetAll()
+            do {
+                let list = try await PrePodClient.shared.podcasts()
+                // Si entró con el correo, se guarda su usuario (salas y permisos se reconocen por usuario)
+                if let canonical = await PrePodClient.shared.canonicalUsername(), canonical != PrePodClient.username {
+                    PrePodClient.username = canonical
+                    user = canonical
+                    await resetAll()
+                }
+                let web = try await PostPodWebClient.shared.projects()
+                AccountRole.shared.refresh()
+                ok = true
+                result = String(localized: "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod")
+            } catch {
+                ok = false
+                result = error.localizedDescription
+            }
+        }
+    }
+
+    private func logout() {
+        PrePodClient.username = ""
+        Keychain.set(nil, for: "prepod-password")
+        user = ""
+        password = ""
+        ok = true
+        result = String(localized: "Sesión cerrada en esta Mac.")
+        AccountRole.shared.clear()
+        Task { await resetAll() }
+    }
+
+    private func resetAll() async {
+        await PrePodClient.shared.resetSession()
+        await PostPodWebClient.shared.resetSession()
+        await ProdPodClient.shared.resetSession()
+        await AmaClient.shared.resetSession()
+    }
+}
+
+
+/// Texto a voz: escribe algo y la Mac lo lee con una de sus voces; queda como un sonido más del episodio.
+struct VoiceSheet: View {
+    @ObservedObject var session: ProjectSession
+    @State private var text = ""
+    @State private var voices: [Speech.Voice] = []
+    @State private var voice: Speech.Voice?
+    @State private var rate: Float = 0.5
+    @State private var testing = false
+    private let tester = AVSpeechSynthesizer()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Agregar una voz").font(.title2.bold())
+            Text("La Mac lee el texto con una de sus voces, sin internet. Sirve para una intro, un aviso o corregir una palabra. Se pone donde está el video ahora.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            TextEditor(text: $text)
+                .font(.body).frame(minHeight: 90, maxHeight: 160)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.stroke))
+            HStack(spacing: 10) {
+                Text("Voz").frame(width: 60, alignment: .leading)
+                Picker("", selection: Binding(get: { voice?.id ?? "" }, set: { id in voice = voices.first { $0.id == id } })) {
+                    ForEach(voices) { v in
+                        Text("\(v.name) · \(v.language)\(v.quality.isEmpty ? "" : " · " + v.quality)").tag(v.id)
+                    }
+                }
+                .labelsHidden().frame(maxWidth: 320)
+                Button {
+                    tester.stopSpeaking(at: .immediate)
+                    let u = AVSpeechUtterance(string: text.isEmpty ? String(localized: "Hola, soy la voz de thePod.") : String(text.prefix(120)))
+                    if let voice { u.voice = AVSpeechSynthesisVoice(identifier: voice.id) }
+                    u.rate = rate
+                    tester.speak(u)
+                } label: { Label("Probar", systemImage: "play.fill") }
+                .controlSize(.small)
+            }
+            .font(.callout)
+            HStack(spacing: 10) {
+                Text("Velocidad").frame(width: 60, alignment: .leading)
+                Slider(value: $rate, in: 0.35...0.65)
+                Text(rate < 0.45 ? "lenta" : rate > 0.55 ? String(localized: "rápida") : "normal").frame(width: 50)
+            }
+            .font(.callout)
+            Text("Las voces mejoradas y premium (suenan mucho mejor) se bajan en Ajustes del Sistema → Accesibilidad → Contenido hablado → Voces del sistema.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
+            HStack {
+                Spacer()
+                Button("Cancelar") { tester.stopSpeaking(at: .immediate); session.voiceSheet = false }
+                Button("Agregar al episodio") {
+                    tester.stopSpeaking(at: .immediate)
+                    session.addVoice(text: text, voice: voice, rate: rate)
+                    session.voiceSheet = false
+                }
+                .buttonStyle(.borderedProminent).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 520)
+        .onAppear {
+            voices = Speech.voices()
+            voice = Speech.defaultVoice()
+        }
+    }
+}

@@ -1,0 +1,2297 @@
+import SwiftUI
+import AppKit
+
+// MARK: - 1. Overview
+
+struct OverviewStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    StepHeader(title: String(localized: "Tu grabación"), subtitle: String(localized: "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video."), step: .overview)
+                    Card {
+                        TextField("Nombre del episodio", text: $session.project.name)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.title3)
+                        if let podcast = session.project.podcastName {
+                            Text("Podcast: \(podcast)").foregroundStyle(Theme.secondary)
+                        }
+                        if let d = session.project.episode.description, !d.isEmpty {
+                            Text(d).font(.callout).foregroundStyle(Theme.secondary).lineLimit(4)
+                        }
+                    }
+                    if !session.project.episode.script.isEmpty || !session.project.segments.isEmpty {
+                        ScriptCard(project: session.project) { t in session.seek(timeline: t) }
+                    }
+                    if !session.project.sponsors.isEmpty {
+                        Card {
+                            Text("Sponsors del episodio").font(.headline)
+                            ForEach(session.project.sponsorAppearances(), id: \.start) { a in
+                                HStack {
+                                    Image(systemName: "megaphone.fill").foregroundStyle(Theme.accent)
+                                    Text(a.sponsor.name).bold()
+                                    if let c = a.sponsor.copy { Text(c).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1) }
+                                    Spacer()
+                                    Button(EditEngine.clock(a.start)) { session.seek(timeline: a.start) }.buttonStyle(.link).monospacedDigit()
+                                }
+                            }
+                            Text("Aparecen en el video en el momento del bloque del guion. Puedes apagarlos al exportar.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        Text("Personas en la grabación").font(.headline)
+                        ForEach(session.project.lanes) { lane in
+                            HStack(spacing: 12) {
+                                Image(systemName: hasVideo(lane) ? "video.fill" : "mic.fill")
+                                    .frame(width: 26)
+                                    .foregroundStyle(Theme.accent)
+                                TextField("Nombre", text: nameBinding(lane.id))
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(maxWidth: 260)
+                                TextField("@usuario (opcional)", text: handleBinding(lane.id))
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(maxWidth: 200)
+                                Spacer()
+                                Text(EditEngine.clock(lane.duration)).monospacedDigit().foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        if !session.project.audioLane.isEmpty {
+                            Label("\(session.project.audioLane.count) efectos de sonido / música del soundboard", systemImage: "music.note")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        Text("Qué sigue").font(.headline)
+                        checklist(String(localized: "Grabación importada"), done: true)
+                        checklist(String(localized: "Audio mejorado, silencios y muletillas fuera"), done: session.project.fix.lastRun != nil)
+                        checklist(String(localized: "Transcripción para subtítulos"), done: session.project.isTranscribed)
+                        checklist(String(localized: "Reels creados"), done: session.project.reels.contains { $0.exportedFile != nil })
+                        BigButton(title: session.project.fix.lastRun == nil ? String(localized: "Siguiente: arreglar el episodio") : String(localized: "Ir a subtítulos"),
+                                  symbol: "arrow.right") {
+                            session.step = session.project.fix.lastRun == nil ? .fix : .captions
+                        }
+                        .padding(.top, 6)
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: .landscape) }
+    }
+
+    private func hasVideo(_ lane: Lane) -> Bool {
+        lane.clips.contains { session.project.mediaItem($0.mediaId)?.hasVideo == true }
+    }
+
+    private func checklist(_ text: String, done: Bool) -> some View {
+        Label(text, systemImage: done ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(done ? Theme.good : Theme.secondary)
+    }
+
+    private func nameBinding(_ laneId: Int) -> Binding<String> {
+        Binding(get: { session.project.laneName(laneId) }, set: { newValue in
+            var p = session.project
+            guard let li = p.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+            if let pid = p.lanes[li].participantId, let pi = p.participants.firstIndex(where: { $0.id == pid }) {
+                p.participants[pi].name = newValue
+            } else {
+                p.lanes[li].name = newValue
+            }
+            session.project = p
+        })
+    }
+
+    private func handleBinding(_ laneId: Int) -> Binding<String> {
+        Binding(get: { session.project.participant(forLane: laneId)?.instagram ?? "" }, set: { newValue in
+            var p = session.project
+            guard let li = p.lanes.firstIndex(where: { $0.id == laneId }) else { return }
+            if let pid = p.lanes[li].participantId, let pi = p.participants.firstIndex(where: { $0.id == pid }) {
+                p.participants[pi].instagram = newValue
+            } else {
+                let id = (p.participants.map(\.id).max() ?? 0) + 1
+                p.participants.append(Participant(id: id, name: p.lanes[li].name, track: laneId, instagram: newValue))
+                p.lanes[li].participantId = id
+            }
+            session.project = p
+        })
+    }
+}
+
+struct ScriptCard: View {
+    let project: Project
+    let seek: (Double) -> Void
+    @State private var expanded = false
+
+    var body: some View {
+        Card {
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(project.segments.sorted { $0.position < $1.position }) { seg in
+                        HStack(alignment: .top) {
+                            Image(systemName: seg.sponsorId != nil ? "megaphone" : "text.alignleft")
+                                .foregroundStyle(Theme.accent).frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(seg.title.isEmpty ? seg.kind.capitalized : seg.title).bold()
+                                if let n = seg.notes, !n.isEmpty { Text(n).font(.caption).foregroundStyle(Theme.secondary) }
+                            }
+                            Spacer()
+                            if let t = seg.actualOffset {
+                                Button(EditEngine.clock(t)) { seek(t) }.buttonStyle(.link).monospacedDigit()
+                            } else if let d = seg.durationEstimate {
+                                Text("~\(Int(d / 60)) min").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                    }
+                    ForEach(project.episode.script) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if !item.title.isEmpty { Text(item.title).bold() }
+                            if !item.text.isEmpty { Text(item.text).font(.callout).foregroundStyle(Theme.secondary).textSelection(.enabled) }
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                Label("Guion de prePod", systemImage: "doc.text").font(.headline)
+            }
+        }
+    }
+}
+
+// MARK: - 2. Fix
+
+struct FixStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var showCuts = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: String(localized: "Arreglar todo"), subtitle: String(localized: "Un botón: sonido de estudio, sin silencios largos y sin “eeeh”. Nada se borra de verdad: puedes deshacer cuando quieras."), step: .fix)
+                    Card {
+                        Toggle(isOn: $session.project.fix.enhanceAudio) {
+                            VStack(alignment: .leading) {
+                                Text("Sonido de estudio").font(.headline)
+                                Text("Separa la voz de todo lo demás —teclas, perro, calle, ventilador— y deja a todos a un volumen parejo").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        if session.project.fix.enhanceAudio {
+                            Picker("Cuánto limpia", selection: $session.project.fix.noiseLevel) {
+                                Text("Natural").tag(1)
+                                Text("Normal").tag(2)
+                                Text("Máximo").tag(3)
+                            }
+                            .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
+                            Text(session.project.fix.noiseLevel == 3
+                                 ? String(localized: "Saca todo el ruido; la voz puede sonar un poco menos natural.")
+                                 : session.project.fix.noiseLevel == 1
+                                 ? String(localized: "Deja un poco del ambiente para que la voz suene más natural; algo del ruido queda de fondo.")
+                                 : String(localized: "El punto medio: el ruido casi desaparece y la voz sigue sonando natural."))
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                            if !VoiceIsolation.isAvailable {
+                                Text("Esta Mac no trae el aislador de voz de Apple: se usará otra limpieza, que saca menos ruido.").font(.caption).foregroundStyle(.orange)
+                            }
+                        }
+                        Divider()
+                        Toggle(isOn: $session.project.fix.gateOthers) {
+                            VStack(alignment: .leading) {
+                                Text("Silenciar a quien no habla").font(.headline)
+                                Text("Baja la pista de quien no está hablando: teclas, perro, sirenas o ruidos del otro quedan al fondo. Espera un momento antes de bajar y lo hace suave, para que las conversaciones rápidas no suenen a bombeo. Se aplica en la vista previa y al exportar.").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        .disabled(session.project.lanes.count < 2)
+                        if session.project.fix.gateOthers && session.project.lanes.count >= 2 {
+                            Picker("Cuánto baja", selection: $session.project.fix.gateDB) {
+                                Text("Suave").tag(8.0)
+                                Text("Normal").tag(12.0)
+                                Text("Fuerte").tag(18.0)
+                            }
+                            .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
+                        }
+                        Divider()
+                        DeclickRow(session: session)
+                        Divider()
+                        NoiseProfileRow(session: session)
+                        Divider()
+                        VoicesMatchRow(session: session)
+                        Divider()
+                        Toggle(isOn: Binding(get: { session.project.conversationPan }, set: { on in
+                            session.project.conversationPan = on
+                            if on { session.project.applyConversationPans() }
+                        })) {
+                            VStack(alignment: .leading) {
+                                Text("Panorama de conversación").font(.headline)
+                                Text("Cada persona suena un poco hacia el lado en que aparece en pantalla (como máximo un 30 %). En auriculares se distingue mejor quién habla; en un altavoz no se pierde nadie.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .disabled(session.project.lanes.count < 2)
+                        if session.project.conversationPan && session.project.lanes.count >= 2 {
+                            HStack(spacing: 10) {
+                                ForEach(session.project.lanesOnScreen) { lane in
+                                    Text(String(localized: "\(session.project.laneName(lane.id)) \(lane.pan < -0.01 ? "◀" : lane.pan > 0.01 ? "▶" : "●") \(String(format: "%.0f %%", abs(lane.pan) * 100))"))
+                                        .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                                }
+                                Spacer()
+                                Button("Según el orden en pantalla") { session.project.applyConversationPans() }.controlSize(.small)
+                            }
+                        }
+                        Divider()
+                        Toggle(isOn: $session.project.fix.roomTone) {
+                            VStack(alignment: .leading) {
+                                Text("Tono de sala").font(.headline)
+                                Text("Toma un segundo del ambiente propio de cada persona (el aire de su sala) y lo pone donde su pista no tiene nada: antes de que empiece a grabar, después de que termine y bajo los pitidos. Y suaviza cada unión de corte para que no haga clic. Así los cortes no suenan «muertos».")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Divider()
+                        Toggle(isOn: $session.project.fix.removeSilences) {
+                            VStack(alignment: .leading) {
+                                Text("Quitar silencios").font(.headline)
+                                Text("Pausas largas donde nadie habla").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        if session.project.fix.removeSilences {
+                            HStack {
+                                Text("Suave").font(.caption)
+                                Slider(value: Binding(get: { 2.0 - session.project.fix.minSilence },
+                                                      set: { session.project.fix.minSilence = 2.0 - $0 }), in: 0.5...1.6)
+                                Text("Dinámico").font(.caption)
+                            }
+                            Text("Cortamos pausas de más de \(String(format: "%.1f", session.project.fix.minSilence)) segundos")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                        Divider()
+                        Toggle(isOn: $session.project.fix.removeFillers) {
+                            VStack(alignment: .leading) {
+                                Text("Quitar muletillas").font(.headline)
+                                Text("“eh”, “emm”, “mmm”…").font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                        if session.project.fix.removeFillers {
+                            Toggle(isOn: $session.project.fix.removeWordFillers) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("También “este”, “o sea”, “bueno”, “pues”…").font(.caption)
+                                    Text("Solo quitamos las que suenan a muletilla (sueltas entre pausas o repetidas). Las dudosas te las dejamos para que decidas.")
+                                        .font(.caption2).foregroundStyle(Theme.secondary)
+                                }
+                            }
+                            Text("Las frases repetidas («es que, es que…») y los sonidos sin palabras también quedan como sugerencia.")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    BigButton(title: session.project.fix.lastRun == nil ? String(localized: "Arreglar todo") : String(localized: "Volver a arreglar"),
+                              symbol: "wand.and.stars", disabled: session.isBusy) {
+                        session.fixEverything()
+                    }
+                    if !session.project.isTranscribed && session.project.fix.lastRun == nil {
+                        Text("La primera vez también escribimos la transcripción (se hace en tu Mac, sin internet, tarda unos minutos).")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                    }
+                    if let summary = session.fixSummary {
+                        Card {
+                            Label(summary, systemImage: "checkmark.seal.fill").foregroundStyle(Theme.good)
+                            HStack {
+                                Button("Siguiente: subtítulos") { session.step = .captions }.buttonStyle(.borderedProminent)
+                                Button("Deshacer cortes") { session.undoFix() }
+                            }
+                        }
+                    }
+                    if !session.pendingSuggestions.isEmpty {
+                        SuggestionsCard(session: session)
+                    }
+                    Text("Para quitar un trozo a mano: arrástralo en la línea de tiempo de abajo y pulsa “Cortar este trozo”. Lo ves en la lista de cortes y puedes desactivarlo. Para el volumen, los fades o el desfase de una persona, toca su nombre en el timeline.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                    if !session.project.cuts.isEmpty {
+                        DisclosureGroup(String(localized: "Ver los \(session.project.cuts.count) cortes (\(EditEngine.clock(session.project.enabledCuts.reduce(0) { $0 + $1.length })) en total)"),
+                                        isExpanded: $showCuts) {
+                            CutList(session: session)
+                        }
+                    }
+                    Card {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "slider.horizontal.3").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Studio").font(.headline)
+                                Text("Consola, ecualizador por bandas, compresor completo, de-esser y puerta por persona. Para quien quiere llegar más lejos; todo lo de arriba sigue funcionando sin entrar aquí.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                                if session.project.lanes.contains(where: \.tunedInStudio) {
+                                    Label("Hay voces ajustadas en Studio", systemImage: "waveform.badge.magnifyingglass").font(.caption).foregroundStyle(Theme.accent)
+                                }
+                            }
+                            Spacer()
+                            OpenStudioButton().buttonStyle(.bordered)
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 520)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: .landscape) }
+    }
+}
+
+struct CutList: View {
+    @ObservedObject var session: ProjectSession
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: 4) {
+            ForEach(session.project.cuts.sorted { $0.start < $1.start }) { cut in
+                HStack {
+                    Toggle("", isOn: binding(cut.id)).labelsHidden()
+                    Image(systemName: icon(cut.kind)).foregroundStyle(cut.suggested == true && cut.reviewed != true ? Color.orange : Theme.secondary).frame(width: 18)
+                    Button(EditEngine.clock(cut.start)) { session.seek(timeline: max(0, cut.start - 2)) }
+                        .buttonStyle(.link).monospacedDigit()
+                    Text(cut.label.isEmpty ? String(format: "%.1f s", cut.length) : cut.label)
+                        .lineLimit(1).foregroundStyle(cut.enabled ? .primary : Theme.secondary)
+                    Spacer()
+                    Text(String(format: "%.1f s", cut.length)).font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+        .padding(.top, 6)
+    }
+    private func icon(_ k: Cut.Kind) -> String {
+        switch k {
+        case .silence: return "speaker.slash"
+        case .filler: return "text.bubble"
+        case .manual: return "scissors"
+        case .imported: return "arrow.down.doc"
+        case .repeated: return "arrow.uturn.backward"
+        }
+    }
+    private func binding(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { session.project.cuts.first { $0.id == id }?.enabled ?? false },
+                set: { v in if let i = session.project.cuts.firstIndex(where: { $0.id == id }) {
+                    session.project.cuts[i].enabled = v
+                    session.project.cuts[i].reviewed = true
+                } })
+    }
+}
+
+/// Lo que «Arreglar» no se animó a quitar solo: muletillas dudosas, frases repetidas y sonidos sin palabras.
+/// Cada una se escucha y se decide; nada se quita hasta que la persona lo marque.
+struct SuggestionsCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var showAll = false
+
+    var body: some View {
+        let pending = session.pendingSuggestions
+        Card {
+            HStack {
+                Label("Para revisar (\(pending.count))", systemImage: "questionmark.bubble").font(.headline)
+                Spacer()
+            }
+            Text("No estamos seguros de que sean muletillas o repeticiones. Escúchalas y decide; las que no toques se quedan en el episodio.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(showAll ? pending : Array(pending.prefix(8))) { cut in
+                    HStack(spacing: 8) {
+                        Button { session.seek(timeline: max(0, cut.start - 1.5)) } label: { Image(systemName: "play.circle") }
+                            .buttonStyle(.borderless).help("Escuchar desde un poco antes")
+                        Text(EditEngine.clock(cut.start)).font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                        Text(cut.label).lineLimit(1)
+                        Spacer()
+                        Button("Quitar") { session.decide(cut.id, remove: true) }.controlSize(.small)
+                        Button("Dejar") { session.decide(cut.id, remove: false) }.controlSize(.small)
+                    }
+                }
+                if pending.count > 8 {
+                    Button(showAll ? String(localized: "Ver menos") : String(localized: "Ver las \(pending.count)")) { showAll.toggle() }.buttonStyle(.link).font(.caption)
+                }
+            }
+            HStack {
+                Button("Quitar todas") { session.decideAllPending(remove: true) }
+                Button("Dejar todas como están") { session.decideAllPending(remove: false) }
+            }
+            .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - 3. Captions
+
+struct CaptionsStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var editing: Int?
+    @State private var draft = ""
+    @State private var filter = ""
+    @State private var askRelisten = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
+                StepHeader(title: String(localized: "Subtítulos"), subtitle: String(localized: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla."), step: .captions)
+                    HStack(spacing: 8) {
+                        Button { session.saveSubtitles(asText: false) } label: { Label("Guardar subtítulos (.srt)", systemImage: "square.and.arrow.down") }
+                        Button { session.saveSubtitles(asText: true) } label: { Label("Guardar transcripción (.txt)", systemImage: "doc.text") }
+                        Spacer()
+                    }
+                    .disabled(!session.project.isTranscribed)
+                    .controlSize(.small)
+                if !session.project.isTranscribed {
+                    Card {
+                        Text("Todavía no hay transcripción.").font(.headline)
+                        Text("La escribimos en tu Mac con inteligencia artificial, sin subir nada a internet.").foregroundStyle(Theme.secondary)
+                        BigButton(title: String(localized: "Escribir transcripción"), symbol: "text.bubble", disabled: session.isBusy) { session.transcribe() }
+                    }
+                } else {
+                    styleCard
+                    syncCard
+                    phraseList
+                }
+            }
+            .padding(.leading, 28).padding(.vertical, 28)
+            .frame(minWidth: 460, maxWidth: 580)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: .vertical) }
+    }
+
+    private var styleCard: some View {
+        Card {
+            HStack {
+                Toggle("Mostrar subtítulos", isOn: $session.project.captionStyle.enabled).font(.headline)
+                Spacer()
+                Toggle("Resaltar palabra", isOn: $session.project.captionStyle.karaoke).font(.caption)
+            }
+            CaptionStyleEditor(style: $session.project.captionStyle)
+            Text("También puedes arrastrar los subtítulos sobre el video para ponerlos donde quieras.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
+        }
+        .onAppear { session.captionDragTarget = .episode }
+        .onDisappear { if session.captionDragTarget == .episode { session.captionDragTarget = nil } }
+    }
+
+    /// Que los subtítulos salgan cuando se escucha la voz: ajustar al audio o escribir todo de nuevo.
+    private var syncCard: some View {
+        Card {
+            HStack {
+                Text("Que coincidan con la voz").font(.headline)
+                Spacer()
+            }
+            if !session.project.wordsSynced {
+                Label("Los subtítulos de este episodio pueden aparecer un poco antes de que hablen.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            if let note = session.captionsNote {
+                Text(note).font(.caption).foregroundStyle(Theme.secondary)
+            }
+            HStack(spacing: 8) {
+                Button { session.syncSubtitles() } label: {
+                    Label(session.project.wordsSynced ? String(localized: "Ajustar de nuevo") : String(localized: "Ajustar al audio"), systemImage: "waveform.badge.magnifyingglass")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Corre cada frase a donde suena la voz. No cambia el texto.")
+                Button { askRelisten = true } label: { Label("Volver a escuchar todo", systemImage: "ear") }
+                    .help("Escribe la transcripción de nuevo escuchando el episodio")
+                Spacer()
+            }
+            .controlSize(.small)
+            .disabled(session.isBusy)
+            Text("Si quitaste silencios, se vuelven a buscar con los tiempos nuevos. Para un solo reel: Entregar → Reels → Subtítulos.")
+                .font(.caption2).foregroundStyle(Theme.secondary)
+        }
+        .confirmationDialog("¿Volver a escuchar todo el episodio?", isPresented: $askRelisten) {
+            Button("Escribir todo de nuevo") { session.relistenEpisode() }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se escribe la transcripción otra vez y se pierden las correcciones que hiciste a mano en el texto. Tarda unos minutos. Los reels con texto propio no cambian.")
+        }
+    }
+
+    private var phraseList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Texto").font(.headline)
+                Spacer()
+                TextField("Buscar…", text: $filter).textFieldStyle(.roundedBorder).frame(width: 180)
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    ForEach(session.phrases().filter { filter.isEmpty || $0.text.localizedCaseInsensitiveContains(filter) }) { ph in
+                        PhraseRow(session: session, phrase: ph, editing: $editing, draft: $draft)
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+/// Estilo de subtítulos: presets, colores, tamaño y posición. Sirve para el episodio y para los reels.
+struct CaptionStyleEditor: View {
+    @Binding var style: CaptionStyle
+    var compact = false
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(CaptionStyle.presets, id: \.id) { preset in
+                    Button {
+                        var s = preset.style
+                        s.enabled = style.enabled
+                        s.freeX = style.freeX; s.freeY = style.freeY
+                        style = s
+                    } label: {
+                        VStack(spacing: 6) {
+                            Text(preset.style.uppercase ? String(localized: "HOLA") : String(localized: "Hola"))
+                                .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
+                                .foregroundStyle(Color(hex: preset.style.textColor))
+                                + Text(preset.style.uppercase ? String(localized: " MUNDO") : String(localized: " mundo"))
+                                .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
+                                .foregroundStyle(Color(hex: preset.style.highlightColor))
+                            Text(preset.title).font(.caption)
+                        }
+                        .frame(width: compact ? 88 : 110, height: compact ? 58 : 70)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(preset.style.backgroundColor != nil ? Color.black : Theme.panelStrong))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style.preset == preset.id ? Theme.accent : Theme.stroke, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        HStack(spacing: 14) {
+            ColorPicker(String(localized: "Texto"), selection: colorBinding(\.textColor))
+            ColorPicker(String(localized: "Resaltado"), selection: colorBinding(\.highlightColor))
+            ColorPicker(String(localized: "Borde"), selection: colorBinding(\.outlineColor))
+            Toggle("MAYÚSCULAS", isOn: $style.uppercase)
+        }
+        .font(.caption)
+        HStack {
+            Picker("Tamaño", selection: $style.size) {
+                Text("Chico").tag(CaptionStyle.Size.small)
+                Text("Mediano").tag(CaptionStyle.Size.medium)
+                Text("Grande").tag(CaptionStyle.Size.large)
+            }
+            Picker("Posición", selection: Binding(get: { style.freeX == nil ? style.position : nil },
+                                                 set: { if let p = $0 { style.position = p; style.freeX = nil; style.freeY = nil } })) {
+                Text("Arriba").tag(Optional(CaptionStyle.Position.top))
+                Text("Centro").tag(Optional(CaptionStyle.Position.center))
+                Text("Abajo").tag(Optional(CaptionStyle.Position.bottom))
+            }
+        }
+        .pickerStyle(.segmented)
+        .font(.caption)
+        if style.freeX != nil {
+            HStack {
+                Text("Posición libre (arrastrada sobre el video).").font(.caption2).foregroundStyle(Theme.secondary)
+                Button("Volver a abajo") { style.freeX = nil; style.freeY = nil; style.position = .bottom }.controlSize(.mini)
+            }
+        }
+    }
+
+    private func colorBinding(_ kp: WritableKeyPath<CaptionStyle, String>) -> Binding<Color> {
+        Binding(get: { Color(hex: style[keyPath: kp]) },
+                set: { style[keyPath: kp] = $0.hex; style.preset = "custom" })
+    }
+}
+
+struct PhraseRow: View {
+    @ObservedObject var session: ProjectSession
+    let phrase: ProjectSession.Phrase
+    @Binding var editing: Int?
+    @Binding var draft: String
+    var reel: Reel? = nil               // dentro de un reel: cortar/devolver solo en ese reel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(EditEngine.clock(phrase.start)) { session.seek(timeline: phrase.start) }
+                .buttonStyle(.link).monospacedDigit().font(.caption)
+                .frame(width: 52, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.project.laneName(phrase.lane)).font(.caption2.bold()).foregroundStyle(Theme.accent)
+                if editing == phrase.id {
+                    TextField("", text: $draft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { commit() }
+                    HStack {
+                        Button("Guardar") { commit() }.buttonStyle(.borderedProminent).controlSize(.small)
+                        Button("Cancelar") { editing = nil }.controlSize(.small)
+                    }
+                } else {
+                    Text(phrase.text)
+                        .strikethrough(phrase.isCut)
+                        .foregroundStyle(phrase.isCut ? Theme.secondary : .primary)
+                        .textSelection(.enabled)
+                        .onTapGesture(count: 2) { draft = phrase.text; editing = phrase.id }
+                }
+            }
+            Spacer(minLength: 4)
+            if editing != phrase.id {
+                Button { draft = phrase.text; editing = phrase.id } label: { Image(systemName: "pencil") }
+                    .buttonStyle(.borderless).help("Corregir texto")
+                Button { if let reel { session.togglePhraseCut(phrase, reel: reel) } else { session.togglePhraseCut(phrase) } } label: {
+                    Image(systemName: phrase.isCut ? "arrow.uturn.backward" : "scissors")
+                }
+                .buttonStyle(.borderless)
+                .help(phrase.isCut ? String(localized: "Volver a poner esta frase") : (reel != nil ? String(localized: "Quitar esta frase solo de este reel") : String(localized: "Quitar esta frase del video")))
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+    }
+
+    private func commit() {
+        session.updatePhrase(phrase, text: draft)
+        editing = nil
+    }
+}
+
+// MARK: - 4. Reels
+
+/// Título de gancho: una frase grande arriba los primeros segundos, para que quien pasa se quede.
+struct ReelHookCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+    @State private var draft = ""
+
+    var body: some View {
+        Card {
+            Toggle(isOn: Binding(get: { reel.hook != nil }, set: { on in
+                session.setReelHook(reel.id, on ? (draft.isEmpty ? reel.title : draft) : nil)
+                if on, draft.isEmpty { draft = reel.title }
+            })) {
+                Label("Título de gancho", systemImage: "textformat.size.larger").font(.headline)
+            }
+            Text("Una frase grande arriba durante los primeros \(Int(Reel.hookSeconds)) segundos, para que quien pasa por el reel se quede a verlo.")
+                .font(.caption).foregroundStyle(Theme.secondary)
+            if reel.hook != nil {
+                TextField("Ej.: «Nadie te cuenta esto del coaching»", text: $draft, axis: .vertical)
+                    .lineLimit(1...3)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { session.setReelHook(reel.id, draft) }
+                    .onChange(of: draft) { _, v in
+                        let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !t.isEmpty { session.setReelHook(reel.id, v) }
+                    }
+                if draft.count > 45 {
+                    Text("Corto se lee mejor: en un celular caben unas 6 palabras por línea.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
+        }
+        .onAppear { draft = reel.hook ?? "" }
+        .onChange(of: reel.id) { _, _ in draft = reel.hook ?? "" }
+    }
+}
+
+struct ReelsStep: View {
+    enum ReelTab: String, CaseIterable, Identifiable {
+        case look, text, sound, broll, cintillos
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .look: return String(localized: "Diseño")
+            case .text: return String(localized: "Subtítulos")
+            case .sound: return String(localized: "Música")
+            case .broll: return "B-roll"
+            case .cintillos: return String(localized: "Cintillos")
+            }
+        }
+    }
+    @State private var tab: ReelTab = .look
+    private var pickReelHint: some View {
+        Text("Toca «Ver» en un reel de la izquierda para corregir su texto y editar su música, b-roll y cintillos.")
+            .font(.caption).foregroundStyle(Theme.secondary)
+    }
+    @ObservedObject var session: ProjectSession
+    @State private var previewing: UUID?
+    @State private var publishing: Reel?
+
+    /// El reel que se está viendo (si sigue existiendo).
+    private var currentReel: Reel? { previewing.flatMap { id in session.project.reels.first { $0.id == id } } }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    StepHeader(title: String(localized: "Reels, TikTok y Shorts"), subtitle: String(localized: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos."), step: .reels)
+                    if session.project.moments.isEmpty && session.project.reels.isEmpty {
+                        Card {
+                            Label("Este episodio no tiene momentos marcados", systemImage: "bookmark.slash").font(.headline)
+                            Text("Márcalos aquí mismo con “Marcar momento” debajo del video, o en postPod web (tecla M) y usa “Traer de nuevo”.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    } else if !session.project.moments.isEmpty {
+                        HStack {
+                            Label("\(session.project.moments.count) momentos de postPod", systemImage: "bookmark.fill")
+                                .foregroundStyle(Theme.accent)
+                            Spacer()
+                            Button("Restaurar desde los momentos") {
+                                session.project.reels = session.project.reelsFromMoments()
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Vuelve a crear los reels tal como vienen de postPod")
+                        }
+                        .font(.callout)
+                    }
+                    // Cada tarjeta busca su reel por id: borrar uno no deja tarjetas apuntando a un índice que ya no existe (antes la app se cerraba)
+                    ForEach(session.project.reels) { reel in
+                        ReelCard(reel: reelBinding(reel), isPreviewing: previewing == reel.id, duration: session.project.duration, preview: {
+                            show(reel)
+                        }, remove: {
+                            removeReel(reel.id)
+                        }, export: { session.exportReel(reel) }, publish: { publishing = reel }, busy: session.isBusy)
+                    }
+                    AIMomentsCard(session: session)
+                    Card {
+                        Label("Marcar un momento nuevo", systemImage: "bookmark.fill").font(.headline)
+                        Text("Mira el episodio y, cuando pase algo bueno, toca “Marcar momento” debajo del video. Se crea un reel de 60 segundos desde ahí; luego ajustas inicio y fin.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        if session.previewWindow != nil {
+                            Button("Ver el episodio completo") {
+                                previewing = nil
+                                session.setPreview(format: .vertical, window: nil, look: session.project.reelLook)
+                            }
+                        }
+                    }
+                    if !session.project.reels.isEmpty {
+                        let n = session.project.reels.filter(\.selected).count
+                        BigButton(title: (session.isBusy ? String(localized: "Poner en cola: ") : String(localized: "Exportar ")) + "\(n) \(n == 1 ? String(localized: "reel") : String(localized: "reels"))",
+                                  symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up",
+                                  disabled: n == 0) { if session.isBusy { session.enqueue(.reels) } else { session.exportReels() } }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 460, maxWidth: 560)
+            VStack(spacing: 12) {
+                PreviewPane(session: session, allowedFormats: [.vertical], showInspector: false)
+                    .frame(minHeight: 380)
+                // Lo del reel, por pestañas: así el panel de lo que se edita no se monta sobre el diseño
+                Picker("", selection: $tab) {
+                    ForEach(ReelTab.allCases) { t in Text(t.title).tag(t) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 520)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        switch tab {
+                        case .look:
+                            if let reel = currentReel { ReelHookCard(session: session, reel: reel) }
+                            ReelLookCard(session: session, reel: currentReel)
+                        case .text:
+                            // Arriba cómo se ven los subtítulos; abajo el texto del reel para corregirlo
+                            ReelCaptionsCard(session: session, reel: currentReel)
+                            if let reel = currentReel { ReelTextCard(session: session, reel: reel) } else { pickReelHint }
+                        case .sound:
+                            if let reel = currentReel {
+                                ReelSoundCard(session: session, reel: reel)
+                                if case .reelSound = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        case .broll:
+                            if let reel = currentReel {
+                                ReelBRollCard(session: session, reel: reel)
+                                if case .reelBRoll = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        case .cintillos:
+                            if let reel = currentReel {
+                                ReelCintilloCard(session: session, reel: reel)
+                                if case .reelCintillo = session.selectedTrack { Card { TrackInspector(session: session) } }
+                            } else { pickReelHint }
+                        }
+                    }
+                    .frame(maxWidth: 520)
+                }
+            }
+            .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onChange(of: session.selectedTrack) { _, sel in
+            // Al elegir una música, un b-roll o un cintillo del reel, se abre su pestaña sola
+            switch sel {
+            case .reelSound: tab = .sound
+            case .reelBRoll: tab = .broll
+            case .reelCintillo: tab = .cintillos
+            default: break
+            }
+        }
+        .onAppear {
+            if let r = session.project.reels.first { show(r) }
+            else { session.setPreview(format: .vertical, window: nil, look: session.project.reelLook); session.captionDragTarget = .allReels }
+        }
+        .onDisappear { session.setPreview(format: .landscape); session.captionDragTarget = nil }
+        .sheet(item: $publishing) { reel in PublishReelSheet(session: session, reel: reel) }
+        // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
+        .onChange(of: session.project.reelLook) { _, _ in refresh() }
+        .onChange(of: currentReel?.look) { _, _ in refresh() }
+        .onChange(of: currentReel?.cuts) { _, _ in refresh() }
+        .onChange(of: currentReel?.brolls) { _, _ in refresh() }
+        .onChange(of: currentReel?.music) { _, _ in refresh() }
+        .onChange(of: currentReel?.cintillos) { _, _ in refresh() }
+    }
+
+    private func reelBinding(_ reel: Reel) -> Binding<Reel> {
+        Binding(get: { session.project.reels.first { $0.id == reel.id } ?? reel },
+                set: { v in if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i] = v } })
+    }
+
+    private func removeReel(_ id: UUID) {
+        if previewing == id {
+            previewing = nil
+            session.selectedTrack = nil
+            session.captionDragTarget = .allReels
+            session.setPreview(format: .vertical, window: nil, look: session.project.reelLook)
+        }
+        if case .reelBRoll(let rid, _) = session.selectedTrack ?? .lane(-1), rid == id { session.selectedTrack = nil }
+        session.project.reels.removeAll { $0.id == id }
+    }
+
+    private func show(_ reel: Reel) {
+        previewing = reel.id
+        session.setPreview(format: .vertical, window: (reel.start, reel.end), look: session.project.look(for: reel), reel: reel)
+        session.captionDragTarget = reel.look?.captionStyle != nil ? .reel(reel.id) : .allReels
+        session.player.seek(to: .zero)
+        session.player.play()
+    }
+
+    private func refresh() {
+        session.setPreview(format: .vertical, window: session.previewWindow, look: session.project.look(for: currentReel), reel: currentReel)
+        session.captionDragTarget = captionTarget
+    }
+
+    /// Arrastrar los subtítulos cambia el estilo propio del reel si lo tiene; si no, el de todos los reels.
+    private var captionTarget: ProjectSession.CaptionTarget {
+        if let r = currentReel, r.look?.captionStyle != nil { return .reel(r.id) }
+        return .allReels
+    }
+}
+
+/// Subtítulos de los reels (pestaña aparte): si salen, y con qué estilo. Para todos o solo para el reel que se ve.
+struct ReelCaptionsCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel?
+
+    private var own: Bool { reel?.look != nil }
+    private var look: Binding<ReelLook> {
+        if let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+            return Binding(get: { session.project.reels[i].look ?? session.project.reelLook },
+                           set: { session.project.reels[i].look = $0 })
+        }
+        return $session.project.reelLook
+    }
+
+    var body: some View {
+        let p = session.project
+        let l = look.wrappedValue
+        Card {
+            HStack {
+                Text(own ? String(localized: "Subtítulos de este reel") : String(localized: "Subtítulos de todos los reels")).font(.headline)
+                Spacer()
+                if reel != nil {
+                    Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
+                        guard let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+                        session.project.reels[i].look = on ? session.project.reelLook : nil
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini).font(.caption)
+                }
+            }
+            Text(own ? String(localized: "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con lo de todos.")
+                     : String(localized: "Aparte del episodio: el estilo de los subtítulos del video completo se cambia en Preparar → Subtítulos."))
+                .font(.caption).foregroundStyle(Theme.secondary)
+            if !p.isTranscribed {
+                Text("Este episodio no tiene transcripción. Hazla en Preparar → Subtítulos para que los reels lleven subtítulos.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            Toggle("Mostrar subtítulos en los reels", isOn: look.captions).font(.callout)
+            if l.captions {
+                Divider()
+                Toggle("Estilo propio para los reels (distinto al del episodio)", isOn: Binding(
+                    get: { l.captionStyle != nil },
+                    set: { on in look.wrappedValue.captionStyle = on ? (l.captionStyle ?? p.captionStyle) : nil }))
+                    .font(.caption)
+                if l.captionStyle != nil {
+                    Toggle("Resaltar palabra", isOn: Binding(get: { (look.wrappedValue.captionStyle ?? p.captionStyle).karaoke },
+                                                             set: { look.wrappedValue.captionStyle?.karaoke = $0 })).font(.caption)
+                    CaptionStyleEditor(style: Binding(get: { look.wrappedValue.captionStyle ?? p.captionStyle },
+                                                      set: { look.wrappedValue.captionStyle = $0 }))
+                    Text("Arrastra el recuadro de los subtítulos sobre el video para ponerlos donde quieras en el reel.")
+                        .font(.caption2).foregroundStyle(Theme.secondary)
+                } else {
+                    Text("Usan el mismo estilo del episodio (Preparar → Subtítulos), acomodado al formato vertical.")
+                        .font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+}
+
+/// Diseño y marca de los reels: para todos, o solo para el reel que se está viendo.
+struct ReelLookCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel?
+
+    private var own: Bool { reel?.look != nil }
+    /// Lo que se edita: el diseño propio del reel o el de todos.
+    private var look: Binding<ReelLook> {
+        if let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+            return Binding(get: { session.project.reels[i].look ?? session.project.reelLook },
+                           set: { session.project.reels[i].look = $0 })
+        }
+        return $session.project.reelLook
+    }
+
+    var body: some View {
+        let p = session.project
+        let onePerson = p.lanes.count <= 1
+        let choices: [LayoutTemplate] = onePerson ? [.solo, .studio] : [.auto, .solo, .stack, .pip, .spotlight, .grid, .sideBySide, .studio]
+        let l = look.wrappedValue
+        let chosen: LayoutTemplate = (onePerson && l.layout == .auto) ? .solo : l.layout
+        Card {
+            HStack {
+                Text(own ? String(localized: "Diseño de este reel") : String(localized: "Diseño de todos los reels")).font(.headline)
+                Spacer()
+                ReelTemplateMenu(look: look)
+                if reel != nil {
+                    Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
+                        guard let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
+                        session.project.reels[i].look = on ? session.project.reelLook : nil
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini).font(.caption)
+                }
+            }
+            Text(own ? String(localized: "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con el diseño de todos.")
+                     : String(localized: "Aparte del episodio: lo que cambies aquí no toca el video completo."))
+                .font(.caption).foregroundStyle(Theme.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92))], spacing: 6) {
+                ForEach(choices) { t in
+                    Button { look.wrappedValue.layout = t } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: t.symbol).font(.title3)
+                            Text(t == .auto ? String(localized: "Quien habla") : t.title).font(.caption2)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(chosen == t ? Theme.panelStrong : .clear))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(chosen == t ? Theme.accent : Theme.stroke))
+                    }
+                    .buttonStyle(.plain)
+                    .help(t == .auto ? String(localized: "Pantalla completa para quien está hablando") : t.help)
+                }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                if l.layout == .auto || l.layout == .solo {
+                    Toggle("Con marco de estudio (el fondo detrás)", isOn: look.options.soloStudio)
+                }
+                if l.layout == .grid && !onePerson {
+                    Toggle("Quien habla en grande, los demás en cuadritos", isOn: look.options.gridSpeakerBig)
+                }
+                if l.layout == .pip && !onePerson {
+                    Toggle("En grande quien habla", isOn: look.options.pipFollowSpeaker)
+                }
+            }
+            .font(.caption)
+            if !onePerson {
+                Divider()
+                HStack {
+                    Text("Orden en pantalla").font(.caption.bold())
+                    Spacer()
+                    Toggle("Propio", isOn: Binding(get: { l.laneOrder != nil },
+                                                   set: { on in look.wrappedValue.laneOrder = on ? (l.laneOrder ?? p.lanesOnScreen.map(\.id)) : nil }))
+                        .toggleStyle(.checkbox).controlSize(.mini).font(.caption)
+                }
+                let order: [Int] = l.laneOrder ?? p.lanesOnScreen.map(\.id)
+                let ids = order + p.lanes.map(\.id).filter { !order.contains($0) }
+                ForEach(Array(ids.enumerated()), id: \.element) { i, laneId in
+                    HStack(spacing: 8) {
+                        Text("\(i + 1)").font(.caption.bold()).frame(width: 18, height: 18).background(Circle().fill(Theme.panelStrong))
+                        Text(p.laneName(laneId)).font(.caption)
+                        Spacer()
+                        Button { session.setReelLanePosition(laneId, i, reelId: own ? reel?.id : nil) } label: { Image(systemName: "chevron.up") }
+                            .disabled(i == 0 || l.laneOrder == nil).help("Subir")
+                        Button { session.setReelLanePosition(laneId, i + 2, reelId: own ? reel?.id : nil) } label: { Image(systemName: "chevron.down") }
+                            .disabled(i == ids.count - 1 || l.laneOrder == nil).help("Bajar")
+                    }
+                    .controlSize(.small)
+                }
+                Text(l.laneOrder == nil ? String(localized: "Usa el orden del episodio. Marca «Propio» para cambiarlo solo en los reels.") : String(localized: "1 = arriba (o izquierda). En Ventanita y Protagonista, el primero va en grande."))
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            Divider()
+            Text("Marca").font(.caption.bold())
+            Toggle("Fondo detrás del video", isOn: look.showBackground).font(.caption)
+            brandRow(kind: "background", label: String(localized: "Fondo solo para reels"), file: l.backgroundFile, fallback: p.backgroundFile)
+            Toggle("Logo arriba a la derecha", isOn: look.showLogo).font(.caption)
+            brandRow(kind: "logo", label: String(localized: "Logo solo para reels"), file: l.logoFile, fallback: p.logoFile)
+            Toggle("Nombres de las personas", isOn: look.showNames).font(.caption)
+            Divider()
+            Text("Sonido").font(.caption.bold())
+            Toggle("Música y efectos del episodio", isOn: look.music).font(.caption)
+            Text("Los subtítulos de los reels se ajustan en la pestaña «Subtítulos».").font(.caption2).foregroundStyle(Theme.secondary)
+            if !l.music {
+                if let reel {
+                    HStack {
+                        Text("Música de este reel").font(.caption.bold())
+                        Spacer()
+                        Button { session.importSounds(placeAt: session.playheadTimeline, reelId: reel.id) } label: { Label("Agregar…", systemImage: "music.note.list") }
+                            .controlSize(.mini)
+                    }
+                    if reel.music.isEmpty {
+                        Text("Sin música del episodio. Agrega una canción solo para este reel: empieza al inicio del reel y, si es más corta, se repite hasta el final.")
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
+                    ForEach(reel.music) { m in
+                        let sel = session.selectedTrack == .reelSound(reel.id, m.id)
+                        Button {
+                            session.selectedTrack = .reelSound(reel.id, m.id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "music.note").frame(width: 18).foregroundStyle(sel ? Theme.accent : .white)
+                                Text(session.project.mediaItem(m.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Música")).lineLimit(1).font(.caption)
+                                Spacer()
+                                Text("\(EditEngine.clock(m.tlStart))\(m.loop ? String(localized: " · bucle") : "") · \(Int(m.volume * 100)) %").font(.caption2).monospacedDigit().foregroundStyle(Theme.secondary)
+                            }
+                            .padding(6)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(sel ? Theme.panelStrong : Theme.panel))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Text("Sin música del episodio en los reels. Al ver un reel puedes agregarle una canción propia.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+            if !onePerson {
+                Divider()
+                Text("Encuadre de cada persona").font(.caption.bold())
+                ForEach(p.lanes) { lane in
+                    HStack {
+                        Text(p.laneName(lane.id)).font(.caption).frame(width: 90, alignment: .leading)
+                        Slider(value: Binding(get: { session.project.laneCrop[lane.id] ?? 0.5 },
+                                              set: { session.project.laneCrop[lane.id] = $0 }), in: 0...1)
+                    }
+                }
+                Text("El encuadre vale para todos los reels.").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+        }
+    }
+
+    private func brandRow(kind: String, label: String, file: String?, fallback: String?) -> some View {
+        HStack(spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong)
+                if let f = file ?? fallback, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).padding(3)
+                } else {
+                    Image(systemName: kind == "logo" ? "seal" : "photo").foregroundStyle(Theme.secondary)
+                }
+            }
+            .frame(width: 40, height: 30)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.caption)
+                Text(file != nil ? String(localized: "Propio de los reels") : (fallback != nil ? String(localized: "Se usa el del podcast") : String(localized: "No hay; elige uno")))
+                    .font(.caption2).foregroundStyle(Theme.secondary)
+            }
+            Spacer()
+            Button(file == nil ? String(localized: "Elegir…") : String(localized: "Cambiar…")) { session.chooseReelImage(kind: kind, reelId: own ? reel?.id : nil) }
+                .controlSize(.mini)
+            if file != nil {
+                Button { session.setReelImage(kind: kind, reelId: own ? reel?.id : nil, file: nil) } label: { Image(systemName: "xmark.circle") }
+                    .buttonStyle(.borderless).controlSize(.mini).help("Volver al del podcast")
+            }
+        }
+    }
+}
+
+struct ReelCard: View {
+    @Binding var reel: Reel
+    let isPreviewing: Bool
+    let duration: Double
+    let preview: () -> Void
+    let remove: () -> Void
+    var export: (() -> Void)? = nil
+    var publish: (() -> Void)? = nil
+    var busy = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Toggle("", isOn: $reel.selected).labelsHidden().padding(.top, 4)
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("Título", text: $reel.title).textFieldStyle(.plain).font(.headline)
+                if !reel.reason.isEmpty { Text(reel.reason).font(.caption).foregroundStyle(Theme.secondary) }
+                HStack(spacing: 6) {
+                    timeStepper(value: $reel.start, label: String(localized: "Empieza"))
+                    Text("→").foregroundStyle(Theme.secondary)
+                    timeStepper(value: $reel.end, label: String(localized: "Termina"))
+                    Text("· \(EditEngine.clock(reel.length))").font(.caption).foregroundStyle(reel.length > 90 ? .orange : Theme.secondary)
+                }
+                HStack(spacing: 6) {
+                    Text("Duración:").font(.caption).foregroundStyle(Theme.secondary)
+                    ForEach([30.0, 60.0, 90.0], id: \.self) { secs in
+                        Button("\(Int(secs)) s") { reel.end = min(duration, reel.start + secs) }
+                            .buttonStyle(.bordered).controlSize(.mini)
+                    }
+                    if reel.length > 90 {
+                        Text("Muy largo para reels").font(.caption2).foregroundStyle(.orange)
+                    }
+                }
+                if let file = reel.exportedFile {
+                    Label(file, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.good).lineLimit(1)
+                }
+            }
+            Spacer()
+            VStack(spacing: 8) {
+                Button(action: preview) { Image(systemName: isPreviewing ? "play.circle.fill" : "play.circle").font(.title2) }
+                    .buttonStyle(.borderless).help("Ver este reel")
+                if let export {
+                    Button(action: export) { Image(systemName: "square.and.arrow.down").font(.title3) }
+                        .buttonStyle(.borderless).disabled(busy).help("Exportar solo este reel")
+                }
+                if let publish {
+                    Button(action: publish) { Image(systemName: "paperplane").font(.title3) }
+                        .buttonStyle(.borderless).disabled(busy).help("Publicar en redes")
+                }
+                Button(action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless).foregroundStyle(Theme.secondary)
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(isPreviewing ? Theme.panelStrong : Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isPreviewing ? Theme.accent : Theme.stroke))
+    }
+
+    private func timeStepper(value: Binding<Double>, label: String) -> some View {
+        HStack(spacing: 2) {
+            Button { value.wrappedValue = max(0, value.wrappedValue - 1) } label: { Image(systemName: "minus") }
+                .buttonStyle(.borderless).help("\(label) 1 s antes")
+            TimecodeField(seconds: value, range: 0...max(0, duration)).controlSize(.small)
+            Button { value.wrappedValue = min(duration, value.wrappedValue + 1) } label: { Image(systemName: "plus") }
+                .buttonStyle(.borderless).help("\(label) 1 s después")
+        }
+    }
+}
+
+// MARK: - 5. Export
+
+
+// MARK: - Patrocinios y marcas
+
+struct BrandsStep: View {
+    @ObservedObject var session: ProjectSession
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: String(localized: "Patrocinios y marcas"), subtitle: String(localized: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo."), step: .brands)
+                    Card {
+                        HStack {
+                            Text("Sponsors").font(.headline)
+                            Spacer()
+                            Button("Buscar en prePod") { session.fetchBranding() }.controlSize(.small)
+                        }
+                        if let st = session.brandingStatus {
+                            Text(st).font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                        if session.project.sponsors.isEmpty {
+                            Text("Este episodio no tiene sponsors. Si los tienes en prePod, usa “Buscar en prePod”.")
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            Toggle("Mostrar sponsors en su momento del guion", isOn: $session.project.showSponsors)
+                            let apps = session.project.sponsorAppearances()
+                            ForEach(session.project.sponsors) { sp in
+                                HStack(spacing: 10) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 6).fill(Theme.panelStrong)
+                                        if let f = sp.logoFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).padding(4)
+                                        } else {
+                                            Image(systemName: "tag").foregroundStyle(Theme.secondary)
+                                        }
+                                    }
+                                    .frame(width: 48, height: 36)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(sp.name).font(.callout.bold())
+                                        let mine = apps.filter { $0.sponsor.id == sp.id }
+                                        if mine.isEmpty {
+                                            Text("Sin momento en el guion de este episodio").font(.caption).foregroundStyle(Theme.secondary)
+                                        } else {
+                                            Text(mine.map { EditEngine.clock($0.start) }.joined(separator: " · ")).font(.caption).foregroundStyle(Theme.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    if let a = apps.first(where: { $0.sponsor.id == sp.id }) {
+                                        Button("Ver") { session.seek(timeline: max(0, a.start - 1), play: true) }.controlSize(.small)
+                                    }
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panel))
+                            }
+                            if apps.isEmpty {
+                                Text("Hay sponsors pero ningún bloque del guion de este episodio tiene sponsor asignado. Asígnalo en prePod (guion → bloque → sponsor) y vuelve a “Buscar en prePod”.")
+                                    .font(.caption).foregroundStyle(Theme.secondary)
+                            }
+                        }
+                    }
+                    Card {
+                        Text("Cintillos del director").font(.headline)
+                        if session.project.cintillos.isEmpty {
+                            Text("Este episodio no tiene cintillos puestos en vivo desde prodPod.").font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            Toggle("Mostrar los \(session.project.cintillos.count) cintillos", isOn: $session.project.showCintillos)
+                            ForEach(session.project.cintillos) { c in
+                                HStack {
+                                    Button(EditEngine.clock(c.start)) { session.seek(timeline: max(0, c.start - 1), play: true) }
+                                        .buttonStyle(.link).monospacedDigit()
+                                    Text(c.title).lineLimit(1)
+                                    Spacer()
+                                    Text(c.kind).font(.caption).foregroundStyle(Theme.secondary)
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+    }
+}
+
+// MARK: - Aspecto
+
+struct LookStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var confirmResetStudioVideo = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: String(localized: "Aspecto"), subtitle: String(localized: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo."), step: .look)
+                    let onePerson = session.project.lanes.count <= 1
+                    let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
+                    let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
+                    Card {
+                        Text(onePerson ? String(localized: "Cómo te ves") : String(localized: "Cómo se ven las personas")).font(.headline)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
+                            ForEach(choices) { l in
+                                Button {
+                                    session.project.layout = l
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        Image(systemName: l.symbol).font(.title2)
+                                        Text(l.title).font(.caption)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 60)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(chosen == l ? Theme.panelStrong : .clear))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(chosen == l ? Theme.accent : Theme.stroke))
+                                }
+                                .buttonStyle(.plain)
+                                .help(l.help)
+                            }
+                        }
+                        layoutOptionsView(onePerson: onePerson)
+                        if !onePerson {
+                            Divider()
+                            Text("Orden en pantalla (1 = izquierda o arriba)").font(.caption.bold())
+                            let onScreen = session.project.lanesOnScreen
+                            ForEach(Array(onScreen.enumerated()), id: \.element.id) { i, lane in
+                                HStack(spacing: 8) {
+                                    Text("\(i + 1)").font(.caption.bold()).frame(width: 18, height: 18)
+                                        .background(Circle().fill(Theme.panelStrong))
+                                    Text(session.project.laneName(lane.id)).font(.caption)
+                                    Spacer()
+                                    Button { session.setLanePosition(lane.id, i) } label: { Image(systemName: "chevron.up") }
+                                        .disabled(i == 0).help("Subir")
+                                    Button { session.setLanePosition(lane.id, i + 2) } label: { Image(systemName: "chevron.down") }
+                                        .disabled(i == onScreen.count - 1).help("Bajar")
+                                }
+                                .controlSize(.small)
+                            }
+                            Text("En Ventanita y Protagonista, el primero es el que va en grande cuando no sigues a quien habla.")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                        Divider()
+                        Text("Espejo (voltear el video de izquierda a derecha)").font(.caption.bold())
+                        ForEach(session.project.lanes) { lane in
+                            Toggle(session.project.laneName(lane.id), isOn: Binding(get: { session.project.laneMirror[lane.id] ?? false },
+                                                                                    set: { session.project.laneMirror[lane.id] = $0 }))
+                                .font(.caption)
+                        }
+                    }
+                    Card {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "film.stack").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Studio · Video").font(.headline)
+                                Text("Pistas encima de la plantilla, keyframes en textos y stickers, transiciones en el b-roll y cámaras fijadas a mano. Lo que decidiste aquí ya está dentro como clips; todo lo de arriba sigue funcionando sin entrar.")
+                                    .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                                if session.project.videoTunedInStudio {
+                                    HStack(spacing: 10) {
+                                        Label("Ajustado en Studio", systemImage: "sparkles").font(.caption).foregroundStyle(Theme.accent)
+                                        Button("Volver al simple…") { confirmResetStudioVideo = true }.controlSize(.small)
+                                    }
+                                }
+                            }
+                            Spacer()
+                            OpenStudioButton(tab: .video).buttonStyle(.bordered)
+                        }
+                    }
+                    .confirmationDialog("¿Quitar lo hecho en Studio · Video?", isPresented: $confirmResetStudioVideo) {
+                        Button("Quitar keyframes, transiciones y cámaras a mano", role: .destructive) {
+                            for i in session.project.overlays.indices { session.project.overlays[i].animation = nil }
+                            for i in session.project.brolls.indices { session.project.brolls[i].transitionIn = nil }
+                            session.project.studioVideo = StudioVideoSettings()
+                        }
+                        Button("Cancelar", role: .cancel) {}
+                    } message: { Text("Los textos, b-roll y la plantilla se quedan; solo se quita lo que el nivel simple no sabe describir. Se puede deshacer con ⌘Z.") }
+                    Card {
+                        Text("Fondo virtual").font(.headline)
+                        Text("Quita el fondo real de cada persona (se separa en la Mac, sin internet) y pone otro detrás. Tarda más al exportar y la vista previa usa una separación rápida, menos fina.")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        ForEach(session.project.lanes) { lane in
+                            virtualBackgroundRow(lane)
+                        }
+                    }
+                    Card {
+                        Text("Color").font(.headline)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
+                            ForEach([("none", String(localized: "Original")), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", "B/N"), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
+                                Button { session.project.colorLook = look.0 } label: {
+                                    Text(look.1).font(.caption)
+                                        .frame(maxWidth: .infinity, minHeight: 32)
+                                        .background(RoundedRectangle(cornerRadius: 8).fill(session.project.colorLook == look.0 ? Theme.panelStrong : .clear))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(session.project.colorLook == look.0 ? Theme.accent : Theme.stroke))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        if session.project.lanes.count > 1 {
+                            HStack {
+                                Toggle("Igualar el color de las cámaras", isOn: Binding(
+                                    get: { session.project.matchColors },
+                                    set: { on in
+                                        if on && session.project.laneColorGain.isEmpty { session.matchCameraColors() }
+                                        else { session.project.matchColors = on }
+                                    }))
+                                Spacer()
+                                if session.project.matchColors {
+                                    Button("Volver a medir") { session.matchCameraColors() }.controlSize(.small).disabled(session.isBusy)
+                                }
+                            }
+                            Text("Toma como referencia a quien está primero en el orden en pantalla (\(session.project.lanesOnScreen.first.map { session.project.laneName($0.id) } ?? "")).")
+                                .font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        Text("Marca del podcast").font(.headline)
+                        if session.project.backgroundFile != nil {
+                            Toggle("Fondo del podcast detrás del video", isOn: $session.project.showBackground)
+                        }
+                        if session.project.logoFile != nil {
+                            Toggle("Logo arriba a la derecha", isOn: $session.project.showLogo)
+                        }
+                        Toggle("Nombres de las personas", isOn: $session.project.showNames)
+                        HStack(spacing: 8) {
+                            Button(session.project.backgroundFile == nil ? String(localized: "Elegir imagen de fondo…") : String(localized: "Cambiar fondo…")) { session.chooseBranding(kind: "background") }
+                            Button(session.project.logoFile == nil ? String(localized: "Elegir logo…") : String(localized: "Cambiar logo…")) { session.chooseBranding(kind: "logo") }
+                            if session.project.backgroundFile == nil || session.project.logoFile == nil {
+                                Button("Buscar en prePod") { session.fetchBranding() }
+                            }
+                        }
+                        .controlSize(.small)
+                        if let st = session.brandingStatus {
+                            Text(st).font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    Card {
+                        Text("Intro y cierre").font(.headline)
+                        Text("Una imagen fija unos segundos antes del video y otra al final, con música si quieres. Solo en el video completo (no en reels ni trozos).")
+                            .font(.caption).foregroundStyle(Theme.secondary)
+                        bumperRow(title: String(localized: "Intro"), kind: "intro", bumper: session.project.intro)
+                        Divider()
+                        bumperRow(title: String(localized: "Cierre"), kind: "outro", bumper: session.project.outro)
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 420, maxWidth: 560)
+            PreviewPane(session: session)
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { session.setPreview(format: session.previewFormat == .audio ? .landscape : session.previewFormat) }
+    }
+
+    @ViewBuilder
+    private func bumperRow(title: String, kind: String, bumper: Bumper?) -> some View {
+        let isIntro = kind == "intro"
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(Theme.panelStrong)
+                if let b = bumper, let img = NSImage(contentsOf: ProjectStore.url(b.imageFile, in: session.project.id)) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: "photo").foregroundStyle(Theme.secondary)
+                }
+            }
+            .frame(width: 96, height: 54)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(title).font(.callout.bold())
+                    Spacer()
+                    Button(bumper == nil ? String(localized: "Elegir imagen…") : String(localized: "Cambiar imagen…")) { session.chooseBumperImage(isIntro: isIntro) }.controlSize(.small)
+                    if bumper != nil {
+                        Button(role: .destructive) { session.setBumper(isIntro: isIntro, nil) } label: { Image(systemName: "trash") }.controlSize(.small).help("Quitar")
+                    }
+                }
+                if let b = bumper {
+                    HStack(spacing: 8) {
+                        Text("Dura").font(.caption)
+                        Slider(value: Binding(get: { b.seconds }, set: { v in var nb = b; nb.seconds = v; session.setBumper(isIntro: isIntro, nb) }), in: 1...15, step: 0.5)
+                        Text(String(format: "%.1f s", b.seconds)).font(.caption).monospacedDigit().frame(width: 40, alignment: .trailing)
+                    }
+                    HStack(spacing: 8) {
+                        Image(systemName: "music.note").foregroundStyle(Theme.secondary)
+                        if let m = b.musicFile {
+                            Text(((m as NSString).lastPathComponent as NSString).deletingPathExtension).font(.caption).lineLimit(1)
+                            Slider(value: Binding(get: { b.musicVolume }, set: { v in var nb = b; nb.musicVolume = v; session.setBumper(isIntro: isIntro, nb) }), in: 0...1.5).frame(width: 90)
+                            Button("Quitar música") { var nb = b; nb.musicFile = nil; session.setBumper(isIntro: isIntro, nb) }.controlSize(.small)
+                        } else {
+                            Button("Agregar música…") { session.chooseBumperMusic(isIntro: isIntro) }.controlSize(.small)
+                            Text("se corta al largo del \(isIntro ? String(localized: "intro") : String(localized: "cierre")) y baja al final").font(.caption2).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    @ViewBuilder
+    private func virtualBackgroundRow(_ lane: Lane) -> some View {
+        let vb = session.project.laneBackground[lane.id]
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(session.project.laneName(lane.id)).font(.callout.bold()).frame(width: 90, alignment: .leading)
+                Picker("", selection: Binding<String>(
+                    get: { vb?.mode.rawValue ?? "none" },
+                    set: { v in
+                        if v == "none" { session.project.laneBackground[lane.id] = nil }
+                        else { var b = vb ?? VirtualBackground(); b.mode = VirtualBackground.Mode(rawValue: v) ?? .blur; session.project.laneBackground[lane.id] = b }
+                    })) {
+                    Text("Su fondo real").tag("none")
+                    ForEach(VirtualBackground.Mode.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
+                }
+                .labelsHidden().frame(maxWidth: 200)
+            }
+            if let vb {
+                HStack(spacing: 8) {
+                    Color.clear.frame(width: 90)
+                    switch vb.mode {
+                    case .blur:
+                        Text("Cuánto").font(.caption)
+                        Slider(value: Binding(get: { vb.blur }, set: { session.project.laneBackground[lane.id]?.blur = $0 }), in: 6...40, step: 1)
+                            .frame(maxWidth: 180)
+                    case .color:
+                        ForEach(["#14141A", "#FFFFFF", "#1E3A5F", "#2E7D5B", "#7C2D3D", "#FFD60A"], id: \.self) { c in
+                            Button { session.project.laneBackground[lane.id]?.color = c } label: {
+                                Circle().fill(Color(hex: c)).frame(width: 18, height: 18)
+                                    .overlay(Circle().strokeBorder(vb.color == c ? Theme.accent : Color.white.opacity(0.3), lineWidth: vb.color == c ? 2.5 : 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    case .image:
+                        if let f = vb.imageFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill).frame(width: 48, height: 28).clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+                        Button(vb.imageFile == nil ? String(localized: "Elegir imagen…") : String(localized: "Cambiar…")) { session.chooseVirtualBackgroundImage(laneId: lane.id) }.controlSize(.small)
+                        if vb.imageFile == nil { Text("Sin imagen se usa el color").font(.caption2).foregroundStyle(Theme.secondary) }
+                    case .podcast:
+                        Text(session.project.backgroundFile == nil ? String(localized: "Este proyecto no tiene fondo del podcast; se verá el color.") : String(localized: "El mismo fondo del podcast, detrás de la persona."))
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
+    @ViewBuilder
+    private func layoutOptionsView(onePerson: Bool) -> some View {
+        let l = session.project.layout
+        let hasBackground = session.project.backgroundFile != nil
+        VStack(alignment: .leading, spacing: 6) {
+            if session.project.lanes.allSatisfy({ l in !(session.project.mediaItem(l.clips.first?.mediaId ?? -1)?.hasVideo ?? false) }) {
+                Toggle(isOn: $session.project.layoutOptions.audiogram) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ondas que siguen la voz")
+                        Text("Este episodio no tiene cámara: sobre el logo y el nombre de quien habla, unas barras se mueven con su voz. Es lo que se publica en redes de un podcast de audio.")
+                            .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Toggle(isOn: $session.project.layoutOptions.punchIn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Acercamiento al hablar")
+                    Text("Cada cámara se acerca un poco (hasta un 4,5 %) cuando sube la energía de la voz de esa persona y vuelve suave. Da vida a cámaras fijas sin tocar nada.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if l == .auto || l == .solo {
+                Toggle("Con marco de estudio (el fondo del podcast detrás)", isOn: $session.project.layoutOptions.soloStudio)
+                if session.project.layoutOptions.soloStudio && !hasBackground {
+                    Text("Este proyecto no tiene fondo del podcast; se verá un fondo oscuro. Súbelo en prePod → Branding → Fondo.")
+                        .font(.caption).foregroundStyle(Theme.secondary)
+                }
+            }
+            if l == .grid && !onePerson {
+                Toggle("Quien habla en grande, los demás en cuadritos abajo", isOn: $session.project.layoutOptions.gridSpeakerBig)
+            }
+            if l == .pip && !onePerson {
+                Toggle("En grande quien habla (si no, siempre la primera persona)", isOn: $session.project.layoutOptions.pipFollowSpeaker)
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
+struct ExportStep: View {
+    @ObservedObject var session: ProjectSession
+    @State private var format: ExportFormat = .landscape
+    @AppStorage("export.youtube4k") private var youtube4K = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StepHeader(title: String(localized: "Exportar"), subtitle: String(localized: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto."), step: .export)
+                    ExportReviewCard(session: session)
+                    SharedReviewCard(session: session)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(ExportFormat.allCases) { f in
+                            Button { select(f) } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Image(systemName: f.symbol).font(.title)
+                                        .foregroundStyle(format == f ? Theme.accent : .white)
+                                    Text(f.title).font(.headline)
+                                    Text(f.subtitle).font(.caption).foregroundStyle(Theme.secondary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+                                .padding(14)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(format == f ? Theme.panelStrong : Theme.panel))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(format == f ? Theme.accent : Theme.stroke, lineWidth: format == f ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    if format == .landscape && ExportFormat.uhdAvailable {
+                        Card {
+                            Picker("Calidad", selection: $youtube4K) {
+                                Text("1080p").tag(false)
+                                Text("4K").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            Text(youtube4K
+                                 ? String(localized: "4K (3840×2160). Aunque hayas grabado en 1080p, YouTube lo muestra más nítido. El archivo pesa unas 4 veces más y tarda más en exportar y subir.")
+                                 : String(localized: "1080p: lo normal para YouTube. Elige 4K si grabaste en 4K o quieres la mejor nitidez en YouTube."))
+                                .font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                    if format != .audio {
+                        Card {
+                            Text("Qué incluir").font(.headline)
+                            HStack {
+                                Toggle("Subtítulos", isOn: $session.project.captionStyle.enabled)
+                                    .disabled(!session.project.isTranscribed)
+                                Spacer()
+                                Button("Guardar .srt") { session.saveSubtitles(asText: false) }.controlSize(.small).disabled(!session.project.isTranscribed)
+                            }
+                            if !session.project.sponsors.isEmpty {
+                                Toggle("Sponsors en su momento del guion (\(session.project.sponsorAppearances().count))", isOn: $session.project.showSponsors)
+                            }
+                            if !session.project.cintillos.isEmpty {
+                                Toggle("Cintillos del director (\(session.project.cintillos.count))", isOn: $session.project.showCintillos)
+                            }
+                            Divider()
+                            HStack(spacing: 6) {
+                                Image(systemName: "rectangle.3.group").foregroundStyle(Theme.secondary)
+                                Text("Aspecto: \(session.project.layout.title)\(session.project.showBackground && session.project.backgroundFile != nil ? String(localized: " · fondo") : "")\(session.project.showLogo && session.project.logoFile != nil ? String(localized: " · logo") : "")\(session.project.intro != nil ? String(localized: " · intro") : "")\(session.project.outro != nil ? String(localized: " · cierre") : "")")
+                                    .font(.caption).foregroundStyle(Theme.secondary)
+                                Spacer()
+                                Button("Cambiar") { session.step = .look }.controlSize(.small)
+                            }
+                        }
+                    }
+                    if format != .audio {
+                        Card {
+                            Picker("Archivo", selection: $session.project.exportHEVC) {
+                                Text("Compatible (H.264): se ve en todas partes").tag(false)
+                                Text("Liviano (HEVC): la mitad de peso, más rápido").tag(true)
+                            }
+                            .pickerStyle(.radioGroup).font(.caption)
+                        }
+                    }
+                    Toggle("Ajustar el volumen final: −16 LUFS para Spotify y Apple, −14 para YouTube y redes", isOn: $session.project.normalizeLoudness)
+                        .font(.caption)
+                    HStack(spacing: 10) {
+                        BigButton(title: session.isBusy ? String(localized: "Poner en cola: \(format.title)") : String(localized: "Exportar \(format.title)"),
+                                  symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up") {
+                            if session.isBusy { session.enqueue(.format(format)) } else { session.export(format: format) }
+                        }
+                        Button { session.enqueueAll() } label: { Label("Exportar todo", systemImage: "square.stack.3d.up") }
+                            .help("YouTube, MP3 y los reels marcados, uno detrás de otro, mientras sigues trabajando.")
+                    }
+                    HStack {
+                        Button { if session.isBusy { session.enqueue(.stems) } else { session.exportStems() } } label: {
+                            Label(session.isBusy ? String(localized: "Poner en cola: pistas (WAV)") : String(localized: "Pistas por separado (WAV)"), systemImage: "square.stack.3d.down.right")
+                        }.controlSize(.small)
+                        Text("Una por persona (con sus cortes, volumen y pitidos) y la música aparte, para terminar en Logic, Audition o Reaper.")
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                    }
+                    if !session.exportQueue.isEmpty { ExportQueueCard(session: session) }
+                    if !session.lastExports.isEmpty {
+                        Card {
+                            Text("Ya exportados").font(.headline)
+                            ForEach(session.lastExports.prefix(12), id: \.self) { url in
+                                HStack {
+                                    Image(systemName: url.pathExtension == "mp4" ? "film" : "waveform")
+                                    Text(url.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                                    Spacer()
+                                    Button("Mostrar") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                                        .buttonStyle(.borderless)
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                }
+                .padding(28)
+            }
+            .frame(minWidth: 440, maxWidth: 540)
+            PreviewPane(session: session, allowedFormats: [])
+                .padding(.vertical, 28).padding(.trailing, 28)
+        }
+        .onAppear { select(format) }
+    }
+
+    private func select(_ f: ExportFormat) {
+        format = f
+        session.setPreview(format: f == .audio ? .landscape : f)
+    }
+
+
+}
+
+// MARK: - Settings
+
+struct SettingsView: View {
+    @AppStorage("whisperModel") private var whisperModel = Transcriber.defaultModel
+    @AppStorage("introAlAbrir") private var introEnabled = true
+    @AppStorage("sonidoAlCerrar") private var quitSound = true
+
+    var body: some View {
+        Form {
+            LanguageSettingsSection()
+            PrePodSettingsSection()
+            UpdateSettingsSection()
+            Section("Al abrir y cerrar") {
+                Toggle("Sonido y animación de thePod al abrir la app", isOn: $introEnabled)
+                Toggle("Sonido de thePod al cerrar la app", isOn: $quitSound)
+            }
+            Section("Transcripción (en tu Mac)") {
+                Picker("Modelo de voz", selection: $whisperModel) {
+                    Text("Preciso (recomendado)").tag(Transcriber.defaultModel)
+                    Text("Rápido (ocupa menos y termina antes)").tag("openai_whisper-small")
+                }
+            }
+            if !FFmpeg.isAvailable {
+                Section {
+                    Label("A esta copia de thePod le falta una parte para procesar video. Vuelve a instalar la app.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+            Section("Carpeta de proyectos") {
+                Button(ProjectStore.libraryURL.path) { NSWorkspace.shared.activateFileViewerSelecting([ProjectStore.libraryURL]) }
+                    .buttonStyle(.link)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 540, height: 640)
+    }
+}
+
+
+/// Texto del reel: las frases que caen en él, para corregirlas o quitarlas solo en este reel.
+struct ReelTextCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+    @State private var editing: Int?
+    @State private var draft = ""
+    @State private var askRelisten = false
+
+    var body: some View {
+        Card {
+            Text("Texto de este reel").font(.headline)
+            if !session.project.isTranscribed && reel.words == nil {
+                Text("Este episodio no tiene transcripción. Hazla en Subtítulos y aquí aparecen las frases del reel.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            } else {
+                if reel.words != nil {
+                    Label("Este reel tiene su propio texto: lo que corrijas aquí no cambia el episodio.", systemImage: "text.badge.checkmark")
+                        .font(.caption).foregroundStyle(Theme.accent)
+                } else if !session.project.wordsSynced {
+                    Label("Los subtítulos pueden aparecer un poco antes de que hablen. «Volver a escuchar este reel» lo arregla solo aquí, o ajusta todo el episodio en Preparar → Subtítulos.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                HStack(spacing: 8) {
+                    Button { askRelisten = true } label: { Label("Volver a escuchar este reel", systemImage: "ear") }
+                        .help("Escribe de nuevo el texto de este reel escuchando solo su tramo, ajustado a la voz")
+                    if reel.words != nil {
+                        Button("Usar el texto del episodio") { session.useEpisodeText(reel) }
+                    }
+                    Spacer()
+                }
+                .controlSize(.small)
+                .disabled(session.isBusy)
+                Text(reel.words != nil
+                     ? String(localized: "Doble clic para corregir una palabra (solo en este reel). Las tijeras quitan la frase solo de este reel.")
+                     : String(localized: "Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel."))
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                ForEach(session.phrases(reel: reel)) { ph in
+                    PhraseRow(session: session, phrase: ph, editing: $editing, draft: $draft, reel: reel)
+                }
+                if !reel.cuts.isEmpty {
+                    HStack {
+                        Text(String(localized: "\(reel.cuts.count) \(reel.cuts.count == 1 ? String(localized: "corte propio") : String(localized: "cortes propios")) en este reel")).font(.caption2).foregroundStyle(Theme.secondary)
+                        Spacer()
+                        Button("Deshacer todos") {
+                            if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i].cuts = [] }
+                        }
+                        .controlSize(.mini)
+                    }
+                }
+            }
+        }
+        .confirmationDialog("¿Volver a escuchar este reel?", isPresented: $askRelisten) {
+            Button("Escuchar de nuevo") { session.relistenReel(reel) }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text(reel.words != nil
+                 ? String(localized: "Se escribe otra vez el texto de este reel y se pierden las correcciones que le hiciste. El episodio no cambia.")
+                 : String(localized: "Este reel tendrá su propio texto, escrito de nuevo y ajustado a la voz. El episodio no cambia."))
+        }
+    }
+}
+
+/// Sonido del reel: limpieza (si falta), silencios solo del reel y silenciar a quien no habla.
+struct ReelSoundCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    private var gate: Binding<Bool> {
+        Binding(get: { session.project.look(for: reel).gateOthers ?? session.project.fix.gateOthers },
+                set: { v in
+                    if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
+                        session.project.reels[i].look?.gateOthers = v
+                    } else { session.project.reelLook.gateOthers = v }
+                })
+    }
+
+    var body: some View {
+        let cleaned = session.project.media.contains { $0.enhancedAudioFile != nil }
+        Card {
+            Text("Sonido de este reel").font(.headline)
+            HStack(spacing: 8) {
+                Image(systemName: cleaned ? "checkmark.circle.fill" : "circle").foregroundStyle(cleaned ? Theme.good : Theme.secondary)
+                Text(cleaned ? String(localized: "Sonido de estudio aplicado (vale para el episodio y todos los reels).") : String(localized: "El sonido todavía no está limpio."))
+                    .font(.caption)
+                Spacer()
+                if !cleaned {
+                    Button("Limpiar sonido") { session.enhanceAudioOnly() }.controlSize(.small).disabled(session.isBusy)
+                        .help("Lo mismo que en Limpiar sonido, pero sin tocar cortes ni transcripción")
+                }
+            }
+            HStack(spacing: 8) {
+                Button { session.removeSilences(in: reel) } label: { Label("Quitar silencios solo en este reel", systemImage: "scissors") }
+                    .controlSize(.small).disabled(session.isBusy)
+                Spacer()
+            }
+            if session.project.lanes.count > 1 {
+                Toggle("Silenciar a quien no habla", isOn: gate).font(.caption)
+            }
+            if let n = session.reelsNote { Text(n).font(.caption2).foregroundStyle(Theme.secondary) }
+            Text("Lo que corta aquí no cambia el episodio.").font(.caption2).foregroundStyle(Theme.secondary)
+        }
+    }
+}
+
+
+/// B-roll solo de este reel: video o foto corta (máximo 10 s y siempre más corta que el reel), entera o en ventanita.
+struct ReelBRollCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    var body: some View {
+        Card {
+            HStack {
+                Text("B-roll de este reel").font(.headline)
+                Spacer()
+                Button { session.chooseBRoll(reelId: reel.id) } label: { Label("Agregar video o imagen…", systemImage: "film") }
+                    .controlSize(.small).disabled(reel.length < 2)
+            }
+            if reel.length < 2 {
+                Text("El reel es muy corto para un b-roll.").font(.caption).foregroundStyle(Theme.secondary)
+            } else if reel.brolls.isEmpty {
+                Text("Un video o una foto que entra unos segundos solo en este reel: toda la pantalla o en una ventanita abajo. Máximo \(Int(BRollClip.maxSeconds)) s.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ForEach(reel.brolls.sorted { $0.start < $1.start }) { b in
+                let sel = session.selectedTrack == .reelBRoll(reel.id, b.id)
+                Button {
+                    session.selectedTrack = .reelBRoll(reel.id, b.id)
+                    session.seek(timeline: b.start + min(1, b.duration / 2), play: false)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: b.isVideo ? "film" : "photo").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                        Text(b.title).lineLimit(1)
+                        Spacer()
+                        Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? String(localized: "ventanita izq.") : String(localized: "ventanita der.")) + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                            .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+
+/// Cintillos solo de este reel (además de los del episodio que caigan en su tramo).
+struct ReelCintilloCard: View {
+    @ObservedObject var session: ProjectSession
+    let reel: Reel
+
+    var body: some View {
+        let inherited = session.project.cintillos.filter { $0.end > reel.start && $0.start < reel.end }.count
+        Card {
+            Text("Cintillos de este reel").font(.headline)
+            HStack(spacing: 8) {
+                Button("Noticiero") { _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: String(localized: "AHORA"), reelId: reel.id) }
+                Button("Limpio") { _ = session.addCintillo(style: "clean", kind: "comment", reelId: reel.id) }
+                Button("Sponsor") { _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: String(localized: "PATROCINA"), reelId: reel.id) }
+                ForEach(session.project.sponsors) { sp in
+                    Button("De \(sp.name)") { session.addSponsorCintillo(sp, reelId: reel.id) }
+                }
+            }
+            .controlSize(.small)
+            if reel.cintillos.isEmpty {
+                Text(inherited > 0 ? String(localized: "El reel ya muestra \(inherited) del episodio que caen en su tramo. Los que agregues aquí salen solo en este reel.")
+                                   : String(localized: "Los que agregues aquí salen solo en este reel, donde está el video."))
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            }
+            ForEach(reel.cintillos.sorted { $0.start < $1.start }) { c in
+                let sel = session.selectedTrack == .reelCintillo(reel.id, c.id)
+                Button {
+                    session.selectedTrack = .reelCintillo(reel.id, c.id)
+                    session.seek(timeline: max(reel.start, c.start - 0.5), play: false)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "rectangle.bottomthird.inset.filled").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
+                        Text(c.title.isEmpty ? c.text : c.title).lineLimit(1)
+                        Spacer()
+                        Text("\(c.style == "clean" ? String(localized: "Limpio") : c.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Noticiero")) · \(EditEngine.clock(c.start)) · \(String(format: "%.0f s", c.duration))")
+                            .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
+                    }
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(sel ? Theme.panelStrong : Theme.panel))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+
+/// Revisión rápida antes de exportar: lo que conviene mirar, cada cosa con su botón para arreglarla ahí mismo.
+struct ExportReviewCard: View {
+    @ObservedObject var session: ProjectSession
+
+    private struct Item: Identifiable {
+        let id: String
+        let text: String
+        let optional: Bool
+        let actions: [(String, () -> Void)]
+    }
+
+    private var items: [Item] {
+        let p = session.project
+        var out: [Item] = []
+        if p.fix.lastRun == nil {
+            out.append(Item(id: "fix", text: String(localized: "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)"), optional: false,
+                            actions: [("Limpiar", { session.step = .fix })]))
+        }
+        if !p.isTranscribed {
+            out.append(Item(id: "words", text: String(localized: "No hay transcripción: el video sale sin subtítulos"), optional: true,
+                            actions: [(String(localized: "Ir a subtítulos"), { session.step = .captions })]))
+        } else if !p.wordsSynced {
+            out.append(Item(id: "sync", text: String(localized: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche"), optional: false,
+                            actions: [("Ajustar", { session.syncSubtitles() })]))
+        }
+        let pending = session.pendingSuggestions.count
+        if pending > 0 {
+            out.append(Item(id: "sugg", text: String(localized: "\(pending) \(pending == 1 ? String(localized: "sugerencia") : String(localized: "sugerencias")) sin revisar (muletillas dudosas o frases repetidas)"), optional: false,
+                            actions: [("Ver", { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
+        }
+        if p.isTranscribed, !p.sensitiveScanned {
+            out.append(Item(id: "sens", text: String(localized: "No se buscaron palabras sensibles (groserías, marcas, datos personales)"), optional: true,
+                            actions: [("Revisar", { session.step = .sensitive })]))
+        }
+        let unseen = p.reels.filter { $0.selected && $0.seen != true }.count
+        if unseen > 0 {
+            out.append(Item(id: "reels", text: "\(unseen) \(unseen == 1 ? String(localized: "reel elegido que no miraste") : String(localized: "reels elegidos que no miraste"))", optional: true,
+                            actions: [(String(localized: "Ver reels"), { session.step = .reels })]))
+        }
+        return out
+    }
+
+    var body: some View {
+        let list = items
+        Card {
+            if list.isEmpty {
+                Label("Todo listo: sonido limpio, subtítulos ajustados y nada pendiente de revisar.", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(Theme.good)
+            } else {
+                Text("Antes de exportar").font(.headline)
+                ForEach(list) { it in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: it.optional ? "circle" : "exclamationmark.circle.fill")
+                            .foregroundStyle(it.optional ? Theme.secondary : Color.orange)
+                        Text(it.text + (it.optional ? String(localized: " (opcional)") : "")).font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 6)
+                        ForEach(Array(it.actions.enumerated()), id: \.offset) { _, a in
+                            Button(a.0, action: a.1).controlSize(.small)
+                        }
+                    }
+                }
+                Text("Puedes exportar igual; esto es solo para que no se escape nada.").font(.caption).foregroundStyle(Theme.secondary)
+            }
+        }
+        .disabled(session.isBusy)
+    }
+}
+
+
+/// Notas y momentos con la IA de thePod. Se hace una sola vez por episodio (ahorra: si se vuelve a tocar,
+/// trae lo mismo sin volver a gastar). La primera vez pide permiso para mandar la transcripción.
+struct AIMomentsCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var showNotes = false
+
+    var body: some View {
+        Card {
+            Label("Momentos y notas con IA", systemImage: "sparkles").font(.headline)
+            if !PrePodClient.isConfigured {
+                Text("Conecta tu cuenta de thePod en Ajustes para que la IA busque los mejores momentos y escriba las notas del episodio.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+            } else if let done = session.project.aiAnalyzedAt {
+                Text("La IA ya leyó este episodio el \(done.formatted(date: .abbreviated, time: .shortened)). Se hace una sola vez por episodio; los reels y las notas se editan a mano.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Button("Traer de nuevo sus momentos") { session.findMomentsWithAI(confirmed: true) }
+                    .controlSize(.small).disabled(session.isBusy)
+                    .help("Vuelve a poner los momentos que borraste (no se gasta de nuevo)")
+            } else {
+                Text("La IA lee la transcripción, propone los momentos con más potencial para reels y escribe el resumen y los puntos destacados. Se hace una sola vez por episodio.")
+                    .font(.caption).foregroundStyle(Theme.secondary)
+                Button { session.findMomentsWithAI() } label: { Label("Buscar momentos con IA", systemImage: "sparkles") }
+                    .buttonStyle(.borderedProminent).disabled(session.isBusy)
+            }
+            if let note = session.aiNote {
+                Label(note, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(Theme.good)
+            }
+            if let notes = session.project.aiSummary, !notes.isEmpty {
+                DisclosureGroup("Notas del episodio", isExpanded: $showNotes) {
+                    Text(notes).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Copiar notas") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(notes, forType: .string)
+                    }
+                    .controlSize(.small)
+                }
+                .font(.callout)
+            }
+        }
+        .alert("¿Mandar la transcripción a la IA?", isPresented: $session.askAIConsent) {
+            Button("Mandar y buscar") { session.findMomentsWithAI(confirmed: true) }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad.")
+        }
+    }
+}
+
+/// «Voces parejas por medición»: mide la sonoridad de cada persona y aplica la ganancia que las iguala.
+struct VoicesMatchRow: View {
+    @ObservedObject var session: ProjectSession
+    @State private var measuring = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { session.project.matchVoices }, set: { on in
+                if on, session.project.lanes.allSatisfy({ $0.measuredLUFS == nil }) { measure() }
+                session.project.matchVoices = on
+            })) {
+                VStack(alignment: .leading) {
+                    Text("Voces parejas por medición").font(.headline)
+                    Text("Mide cuánto suena cada persona (como lo miden Spotify y YouTube, solo mientras habla) y sube o baja cada voz lo justo para que todas queden al mismo nivel. Es una ganancia fija: no comprime ni cambia el timbre.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .disabled(session.project.lanes.count < 2)
+            if session.project.matchVoices {
+                ForEach(session.project.lanes) { lane in
+                    HStack(spacing: 10) {
+                        Text(session.project.laneName(lane.id)).font(.caption).frame(width: 140, alignment: .leading).lineLimit(1)
+                        if let l = lane.measuredLUFS {
+                            Text(String(format: "%.1f LUFS", l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
+                            Text(String(format: "%@%.1f dB", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption.monospacedDigit().bold())
+                                .foregroundStyle(abs(lane.matchGain) < 0.05 ? Theme.secondary : Theme.accent).frame(width: 64, alignment: .trailing)
+                        } else {
+                            Text(measuring ? String(localized: "midiendo…") : String(localized: "sin medir")).font(.caption).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                }
+                HStack {
+                    Button(measuring ? String(localized: "Midiendo…") : String(localized: "Medir de nuevo")) { measure() }.controlSize(.small).disabled(measuring)
+                    Text("Vuelve a medir si cambias «Sonido de estudio» o las grabaciones.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private func measure() {
+        measuring = true
+        let p = session.project
+        Task.detached(priority: .userInitiated) {
+            let results = LoudnessMatch.measure(project: p)
+            await MainActor.run {
+                for r in results {
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == r.lane }) {
+                        session.project.lanes[i].measuredLUFS = r.lufs
+                        session.project.lanes[i].matchGain = r.gainDB
+                    }
+                }
+                measuring = false
+            }
+        }
+    }
+}
+
+
+/// «Reducir ruido por huella»: toma el espectro del segundo más quieto de cada persona y resta lo que no supere
+/// esa huella. Sin IA; vale para ruido constante (aire, ventilador, zumbido).
+struct NoiseProfileRow: View {
+    @ObservedObject var session: ProjectSession
+    @State private var working = false
+
+    private var anyOn: Bool { session.project.lanes.contains { $0.noiseReduce } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { anyOn }, set: { on in
+                for i in session.project.lanes.indices { session.project.lanes[i].noiseReduce = on }
+                if on { capture() }
+            })) {
+                VStack(alignment: .leading) {
+                    Text("Reducir ruido por huella").font(.headline)
+                    Text("Toma el segundo más quieto de cada persona como «huella» del ruido de su sala y baja lo que no la supera. Sirve para ruido constante (aire acondicionado, ventilador, zumbido) y no toca la voz. Es distinto de «Sonido de estudio»: no usa inteligencia artificial y se puede usar a la vez o en su lugar.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if anyOn {
+                ForEach(session.project.lanes) { lane in
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == lane.id }) {
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: $session.project.lanes[i].noiseReduce).labelsHidden().controlSize(.mini)
+                            Text(session.project.laneName(lane.id)).font(.caption).frame(width: 120, alignment: .leading).lineLimit(1)
+                            Picker("", selection: $session.project.lanes[i].noiseAmount) {
+                                Text("Suave").tag(0.3); Text("Normal").tag(0.6); Text("Fuerte").tag(0.9)
+                            }.pickerStyle(.segmented).labelsHidden().frame(width: 200).disabled(!lane.noiseReduce)
+                            if let at = lane.noiseProfileAt {
+                                Text("huella en \(EditEngine.clock(at))").font(.caption2).foregroundStyle(Theme.secondary)
+                            } else {
+                                Text(working ? String(localized: "buscando la huella…") : String(localized: "sin huella: no hay un segundo quieto")).font(.caption2).foregroundStyle(working ? Theme.secondary : .orange)
+                            }
+                        }
+                    }
+                }
+                HStack {
+                    Button(working ? String(localized: "Buscando…") : String(localized: "Tomar la huella de nuevo")) { capture() }.controlSize(.small).disabled(working)
+                    Text("Reproduce y compara con A/B en Studio; si la voz suena «acuosa», baja a Suave.").font(.caption2).foregroundStyle(Theme.secondary)
+                }
+            }
+        }
+    }
+
+    private func capture() {
+        working = true
+        let p = session.project
+        Task.detached(priority: .userInitiated) {
+            let energy = AudioAnalysis.loadEnergy(p.id)
+            var results: [(Int, [Float], Double)] = []
+            if let energy {
+                for lane in p.lanes { if let r = RoomTone.noiseProfile(project: p, lane: lane, energy: energy) { results.append((lane.id, r.profile, r.at)) } }
+            }
+            await MainActor.run {
+                for (id, prof, at) in results {
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == id }) {
+                        session.project.lanes[i].noiseProfile = prof; session.project.lanes[i].noiseProfileAt = at
+                    }
+                }
+                working = false
+            }
+        }
+    }
+}
+
+
+/// «Quitar clics y chasquidos»: saltos bruscos de menos de 2,5 ms (chasquidos de boca, clics de cable) se
+/// sustituyen por una línea entre las muestras sanas. Sin IA; la voz no se toca.
+struct DeclickRow: View {
+    @ObservedObject var session: ProjectSession
+    private var anyOn: Bool { session.project.lanes.contains { $0.declick } }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: Binding(get: { anyOn }, set: { on in for i in session.project.lanes.indices { session.project.lanes[i].declick = on } })) {
+                VStack(alignment: .leading) {
+                    Text("Quitar clics y chasquidos").font(.headline)
+                    Text("Chasquidos de boca, clics de cable o de teclado muy cortos: se detectan como saltos bruscos de menos de 2,5 ms y se cosen. No usa inteligencia artificial y no cambia el timbre.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if anyOn {
+                ForEach(session.project.lanes) { lane in
+                    if let i = session.project.lanes.firstIndex(where: { $0.id == lane.id }) {
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: $session.project.lanes[i].declick).labelsHidden().controlSize(.mini)
+                            Text(session.project.laneName(lane.id)).font(.caption).frame(width: 120, alignment: .leading).lineLimit(1)
+                            Picker("", selection: $session.project.lanes[i].declickAmount) {
+                                Text("Suave").tag(0.25); Text("Normal").tag(0.5); Text("Fuerte").tag(0.8)
+                            }.pickerStyle(.segmented).labelsHidden().frame(width: 200).disabled(!lane.declick)
+                        }
+                    }
+                }
+                Text("Si en «Fuerte» se come consonantes (p, t, k), vuelve a Normal.").font(.caption2).foregroundStyle(Theme.secondary)
+            }
+        }
+    }
+}
+
+
+/// Revisión compartida: un enlace para que el invitado o el cliente escuche y deje comentarios en un segundo
+/// exacto; los comentarios llegan como marcas naranjas a la línea de tiempo.
+struct SharedReviewCard: View {
+    @ObservedObject var session: ProjectSession
+    @State private var confirmRevoke = false
+
+    var body: some View {
+        Card {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "bubble.left.and.text.bubble.right").font(.title2).foregroundStyle(Theme.accent).frame(width: 32)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Revisión compartida").font(.headline)
+                    Text("Sube el episodio (MP3) a postPod y comparte un enlace: quien lo abra escucha, marca un segundo y deja su comentario, sin cuenta. Los comentarios aparecen aquí y en la línea de tiempo.")
+                        .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                    if session.project.postpodSlug == nil {
+                        Text("Este episodio no vino de postPod web, así que no hay dónde subirlo.").font(.caption).foregroundStyle(.orange)
+                    } else if let r = session.project.review {
+                        HStack(spacing: 8) {
+                            TextField("", text: .constant(r.url)).textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 420)
+                            Button("Copiar") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string); session.note = String(localized: "Enlace copiado.") }.controlSize(.small)
+                            Button("Abrir") { if let u = URL(string: r.url) { NSWorkspace.shared.open(u) } }.controlSize(.small)
+                            Button("Traer comentarios") { session.refreshReviewComments() }.controlSize(.small)
+                            Button("Cerrar enlace", role: .destructive) { confirmRevoke = true }.controlSize(.small)
+                        }
+                        let df: DateFormatter = { let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short; return f }()
+                        Text(String(localized: "Enviado el \(df.string(from: r.sentAt))") + (r.fetchedAt.map { String(localized: " · comentarios al \(df.string(from: $0))") } ?? String(localized: " · todavía no se han traído comentarios")))
+                            .font(.caption2).foregroundStyle(Theme.secondary)
+                        if r.comments.isEmpty {
+                            Text("Sin comentarios por ahora.").font(.caption).foregroundStyle(Theme.secondary)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(r.comments) { c in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Toggle("", isOn: Binding(get: { c.resolved }, set: { session.resolveReviewComment(c.id, $0) })).labelsHidden().controlSize(.mini)
+                                        Button(EditEngine.clock(r.timelineTime(c))) { session.seek(timeline: r.timelineTime(c), play: false) }
+                                            .buttonStyle(.plain).font(.caption.monospacedDigit()).foregroundStyle(c.resolved ? Theme.secondary : .orange)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(c.author.isEmpty ? String(localized: "Alguien") : c.author).font(.caption2).foregroundStyle(Theme.secondary)
+                                            Text(c.text).font(.caption).strikethrough(c.resolved).foregroundStyle(c.resolved ? Theme.secondary : .primary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Button("Enviar una versión nueva") { session.sendForReview() }.controlSize(.small)
+                            .help("Exporta el MP3 otra vez y crea otro enlace; el anterior sigue abierto hasta que lo cierres")
+                    } else {
+                        Button("Enviar a revisión (MP3)") { session.sendForReview() }
+                            .help("Exporta el episodio en MP3, lo sube a postPod y copia el enlace")
+                    }
+                }
+                Spacer()
+            }
+        }
+        .confirmationDialog("¿Cerrar el enlace de revisión?", isPresented: $confirmRevoke) {
+            Button("Cerrar enlace", role: .destructive) { session.revokeReview() }
+            Button("Cancelar", role: .cancel) {}
+        } message: { Text("Quien lo tenga ya no podrá abrirlo y las marcas de sus comentarios se quitan de la línea de tiempo.") }
+    }
+}
+
+
+/// Cola de exportación: lo que espera, lo que corre y lo que ya salió. No bloquea nada.
+struct ExportQueueCard: View {
+    @ObservedObject var session: ProjectSession
+    var body: some View {
+        Card {
+            HStack {
+                Text("Cola de exportación").font(.headline)
+                if session.queuePending > 0 {
+                    Text(String(localized: "\(session.queuePending) pendiente\(session.queuePending == 1 ? "" : "s")")).font(.caption).foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                if session.exportQueue.contains(where: { $0.status.isFinished }) {
+                    Button("Limpiar") { session.clearFinishedExports() }.controlSize(.small)
+                }
+            }
+            ForEach(session.exportQueue) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.kind.symbol).frame(width: 18)
+                    Text(item.title).lineLimit(1)
+                    Spacer()
+                    switch item.status {
+                    case .waiting:
+                        Text("Esperando").font(.caption).foregroundStyle(Theme.secondary)
+                        Button { session.removeFromQueue(item.id) } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.plain).help("Quitar de la cola")
+                    case .running:
+                        ProgressView().controlSize(.small)
+                        Text("Exportando…").font(.caption).foregroundStyle(Theme.secondary)
+                    case .done(let urls):
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        if let u = urls.last { Button("Mostrar") { NSWorkspace.shared.activateFileViewerSelecting([u]) }.controlSize(.small) }
+                    case .failed(let why):
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text(why).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1).help(why)
+                    }
+                }
+                .font(.callout)
+            }
+        }
+    }
+}
