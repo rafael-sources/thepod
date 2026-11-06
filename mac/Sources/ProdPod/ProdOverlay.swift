@@ -30,7 +30,7 @@ struct Overlay: Identifiable, Equatable {
         case "banner": title = p["name"] as? String ?? ""; text = p["title"] as? String ?? ""
         case "segment": title = p["title"] as? String ?? ""; text = p["subtitle"] as? String ?? ""
         case "comment": title = p["author"] as? String ?? ""; text = p["text"] as? String ?? ""
-        case "countdown": title = p["label"] as? String ?? "Volvemos en"; text = "\(p["seconds"] as? Int ?? 180) s"
+        case "countdown": title = p["label"] as? String ?? String(localized: "Volvemos en"); text = "\(p["seconds"] as? Int ?? 180) s"
         default: title = p["caption"] as? String ?? ""
         }
         let secs = (m["duration_seconds"] as? Double) ?? (m["duration_seconds"] as? Int).map(Double.init) ?? seconds(for: kind)

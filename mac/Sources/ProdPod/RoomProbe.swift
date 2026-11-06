@@ -78,7 +78,7 @@ final class RoomProbe: NSObject, ObservableObject {
         guard let sid = sessionId else { return }
         Task {
             do {
-                let inv = try await ProdPodClient.shared.invite(sid, name: "Invitado de prueba")
+                let inv = try await ProdPodClient.shared.invite(sid, name: String(localized: "Invitado de prueba"))
                 inviteURL = inv.invite_url
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(inv.invite_url, forType: .string)

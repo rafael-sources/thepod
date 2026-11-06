@@ -560,10 +560,10 @@ struct InsertEditor: View {
     private var title: String {
         let who = index.map { session.project.laneName(session.project.lanes[$0].id) } ?? ""
         switch ref.kind {
-        case .eq: return "\(who) · Ecualizador paramétrico"
-        case .compressor: return "\(who) · Compresor"
-        case .deesser: return "\(who) · De-esser"
-        case .gate: return "\(who) · Puerta"
+        case .eq: return String(localized: "\(who) · Ecualizador paramétrico")
+        case .compressor: return String(localized: "\(who) · Compresor")
+        case .deesser: return String(localized: "\(who) · De-esser")
+        case .gate: return String(localized: "\(who) · Puerta")
         }
     }
 

@@ -18,7 +18,7 @@ struct SensitiveStep: View {
 
                     if !p.isTranscribed {
                         EmptyHint(symbol: "captions.bubble", title: String(localized: "Primero los subtítulos"),
-                                  text: "Esta sección busca en la transcripción. Ve a Subtítulos y transcribe el episodio.")
+                                  text: String(localized: "Esta sección busca en la transcripción. Ve a Subtítulos y transcribe el episodio."))
                     } else {
                         HStack(spacing: 10) {
                             Button { session.scanSensitive() } label: {
@@ -66,7 +66,7 @@ struct SensitiveStep: View {
 
                         if p.sensitiveScanned && p.sensitive.isEmpty {
                             EmptyHint(symbol: "checkmark.seal", title: String(localized: "Nada que tapar"),
-                                      text: "No se encontraron groserías ni palabras sensibles en la transcripción. Si falta alguna, agrégala a la derecha y vuelve a buscar.")
+                                      text: String(localized: "No se encontraron groserías ni palabras sensibles en la transcripción. Si falta alguna, agrégala a la derecha y vuelve a buscar."))
                         }
                     }
                 }

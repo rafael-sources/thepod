@@ -299,7 +299,7 @@ struct DirectorView: View {
                             VStack(spacing: 6) {
                                 if let e = o.expires {
                                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                                        Text("\(max(0, Int(e.timeIntervalSince(ctx.date))))s")
+                                        Text(String(localized: "\(max(0, Int(e.timeIntervalSince(ctx.date))))s"))
                                             .font(.caption.monospacedDigit().weight(.semibold)).foregroundStyle(Theme.secondary)
                                     }
                                 }
@@ -404,7 +404,7 @@ struct DirectorView: View {
                 ForEach(people) { p in personRow(p) }
             }
             VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(text: "Pistas grabadas")
+                SectionTitle(text: String(localized: "Pistas grabadas"))
                 if dir.uploads.isEmpty {
                     Text(dir.recording ? "Esperando que empiecen a subir…" : "Aparecen al grabar.").font(.callout).foregroundStyle(Theme.secondary)
                 }
@@ -553,7 +553,7 @@ struct CintillosPanel: View {
 
             if mode != 2 {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionTitle(text: "Tiempo en pantalla")
+                    SectionTitle(text: String(localized: "Tiempo en pantalla"))
                     HStack(spacing: 6) {
                         ForEach([(8.0, "8 s"), (15.0, "15 s"), (30.0, "30 s"), (0.0, String(localized: "Hasta quitarlo"))], id: \.0) { v, l in
                             Pill(text: l, selected: seconds == v, color: accent) { seconds = v }
@@ -571,7 +571,7 @@ struct CintillosPanel: View {
     /// Vista previa sobre un fondo tipo pantalla, a escala.
     private var previewBox: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Vista previa")
+            SectionTitle(text: String(localized: "Vista previa"))
             ZStack(alignment: .bottomLeading) {
                 LinearGradient(colors: [Color(white: 0.2), Color(white: 0.09)], startPoint: .top, endPoint: .bottom)
                 Cintillo(overlay: previewOverlay, scale: 0.5).padding(12)
@@ -651,7 +651,7 @@ struct CintillosPanel: View {
             CRField(placeholder: dir.podcastName.isEmpty ? "Nombre del podcast" : dir.podcastName, text: $podTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Qué decir ahora")
+            SectionTitle(text: String(localized: "Qué decir ahora"))
             CRField(placeholder: String(localized: "Ej.: Síguenos en todas las plataformas"), text: $podText, lines: 2...3)
         }
     }
@@ -703,13 +703,13 @@ struct CuesPanel: View {
                           selected: $target)
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Avisos rápidos", trailing: String(localized: "salen en su pantalla"))
+                SectionTitle(text: String(localized: "Avisos rápidos"), trailing: String(localized: "salen en su pantalla"))
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                     ForEach(DirectorStudio.cues, id: \.self) { c in cueTile(c) }
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Aviso escrito")
+                SectionTitle(text: String(localized: "Aviso escrito"))
                 HStack(spacing: 8) {
                     CRField(placeholder: String(localized: "Ej.: Faltan 5 minutos"), text: $custom) { sendCustom() }
                     Button { sendCustom() } label: {
@@ -782,7 +782,7 @@ struct TeleprompterPanel: View {
             }
             if !dir.sponsors.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionTitle(text: "Texto de un sponsor (prePod)")
+                    SectionTitle(text: String(localized: "Texto de un sponsor (prePod)"))
                     FlowPills(items: dir.sponsors.map { ("\($0.id)", $0.name) },
                               selected: Binding(get: { sponsorId.map(String.init) ?? "" },
                                                 set: { v in
@@ -795,9 +795,9 @@ struct TeleprompterPanel: View {
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Título del aviso")
+                SectionTitle(text: String(localized: "Título del aviso"))
                 CRField(placeholder: String(localized: "Ej.: Publicidad de Café Loma Verde"), text: $title)
-                SectionTitle(text: "Texto que va a leer")
+                SectionTitle(text: String(localized: "Texto que va a leer"))
                 CRField(placeholder: String(localized: "Escribe o pega el texto…"), text: $text, lines: 4...10)
             }
             HStack(alignment: .top, spacing: 18) {
@@ -819,7 +819,7 @@ struct TeleprompterPanel: View {
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Aviso previo")
+                SectionTitle(text: String(localized: "Aviso previo"))
                 HStack(spacing: 6) {
                     ForEach([(0, String(localized: "Sin aviso")), (3, "3 s"), (5, "5 s"), (10, "10 s")], id: \.0) { v, l in
                         Pill(text: l, selected: countdown == v) { countdown = v }
@@ -891,7 +891,7 @@ struct DirectorChatPanel: View {
     @State private var text = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(text: "Chat de dirección", trailing: String(localized: "los conductores lo ven como aviso"))
+            SectionTitle(text: String(localized: "Chat de dirección"), trailing: String(localized: "los conductores lo ven como aviso"))
             VStack(alignment: .leading, spacing: 8) {
                 if dir.chat.isEmpty {
                     Text("Todavía no hay mensajes.").font(.callout).foregroundStyle(Theme.secondary)

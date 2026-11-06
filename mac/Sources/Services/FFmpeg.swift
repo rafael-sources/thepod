@@ -109,7 +109,7 @@ enum FFmpeg {
 
     static func hasStream(_ kind: String, in url: URL) async -> Bool {
         let log = await inspect(url)
-        return log.contains("Stream #") && log.contains(": \(kind):")
+        return log.contains(String(localized: "Stream #")) && log.contains(": \(kind):")
     }
 
     /// First timestamp of the video and audio streams. prodPod files that lost their first

@@ -18,8 +18,8 @@ enum VoiceIsolation {
         case unavailable, render
         var errorDescription: String? {
             switch self {
-            case .unavailable: return "Esta Mac no trae el aislador de voz."
-            case .render: return "No se pudo separar la voz del ruido."
+            case .unavailable: return String(localized: "Esta Mac no trae el aislador de voz.")
+            case .render: return String(localized: "No se pudo separar la voz del ruido.")
             }
         }
     }

@@ -67,11 +67,11 @@ enum LoudnessReport {
         func rule(_ y: CGFloat) { ctx.setStrokeColor(NSColor(white: 0.8, alpha: 1).cgColor); ctx.setLineWidth(0.8); ctx.move(to: CGPoint(x: 56, y: y)); ctx.addLine(to: CGPoint(x: 539, y: y)); ctx.strokePath() }
         let accent = NSColor(red: 0.957, green: 0.780, blue: 0.439, alpha: 1)
         var y: CGFloat = 770
-        text("INFORME DE SONORIDAD", size: 10, bold: true, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 26
+        text(String(localized: "INFORME DE SONORIDAD"), size: 10, bold: true, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 26
         text(Exporter.episodeTitle(p), size: 18, bold: true, at: y); y -= 20
         text((p.podcastName ?? "") + " · " + format.title, size: 11, color: NSColor(white: 0.35, alpha: 1), at: y); y -= 16
         let df = DateFormatter(); df.dateStyle = .long; df.timeStyle = .short; df.locale = Locale(identifier: "es")
-        text("Archivo: \(file.lastPathComponent) · " + df.string(from: Date()), size: 10, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 24
+        text(String(localized: "Archivo: \(file.lastPathComponent) · ") + df.string(from: Date()), size: 10, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 24
         rule(y); y -= 30
         // Medidas grandes
         func big(_ value: String, _ label: String, x: CGFloat) {
@@ -85,7 +85,7 @@ enum LoudnessReport {
         let mins = Int(m.duration / 60), secs = Int(m.duration) % 60
         text(String(format: String(localized: "Duración %d:%02d · objetivo del export %.0f LUFS · medido con EBU R128 sobre el archivo final"), mins, secs, target), size: 10, color: NSColor(white: 0.35, alpha: 1), at: y); y -= 28
         rule(y); y -= 24
-        text("Cumplimiento por destino", size: 12, bold: true, at: y); y -= 22
+        text(String(localized: "Cumplimiento por destino"), size: 12, bold: true, at: y); y -= 22
         for t in targets {
             let ok = t.passes(m)
             ctx.setFillColor((ok ? NSColor(red: 0.35, green: 0.70, blue: 0.45, alpha: 1) : NSColor(red: 0.85, green: 0.45, blue: 0.40, alpha: 1)).cgColor)
@@ -97,7 +97,7 @@ enum LoudnessReport {
             y -= 20
         }
         y -= 10; rule(y); y -= 24
-        text("Qué significa", size: 12, bold: true, at: y); y -= 18
+        text(String(localized: "Qué significa"), size: 12, bold: true, at: y); y -= 18
         let notes = [
             String(localized: "Sonoridad integrada: el volumen percibido de todo el episodio, como lo miden las plataformas. Cada una lo lleva a su objetivo al reproducir; entregar ya en el objetivo evita que lo suban (más ruido) o lo bajen."),
             String(localized: "Pico real: el nivel máximo de la señal tras convertirla a analógico. Por encima de −1 dBTP los códecs (MP3, AAC) pueden distorsionar."),
@@ -112,7 +112,7 @@ enum LoudnessReport {
         }
         ctx.setFillColor(accent.cgColor)
         ctx.fill(CGRect(x: 56, y: 44, width: 483, height: 2))
-        text("thePod · postPod para Mac", size: 9, color: NSColor(white: 0.45, alpha: 1), at: 30)
+        text(String(localized: "thePod · postPod para Mac"), size: 9, color: NSColor(white: 0.45, alpha: 1), at: 30)
         NSGraphicsContext.restoreGraphicsState()
         ctx.endPDFPage()
         ctx.closePDF()

@@ -128,7 +128,7 @@ enum PluginHost {
                 guard let self else { return }
                 Task { @MainActor in
                     guard let unit else {
-                        let a = NSAlert(); a.messageText = "No se pudo abrir \(self.insert.name)"; a.informativeText = error?.localizedDescription ?? ""; a.runModal(); return
+                        let a = NSAlert(); a.messageText = String(localized: "No se pudo abrir \(self.insert.name)"); a.informativeText = error?.localizedDescription ?? ""; a.runModal(); return
                     }
                     self.unit = unit
                     let au = unit.auAudioUnit

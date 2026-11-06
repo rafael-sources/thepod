@@ -143,7 +143,7 @@ struct ProjectView: View {
     private func hint(_ step: Step) -> String? {
         let p = session.project
         switch step {
-        case .captions: return p.isTranscribed ? nil : "sin transcribir"
+        case .captions: return p.isTranscribed ? nil : String(localized: "sin transcribir")
         case .sensitive:
             let n = p.sensitive.filter { !$0.ignored }.count
             return p.sensitiveScanned ? (n == 0 ? nil : "\(n)") : nil

@@ -53,7 +53,7 @@ struct IdeasTab: View {
                     }
                     if ideas.isEmpty {
                         EmptyHint(symbol: "lightbulb", title: String(localized: "Todavía no hay ideas"),
-                                  text: "Cualquiera del equipo puede proponer. Las más votadas suben arriba.")
+                                  text: String(localized: "Cualquiera del equipo puede proponer. Las más votadas suben arriba."))
                     }
                 }
             }

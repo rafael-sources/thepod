@@ -113,7 +113,7 @@ struct AmaHomeView: View {
                 let done = events.filter { $0.status == "finished" }
                 if live.isEmpty && upcoming.isEmpty && !loading && error == nil {
                     EmptyHint(symbol: "questionmark.bubble", title: String(localized: "No tienes eventos de preguntas"),
-                              text: "Toca “Nuevo evento”. Cuando lo empieces, comparte el link y la gente se anota para preguntar.")
+                              text: String(localized: "Toca “Nuevo evento”. Cuando lo empieces, comparte el link y la gente se anota para preguntar."))
                 }
                 if !live.isEmpty { section(String(localized: "En vivo"), live) }
                 if !upcoming.isEmpty { section(String(localized: "Por empezar"), upcoming) }
@@ -254,7 +254,7 @@ struct NewAmaEventSheet: View {
                       subtitle: String(localized: "Después lo empiezas cuando quieras y compartes el link."), color: .amaPod)
             if !templates.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    AmaTitle(text: "Empezar desde una plantilla")
+                    AmaTitle(text: String(localized: "Empezar desde una plantilla"))
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(templates) { t in
@@ -396,7 +396,7 @@ struct AmaStudioView: View {
                 if let d = studio.event.description, !d.isEmpty { Text(d).foregroundStyle(Theme.secondary) }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    AmaTitle(text: "Links para compartir")
+                    AmaTitle(text: String(localized: "Links para compartir"))
                     linkRow(String(localized: "Para preguntar"), "person.wave.2.fill", AmaClient.joinLink(studio.event.id), String(localized: "para preguntar"))
                     linkRow(String(localized: "Para mirar"), "eye.fill", AmaClient.watchLink(studio.event.id), String(localized: "para mirar"))
                 }
@@ -670,7 +670,7 @@ struct AmaStudioView: View {
 
     private var requestsPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            AmaTitle(text: "Quieren preguntar", trailing: studio.requests.isEmpty ? nil : "\(studio.requests.count)")
+            AmaTitle(text: String(localized: "Quieren preguntar"), trailing: studio.requests.isEmpty ? nil : "\(studio.requests.count)")
             if studio.requests.isEmpty {
                 Text("Nadie por ahora. Comparte el link para preguntar (pestaña Compartir).")
                     .font(.callout).foregroundStyle(Theme.secondary).padding(.vertical, 8)
@@ -711,7 +711,7 @@ struct AmaStudioView: View {
 
     private var queuePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AmaTitle(text: "En la cola", trailing: studio.waiting.isEmpty ? nil : String(localized: "arrastra para ordenar")).padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 6)
+            AmaTitle(text: String(localized: "En la cola"), trailing: studio.waiting.isEmpty ? nil : String(localized: "arrastra para ordenar")).padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 6)
             if studio.waiting.isEmpty {
                 Text("Nadie en la cola. Acepta solicitudes para que aparezcan aquí.")
                     .font(.callout).foregroundStyle(Theme.secondary).padding(.horizontal, 18).padding(.vertical, 8)
@@ -758,7 +758,7 @@ struct AmaStudioView: View {
 
     private var chatPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            AmaTitle(text: "Chat del evento", trailing: chatModeName(studio.event.chat_mode))
+            AmaTitle(text: String(localized: "Chat del evento"), trailing: chatModeName(studio.event.chat_mode))
             if studio.event.chat_mode == "moderated" {
                 Text(studio.pendingCount > 0
                      ? (studio.pendingCount == 1 ? "1 mensaje espera tu aprobación. El público no lo ve hasta que lo apruebes."
@@ -825,7 +825,7 @@ struct AmaStudioView: View {
 
     private var sharePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AmaTitle(text: "Links del evento")
+            AmaTitle(text: String(localized: "Links del evento"))
             linkRow(String(localized: "Para preguntar"), "person.wave.2.fill", AmaClient.joinLink(studio.event.id), String(localized: "para preguntar"))
             Text("Se anotan con su nombre y hasta 3 preguntas. Tú los aceptas y decides el orden.")
                 .font(.caption).foregroundStyle(Theme.secondary)

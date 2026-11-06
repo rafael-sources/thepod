@@ -3,7 +3,15 @@ import SwiftUI
 /// Los atajos de teclado de la app, en una sola lista: la ventana «?» de Studio y el manual salen de aquí.
 /// Valen cuando no se está escribiendo en un campo de texto.
 struct Shortcut: Identifiable, Equatable {
-    enum Scope: String, CaseIterable { case everywhere = "En toda la app", studio = "Studio", video = "Studio · Video", audio = "Studio · Audio" }
+    enum Scope: String, CaseIterable {
+        case everywhere, studio, video, audio
+        var name: String {
+            switch self {
+            case .everywhere: return String(localized: "En toda la app"); case .studio: return "Studio"
+            case .video: return "Studio · Video"; case .audio: return "Studio · Audio"
+            }
+        }
+    }
     var id: String { keys + "·" + scope.rawValue }
     let keys: String
     let what: String
@@ -37,7 +45,7 @@ enum StudioShortcuts {
         var seen: Set<String> = [], dup: [String] = []
         for s in all {
             for k in s.keys.split(separator: "·").map({ $0.trimmingCharacters(in: .whitespaces) }) where !k.isEmpty {
-                let key = "\(s.scope == .everywhere ? "*" : s.scope.rawValue):\(k)"
+                let key = "\(s.scope.rawValue):\(k)"
                 if !seen.insert(key).inserted { dup.append(key) }
             }
         }
@@ -52,7 +60,7 @@ struct ShortcutsPopover: View {
             ForEach(Shortcut.Scope.allCases, id: \.self) { scope in
                 let items = StudioShortcuts.all.filter { $0.scope == scope }
                 if !items.isEmpty {
-                    Text(scope.rawValue).font(.caption.bold()).foregroundStyle(Theme.secondary).padding(.top, 4)
+                    Text(scope.name).font(.caption.bold()).foregroundStyle(Theme.secondary).padding(.top, 4)
                     ForEach(items) { s in
                         HStack(alignment: .top, spacing: 10) {
                             Text(s.keys).font(.caption.monospaced()).frame(width: 150, alignment: .leading)

@@ -235,7 +235,7 @@ struct FixStep: View {
                         if session.project.conversationPan && session.project.lanes.count >= 2 {
                             HStack(spacing: 10) {
                                 ForEach(session.project.lanesOnScreen) { lane in
-                                    Text("\(session.project.laneName(lane.id)) \(lane.pan < -0.01 ? "◀" : lane.pan > 0.01 ? "▶" : "●") \(String(format: "%.0f %%", abs(lane.pan) * 100))")
+                                    Text(String(localized: "\(session.project.laneName(lane.id)) \(lane.pan < -0.01 ? "◀" : lane.pan > 0.01 ? "▶" : "●") \(String(format: "%.0f %%", abs(lane.pan) * 100))"))
                                         .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
                                 }
                                 Spacer()
@@ -1762,7 +1762,7 @@ struct ReelTextCard: View {
                 }
                 if !reel.cuts.isEmpty {
                     HStack {
-                        Text("\(reel.cuts.count) \(reel.cuts.count == 1 ? "corte propio" : "cortes propios") en este reel").font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(String(localized: "\(reel.cuts.count) \(reel.cuts.count == 1 ? "corte propio" : "cortes propios") en este reel")).font(.caption2).foregroundStyle(Theme.secondary)
                         Spacer()
                         Button("Deshacer todos") {
                             if let i = session.project.reels.firstIndex(where: { $0.id == reel.id }) { session.project.reels[i].cuts = [] }
@@ -1931,23 +1931,23 @@ struct ExportReviewCard: View {
         let p = session.project
         var out: [Item] = []
         if p.fix.lastRun == nil {
-            out.append(Item(id: "fix", text: "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)", optional: false,
+            out.append(Item(id: "fix", text: String(localized: "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)"), optional: false,
                             actions: [("Limpiar", { session.step = .fix })]))
         }
         if !p.isTranscribed {
-            out.append(Item(id: "words", text: "No hay transcripción: el video sale sin subtítulos", optional: true,
+            out.append(Item(id: "words", text: String(localized: "No hay transcripción: el video sale sin subtítulos"), optional: true,
                             actions: [("Ir a subtítulos", { session.step = .captions })]))
         } else if !p.wordsSynced {
-            out.append(Item(id: "sync", text: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche", optional: false,
+            out.append(Item(id: "sync", text: String(localized: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche"), optional: false,
                             actions: [("Ajustar", { session.syncSubtitles() })]))
         }
         let pending = session.pendingSuggestions.count
         if pending > 0 {
-            out.append(Item(id: "sugg", text: "\(pending) \(pending == 1 ? "sugerencia" : "sugerencias") sin revisar (muletillas dudosas o frases repetidas)", optional: false,
+            out.append(Item(id: "sugg", text: String(localized: "\(pending) \(pending == 1 ? "sugerencia" : "sugerencias") sin revisar (muletillas dudosas o frases repetidas)"), optional: false,
                             actions: [("Ver", { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
         }
         if p.isTranscribed, !p.sensitiveScanned {
-            out.append(Item(id: "sens", text: "No se buscaron palabras sensibles (groserías, marcas, datos personales)", optional: true,
+            out.append(Item(id: "sens", text: String(localized: "No se buscaron palabras sensibles (groserías, marcas, datos personales)"), optional: true,
                             actions: [("Revisar", { session.step = .sensitive })]))
         }
         let unseen = p.reels.filter { $0.selected && $0.seen != true }.count
@@ -2217,7 +2217,7 @@ struct SharedReviewCard: View {
                             Button("Cerrar enlace", role: .destructive) { confirmRevoke = true }.controlSize(.small)
                         }
                         let df: DateFormatter = { let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short; return f }()
-                        Text("Enviado el \(df.string(from: r.sentAt))" + (r.fetchedAt.map { String(localized: " · comentarios al \(df.string(from: $0))") } ?? String(localized: " · todavía no se han traído comentarios")))
+                        Text(String(localized: "Enviado el \(df.string(from: r.sentAt))") + (r.fetchedAt.map { String(localized: " · comentarios al \(df.string(from: $0))") } ?? String(localized: " · todavía no se han traído comentarios")))
                             .font(.caption2).foregroundStyle(Theme.secondary)
                         if r.comments.isEmpty {
                             Text("Sin comentarios por ahora.").font(.caption).foregroundStyle(Theme.secondary)
@@ -2262,7 +2262,7 @@ struct ExportQueueCard: View {
             HStack {
                 Text("Cola de exportación").font(.headline)
                 if session.queuePending > 0 {
-                    Text("\(session.queuePending) pendiente\(session.queuePending == 1 ? "" : "s")").font(.caption).foregroundStyle(Theme.secondary)
+                    Text(String(localized: "\(session.queuePending) pendiente\(session.queuePending == 1 ? "" : "s")")).font(.caption).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
                 if session.exportQueue.contains(where: { $0.status.isFinished }) {

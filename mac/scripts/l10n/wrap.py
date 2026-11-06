@@ -9,7 +9,7 @@ keys = {u.find('x:source', ns).text for u in ET.parse(root/'l10n/en.xliff').getr
 interp = re.compile(r'\\\((?:[^()]|\([^()]*\))*\)')
 spanish = re.compile(r'[a-záéíóúñ]{3,}', re.I)
 skip_prefix = ('http', '/', '-', '#', 'com.', 'space.', 'cache/', 'media/', 'broll/', 'exports', 'estudio.', 'proxy', 'application/', 'ritmo-', 'capas/', 'sfx/', 'musica/', 'fondos/', 'looks/', 'pistas_')
-skip_ctx = re.compile(r'(case|==|!=|\.contains|\.hasPrefix|\.hasSuffix|forKey|key|rel|\.appendingPathComponent|dateFormat|NSLog|print|\.query|keys|track|URL|string:|withExtension|fileURLWithPath|localized:|verbatim:|Keychain|UserDefaults|\.set\(|object\(|\.range|replacingOccurrences|split|components|separator:|identifier|rawValue|name:|\.name ==|systemImage|systemName|AVAudioUnit|AudioComponent|fileName|filename|baseName|\.path|slug|command|\[|tag\(|forHTTPHeaderField|setValue|arguments|executableURL|lastPathComponent|regularExpression|pattern|withName|extension|ext|\.joined|domain)\s*[:(=]?\s*$')
+skip_ctx = re.compile(r'(?<![\w])(case|==|!=|\.contains|\.hasPrefix|\.hasSuffix|forKey|key|rel|\.appendingPathComponent|dateFormat|NSLog|print|\.query|keys|track|URL|string:|withExtension|fileURLWithPath|localized:|verbatim:|Keychain|UserDefaults|\.set\(|object\(|\.range|replacingOccurrences|split|components|separator:|identifier|rawValue|name:|\.name ==|systemImage|systemName|AVAudioUnit|AudioComponent|fileName|filename|baseName|\.path|slug|command|\[|tag\(|forHTTPHeaderField|setValue|arguments|executableURL|lastPathComponent|regularExpression|pattern|withName|extension|ext|\.joined|domain)\s*[:(=]?\s*$')
 def key_of(s): return interp.sub('%@', s).replace('\\"', '"')
 def wrappable(s, before):
     plain = interp.sub('', s)
@@ -22,7 +22,7 @@ def wrappable(s, before):
     b = before.rstrip()
     if b.endswith('String(localized:') or b.endswith('localized:'): return False
     if skip_ctx.search(b[-48:]): return False
-    if re.search(r'\b(case|switch)\b[^{]*$', b): return False
+    if re.search(r'\b(case|switch)\b[^{:]*$', b) and not re.search(r'\b(return|=|\+|\?|\(|,)\s*$', b): return False
     return True
 total = 0
 for f in sorted((root/'Sources').rglob('*.swift')):

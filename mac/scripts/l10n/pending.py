@@ -2,6 +2,7 @@
 """Literales en español del código que NO están en l10n/en.xliff (lo que el compilador no ve como localizable).
 Uso: python3 scripts/l10n/pending.py [--by-context] [--files]"""
 import re, sys, xml.etree.ElementTree as ET, collections, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent)); from swiftlit import literals
 root = pathlib.Path(__file__).resolve().parents[2]
 ns = {'x': 'urn:oasis:names:tc:xliff:document:1.2'}
 keys = {u.find('x:source', ns).text for u in ET.parse(root/'l10n/en.xliff').getroot().findall('.//x:trans-unit', ns)}
@@ -17,13 +18,13 @@ for f in sorted((root/'Sources').rglob('*.swift')):
     for ln, line in enumerate(f.read_text().splitlines(), 1):
         st = line.strip()
         if st.startswith('//') or st.startswith('///'): continue
-        for m in lit.finditer(line):
-            s = m.group(1)
-            if not spanish.search(s) or s.startswith(skip_prefix) or len(s) < 4: continue
-            if re.fullmatch(r'[\w\-.]+', s): continue          # identificadores, claves, nombres de archivo
+        for a, z, s in literals(line):
+            plain = re.sub(r'\\\((?:[^()]|\([^()]*\))*\)', '', s)
+            if not spanish.search(plain) or s.startswith(skip_prefix) or len(plain.strip()) < 4: continue
+            if re.fullmatch(r'[\w\-.]+', plain): continue          # identificadores, claves, nombres de archivo
             k = key_of(s)
-            if k in keys or k.replace('%@', '%lld') in keys: continue
-            before = line[:m.start()].rstrip()[-28:]
+            if k in keys or k.replace('%@', '%lld') in keys or re.sub(r'%(lld|@|\.\df|d)', '%', k) in {re.sub(r'%(lld|@|\.\df|d)', '%', x) for x in keys}: continue
+            before = line[:a].rstrip()[-28:]
             ctx = re.findall(r'(\w+|\.\w+)\s*\($', before) or re.findall(r'(\w+)\s*[=:+]\s*$', before) or ['?']
             pending.append((str(f.relative_to(root)), ln, ctx[-1], s))
 if '--by-context' in sys.argv:

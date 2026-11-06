@@ -20,8 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let studio = ProdStudio.current, studio.phase == .inRoom, !leavingRoom {
             if studio.recording {
                 let a = NSAlert()
-                a.messageText = "Estás grabando"
-                a.informativeText = "Si cierras thePod se detiene tu grabación. Lo grabado queda en tu Mac y se termina de subir la próxima vez que abras prod."
+                a.messageText = String(localized: "Estás grabando")
+                a.informativeText = String(localized: "Si cierras thePod se detiene tu grabación. Lo grabado queda en tu Mac y se termina de subir la próxima vez que abras prod.")
                 a.addButton(withTitle: String(localized: "Cerrar igual"))
                 a.addButton(withTitle: String(localized: "Seguir grabando"))
                 if a.runModal() != .alertFirstButtonReturn { return .terminateCancel }

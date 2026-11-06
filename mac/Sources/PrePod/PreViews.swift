@@ -363,7 +363,7 @@ struct PreHomeView: View {
     private var summary: String {
         let active = model.episodes.filter { ![.published, .archived].contains($0.statusValue) }.count
         let published = model.episodes.filter { $0.statusValue == .published }.count
-        var parts = ["\(active) en preparación", String(localized: "\(published) publicados")]
+        var parts = [String(localized: "\(active) en preparación"), String(localized: "\(published) publicados")]
         if let t = model.podcast?.tagline, !t.isEmpty, t.count <= 90 { parts.insert(t, at: 0) }
         return parts.joined(separator: " · ")
     }
@@ -900,7 +900,7 @@ struct ScriptTab: View {
                     }
                     if sections.isEmpty {
                         EmptyHint(symbol: "text.page", title: String(localized: "El guion está vacío"),
-                                  text: "Toca “Agregar sección” y escribe qué se dice en cada parte. No hace falta que sea perfecto.")
+                                  text: String(localized: "Toca “Agregar sección” y escribe qué se dice en cada parte. No hace falta que sea perfecto."))
                     }
                 }
             }
@@ -952,7 +952,7 @@ struct ScriptTab: View {
                                                         set: { g in s.wrappedValue.tpGapSeconds = max(0, g); save(s.wrappedValue.id, ["tp_gap_seconds": max(0, g)]) }),
                                   format: .number)
                             .frame(width: 44)
-                        Text("seg → empieza en \(clockTP(tpStart(s.wrappedValue)))").font(.caption).foregroundStyle(Theme.secondary)
+                        Text(String(localized: "seg → empieza en \(clockTP(tpStart(s.wrappedValue)))")).font(.caption).foregroundStyle(Theme.secondary)
                     } else {
                         Text("aparece a los").font(.caption).foregroundStyle(Theme.secondary)
                         let secs = s.wrappedValue.tpOffsetSeconds ?? 0
@@ -968,7 +968,7 @@ struct ScriptTab: View {
                             .buttonStyle(.borderless).font(.caption)
                             .help("Sumar lo que duran las secciones anteriores")
                     }
-                    Text("corre ~\(Int(tpRunSeconds(s.wrappedValue).rounded())) s").font(.caption).foregroundStyle(Theme.secondary)
+                    Text(String(localized: "corre ~\(Int(tpRunSeconds(s.wrappedValue).rounded())) s")).font(.caption).foregroundStyle(Theme.secondary)
                 }
                 HStack(spacing: 10) {
                     Text("velocidad").font(.caption).foregroundStyle(Theme.secondary)
@@ -1107,7 +1107,7 @@ struct RundownTab: View {
             if totalMinutes > 0 { proportionBar }
             if blocks.isEmpty {
                 EmptyHint(symbol: "list.bullet.rectangle", title: String(localized: "El rundown está vacío"),
-                          text: "Toca “Agregar bloque” y arma el orden: intro, segmentos, entrevista, sponsor, cierre.")
+                          text: String(localized: "Toca “Agregar bloque” y arma el orden: intro, segmentos, entrevista, sponsor, cierre."))
             }
             ScrollView {
                 VStack(spacing: 8) {
@@ -1285,7 +1285,7 @@ struct GuestsTab: View {
                     }
                     if guests.isEmpty {
                         EmptyHint(symbol: "person.2", title: String(localized: "Todavía no hay nadie"),
-                                  text: "Agrega a los conductores e invitados abajo. Con su correo puedes invitarlos y mandarles la preparación.")
+                                  text: String(localized: "Agrega a los conductores e invitados abajo. Con su correo puedes invitarlos y mandarles la preparación."))
                     }
                 }
             }

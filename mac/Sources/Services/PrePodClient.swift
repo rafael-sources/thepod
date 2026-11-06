@@ -158,7 +158,7 @@ actor PrePodClient {
             return nil
         } catch {
             let msg = error.localizedDescription
-            return msg.hasPrefix("El plan") ? msg : nil      // sin conexión: no se bloquea
+            return msg.hasPrefix(String(localized: "El plan")) ? msg : nil      // sin conexión: no se bloquea
         }
     }
 
@@ -322,7 +322,7 @@ actor PrePodClient {
             case "done":
                 let r = obj["result"] as? [String: Any] ?? [:]
                 return r.compactMapValues { v in (v as? String) ?? (v as? NSNumber)?.stringValue }
-            case "error": throw Failure(message: obj["error"] as? String ?? "prePod no pudo publicar")
+            case "error": throw Failure(message: obj["error"] as? String ?? String(localized: "prePod no pudo publicar"))
             default: try await Task.sleep(nanoseconds: 1_500_000_000)
             }
         }

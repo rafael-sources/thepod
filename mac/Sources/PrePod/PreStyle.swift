@@ -16,12 +16,12 @@ extension EpisodeStatus {
     /// Lo que significa la columna, en una línea.
     var hint: String {
         switch self {
-        case .idea: return "Por pensar"
-        case .planning: return "Armando el episodio"
-        case .scripted: return "Listo para grabar"
-        case .recorded: return "A edición (post)"
-        case .published: return "Ya está al aire"
-        case .archived: return "Guardados aparte"
+        case .idea: return String(localized: "Por pensar")
+        case .planning: return String(localized: "Armando el episodio")
+        case .scripted: return String(localized: "Listo para grabar")
+        case .recorded: return String(localized: "A edición (post)")
+        case .published: return String(localized: "Ya está al aire")
+        case .archived: return String(localized: "Guardados aparte")
         }
     }
 }
@@ -168,7 +168,7 @@ extension PreEpisode {
         case 0: return "hoy"
         case 1: return "mañana"
         case -1: return "ayer"
-        case 2...: return "en \(days) días"
+        case 2...: return String(localized: "en \(days) días")
         default: return String(localized: "hace \(-days) días")
         }
     }

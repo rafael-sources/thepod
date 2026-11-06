@@ -162,7 +162,7 @@ struct RoomProbeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 LazyVGrid(columns: cols, spacing: 14) {
-                    tile(name: "Tú (Mac)", track: probe.localTrack, speaking: false, mirror: true, recording: probe.recording)
+                    tile(name: String(localized: "Tú (Mac)"), track: probe.localTrack, speaking: false, mirror: true, recording: probe.recording)
                     ForEach(probe.remotes) { r in tile(name: r.name, track: r.track, speaking: r.speaking, mirror: false, recording: false) }
                 }
                 Spacer()

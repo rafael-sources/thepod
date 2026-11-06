@@ -10,7 +10,7 @@ struct RedesTab: View {
         let id: String; let name: String; let note: String; let stars: [String]; let connectable: Bool
     }
     private let rows = [
-        Row(id: "feed", name: "Feed del podcast", note: String(localized: "Spotify y Apple Podcasts lo leen solos"), stars: ["spotify", "apple"], connectable: false),
+        Row(id: "feed", name: String(localized: "Feed del podcast"), note: String(localized: "Spotify y Apple Podcasts lo leen solos"), stars: ["spotify", "apple"], connectable: false),
         Row(id: "youtube", name: "YouTube", note: String(localized: "Tu canal: los episodios y los Shorts"), stars: ["youtube", "shorts"], connectable: true),
         Row(id: "instagram", name: "Instagram", note: String(localized: "Cuenta profesional: la portada y los Reels"), stars: ["instagram", "reels"], connectable: true),
         Row(id: "tiktok", name: "TikTok", note: String(localized: "Los reels llegan a tu bandeja y los publicas desde el teléfono"), stars: ["tiktok"], connectable: true),

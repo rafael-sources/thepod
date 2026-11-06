@@ -127,7 +127,7 @@ enum TextRenderer {
     static func sponsorText(name: String, copy: String?, fontSize: CGFloat, maxWidth: CGFloat) -> CIImage? {
         let para = NSMutableParagraphStyle()
         para.lineBreakMode = .byWordWrapping
-        let s = NSMutableAttributedString(string: "PATROCINA\n", attributes: [
+        let s = NSMutableAttributedString(string: String(localized: "PATROCINA\n"), attributes: [
             .font: NSFont.systemFont(ofSize: fontSize * 0.55, weight: .heavy),
             .foregroundColor: NSColor(srgbRed: 1, green: 0.78, blue: 0.2, alpha: 1), .kern: 1.5, .paragraphStyle: para])
         s.append(NSAttributedString(string: name, attributes: [

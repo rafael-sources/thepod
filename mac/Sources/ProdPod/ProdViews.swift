@@ -58,7 +58,7 @@ struct ProdHomeView: View {
                 let done = sessions.filter { $0.status == "finished" }
                 if open.isEmpty && !loading && error == nil {
                     EmptyHint(symbol: "record.circle", title: String(localized: "No hay salas por grabar"),
-                              text: "En pre, abre un episodio y toca “Ir a grabar”. La sala aparece aquí.")
+                              text: String(localized: "En pre, abre un episodio y toca “Ir a grabar”. La sala aparece aquí."))
                 }
                 if !open.isEmpty {
                     Text("Por grabar").font(.title2.bold())
@@ -437,7 +437,7 @@ struct StudioView: View {
             }
             if studio.micGainDb != 0 {
                 HStack {
-                    Text("La sala te oye \(studio.micGainDb > 0 ? "+" : "")\(studio.micGainDb) dB con este micrófono. Tu grabación no cambia.")
+                    Text(String(localized: "La sala te oye \(studio.micGainDb > 0 ? "+" : "")\(studio.micGainDb) dB con este micrófono. Tu grabación no cambia."))
                         .font(.caption).foregroundStyle(Theme.secondary)
                     Spacer()
                     Button("Quitar") { studio.setMicGain(0) }.controlSize(.small)
@@ -688,7 +688,7 @@ struct StudioView: View {
             }
             ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
                 let name = studio.people.first(where: { $0.id == id })?.name ?? String(localized: "Otra persona")
-                Text("\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))")
+                Text(String(localized: "\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))"))
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
             if studio.canExport && role.isAdmin {
@@ -733,7 +733,7 @@ struct StudioView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(s.name).font(.callout.weight(.semibold))
-                        Text("a los \(studio.clock(Int(s.at)))").font(.caption).foregroundStyle(Theme.secondary)
+                        Text(String(localized: "a los \(studio.clock(Int(s.at)))")).font(.caption).foregroundStyle(Theme.secondary)
                     }
                     Spacer()
                     if studio.recording { Button("+90 s") { studio.delaySponsor(s) }.controlSize(.small) }

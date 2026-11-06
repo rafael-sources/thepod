@@ -9,7 +9,7 @@ enum EpisodeStatus: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .idea: return "Idea"
         case .planning: return "Planificando"
-        case .scripted: return "Con guion"
+        case .scripted: return String(localized: "Con guion")
         case .recorded: return "Grabado"
         case .published: return "Publicado"
         case .archived: return "Archivado"

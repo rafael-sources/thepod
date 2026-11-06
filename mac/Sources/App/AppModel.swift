@@ -188,13 +188,13 @@ enum Step: String, CaseIterable, Identifiable {
         case .captions: return "Subtítulos"
         case .sensitive: return "Palabras sensibles"
         case .look: return "Aspecto"
-        case .layers: return "Textos y stickers"
+        case .layers: return String(localized: "Textos y stickers")
         case .cintillos: return "Cintillos"
-        case .sounds: return "Música y efectos"
+        case .sounds: return String(localized: "Música y efectos")
         case .brands: return "Patrocinios y marcas"
         case .reels: return "Reels"
         case .cover: return "Portada"
-        case .export: return "Exportar video"
+        case .export: return String(localized: "Exportar video")
         case .publish: return "Publicar"
         }
     }

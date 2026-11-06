@@ -60,11 +60,11 @@ struct AutomationStrip: View {
     }
     private var label: String {
         switch param {
-        case ChainSettings.compThreshold: return "Compresor · umbral"
-        case ChainSettings.compRatio: return "Compresor · relación"
-        case ChainSettings.compMakeup: return "Compresor · compensación"
-        case ChainSettings.deesserAmount: return "De-esser · cantidad"
-        case ChainSettings.gateThreshold: return "Puerta · umbral"
+        case ChainSettings.compThreshold: return String(localized: "Compresor · umbral")
+        case ChainSettings.compRatio: return String(localized: "Compresor · relación")
+        case ChainSettings.compMakeup: return String(localized: "Compresor · compensación")
+        case ChainSettings.deesserAmount: return String(localized: "De-esser · cantidad")
+        case ChainSettings.gateThreshold: return String(localized: "Puerta · umbral")
         default:
             let parts = param.split(separator: ".")
             if parts.count == 3, let id = UUID(uuidString: String(parts[1])), let i = chain.bands.firstIndex(where: { $0.id == id }) {

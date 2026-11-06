@@ -240,7 +240,7 @@ struct TeleprompterLayer: View {
                             .frame(width: 64, height: 64)
                             .background(Circle().fill(Color.white.opacity(0.18)))
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Viene **\(n.title)** en \(n.remaining) s").font(.title3.weight(.semibold))
+                            Text(String(localized: "Viene **\(n.title)** en \(n.remaining) s")).font(.title3.weight(.semibold))
                             if !n.who.isEmpty { Text("ATENTO \(n.who)").font(.headline.weight(.black)).tracking(1.5) }
                         }
                     }

@@ -15,7 +15,7 @@ struct LayersStep: View {
                     Card {
                         Text("Agregar").font(.headline)
                         HStack(spacing: 10) {
-                            addButton("Texto", "textformat") { _ = session.addOverlay(kind: .text, text: "Escribe aquí") }
+                            addButton("Texto", "textformat") { _ = session.addOverlay(kind: .text, text: String(localized: "Escribe aquí")) }
                             addButton("Imagen", "photo") { session.chooseOverlayImage() }
                             addButton("Sticker", "face.smiling") { _ = session.addOverlay(kind: .sticker, text: "🔥") }
                         }

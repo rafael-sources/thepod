@@ -208,7 +208,7 @@ extension ProdStudio {
             do { _ = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/start") }
             catch {
                 // Plan Gratis sin episodios: no se graba, y se avisa a los demás para que tampoco
-                if error.localizedDescription.hasPrefix("El plan") {
+                if error.localizedDescription.hasPrefix(String(localized: "El plan")) {
                     send(["type": "recording_stop"])
                     self.error = error.localizedDescription
                     return

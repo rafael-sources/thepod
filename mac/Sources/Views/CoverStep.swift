@@ -28,7 +28,7 @@ struct CoverStep: View {
                             Text("Recorre el episodio y propone los segundos donde todas las personas salen sonriendo, con los ojos abiertos y la imagen nítida. Tarda alrededor de un minuto por cada media hora de episodio.")
                                 .font(.caption).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
                             if let d = session.project.coverScannedAt {
-                                Text("Última búsqueda: \(d.formatted(date: .abbreviated, time: .shortened)) · \(candidates.count) capturas")
+                                Text(String(localized: "Última búsqueda: \(d.formatted(date: .abbreviated, time: .shortened)) · \(candidates.count) capturas"))
                                     .font(.caption2).foregroundStyle(Theme.secondary)
                             }
                         }

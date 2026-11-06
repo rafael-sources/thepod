@@ -271,11 +271,11 @@ struct EQBand: Codable, Equatable, Identifiable, Hashable {
     var enabled = true
     var label: String {
         switch kind {
-        case .highpass: return "Paso alto"
-        case .lowshelf: return "Estante bajo"
+        case .highpass: return String(localized: "Paso alto")
+        case .lowshelf: return String(localized: "Estante bajo")
         case .peak: return "Campana"
-        case .highshelf: return "Estante alto"
-        case .lowpass: return "Paso bajo"
+        case .highshelf: return String(localized: "Estante alto")
+        case .lowpass: return String(localized: "Paso bajo")
         }
     }
 }
@@ -702,7 +702,7 @@ struct VirtualBackground: Codable, Equatable {
     enum Mode: String, Codable, CaseIterable {
         case blur, podcast, color, image
         var name: String {
-            switch self { case .blur: return "Difuminado"; case .podcast: return "Fondo del podcast"; case .color: return "Color"; case .image: return "Imagen" }
+            switch self { case .blur: return "Difuminado"; case .podcast: return String(localized: "Fondo del podcast"); case .color: return "Color"; case .image: return "Imagen" }
         }
     }
     var mode: Mode = .blur
@@ -833,11 +833,11 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .auto: return "Automático"
         case .solo: return "Quien habla"
-        case .sideBySide: return "Lado a lado"
+        case .sideBySide: return String(localized: "Lado a lado")
         case .grid: return "Cuadrícula"
         case .spotlight: return "Protagonista"
         case .pip: return "Ventanita"
-        case .stack: return "Arriba y abajo"
+        case .stack: return String(localized: "Arriba y abajo")
         case .studio: return "Estudio"
         }
     }
@@ -855,14 +855,14 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
     }
     var help: String {
         switch self {
-        case .auto: return "Elegimos el mejor según el formato"
+        case .auto: return String(localized: "Elegimos el mejor según el formato")
         case .solo: return "Pantalla completa para quien está hablando"
-        case .sideBySide: return "Todos a la vez, uno al lado del otro"
-        case .grid: return "Todos en cuadrícula"
-        case .spotlight: return "Quien habla en grande, el resto al costado"
-        case .pip: return "Quien habla en grande, otro en una esquina"
-        case .stack: return "Uno arriba y otro abajo (ideal vertical)"
-        case .studio: return "Las cámaras en recuadros sobre el fondo de tu podcast"
+        case .sideBySide: return String(localized: "Todos a la vez, uno al lado del otro")
+        case .grid: return String(localized: "Todos en cuadrícula")
+        case .spotlight: return String(localized: "Quien habla en grande, el resto al costado")
+        case .pip: return String(localized: "Quien habla en grande, otro en una esquina")
+        case .stack: return String(localized: "Uno arriba y otro abajo (ideal vertical)")
+        case .studio: return String(localized: "Las cámaras en recuadros sobre el fondo de tu podcast")
         }
     }
 }
@@ -873,17 +873,17 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .landscape: return "YouTube"
-        case .vertical: return "Reels · TikTok · Shorts"
-        case .square: return "Instagram cuadrado"
-        case .audio: return "Solo audio (MP3)"
+        case .vertical: return String(localized: "Reels · TikTok · Shorts")
+        case .square: return String(localized: "Instagram cuadrado")
+        case .audio: return String(localized: "Solo audio (MP3)")
         }
     }
     var subtitle: String {
         switch self {
-        case .landscape: return "Horizontal 16:9 · \(Int(renderSize.height))p" + planNote
-        case .vertical: return "Vertical 9:16 · \(Int(renderSize.width))×\(Int(renderSize.height))" + planNote
-        case .square: return "Cuadrado 1:1 · \(Int(renderSize.width))×\(Int(renderSize.height))" + planNote
-        case .audio: return "Para Spotify, Apple Podcasts…"
+        case .landscape: return String(localized: "Horizontal 16:9 · \(Int(renderSize.height))p") + planNote
+        case .vertical: return String(localized: "Vertical 9:16 · \(Int(renderSize.width))×\(Int(renderSize.height))") + planNote
+        case .square: return String(localized: "Cuadrado 1:1 · \(Int(renderSize.width))×\(Int(renderSize.height))") + planNote
+        case .audio: return String(localized: "Para Spotify, Apple Podcasts…")
         }
     }
     var symbol: String {
@@ -1230,7 +1230,7 @@ struct Transition: Codable, Equatable {
         case cut, fade, black, slide, zoom
         var name: String {
             switch self {
-            case .cut: return "Corte"; case .fade: return "Fundido"; case .black: return "A negro"
+            case .cut: return "Corte"; case .fade: return "Fundido"; case .black: return String(localized: "A negro")
             case .slide: return "Deslizar"; case .zoom: return "Zoom"
             }
         }

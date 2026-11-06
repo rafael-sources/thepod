@@ -465,12 +465,12 @@ struct PubHomeView: View {
 
     private func accountNote(_ s: PubStar) -> String {
         switch s.id {
-        case "spotify", "apple": return "Lee el feed del podcast"
-        case "youtube": return "Tu canal · también publica los Shorts"
-        case "shorts": return "Tu canal · también publica el episodio"
-        case "instagram": return "Cuenta profesional · también publica los Reels"
-        case "reels": return "Cuenta profesional · también publica la portada"
-        case "tiktok": return "Los reels llegan a tu bandeja"
+        case "spotify", "apple": return String(localized: "Lee el feed del podcast")
+        case "youtube": return String(localized: "Tu canal · también publica los Shorts")
+        case "shorts": return String(localized: "Tu canal · también publica el episodio")
+        case "instagram": return String(localized: "Cuenta profesional · también publica los Reels")
+        case "reels": return String(localized: "Cuenta profesional · también publica la portada")
+        case "tiktok": return String(localized: "Los reels llegan a tu bandeja")
         default: return ""
         }
     }
@@ -627,7 +627,7 @@ struct PubHomeView: View {
                 if working, let s = session, let j = s.job {
                     Text(j.detail.isEmpty ? j.title : j.detail).font(.caption).foregroundStyle(Theme.secondary).lineLimit(1)
                 } else if working {
-                    Text("Subiendo \(Int(progress * 100)) %").font(.caption).foregroundStyle(Theme.secondary)
+                    Text(String(localized: "Subiendo \(Int(progress * 100)) %")).font(.caption).foregroundStyle(Theme.secondary)
                 }
                 mainButton(ts)
             }
@@ -639,10 +639,10 @@ struct PubHomeView: View {
 
     private func hint(_ s: PubStar) -> String {
         switch s.platform {
-        case "feed": return "Notas del episodio (Spotify y Apple Podcasts leen las mismas)"
-        case "youtube": return isEpisode ? "Descripción" : "Texto del Short"
-        case "instagram_image": return "Texto de la portada"
-        case "tiktok": return "Texto para pegar en TikTok (el video llega a tu bandeja)"
+        case "feed": return String(localized: "Notas del episodio (Spotify y Apple Podcasts leen las mismas)")
+        case "youtube": return isEpisode ? "Descripción" : String(localized: "Texto del Short")
+        case "instagram_image": return String(localized: "Texto de la portada")
+        case "tiktok": return String(localized: "Texto para pegar en TikTok (el video llega a tu bandeja)")
         default: return String(localized: "Texto, con tus hashtags")
         }
     }
