@@ -68,7 +68,7 @@ struct ColorPanel: View {
     private func importCube() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data]
-        panel.message = String(localized: "Un look en formato .cube (LUT 3D), como los que exportan Resolve, Premiere o Final Cut"
+        panel.message = String(localized: "Un look en formato .cube (LUT 3D), como los que exportan Resolve, Premiere o Final Cut")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         if let name = LUTLibrary.importCube(url) { set { $0.lut = name; $0.look = name }; tick += 1 }
     }
