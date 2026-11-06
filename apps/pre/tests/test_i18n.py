@@ -33,6 +33,10 @@ import pytest
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    # create_app() starts the pubpod and reminders background threads; in tests they would
+    # outlive the fixture and race with test_pubpod over the patched PODCASTS_DIR.
+    monkeypatch.setenv("PUBPOD_SCHEDULER", "0")
+    monkeypatch.setenv("PREPOD_REMINDERS", "0")
     import config
     monkeypatch.setattr(config, "PODCASTS_DIR", tmp_path / "podcasts")
     import app as app_module

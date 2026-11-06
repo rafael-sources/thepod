@@ -20,7 +20,7 @@ def test_borrar_sala_borra_sus_archivos(tmp_path, monkeypatch):
     from app import create_app
     app = create_app(); app.testing = True
     c = app.test_client()
-    with c.session_transaction() as s:
+    with c.session_transaction(base_url="http://castmedia.space") as s:
         s["username"] = "host"
     r = c.delete("/api/sessions/7", base_url="http://castmedia.space")
     assert r.status_code == 200, r.get_json()
