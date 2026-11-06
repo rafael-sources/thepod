@@ -1,7 +1,7 @@
-"""Guarda en privado el ID y la clave secreta de la app de Instagram de thePod.
+"""Privately stores the app ID and secret key of thePod's Instagram app.
 
-Uso (en el servidor):  python3 ~/prepod/scripts/conectar_instagram.py
-Nada de lo que escribas se muestra en pantalla ni queda en el historial.
+Usage (on the server):  python3 ~/prepod/scripts/conectar_instagram.py
+Nothing you type is shown on screen or kept in the history.
 """
 import getpass
 import sys
@@ -10,12 +10,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared_config import load_shared_config, update_shared_config  # noqa: E402
 
-app_id = input("ID de la app de Instagram: ").strip()
-secret = getpass.getpass("Clave secreta de la app de Instagram (no se ve al escribir): ").strip()
+app_id = input("Instagram app ID: ").strip()
+secret = getpass.getpass("Instagram app secret key (hidden while typing): ").strip()
 if not app_id.isdigit() or len(secret) < 16:
-    sys.exit("No se guardó: el ID debe ser solo números y la clave parece incompleta.")
+    sys.exit("Not saved: the ID must be digits only and the key looks incomplete.")
 cfg = load_shared_config()
 ig = dict(cfg.get("instagram") or {})
 ig.update({"app_id": app_id, "app_secret": secret})
 update_shared_config({"instagram": ig})
-print("Listo. Instagram quedó habilitado en thePod.")
+print("Done. Instagram is now enabled in thePod.")

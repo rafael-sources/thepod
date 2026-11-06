@@ -1,17 +1,17 @@
 """
-Registro propio con correo confirmado — ESCONDIDO hasta el lanzamiento.
+Self-service signup with confirmed email — HIDDEN until launch.
 
-Solo funciona con la clave `signup_key` de ~/.podpod/config.json (se comparte como
-enlace: /registro?clave=…). Sin esa clave en la config, el registro está cerrado para todos.
+Only works with the `signup_key` from ~/.podpod/config.json (shared as a
+link: /registro?clave=…). Without that key in the config, signup is closed to everyone.
 
-Flujo:
+Flow:
 1. POST /api/auth/signup  {clave, display_name, email, password}
-   → guarda una solicitud pendiente (no crea el usuario) y manda un correo con un enlace.
+   → stores a pending request (does not create the user) and sends an email with a link.
 2. POST /api/auth/signup/confirm {token}
-   → crea el usuario (no admin, 1 podcast) e inicia la sesión.
+   → creates the user (non-admin, 1 podcast) and starts the session.
 
-Las solicitudes pendientes viven en ~/.podpod/signups.db (la contraseña ya va como hash;
-nunca viaja en el enlace). El enlace vence a las 24 h.
+Pending requests live in ~/.podpod/signups.db (the password is already hashed;
+it never travels in the link). The link expires after 24 h.
 """
 
 import hmac
@@ -38,7 +38,7 @@ _MAX_AGE = 24 * 3600
 _DB = Path.home() / ".podpod" / "signups.db"
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _lock = threading.Lock()
-_hits: dict[str, list[float]] = {}          # ip → tiempos (límite simple contra abuso)
+_hits: dict[str, list[float]] = {}          # ip → timestamps (simple anti-abuse rate limit)
 FREE_MAX_PODCASTS = 1
 
 
@@ -72,7 +72,7 @@ def _email_taken(email: str) -> bool:
 
 
 def _free_username(email: str) -> str:
-    """Usuario a partir del correo: «maria.garcia@x.com» → «mariagarcia» (o «mariagarcia2»…)."""
+    """Username from the email: «maria.garcia@x.com» → «mariagarcia» (or «mariagarcia2»…)."""
     from shared_users import get_user
     base = re.sub(r"[^a-z0-9_-]", "", email.split("@")[0].lower())[:28] or "usuario"
     if len(base) < 3:
@@ -86,7 +86,7 @@ def _free_username(email: str) -> str:
 
 @bp.get("/open")
 def is_open():
-    """¿Esta clave abre el registro? (la pantalla de registro solo aparece si sí)."""
+    """Does this key open signup? (the signup screen only appears if so)."""
     return jsonify({"open": _key_ok(request.args.get("clave", ""))})
 
 
@@ -110,7 +110,7 @@ def signup():
 
     ok = {"ok": True, "message": f"Te mandamos un correo a {email}. Abre el enlace para activar tu cuenta (vence en 24 horas)."}
     if _email_taken(email):
-        # Mismo mensaje que si fuera nuevo: no se revela qué correos tienen cuenta.
+        # Same message as if it were new: does not reveal which emails have an account.
         return jsonify(ok)
 
     sid = uuid.uuid4().hex
@@ -153,12 +153,12 @@ def confirm():
 
         from shared_users import create_user, update_user_fields
         username = _free_username(row["email"])
-        # create_user pide la contraseña en claro; se crea con una al azar y se pone el hash guardado.
+        # create_user takes the plaintext password; create with a random one and set the stored hash.
         create_user(username, secrets.token_urlsafe(12), display_name=row["display_name"], email=row["email"],
                     is_admin=False, max_podcasts=FREE_MAX_PODCASTS)
         update_user_fields(username, {"password_md5": row["password_md5"]})
         from plans import set_plan
-        set_plan(username, "gratis")        # quien se registra solo empieza en Gratis
+        set_plan(username, "gratis")        # self-signups always start on Gratis
         c.execute("UPDATE pending SET used = 1 WHERE id = ?", (sid,))
 
     session.clear()

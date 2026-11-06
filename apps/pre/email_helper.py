@@ -1,6 +1,6 @@
 """
 SMTP email sender for thePod. All emails use the branded table-based
-HTML template designed by Claude Design — same membrete + footer across
+HTML template designed by Claude Design — same letterhead + footer across
 RSVP invitations, pre-recording prep, host invitations, and future types.
 
 Reads SMTP config from `~/.podpod/config.json` under an `smtp` key.
@@ -72,7 +72,7 @@ def _base_html(
     """Wrap body_html in the full thePod branded email shell.
 
     accent_color: top strip color (podcast brand color, defaults to blue).
-    meta_label: top-right label in the membrete (e.g. "Invitación", "Preparación").
+    meta_label: top-right label in the letterhead (e.g. "Invitación", "Preparación").
     preheader: hidden text that appears in inbox preview.
     body_html: the inner content (goes inside the white card after the accent strip).
     footer_extra: optional line below the standard footer.
@@ -102,7 +102,7 @@ def _base_html(
     <tr>
       <td align="center" style="padding:32px 16px;">
 
-        <!-- MEMBRETE -->
+        <!-- LETTERHEAD -->
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;">
           <tr>
             <td style="padding:0 8px 16px 8px;font-family:Georgia, 'Times New Roman', serif;color:#1a1511;">
@@ -451,7 +451,7 @@ def send_pre_recording_email(
 
 {rec_html}
 
-              <!-- Recomendaciones -->
+              <!-- Recommendations -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #ede5d3;">
                 <tr>
                   <td style="padding:24px 48px;font-family:Arial, Helvetica, sans-serif;">

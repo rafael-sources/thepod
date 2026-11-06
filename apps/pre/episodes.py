@@ -79,7 +79,7 @@ def _serialize_section(row):
         "estimated_duration": row["estimated_duration"],
         "notes": row["notes"] or "",
         "created_at": row["created_at"],
-        # Teleprompter (solo las secciones que lo usan; quién lo lee = speaker)
+        # Teleprompter (only the sections that use it; who reads it = speaker)
         "tp_enabled": bool(_rowget(row, "tp_enabled", 0)),
         "tp_offset_seconds": _rowget(row, "tp_offset_seconds", None),
         "tp_speed": _rowget(row, "tp_speed", "normal") or "normal",
@@ -1363,11 +1363,11 @@ def force_sync_notes(slug, ep_id):
 
 
 def upload_episode_media(slug: str, ep_id: int, media_path) -> dict:
-    """Sube el archivo a hosting (VPS) y marca el episodio como publicado.
+    """Upload the file to hosting (VPS) and mark the episode as published.
 
-    Lógica compartida entre el endpoint web (ruta en el servidor) y la API
-    del Mac (archivo subido por partes).
-    Returns {"ok": True, "media_url": ...} o {"ok": False, "error": ...}.
+    Logic shared between the web endpoint (path on the server) and the Mac
+    API (file uploaded in chunks).
+    Returns {"ok": True, "media_url": ...} or {"ok": False, "error": ...}.
     """
     db = get_db(slug)
     try:

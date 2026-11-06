@@ -1,13 +1,13 @@
 """
-Recordatorio al teléfono: «tu episodio empieza en una hora».
+Phone reminder: «your episode starts in one hour».
 
-Un hilo revisa cada minuto los episodios con fecha y hora (scheduled_at, o scheduled_date a las
-09:00) y, cuando faltan 60 minutos o menos, avisa una sola vez al dueño del podcast y a los
-hosts adicionales a través de thePod (pod_push). La hora del episodio se guarda tal como la
-escribió la persona, sin zona: se interpreta en la zona horaria de la suite (`timezone` en
-~/.podpod/config.json; si no está, America/Guayaquil).
+A thread checks every minute the episodes with date and time (scheduled_at, or scheduled_date at
+09:00) and, when 60 minutes or less remain, notifies the podcast owner and the extra hosts
+exactly once through thePod (pod_push). The episode time is stored exactly as the person
+typed it, with no zone: it is interpreted in the suite's time zone (`timezone` in
+~/.podpod/config.json; if missing, America/Guayaquil).
 
-Se apaga con PREPOD_REMINDERS=0 (pruebas).
+Disabled with PREPOD_REMINDERS=0 (tests).
 """
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from db import get_db, _ensure_column
 from pod_push import notify as push_notify
 from shared_config import load_shared_config
 
-LEAD = timedelta(minutes=60)     # cuánto antes se avisa
-GRACE = timedelta(minutes=30)    # si el servidor estuvo caído, no avisar de episodios ya empezados hace rato
+LEAD = timedelta(minutes=60)     # how far ahead to notify
+GRACE = timedelta(minutes=30)    # if the server was down, don't notify about episodes that started a while ago
 
 _started = False
 _lock = threading.Lock()
@@ -56,7 +56,7 @@ def _hosts(db, slug: str) -> list[str]:
 
 
 def run_once(slug: str, now: datetime | None = None) -> int:
-    """Revisa un podcast. Devuelve cuántos avisos mandó."""
+    """Check one podcast. Returns how many notifications it sent."""
     now = now or datetime.now(_tz())
     db = get_db(slug)
     sent = 0
@@ -75,7 +75,7 @@ def run_once(slug: str, now: datetime | None = None) -> int:
             if now - GRACE <= at <= now + LEAD:
                 due.append((r, at))
             elif at < now - GRACE:
-                # Ya pasó: se marca para no volver a mirarlo
+                # Already past: mark it so it is not checked again
                 db.execute("UPDATE episodes SET reminded_at=? WHERE id=?", (now.isoformat(), r["id"]))
         if not due:
             db.commit()

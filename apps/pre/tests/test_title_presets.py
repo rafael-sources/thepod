@@ -1,5 +1,5 @@
-"""Plantillas de título de Studio · Video (thePod para Mac): viven en el podcast como `title_presets`,
-igual que las cadenas de voz, para que viajen a cualquier Mac con la cuenta."""
+"""Studio · Video title presets (thePod for Mac): they live in the podcast as `title_presets`,
+like the voice chains, so they travel to any Mac with the account."""
 import json
 import sys
 from pathlib import Path
@@ -39,5 +39,5 @@ def test_title_presets_round_trip(client):
     assert r.status_code == 200, r.data
     assert r.get_json()["title_presets"] == presets
     assert client.get(f"/api/podcasts/{slug}").get_json()["title_presets"] == presets
-    # se pueden vaciar
+    # they can be emptied
     assert client.put(f"/api/podcasts/{slug}", json={"title_presets": "[]"}).get_json()["title_presets"] == "[]"

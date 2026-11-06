@@ -254,10 +254,10 @@ def youtube_disconnect():
 def _upload_video(slug: str, video_path, title: str, description: str = "",
                   privacy: str = "public", category: str = "22",
                   progress_cb=None) -> dict:
-    """Sube un video a YouTube con los tokens OAuth del podcast.
+    """Upload a video to YouTube with the podcast's OAuth tokens.
 
-    progress_cb (opcional) recibe un float 0.0–1.0 en cada chunk subido.
-    Returns {"ok": True, "video_id": ..., "url": ...} o {"ok": False, "error": ...}.
+    progress_cb (optional) receives a float 0.0–1.0 on each uploaded chunk.
+    Returns {"ok": True, "video_id": ..., "url": ...} or {"ok": False, "error": ...}.
     """
     yt_config = _get_youtube_config()
     if not yt_config:

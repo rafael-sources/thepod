@@ -1,20 +1,20 @@
 """
-API para postPod de Mac: subida por partes de archivos grandes (100 MB–GB)
-y publicación de episodios reutilizando la configuración existente de prePod
-(hosting VPS + feed RSS y YouTube OAuth por podcast).
+API for postPod for Mac: chunked upload of large files (100 MB–GB)
+and episode publishing reusing prePod's existing configuration
+(VPS hosting + RSS feed and per-podcast YouTube OAuth).
 
-Endpoints (todos requieren la sesión de /api/auth/login):
+Endpoints (all require the /api/auth/login session):
     POST /api/mac/uploads                              {filename, size} → {upload_id}
-    PUT  /api/mac/uploads/<upload_id>/chunk?index=N    cuerpo binario ≤ 16 MB, secuencial
-    POST /api/mac/uploads/<upload_id>/finish           → verifica tamaño → {ok}
+    PUT  /api/mac/uploads/<upload_id>/chunk?index=N    binary body ≤ 16 MB, sequential
+    POST /api/mac/uploads/<upload_id>/finish           → verifies size → {ok}
     POST /api/mac/publish/audio                        {slug, episode_id, upload_id} → {job_id}
     POST /api/mac/publish/youtube                      {slug, episode_id, upload_id, title, ...} → {job_id}
     GET  /api/mac/jobs/<job_id>                        → {status, progress, result, error}
     GET  /api/mac/podcasts/<slug>/publish-status?episode_id=N
 
-Los uploads viven en podcasts/_uploads/ y se limpian a las 24 h.
-Los jobs corren en hilos daemon dentro del único worker de gunicorn;
-se pierden si el servicio se reinicia (el cliente debe reintentar).
+Uploads live in podcasts/_uploads/ and are cleaned up after 24 h.
+Jobs run in daemon threads inside the single gunicorn worker;
+they are lost if the service restarts (the client must retry).
 """
 
 from __future__ import annotations
@@ -36,15 +36,15 @@ from db import get_db
 
 bp = Blueprint("mac_publish", __name__, url_prefix="/api/mac")
 
-CHUNK_MAX = 16 * 1024 * 1024   # 16 MB por chunk
+CHUNK_MAX = 16 * 1024 * 1024   # 16 MB per chunk
 
 _UPLOAD_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
 
 
 def _valid_upload_id(upload_id) -> bool:
     return bool(isinstance(upload_id, str) and _UPLOAD_ID_RE.fullmatch(upload_id))
-UPLOAD_MAX = 20 * 1024 ** 3    # 20 GB: tope de tamaño declarado por upload
-UPLOAD_TTL = 24 * 3600         # limpiar uploads abandonados a las 24 h
+UPLOAD_MAX = 20 * 1024 ** 3    # 20 GB: max declared size per upload
+UPLOAD_TTL = 24 * 3600         # clean up abandoned uploads after 24 h
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ def _resolve_upload(upload_id: str) -> tuple[Path | None, dict | None]:
 
 
 # ---------------------------------------------------------------------------
-# Acceso por podcast (mismo criterio que el guard de app.py, que no cubre /api/mac)
+# Per-podcast access (same rule as the app.py guard, which does not cover /api/mac)
 # ---------------------------------------------------------------------------
 
 def _podcast_access_error(slug: str):
@@ -159,7 +159,7 @@ def _podcast_access_error(slug: str):
 
 
 # ---------------------------------------------------------------------------
-# Registro de jobs en memoria (gunicorn corre con 1 worker → seguro)
+# In-memory job registry (gunicorn runs with 1 worker → safe)
 # ---------------------------------------------------------------------------
 
 _jobs: dict[str, dict] = {}
@@ -200,7 +200,7 @@ def _upload_lock(upload_id: str) -> threading.Lock:
 
 
 # ---------------------------------------------------------------------------
-# Endpoints de subida por partes
+# Chunked upload endpoints
 # ---------------------------------------------------------------------------
 
 @bp.post("/uploads")
@@ -290,8 +290,8 @@ def finish_upload(upload_id):
                 "error": f"tamaño incorrecto: se esperaban {meta['size']} bytes y llegaron {actual}",
             }), 400
 
-        # Conservar la extensión original: el nombre final del audio y el mimetype
-        # del video en YouTube dependen del sufijo del archivo.
+        # Keep the original extension: the final audio name and the mimetype
+        # of the video on YouTube depend on the file suffix.
         suffix = Path(meta["filename"]).suffix
         if not re.fullmatch(r"\.[A-Za-z0-9]{1,10}", suffix or ""):
             suffix = ".bin"
@@ -304,12 +304,12 @@ def finish_upload(upload_id):
 
 
 # ---------------------------------------------------------------------------
-# Publicación
+# Publishing
 # ---------------------------------------------------------------------------
 
 def _parse_publish_payload():
-    """Valida el cuerpo común {slug, episode_id, upload_id}.
-    Returns (slug, episode_id, upload_path, meta, None) o (None, None, None, None, error_response)."""
+    """Validate the common body {slug, episode_id, upload_id}.
+    Returns (slug, episode_id, upload_path, meta, None) or (None, None, None, None, error_response)."""
     data = request.get_json(silent=True) or {}
     slug = (data.get("slug") or "").strip()
     episode_id = data.get("episode_id")
@@ -414,8 +414,8 @@ def publish_youtube():
             try:
                 _save_episode_link(slug, episode_id, "youtube", result["url"])
             except Exception as e:
-                # El video ya está publicado en YouTube; registra el fallo del link
-                # pero termina el job para que el cliente no espere para siempre.
+                # The video is already published on YouTube; record the link failure
+                # but finish the job so the client does not wait forever.
                 job_result["warning"] = f"link no guardado: {str(e)[:200]}"
             _update_job(job_id, status="done", progress=1.0, result=job_result)
             _delete_upload(meta["upload_id"])
@@ -428,7 +428,7 @@ def publish_youtube():
 
 
 # ---------------------------------------------------------------------------
-# Estado de publicación (lectura agregada para la app Mac)
+# Publish status (aggregated read for the Mac app)
 # ---------------------------------------------------------------------------
 
 @bp.get("/podcasts/<slug>/publish-status")

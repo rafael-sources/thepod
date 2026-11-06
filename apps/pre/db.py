@@ -234,14 +234,14 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "episodes", "production_meta", "production_meta TEXT")
     _ensure_column(conn, "episodes", "production_updated_at", "production_updated_at TEXT")
     _ensure_column(conn, "episodes", "scheduled_at", "scheduled_at TEXT")
-    # Teleprompter por sección del guion (thePod 0.11): quién lo lee ya está en `speaker`
+    # Per-section script teleprompter (thePod 0.11): who reads it is already in `speaker`
     _ensure_column(conn, "script_sections", "tp_enabled", "tp_enabled INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "script_sections", "tp_offset_seconds", "tp_offset_seconds REAL")
     _ensure_column(conn, "script_sections", "tp_speed", "tp_speed TEXT NOT NULL DEFAULT 'normal'")   # slow | normal | fast
     _ensure_column(conn, "script_sections", "tp_size", "tp_size TEXT NOT NULL DEFAULT 'half'")       # quarter | half | full
     _ensure_column(conn, "script_sections", "tp_speaker", "tp_speaker TEXT")
-    _ensure_column(conn, "script_sections", "tp_after_prev", "tp_after_prev INTEGER NOT NULL DEFAULT 0")   # encadenado al anterior
-    _ensure_column(conn, "script_sections", "tp_gap_seconds", "tp_gap_seconds REAL NOT NULL DEFAULT 0.5")   # quién lo lee: usuario del conductor o nombre del invitado
+    _ensure_column(conn, "script_sections", "tp_after_prev", "tp_after_prev INTEGER NOT NULL DEFAULT 0")   # chained to the previous one
+    _ensure_column(conn, "script_sections", "tp_gap_seconds", "tp_gap_seconds REAL NOT NULL DEFAULT 0.5")   # who reads it: host's username or guest's name
     _ensure_column(conn, "podcast_meta", "owner_username", "owner_username TEXT")
     _ensure_column(conn, "podcast_meta", "extra_hosts", "extra_hosts TEXT")  # JSON array of usernames
     _ensure_column(conn, "podcast_meta", "host_invitations", "host_invitations TEXT")  # JSON {username: {status, invited_by, invited_at, email_sent}}
@@ -273,8 +273,8 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "team_members", "social_tiktok", "social_tiktok TEXT")
     _ensure_column(conn, "podcast_meta", "directors", "directors TEXT")  # JSON array of usernames
     _ensure_column(conn, "podcast_meta", "background_filename", "background_filename TEXT")
-    _ensure_column(conn, "podcast_meta", "voice_presets", "voice_presets TEXT")  # JSON: cadenas de voz del estudio (thePod para Mac)
-    _ensure_column(conn, "podcast_meta", "title_presets", "title_presets TEXT")  # JSON: plantillas de título de Studio · Video (thePod para Mac)
+    _ensure_column(conn, "podcast_meta", "voice_presets", "voice_presets TEXT")  # JSON: studio voice chains (thePod for Mac)
+    _ensure_column(conn, "podcast_meta", "title_presets", "title_presets TEXT")  # JSON: Studio · Video title presets (thePod for Mac)
     _ensure_column(conn, "episodes", "ai_summary", "ai_summary TEXT")
     _ensure_column(conn, "episodes", "ai_highlights", "ai_highlights TEXT")
     _ensure_column(conn, "episodes", "ai_notes_edited", "ai_notes_edited INTEGER DEFAULT 0")

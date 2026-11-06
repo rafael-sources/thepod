@@ -70,7 +70,7 @@ GLOBAL_SOUNDS_DIR = next((p for p in _SOUND_LIBRARY_CANDIDATES if p.exists()), N
 
 # Fonts available for branding selection
 AVAILABLE_FONTS = [
-    # Serif elegantes
+    # Elegant serifs
     "Fraunces",
     "Playfair Display",
     "DM Serif Display",
@@ -78,7 +78,7 @@ AVAILABLE_FONTS = [
     "Cormorant Garamond",
     "EB Garamond",
     "Libre Baskerville",
-    # Sans modernas
+    # Modern sans
     "Inter",
     "Poppins",
     "Roboto",

@@ -1,29 +1,29 @@
 """
-pubPod — publicar y programar reels en las redes del podcast.
+pubPod — publish and schedule reels on the podcast's social networks.
 
-Redes: Instagram (API con inicio de sesión de Instagram), YouTube Shorts
-(reusa la conexión de YouTube que ya tiene prePod) y TikTok (el reel llega a
-la bandeja del usuario y él lo publica desde la app; la publicación directa
-exige la auditoría de TikTok). Cada red vive en su propio "publicador" para
-pasar del modo limitado al completo red por red.
+Networks: Instagram (API with Instagram Login), YouTube Shorts
+(reuses the YouTube connection prePod already has) and TikTok (the reel lands in
+the user's inbox and they publish it from the app; direct posting
+requires TikTok's audit). Each network lives in its own "publisher" so it can
+move from limited to full mode network by network.
 
-Endpoints (sesión de thePod):
-    GET  /api/pubpod/networks                         redes disponibles en el servidor
-    GET  /api/pubpod/podcasts/<slug>/accounts         cuentas conectadas
-    GET  /api/pubpod/instagram/auth-url?slug=         URL para conectar Instagram
-    GET  /api/pubpod/instagram/callback               vuelta de Instagram (pública)
+Endpoints (thePod session):
+    GET  /api/pubpod/networks                         networks available on the server
+    GET  /api/pubpod/podcasts/<slug>/accounts         connected accounts
+    GET  /api/pubpod/instagram/auth-url?slug=         URL to connect Instagram
+    GET  /api/pubpod/instagram/callback               Instagram redirect back (public)
     POST /api/pubpod/podcasts/<slug>/accounts/<net>/disconnect
     POST /api/pubpod/reels                            {slug, upload_id, title, targets, scheduled_at, episode_id}
-                                                      (el video se sube antes por /api/mac/uploads, web y Mac)
+                                                      (the video is uploaded first via /api/mac/uploads, web and Mac)
     GET  /api/pubpod/podcasts/<slug>/posts
     POST /api/pubpod/podcasts/<slug>/posts/<id>/cancel
     POST /api/pubpod/podcasts/<slug>/posts/<id>/retry
-    GET  /pub/m/<slug>/<token>.mp4                    video público temporal (Meta lo descarga)
+    GET  /pub/m/<slug>/<token>.mp4                    temporary public video (Meta downloads it)
 
-Config en ~/.podpod/config.json:
+Config in ~/.podpod/config.json:
     "instagram": {"app_id": "...", "app_secret": "..."}
     "tiktok":    {"client_key": "...", "client_secret": "..."}
-Redirecciones: <prepod_url>/api/pubpod/instagram/callback y .../tiktok/callback.
+Redirects: <prepod_url>/api/pubpod/instagram/callback and .../tiktok/callback.
 """
 
 from __future__ import annotations
@@ -53,8 +53,8 @@ bp = Blueprint("pubpod", __name__)
 
 IG_GRAPH = "https://graph.instagram.com/v23.0"
 IG_SCOPES = "instagram_business_basic,instagram_business_content_publish"
-# Destinos: instagram = Reels (video), instagram_image = la portada en el feed de Instagram,
-# youtube = Shorts (reel) o el episodio completo, tiktok, feed = el audio al feed (Spotify y Apple Podcasts).
+# Targets: instagram = Reels (video), instagram_image = the cover in the Instagram feed,
+# youtube = Shorts (reel) or the full episode, tiktok, feed = the audio to the feed (Spotify and Apple Podcasts).
 NETWORKS = ("instagram", "instagram_image", "youtube", "tiktok", "feed")
 CAPTION_MAX = {"instagram": 2200, "instagram_image": 2200, "youtube": 5000, "tiktok": 2200, "feed": 20000}
 FOR_KIND = {"reel": {"instagram", "youtube", "tiktok"},
@@ -100,7 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_pub_posts_due ON pub_posts(status, scheduled_at);
 
 
 # ---------------------------------------------------------------------------
-# Base de datos y archivos
+# Database and files
 # ---------------------------------------------------------------------------
 
 def _db(slug: str):
@@ -111,14 +111,14 @@ def _db(slug: str):
 
 
 def _migrate(conn):
-    """Cambios de esquema posteriores a la primera versión."""
+    """Schema changes after the first version."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(pub_accounts)")}
     if "refresh_token" not in cols:
         conn.execute("ALTER TABLE pub_accounts ADD COLUMN refresh_token TEXT")
         conn.execute("ALTER TABLE pub_accounts ADD COLUMN refresh_expires_at REAL")
         conn.commit()
     sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='pub_posts'").fetchone()[0]
-    if "'inbox'" not in sql:   # TikTok deja el reel en la bandeja del usuario: estado nuevo
+    if "'inbox'" not in sql:   # TikTok leaves the reel in the user's inbox: new status
         conn.execute("DROP INDEX IF EXISTS idx_pub_posts_due")
         conn.execute("ALTER TABLE pub_posts RENAME TO pub_posts_old")
         conn.executescript(SCHEMA)
@@ -129,7 +129,7 @@ def _migrate(conn):
     conn.execute("""CREATE TABLE IF NOT EXISTS pub_prefs (
         platform TEXT PRIMARY KEY, signature TEXT NOT NULL DEFAULT '')""")
     if "kind" not in {r[1] for r in conn.execute("PRAGMA table_info(pub_posts)")}:
-        # «reel» (vertical, Shorts) o «episode» (el episodio completo a YouTube)
+        # «reel» (vertical, Shorts) or «episode» (the full episode to YouTube)
         conn.execute("ALTER TABLE pub_posts ADD COLUMN kind TEXT NOT NULL DEFAULT 'reel'")
         conn.commit()
 
@@ -141,7 +141,7 @@ def _media_dir(slug: str) -> Path:
 
 
 def _media_path(slug: str, token: str) -> Path:
-    """Archivo guardado para esa publicación (video, audio o imagen)."""
+    """Stored file for that post (video, audio or image)."""
     d = _media_dir(slug)
     for f in d.glob(f"{token}.*"):
         if f.suffix[1:].lower() in MEDIA_EXT:
@@ -170,7 +170,7 @@ def _iso(ts):
 
 
 def _parse_when(value):
-    """None/'' → ahora. ISO 8601 (con zona) → epoch. Error → ValueError."""
+    """None/'' → now. ISO 8601 (with zone) → epoch. Error → ValueError."""
     if value in (None, "", "now"):
         return _now()
     s = str(value).strip()
@@ -183,7 +183,7 @@ def _parse_when(value):
 
 
 # ---------------------------------------------------------------------------
-# Acceso por podcast (mismo criterio que mac_publish)
+# Per-podcast access (same rule as mac_publish)
 # ---------------------------------------------------------------------------
 
 def _access_error(slug: str):
@@ -194,7 +194,7 @@ def _access_error(slug: str):
 
 
 # ---------------------------------------------------------------------------
-# Instagram: conexión
+# Instagram: connection
 # ---------------------------------------------------------------------------
 
 def _ig_config():
@@ -239,7 +239,7 @@ def _get_account(slug, platform):
 
 
 def _ig_token(slug):
-    """Token vigente de Instagram; lo renueva si vence en menos de 7 días."""
+    """Current Instagram token; refreshes it if it expires in less than 7 days."""
     acc = _get_account(slug, "instagram")
     if not acc:
         return None, None
@@ -293,7 +293,7 @@ def accounts(slug):
                       if yt else {"connected": False})
     tt = _get_account(slug, "tiktok")
     if tt and (tt.get("refresh_expires_at") or 0) < _now():
-        tt = None   # la conexión de TikTok venció (dura un año): hay que volver a conectar
+        tt = None   # the TikTok connection expired (lasts one year): must reconnect
     out["tiktok"] = ({"connected": True, "username": tt.get("username")} if tt else {"connected": False})
     out["feed"] = ({"connected": True, "username": "Feed del podcast"} if _feed_ready() else {"connected": False})
     out["facebook"] = {"connected": False}
@@ -378,11 +378,11 @@ def instagram_callback():
 
 
 # ---------------------------------------------------------------------------
-# Meta: quitar el permiso y pedir borrado de datos (obligatorio para la revisión)
+# Meta: deauthorize and data deletion request (required for app review)
 # ---------------------------------------------------------------------------
 
 def _parse_signed_request(signed: str, secret: str):
-    """Valida el signed_request de Meta (HMAC-SHA256 con la clave de la app)."""
+    """Validate Meta's signed_request (HMAC-SHA256 with the app secret)."""
     import base64
     import hashlib
     import hmac
@@ -400,7 +400,7 @@ def _parse_signed_request(signed: str, secret: str):
 
 
 def _forget_instagram_user(ig_user_id: str) -> int:
-    """Borra la conexión de esa cuenta de Instagram en todos los podcasts y cancela lo pendiente."""
+    """Delete that Instagram account's connection in all podcasts and cancel anything pending."""
     removed = 0
     for d in PODCASTS_DIR.glob("*/"):
         if not (d / "proyecto.sqlite").exists():
@@ -432,7 +432,7 @@ def _meta_user_from_request():
 
 @bp.post("/api/pubpod/instagram/deauthorize")
 def instagram_deauthorize():
-    """Meta avisa que la persona le quitó el permiso a thePod."""
+    """Meta notifies that the person revoked thePod's permission."""
     uid = _meta_user_from_request()
     if not uid:
         return jsonify({"error": "solicitud inválida"}), 400
@@ -442,7 +442,7 @@ def instagram_deauthorize():
 
 @bp.post("/api/pubpod/instagram/data-deletion")
 def instagram_data_deletion():
-    """Meta pide borrar los datos de esa persona. Responde con un enlace para ver el estado."""
+    """Meta asks to delete that person's data. Responds with a link to check the status."""
     uid = _meta_user_from_request()
     if not uid:
         return jsonify({"error": "solicitud inválida"}), 400
@@ -471,7 +471,7 @@ def deletion_status():
 @bp.get("/api/pubpod/podcasts/<slug>/prefs")
 @require_auth
 def get_prefs(slug):
-    """Texto que va siempre al final en cada destino (hashtags, firma)."""
+    """Text always appended at the end for each target (hashtags, signature)."""
     denied = _access_error(slug)
     if denied:
         return denied
@@ -530,7 +530,7 @@ def disconnect(slug, net):
 
 
 # ---------------------------------------------------------------------------
-# TikTok: conexión (Login Kit) — el reel llega a la bandeja del usuario
+# TikTok: connection (Login Kit) — the reel lands in the user's inbox
 # ---------------------------------------------------------------------------
 
 def _tt_config():
@@ -610,7 +610,7 @@ def tiktok_callback():
 
 
 def _tt_token(slug):
-    """Token vigente de TikTok (dura 24 h); lo renueva con el de refresco (dura un año)."""
+    """Current TikTok token (lasts 24 h); refreshes it with the refresh token (lasts one year)."""
     acc = _get_account(slug, "tiktok")
     if not acc:
         return None
@@ -634,7 +634,7 @@ def _tt_token(slug):
 
 
 # ---------------------------------------------------------------------------
-# Crear publicaciones
+# Create posts
 # ---------------------------------------------------------------------------
 
 def _validate_targets(raw):
@@ -658,7 +658,7 @@ def _validate_targets(raw):
 
 
 def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
-    """Valida, guarda el video y crea una publicación por red. Devuelve (posts, None) o (None, error)."""
+    """Validate, store the video and create one post per network. Returns (posts, None) or (None, error)."""
     title = (payload.get("title") or "").strip()[:200]
     if not title:
         return None, "falta el título del reel"
@@ -733,7 +733,7 @@ def _create_posts(slug, src_path: Path, move: bool, payload: dict, user: str):
 @bp.post("/api/pubpod/reels")
 @require_auth
 def create_from_upload():
-    """Desde la app de Mac: el video ya se subió por /api/mac/uploads."""
+    """From the Mac app: the video was already uploaded via /api/mac/uploads."""
     data = request.get_json(silent=True) or {}
     slug = (data.get("slug") or "").strip()
     denied = _access_error(slug)
@@ -830,7 +830,7 @@ def retry_post(slug, post_id):
 
 
 # ---------------------------------------------------------------------------
-# Video público temporal (Instagram lo descarga desde aquí)
+# Temporary public video (Instagram downloads it from here)
 # ---------------------------------------------------------------------------
 
 @bp.get("/pub/m/<slug>/<name>")
@@ -854,7 +854,7 @@ def public_media(slug, name):
 
 
 def _cleanup_media(slug):
-    """Borra videos que ya no necesita ninguna publicación pendiente, o con más de 7 días."""
+    """Delete videos no pending post needs anymore, or older than 7 days."""
     d = PODCASTS_DIR / slug / "pubpod"
     if not d.is_dir():
         return
@@ -876,7 +876,7 @@ def _cleanup_media(slug):
 
 
 # ---------------------------------------------------------------------------
-# Publicadores
+# Publishers
 # ---------------------------------------------------------------------------
 
 class PublishError(Exception):
@@ -938,7 +938,7 @@ def publish_youtube(slug, post, media_path):
                                         privacy="public", category="22")
     if not res.get("ok"):
         raise PublishError(res.get("error") or "YouTube rechazó el video")
-    # Mientras Google no apruebe la app, YouTube deja el video en privado.
+    # Until Google approves the app, YouTube keeps the video private.
     status = "published"
     try:
         from googleapiclient.discovery import build
@@ -971,13 +971,13 @@ def _tt_fail(data, fallback):
 
 
 def publish_tiktok(slug, post, media_path):
-    """Envía el reel a la bandeja de TikTok del usuario; él lo termina de publicar en la app.
-    (La publicación directa exige la auditoría de TikTok.)"""
+    """Send the reel to the user's TikTok inbox; they finish publishing it in the app.
+    (Direct posting requires TikTok's audit.)"""
     token = _tt_token(slug)
     if not token:
         raise PublishError("La conexión con TikTok venció. Vuelve a conectar TikTok en Redes.")
     size = Path(media_path).stat().st_size
-    # Reglas de TikTok: trozos de 5 a 64 MB; si el video es chico va entero; el último absorbe el resto
+    # TikTok rules: 5 to 64 MB chunks; a small video goes whole; the last chunk absorbs the remainder
     if size <= 64 * 1024 * 1024:
         chunk, count = size, 1
     else:
@@ -1015,17 +1015,17 @@ def publish_tiktok(slug, post, media_path):
             return "published", "https://www.tiktok.com/"
         if st == "FAILED":
             raise PublishError(f"TikTok no pudo procesar el video ({d.get('fail_reason') or 'sin motivo'})")
-    # Sigue procesando: lo más probable es que llegue igual a la bandeja
+    # Still processing: most likely it will reach the inbox anyway
     return "inbox", None
 
 
 def _feed_ready() -> bool:
-    """Spotify y Apple Podcasts leen el feed: hace falta el alojamiento del audio configurado."""
+    """Spotify and Apple Podcasts read the feed: audio hosting must be configured."""
     return bool((load_shared_config().get("hosting") or {}).get("host"))
 
 
 def publish_feed(slug, post, media_path):
-    """El audio al feed del podcast: Spotify y Apple Podcasts lo toman de ahí solos."""
+    """The audio to the podcast feed: Spotify and Apple Podcasts pick it up from there on their own."""
     if not post.get("episode_id"):
         raise PublishError("el episodio no está vinculado en prePod")
     if (post.get("caption") or "").strip():
@@ -1061,7 +1061,7 @@ def _publish_one(slug, post):
 
 
 # ---------------------------------------------------------------------------
-# Programador (un hilo en el único worker de gunicorn)
+# Scheduler (one thread in the single gunicorn worker)
 # ---------------------------------------------------------------------------
 
 _wake = threading.Event()
@@ -1092,7 +1092,7 @@ _NET_LABEL = {"youtube": "YouTube", "instagram": "Instagram", "instagram_image":
 
 
 def _notify_post(slug, post, status, url=None, error=None):
-    """Aviso al teléfono de quien programó y del dueño/hosts: publicado, en revisión o fallido."""
+    """Phone notification to whoever scheduled it and to the owner/hosts: published, in review or failed."""
     try:
         conn = _db(slug)
         try:
@@ -1117,7 +1117,7 @@ def _notify_post(slug, post, status, url=None, error=None):
 
 
 def run_due(slug):
-    """Publica lo vencido de un podcast. Devuelve cuántas publicaciones procesó."""
+    """Publish a podcast's due posts. Returns how many posts it processed."""
     done = 0
     for post in _claim_due(slug):
         try:
@@ -1127,7 +1127,7 @@ def run_due(slug):
         except PublishError as e:
             _set_status(slug, post["id"], ("publishing",), "error", error=str(e)[:300])
             _notify_post(slug, post, "error", error=str(e))
-        except Exception as e:  # noqa: BLE001 — nunca dejar un post colgado en "publishing"
+        except Exception as e:  # noqa: BLE001 — never leave a post stuck in "publishing"
             _set_status(slug, post["id"], ("publishing",), "error",
                         error=f"error inesperado: {str(e)[:200]}")
             _notify_post(slug, post, "error", error="error inesperado")
@@ -1137,8 +1137,8 @@ def run_due(slug):
 
 
 def _recover_interrupted():
-    """Si el servicio se reinició a mitad de una publicación, no se reintenta solo:
-    podría duplicarse. Se marca como error para que el usuario decida."""
+    """If the service restarted mid-publish, it is not retried automatically:
+    it could be duplicated. It is marked as error so the user decides."""
     for d in PODCASTS_DIR.glob("*/"):
         if not (d / "pubpod").is_dir():
             continue

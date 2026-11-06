@@ -1,10 +1,10 @@
 /* ==========================================================================
    prePod — "Green Room" design system
-   Misma estructura y tipografía que postPod; signal azul cobalto.
+   Same structure and typography as postPod; cobalt blue signal.
    ========================================================================== */
 
 :root {
-  /* Surfaces — cálidos oscuros (familia postPod) */
+  /* Surfaces — warm darks (postPod family) */
   --ink-deep:    #120e09;
   --ink:         #1a1511;
   --ink-raised:  #221c16;
@@ -17,10 +17,10 @@
   /* Text */
   --paper:       #efe3d0;
   --paper-soft:  #c7b894;
-  --paper-dim:   #9d9078;   /* antes #8a7d65 (4,5:1 justo; en paneles fallaba AA). Ahora 5,8:1 */
+  --paper-dim:   #9d9078;   /* was #8a7d65 (barely 4.5:1; failed AA on panels). Now 5.8:1 */
   --paper-faint: #5c5240;
 
-  /* Signal — COBALTO / AZUL ELÉCTRICO */
+  /* Signal — COBALT / ELECTRIC BLUE */
   --signal:         #5a8bff;
   --signal-strong:  #7ba3ff;
   --signal-dim:     #3a5dab;
@@ -1778,7 +1778,7 @@ a.mark:hover { opacity: 0.8; }
 .guest-add select, .guest-add input { font-size: 12.5px; padding: 7px 10px; }
 
 /* ==========================================================================
-   Rundown editor (bloques planificados)
+   Rundown editor (planned blocks)
    ========================================================================== */
 
 .rundown-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1944,7 +1944,7 @@ label.btn.disabled { opacity: 0.6; pointer-events: none; }
 .user-add { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ink-line); }
 .user-add h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-dim); }
 
-/* Usuarios: buscador, alta guiada y datos de acceso */
+/* Users: search, guided creation and login details */
 .users-admin-modal .modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .users-admin-modal .modal-head h3 { margin: 0; }
 .ua-count { font-family: var(--font-mono); font-size: 11px; color: var(--paper-dim); margin-left: 6px; }
@@ -2047,7 +2047,7 @@ label.btn.disabled { opacity: 0.6; pointer-events: none; }
 }
 
 /* ==========================================================================
-   Calendar view (programación de episodios)
+   Calendar view (episode scheduling)
    ========================================================================== */
 
 .container.calendar-wide { max-width: none; width: 100%; padding: 22px 28px; overflow-y: auto; flex: 1; }
@@ -2290,7 +2290,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 .dist-step { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
 .dist-step-num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent, #5a8bff); color: white; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-/* Escritorio: el nombre del podcast no se parte en varias líneas y las pestañas se deslizan si no caben */
+/* Desktop: the podcast name doesn't wrap onto several lines and the tabs scroll if they don't fit */
 .podcast-view-wrap .page-bar h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
 .podcast-view-wrap .page-bar .mode-tabs { overflow-x: auto; flex: 0 1 auto; min-width: 0; scrollbar-width: none; }
 .podcast-view-wrap .page-bar .mode-tabs button { white-space: nowrap; }
@@ -2298,7 +2298,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 .ep-meta-grid input, .ep-meta-grid select { width: 100%; min-width: 0; }
 
 /* ==========================================================================
-   Celular / iPad — el anfitrión en emergencia y los invitados
+   Phone / iPad — the host in an emergency and the guests
    ========================================================================== */
 
 .m-only { display: none !important; }
@@ -2312,14 +2312,14 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   button, a.btn { min-height: 40px; }
   button.icon { min-width: 40px; min-height: 40px; }
 
-  /* Encabezado */
+  /* Header */
   .app-header { padding: calc(10px + env(safe-area-inset-top)) 14px 10px; gap: 10px; }
   .app-header .brand .mark { font-size: 20px; }
   .user-chip { gap: 6px; }
   .user-chip .tiny { display: none; }
   .settings-btn { min-height: 36px; }
 
-  /* Login y lista de podcasts */
+  /* Login and podcast list */
   .login-wrapper { min-height: 100dvh; padding: 20px; }
   .login-card { width: 100%; max-width: 400px; padding: 32px 22px; }
   .login-card button[type=submit] { padding: 14px; font-size: 16px; }
@@ -2327,7 +2327,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .page-head { flex-wrap: wrap; gap: 10px; }
   .podcast-list { grid-template-columns: 1fr; }
 
-  /* Vista del podcast: barra con nombre + contenido + pestañas abajo */
+  /* Podcast view: bar with name + content + tabs at the bottom */
   .podcast-view-wrap { height: calc(100dvh - 58px - env(safe-area-inset-top)); }
   .podcast-view-wrap .page-bar { padding: 8px 12px; gap: 8px; }
   .podcast-view-wrap .page-bar > button.ghost { padding: 6px 8px; white-space: nowrap; flex: none; }
@@ -2346,7 +2346,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .pod-sheet span { font-size: 18px; }
   @keyframes sheet-up { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-  /* Tablero de episodios: una columna por pantalla, deslizando de lado */
+  /* Episode board: one column per screen, swiping sideways */
   .kanban { padding: 12px; gap: 10px; scroll-snap-type: x mandatory; overflow-y: hidden; scroll-padding: 12px; }
   .kanban-col { flex: 0 0 calc(100% - 44px); min-width: 0; max-width: none; scroll-snap-align: start; }
   .kanban-col.collapsed { flex: 0 0 48px; }
@@ -2357,7 +2357,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .ep-card .ep-card-del, .ep-card .ep-reorder { display: none; }
   .add-btn-head { min-width: 36px; }
 
-  /* Detalle del episodio: todo en una columna */
+  /* Episode detail: everything in one column */
   .episode-detail { display: block; overflow-y: auto; }
   .episode-detail .main { overflow: visible; padding: 14px 14px 90px; }
   .episode-detail .side { border-left: 0; border-top: 1px solid var(--ink-line); padding: 14px 14px 100px; overflow: visible; }
@@ -2377,7 +2377,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .save-bar { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); justify-content: flex-end; }
   .save-bar .save-btn { min-height: 46px; padding: 0 22px; font-size: 15px; }
 
-  /* Guion por bloques */
+  /* Block-based script */
   .rundown-block { grid-template-columns: auto auto minmax(0, 1fr) 72px 40px; grid-template-areas: "mv pos kind dur del" "title title title title title" "notes notes notes notes notes"; row-gap: 8px; cursor: default; padding: 10px; }
   .rundown-block .rb-move { grid-area: mv; display: inline-flex !important; gap: 4px; }
   .rundown-block .rb-move .icon { min-width: 34px; min-height: 34px; width: 34px; height: 34px; padding: 0; font-size: 12px; }
@@ -2390,7 +2390,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .rundown-sponsor-link { margin-left: 0 !important; }
   .rundown-sponsor-link > div { flex-wrap: wrap; }
 
-  /* Invitados */
+  /* Guests */
   .guest-row, .guest-row:nth-of-type(2) { grid-template-columns: 1fr; display: grid; }
   .guest-card .guest-row:first-child { grid-template-columns: minmax(0, 1fr) auto 40px; }
   .guest-card .guest-row:first-child select { grid-column: 1 / 2; grid-row: 2; }
@@ -2402,7 +2402,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .guest-add { grid-template-columns: 1fr 1fr; }
   .guest-add input { grid-column: 1 / -1; }
 
-  /* Formularios y editores en general */
+  /* Forms and editors in general */
   .grid-2, .grid-3, .socials-grid, .editor { grid-template-columns: 1fr !important; }
   .editor .side { border-left: 0; }
   .link-row, .link-add { grid-template-columns: 1fr auto; }
@@ -2414,7 +2414,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .modal-backdrop > * { max-width: calc(100vw - 24px); max-height: calc(100dvh - 40px); overflow-y: auto; }
   .sound-grid { grid-template-columns: 1fr; }
 
-  /* Calendario: días chicos con marca + lista del mes */
+  /* Calendar: small days with a marker + month list */
   .container.calendar-wide { padding: 12px; }
   .calendar-wide .section-head { gap: 6px; }
   .calendar-wide .section-head h3 { flex-basis: 100%; }
@@ -2442,7 +2442,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .ca-hint { margin-top: 12px; font-size: 12px; }
 }
 
-/* iPad horizontal: sobra espacio, dos columnas del tablero a la vez y detalle con panel lateral */
+/* iPad landscape: plenty of room, two board columns at once and detail with a side panel */
 @media (pointer: coarse) and (min-width: 1000px) {
   .kanban-col { flex: 0 0 calc(50% - 20px); }
   .episode-detail { display: grid; grid-template-columns: minmax(0, 1fr) 340px; overflow: hidden; }
@@ -2451,7 +2451,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .cal-cell { min-height: 80px; }
 }
 
-/* Publicar desde la web */
+/* Publish from the web */
 .publish-section .pub-block { padding: 12px 0; border-top: 1px solid var(--ink-line); display: flex; flex-direction: column; gap: 8px; }
 .publish-section .pub-block:first-of-type { border-top: 0; }
 .publish-section .pub-title { font-weight: 600; font-size: 14px; }
@@ -2465,16 +2465,16 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
 
 
 /* ==========================================================================
-   thePod móvil · prePod (nov 2026)
-   Barra de abajo, barra de arriba, píldoras, listas y hojas. Solo en táctil.
-   Todo objetivo ≥ 44 px; campos a 16 px; activo por color + forma; foco visible.
+   thePod mobile · prePod (Nov 2026)
+   Bottom bar, top bar, pills, lists and sheets. Touch only.
+   Every target ≥ 44 px; fields at 16 px; active state by color + shape; visible focus.
    ========================================================================== */
 @media (max-width: 900px), (pointer: coarse) {
   :root { --m-tab-h: 56px; --m-top-h: 52px; }
   :focus-visible { outline: 2px solid var(--signal-strong); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 
-  /* La cabecera de escritorio no va: en el celular la barra de arriba es por pantalla */
+  /* The desktop header is hidden: on the phone the top bar is per screen */
   body.m-app .app-header { display: none; }
   body.m-app .podcast-view-wrap { height: 100dvh; }
 
@@ -2533,7 +2533,7 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   .m-sheet .m-opt { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--ink-line); background: transparent; color: var(--paper); font: inherit; font-size: 15px; cursor: pointer; text-align: left; width: 100%; text-decoration: none; }
   .m-sheet .m-opt[aria-current="true"] { border-width: 2px; border-color: var(--signal-strong); color: var(--signal-strong); font-weight: 600; }
 
-  /* El detalle del episodio en el celular: hub + una sección por pantalla */
+  /* The episode detail on the phone: hub + one section per screen */
   .m-ep-head { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 2px; }
   .m-ep-head h2 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 24px; line-height: 1.15; }
   .m-ep-head .m-when { font-size: 14px; color: var(--paper-soft); }

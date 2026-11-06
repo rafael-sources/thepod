@@ -14,7 +14,7 @@ from config import DEFAULT_COLORS, PODCASTS_DIR, USER_POLICY, policy_for
 from db import get_db
 
 
-# Lo creado antes de que hubiera dueños es del primer administrador (shared_users.default_owner).
+# Anything created before there were owners belongs to the first administrator (shared_users.default_owner).
 
 
 def _row_owner(row) -> str:

@@ -1,4 +1,4 @@
-"""Teleprompter por sección del guion: columna tp_speaker y endpoint para prodPod."""
+"""Per-section script teleprompter: tp_speaker column and endpoint for prodPod."""
 import sys
 from pathlib import Path
 
@@ -66,6 +66,6 @@ def test_chained_offsets(client):
     client.put(f"/api/podcasts/{slug}/script-sections/{b['id']}", json={"tp_enabled": True, "tp_after_prev": True, "tp_gap_seconds": 0.5, "tp_speaker": "Karelia"})
     s = client.get(f"/api/integrations/teleprompter?slug={slug}&episode_id={ep}",
                    headers={"X-PodPod-Secret": config.INTEGRATION_SECRET}).get_json()["sections"]
-    # 27 palabras a 135 wpm = 12 s + 2,5 = 14,5 s → termina en 19,5; el siguiente a 0,5 s → 20,0
+    # 27 words at 135 wpm = 12 s + 2.5 = 14.5 s → ends at 19.5; the next one 0.5 s later → 20.0
     assert s[0]["offset_seconds"] == 5 and s[0]["ends_seconds"] == 19.5
     assert s[1]["after_prev"] is True and s[1]["offset_seconds"] == 20.0 and s[1]["gap_seconds"] == 0.5

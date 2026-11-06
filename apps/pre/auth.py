@@ -38,7 +38,7 @@ def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip().lower()
     password = data.get("password") or ""
-    if "@" in username:   # también se puede entrar con el correo
+    if "@" in username:   # logging in with the email also works
         from shared_users import list_user_rows
         username = next((r["username"] for r in list_user_rows()
                          if (r.get("email") or "").strip().lower() == username), username)
@@ -154,7 +154,7 @@ def reset_password():
 
 
 # ---------------------------------------------------------------------------
-# Planes: la app de Mac cuenta un episodio nuevo (proyecto importado en la Mac)
+# Plans: the Mac app counts a new episode (project imported on the Mac)
 # ---------------------------------------------------------------------------
 
 @bp.post("/plan/claim")

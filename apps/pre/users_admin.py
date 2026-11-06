@@ -24,7 +24,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _check_email(email):
-    """None si está bien (o vacío); si no, el mensaje de error."""
+    """None if valid (or empty); otherwise, the error message."""
     email = (email or "").strip()
     if email and not _EMAIL_RE.match(email):
         return "el correo no parece válido"

@@ -72,12 +72,12 @@ function debounce(fn, ms = 400) {
    Login
    ========================================================================== */
 
-// Celular / iPad: la misma regla que usa el CSS para el modo táctil.
+// Phone / iPad: the same rule the CSS uses for touch mode.
 function isTouchLayout() {
   try { return window.matchMedia("(max-width: 900px), (pointer: coarse)").matches; } catch (_) { return false; }
 }
 
-/* thePod móvil: un ref que sigue al tamaño de la ventana, para que los componentes cambien de forma */
+/* thePod mobile: a ref that tracks the window size, so components change shape */
 var _touchRef = null;
 function useTouch() {
   if (!_touchRef) {
@@ -90,7 +90,7 @@ function useTouch() {
   return _touchRef;
 }
 
-/* Iconos de la barra de abajo y las filas (trazo, 24 px) */
+/* Icons for the bottom bar and the rows (stroke, 24 px) */
 var M_ICONS = {
   episodes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
@@ -121,8 +121,8 @@ function fmtWhen(ep) {
   } catch (_) { return s; }
 }
 
-/* Barra de abajo de prePod (celular) */
-/* Filas «Instalar thePod» y «Avisos» de la hoja «Yo» (usa window.podPWA de pod-base.js) */
+/* prePod bottom bar (phone) */
+/* «Instalar thePod» and «Avisos» rows of the «Yo» sheet (uses window.podPWA from pod-base.js) */
 var PodPwaRows = {
   setup: function () {
     var P = window.podPWA || { enabled: false };
@@ -206,8 +206,8 @@ var LoginView = {
         mode.value = "reset";
         resetToken.value = token;
       }
-      if (params.get("olvide")) { mode.value = "forgot"; }   // enlace «¿Olvidaste tu contraseña?» de la app
-      // Registro escondido: solo con el enlace que trae la clave
+      if (params.get("olvide")) { mode.value = "forgot"; }   // the app's «¿Olvidaste tu contraseña?» link
+      // Hidden signup: only with the link that carries the key
       if (window.location.pathname === "/registro" && params.get("clave")) {
         api("/api/auth/signup/open?clave=" + encodeURIComponent(params.get("clave"))).then(function (r) {
           if (r && r.open) { su.clave = params.get("clave"); mode.value = "signup"; }
@@ -309,7 +309,7 @@ var LoginView = {
           </div>
         </template>
 
-        <!-- REGISTRO (escondido: solo con enlace) -->
+        <!-- SIGNUP (hidden: link only) -->
         <template v-if="mode === 'signup'">
           <div class="subtitle">Crea tu cuenta de thePod. Te mandamos un correo para confirmarla.</div>
           <form @submit.prevent="submitSignup">
@@ -796,7 +796,7 @@ var BrandingEditor = {
       <div class="main">
         <div v-if="error" class="error">{{ error }}</div>
 
-        <!-- Identidad -->
+        <!-- Identity -->
         <div class="section">
           <div class="section-head">
             <div class="eyebrow">IDENTIDAD</div>
@@ -902,7 +902,7 @@ var BrandingEditor = {
           </div>
         </div>
 
-        <!-- Colores -->
+        <!-- Colors -->
         <div class="section">
           <div class="section-head">
             <div class="eyebrow">COLORES</div>
@@ -947,7 +947,7 @@ var BrandingEditor = {
           </div>
         </div>
 
-        <!-- Tipografía -->
+        <!-- Typography -->
         <div class="section">
           <div class="section-head">
             <div class="eyebrow">TIPOGRAFÍA</div>
@@ -984,7 +984,7 @@ var BrandingEditor = {
           </div>
         </div>
 
-        <!-- Assets visuales -->
+        <!-- Visual assets -->
         <div class="section">
           <div class="section-head">
             <div class="eyebrow">ASSETS</div>
@@ -1307,7 +1307,7 @@ var EpisodesBoard = {
       } catch (e) { error.value = e.message; }
     }
 
-    // Celular: lista con filtro por estado y «Mover a…» en una hoja
+    // Phone: list with a status filter and «Mover a…» in a sheet
     const touch = useTouch();
     const mFilter = ref("all");
     const mMove = ref(null);
@@ -1613,20 +1613,20 @@ var ScriptEditor = {
     );
     watch(totalSeconds, (v) => emit("total-seconds-changed", v));
 
-    /* Teleprompter: minutos y segundos por separado; se guarda en segundos. */
+    /* Teleprompter: minutes and seconds separately; stored in seconds. */
     function tpMin(sec) { const s = sec.tp_offset_seconds; return s == null ? 0 : Math.floor(s / 60); }
     function tpSec(sec) { const s = sec.tp_offset_seconds; return s == null ? 0 : Math.floor(s % 60); }
     function setTpMinSec(sec, mins, secs) {
       mins = Math.max(0, parseInt(mins, 10) || 0); secs = Math.max(0, Math.min(59, parseInt(secs, 10) || 0));
       sec.tp_offset_seconds = mins * 60 + secs; saveSection(sec);
     }
-    /* Encadenar: cuándo termina de correr el teleprompter anterior (misma fórmula que prodPod) + separación. */
+    /* Chaining: when the previous teleprompter finishes running (same formula as prodPod) + gap. */
     const TP_WPM_PRE = { slow: 95, normal: 135, fast: 180 };
     function tpRunSeconds(sec) {
       const words = Math.max(8, (sec.content || "").trim().split(/\s+/).filter(Boolean).length);
       return words / (TP_WPM_PRE[sec.tp_speed || "normal"] || 135) * 60 + 2.5;
     }
-    /* Inicio real de cada teleprompter (resuelve los encadenados en orden). */
+    /* Actual start of each teleprompter (resolves chained ones in order). */
     function tpStart(sec) {
       let prevEnd = null;
       for (const s of sections.value) {
@@ -1648,14 +1648,14 @@ var ScriptEditor = {
       return m + ":" + String(r).padStart(2, "0");
     }
     function setTpGap(sec, v) { sec.tp_gap_seconds = Math.max(0, parseFloat(v) || 0); saveSection(sec); }
-    /* Sugerencia: el minuto donde empieza la sección sumando las anteriores. */
+    /* Suggestion: the minute where the section starts, summing the previous ones. */
     function tpSuggest(sec) {
       let acc = 0;
       for (const s of sections.value) { if (s.id === sec.id) break; acc += s.estimated_duration || 0; }
       sec.tp_offset_seconds = acc; saveSection(sec);
     }
-    /* Quién lo lee: se elige entre los conductores del podcast (por usuario) y los invitados del episodio,
-       así prodPod lo manda a la persona correcta aunque el nombre esté escrito distinto. */
+    /* Who reads it: chosen from the podcast hosts (by username) and the episode guests,
+       so prodPod sends it to the right person even if the name is spelled differently. */
     const tpPeople = ref([]);   // [{key, label, kind}]
     async function loadTpPeople() {
       const out = [];
@@ -2073,7 +2073,7 @@ var EpisodeLinks = {
 };
 
 /* ==========================================================================
-   Rundown editor (estructura del episodio: bloques planificados)
+   Rundown editor (episode structure: planned blocks)
    ========================================================================== */
 
 var BLOCK_KINDS = [
@@ -2671,10 +2671,10 @@ var ShowNotesModal = {
    ========================================================================== */
 
 /* ==========================================================================
-   Publicar desde la web: subir el archivo (por partes, con avance) y publicarlo
-   - Audio → feed para Spotify y Apple Podcasts
-   - Video → YouTube (canal conectado del podcast)
-   Usa los mismos endpoints que la app de Mac (/api/mac/uploads y /api/mac/publish/*).
+   Publish from the web: upload the file (in chunks, with progress) and publish it
+   - Audio → feed for Spotify and Apple Podcasts
+   - Video → YouTube (the podcast's connected channel)
+   Uses the same endpoints as the Mac app (/api/mac/uploads and /api/mac/publish/*).
    ========================================================================== */
 
 async function uploadInChunks(file, onProgress) {
@@ -2719,7 +2719,7 @@ var PublishPanel = {
     const audio = reactive({ file: null, stage: "", pct: 0, error: "", busy: false });
     const video = reactive({ file: null, stage: "", pct: 0, error: "", busy: false, url: "",
                              title: "", privacy: "public" });
-    const yt = ref(null);       // null = cargando · {connected, channel_name}
+    const yt = ref(null);       // null = loading · {connected, channel_name}
 
     onMounted(async function () {
       video.title = props.ep.title || "";
@@ -2943,7 +2943,7 @@ var EpisodeDetail = {
       finally { publishing.value = false; }
     }
 
-    // Celular: un hub con el episodio y una sección por pantalla
+    // Phone: a hub with the episode and one section per screen
     const touch = useTouch();
     const mSec = ref("hub");
     const M_SECS = [
@@ -3734,9 +3734,9 @@ var CalendarView = {
       } catch (e) { error.value = e.message; }
     }
 
-    // Drag-drop: arrastrar un episodio de un día a otro cambia su fecha
-    // sin perder la hora. Usamos el dataTransfer en vez de un ref porque en
-    // Safari el ref puede limpiarse entre dragstart y drop.
+    // Drag-drop: dragging an episode from one day to another changes its date
+    // without losing the time. We use dataTransfer instead of a ref because in
+    // Safari the ref can get cleared between dragstart and drop.
     const dragging = ref(null);
     let _dragId = null;
     function onDragEpStart(ep, ev) {
@@ -5040,7 +5040,7 @@ var DistributionPanel = {
 
 
 /* ==========================================================================
-   prePod — Redes: conectar las cuentas del podcast (publicar se hace en pubPod)
+   prePod — Networks: connect the podcast's accounts (publishing happens in pubPod)
    ========================================================================== */
 
 var PUB_STAR = '<svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true" style="flex:0 0 auto"><polygon points="24,2.5 29.8,17.4 45.5,18.1 33.2,28 37.5,43.5 24,34.7 10.5,43.5 14.8,28 2.5,18.1 18.2,17.4" fill="FILL" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-dasharray="DASH"></polygon></svg>';
@@ -5133,7 +5133,7 @@ var RedesPanel = {
   `,
 };
 
-/* Celular → Configurar: una lista con todo lo que en escritorio son pestañas */
+/* Phone → Configurar: a list with everything that on desktop is tabs */
 var CONFIG_ROWS = [
   { key: "branding", label: "Branding", sub: "Nombre, logo, colores y voz", ico: "star" },
   { key: "sounds", label: "Sonidos", sub: "Cortinas, efectos y música", ico: "rec" },
@@ -5152,7 +5152,7 @@ var PodcastView = {
     const touch = useTouch();
     const meOpen = ref(false);
     const appsOpen = ref(false);
-    // La pestaña de abajo que corresponde al modo actual
+    // The bottom tab that matches the current mode
     const mTab = computed(() => {
       const m = mode.value;
       if (m === "episodes" || m === "episode-detail") return "episodes";
@@ -5171,7 +5171,7 @@ var PodcastView = {
       if (inConfigChild.value) { mode.value = "config"; return; }
       props.onBack();
     }
-    // En celular/iPad se entra directo a los episodios: es lo que se usa en una emergencia.
+    // On phone/iPad it opens straight into episodes: that's what's used in an emergency.
     const mode = ref(isTouchLayout() ? "episodes" : "branding");
     const selectedEpId = ref(null);
     const moreOpen = ref(false);
@@ -5310,7 +5310,7 @@ var PodcastView = {
 
 var USER_COLORS = ["#8DB36A", "#E0A458", "#D9706B", "#6FA8DC", "#B48EAD", "#5FB3A1", "#E6C35C", "#9AA0A6"];
 
-/* «María José García» → «mariajose» (sin tildes ni espacios); el admin lo puede cambiar. */
+/* «María José García» → «mariajose» (no accents or spaces); the admin can change it. */
 function suggestUsername(name) {
   var parts = (name || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
     .replace(/[^a-z0-9 ]/g, " ").trim().split(/\s+/).filter(Boolean);
@@ -5376,7 +5376,7 @@ var UsersAdminModal = {
         .sort((a, b) => (b.is_admin - a.is_admin) || (a.display_name || "").localeCompare(b.display_name || ""));
     });
 
-    /* ---- Nuevo usuario ---- */
+    /* ---- New user ---- */
     watch(() => nu.display_name, function (v) { if (!nu.usernameTouched) nu.username = suggestUsername(v); });
 
     const usernameState = computed(() => {
@@ -5426,7 +5426,7 @@ var UsersAdminModal = {
       finally { busy.value = false; }
     }
 
-    /* ---- Mensaje con los datos de acceso ---- */
+    /* ---- Message with the login details ---- */
     const welcomeText = computed(() => {
       const c = credentials.value;
       if (!c) return "";
@@ -5448,7 +5448,7 @@ var UsersAdminModal = {
       catch (_) { podSwal.toast("No se pudo copiar; selecciona el texto y cópialo a mano", "error"); }
     }
 
-    /* ---- Editar ---- */
+    /* ---- Edit ---- */
     function startEdit(u) {
       editing.value = u.username; error.value = "";
       Object.assign(editForm, { display_name: u.display_name || "", email: u.email || "", avatar_color: u.avatar_color || USER_COLORS[0],
@@ -5519,7 +5519,7 @@ var UsersAdminModal = {
         <div class="modal-body">
           <div v-if="error" class="error">{{ error }}</div>
 
-          <!-- Datos de acceso recién creados / clave nueva -->
+          <!-- Newly created login details / new password -->
           <div v-if="credentials" class="ua-cred">
             <div class="ua-cred-head">
               <strong>{{ credentials.isNew ? 'Listo: ' + credentials.display_name + ' ya tiene cuenta' : 'Contraseña nueva para ' + credentials.display_name }}</strong>
@@ -5537,7 +5537,7 @@ var UsersAdminModal = {
             <div class="muted ua-hint">Esta contraseña no se vuelve a mostrar. Si se pierde, genera otra con la llave 🔑.</div>
           </div>
 
-          <!-- Nuevo usuario -->
+          <!-- New user -->
           <div v-if="mode === 'new'" class="ua-new">
             <h4>Nuevo usuario</h4>
             <div class="ua-grid">
@@ -5614,7 +5614,7 @@ var UsersAdminModal = {
             </div>
           </div>
 
-          <!-- Lista -->
+          <!-- List -->
           <template v-else>
             <div class="ua-toolbar">
               <input type="search" v-model="query" placeholder="Buscar por nombre, usuario o correo" class="ua-search">

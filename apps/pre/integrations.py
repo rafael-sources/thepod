@@ -403,21 +403,21 @@ def episode_integration_status(slug, ep_id):
 
 
 # ---------------------------------------------------------------------------
-# Inbound: teleprompter del guion (prodPod lo pide al abrir la sala, con el secreto compartido)
+# Inbound: script teleprompter (prodPod requests it when opening the room, with the shared secret)
 # ---------------------------------------------------------------------------
 
 _TP_WPM = {"slow": 95, "normal": 135, "fast": 180}
 
 
 def _tp_run_seconds(text: str, speed: str) -> float:
-    """Cuánto tarda en correr un teleprompter (misma fórmula que prodPod y la app): palabras / velocidad + 2,5 s."""
+    """How long a teleprompter takes to run (same formula as prodPod and the app): words / speed + 2.5 s."""
     words = max(8, len((text or "").split()))
     return words / _TP_WPM.get(speed, 135) * 60 + 2.5
 
 
 @bp.get("/api/integrations/teleprompter")
 def teleprompter_for_episode():
-    """Secciones del guion marcadas para teleprompter + sponsors activos, para prodPod.
+    """Script sections flagged for teleprompter + active sponsors, for prodPod.
     GET ?slug=<podcast>&episode_id=<id>  (X-PodPod-Secret)"""
     err = _require_shared_secret_inbound()
     if err:
@@ -440,7 +440,7 @@ def teleprompter_for_episode():
         ).fetchall()
         cols = {r[1] for r in db.execute("PRAGMA table_info(script_sections)").fetchall()}
         sections = []
-        prev_end = None          # cuándo termina de correr el teleprompter anterior (para los encadenados)
+        prev_end = None          # when the previous teleprompter finishes running (for chained ones)
         for r in rows:
             d = dict(r)
             if not cols or "tp_enabled" not in cols or not d.get("tp_enabled"):
@@ -461,12 +461,12 @@ def teleprompter_for_episode():
                 "id": d["id"],
                 "position": d["position"],
                 "speaker": d.get("speaker") or "",
-                "speaker_key": d.get("tp_speaker") or d.get("speaker") or "",   # usuario del conductor o nombre del invitado
+                "speaker_key": d.get("tp_speaker") or d.get("speaker") or "",   # host's username or guest's name
                 "content": content,
                 "offset_seconds": offset,
                 "ends_seconds": round(prev_end, 1),
                 "after_prev": after_prev,
-                "gap_seconds": gap,      # pausa tras el anterior; prodPod espera a que el anterior termine de verdad
+                "gap_seconds": gap,      # pause after the previous one; prodPod waits for the previous one to actually finish
                 "speed": speed,
                 "size": d.get("tp_size") or "half",
             })

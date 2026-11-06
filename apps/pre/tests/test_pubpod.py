@@ -1,4 +1,4 @@
-"""Tests de pubpod.py — conectar redes, crear/programar reels y publicarlos."""
+"""Tests for pubpod.py — connect networks, create/schedule reels and publish them."""
 
 import sys
 import time
@@ -118,7 +118,7 @@ def test_publish_instagram_reel(client, monkeypatch):
     assert post["status"] == "scheduled"
 
     token = pubpod._db(SLUG).execute("SELECT media_token FROM pub_posts").fetchone()[0]
-    # El video está disponible públicamente mientras la publicación está pendiente
+    # The video is publicly available while the post is pending
     assert client.get(f"/pub/m/{SLUG}/{token}.mp4").status_code == 200
 
     calls = []
@@ -149,7 +149,7 @@ def test_publish_instagram_reel(client, monkeypatch):
     posts = client.get(f"/api/pubpod/podcasts/{SLUG}/posts").get_json()["posts"]
     assert posts[0]["status"] == "published"
     assert posts[0]["result_url"] == "https://www.instagram.com/reel/abc/"
-    # Ya publicado: el video deja de ser público y se borra
+    # Once published: the video is no longer public and is deleted
     assert client.get(f"/pub/m/{SLUG}/{token}.mp4").status_code == 404
     assert not pubpod._media_path(SLUG, token).exists()
 
@@ -239,7 +239,7 @@ def test_tiktok_needs_connection_then_shows_account(client):
 
 def test_tiktok_sends_to_inbox_in_chunks(client, monkeypatch):
     _connect_tt()
-    big = b"x" * (70 * 1024 * 1024 + 123)          # > 64 MB → trozos de 10 MB, el último con el resto
+    big = b"x" * (70 * 1024 * 1024 + 123)          # > 64 MB → 10 MB chunks, the last one with the remainder
     uid = _upload(client, big)
     r = client.post("/api/pubpod/reels", json={"slug": SLUG, "upload_id": uid, "title": "T",
                                                 "targets": [{"platform": "tiktok", "caption": "c"}]})
@@ -284,7 +284,7 @@ def test_tiktok_pending_limit_message(client, monkeypatch):
 
 
 def test_tiktok_token_refresh(client, monkeypatch):
-    _connect_tt(expires_in=60)                     # vence en 1 minuto → se renueva
+    _connect_tt(expires_in=60)                     # expires in 1 minute → gets refreshed
     calls = []
 
     def fake_post(url, data=None, timeout=None, **k):
@@ -304,7 +304,7 @@ def test_tiktok_state_cannot_be_used_for_instagram(client):
 
 
 def test_migration_from_first_version(client):
-    """Una base creada con la primera versión (sin 'inbox' ni refresh) se actualiza sin perder nada."""
+    """A DB created with the first version (no 'inbox' or refresh) is upgraded without losing anything."""
     import sqlite3
     conn = db_mod.get_db(SLUG)
     old = pubpod.SCHEMA.replace("'private','inbox','error'", "'private','error'")

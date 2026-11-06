@@ -1,5 +1,5 @@
-"""Contraseñas: scrypt con sal, el MD5 viejo se acepta y se convierte al entrar, y el primer arranque crea
-un solo administrador (con la contraseña de THEPOD_ADMIN_PASSWORD)."""
+"""Passwords: salted scrypt, the old MD5 is accepted and converted on login, and the first boot creates
+a single administrator (with the password from THEPOD_ADMIN_PASSWORD)."""
 import importlib
 import sqlite3
 import sys
@@ -44,10 +44,10 @@ def test_old_md5_is_accepted_once_and_upgraded(tmp_path, monkeypatch):
     con.commit()
     su._invalidate_cache()
     assert not su.verify_password("ana", "mala")
-    assert len(su.get_user("ana")["password_md5"]) == 32          # una contraseña mala no la toca
+    assert len(su.get_user("ana")["password_md5"]) == 32          # a wrong password leaves it untouched
     assert su.verify_password("ana", "secreta1")
     stored = su.get_user("ana")["password_md5"]
-    assert stored.startswith("scrypt$")                              # convertida al entrar
+    assert stored.startswith("scrypt$")                              # converted on login
     assert su.verify_password("ana", "secreta1")
 
 
