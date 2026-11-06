@@ -34,8 +34,8 @@ final class Updater: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "buscarActualizaciones") }
     }
 
-    static var currentVersion: String { Bundle.main.object(forInfoDictionaryKey: String(localized: "CFBundleShortVersionString")) as? String ?? "0" }
-    static var currentBuild: String { Bundle.main.object(forInfoDictionaryKey: String(localized: "CFBundleVersion")) as? String ?? "0" }
+    static var currentVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
+    static var currentBuild: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0" }
 
     private var cookies: [String: String] = [:]
     private var stagedApp: URL?

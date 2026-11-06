@@ -17,7 +17,7 @@ def wrappable(s, before):
     # identificadores: camelCase sin acentos, o con _ . - y sin espacios; una palabra con mayúscula o acento sí es texto
     if re.fullmatch(r'[a-z][A-Za-z0-9]*', plain) or (re.fullmatch(r'[\w\-.]+', plain) and re.search(r'[_.\-]', plain)): return False
     if re.search(r'\bcase\s+\w+\s*=\s*$', before): return False     # valor crudo de un enum
-    if re.fullmatch(r'(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|CI[A-Z]\w*|Sounds|Fonts|Models|Assets|Resources|Vendor|Contents|MacOS)', plain): return False
+    if re.fullmatch(r'(CFBundle\w*|CUSTOM|GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|CI[A-Z]\w*|Sounds|Fonts|Models|Assets|Resources|Vendor|Contents|MacOS)', plain): return False
     if re.search(r'(applyingFilter|CIFilter\(name|send\(|method:|fontName|NSFont\(name|Font\.custom)\s*[:(]?\s*$', before): return False
     if re.search(r'\.(caf|mp4|mp3|wav|m4a|png|jpg|json|txt|srt|vtt|pdf|cube|mov)\b', s): return False
     if '/' in plain and ' ' not in plain: return False

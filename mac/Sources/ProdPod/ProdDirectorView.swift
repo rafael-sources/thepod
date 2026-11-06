@@ -731,7 +731,7 @@ struct CuesPanel: View {
     private func sendCustom() {
         let t = custom.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }
-        dir.sendCue(String(localized: "CUSTOM"), text: t, target: target); custom = ""
+        dir.sendCue("CUSTOM", text: t, target: target); custom = ""
     }
 
     private func cueTile(_ c: String) -> some View {
