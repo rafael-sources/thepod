@@ -21,8 +21,8 @@ def tp_db(tmp_path):
         "INSERT INTO sessions (id, title, created_by, shared_project_id, livekit_room_name, source_url, source_slug, source_episode_id, sponsors_json) "
         "VALUES (1, 'S', 'host_user', 'p', 'room_1', 'http://prepod.test', 'demo', 14, '[{\"name\": \"Respaldo\"}]')"
     )
-    conn.execute("INSERT INTO participants (session_id, username, display_name, invite_token, role, status) VALUES (1, 'host_user', 'Patricio', 'tok-host', 'host', 'connected')")
-    conn.execute("INSERT INTO participants (session_id, username, display_name, invite_token, role, status) VALUES (1, 'guest', 'Karelia', 'tok-guest', 'guest', 'connected')")
+    conn.execute("INSERT INTO participants (session_id, username, display_name, invite_token, role, status) VALUES (1, 'host_user', 'Alex', 'tok-host', 'host', 'connected')")
+    conn.execute("INSERT INTO participants (session_id, username, display_name, invite_token, role, status) VALUES (1, 'guest', 'Sam', 'tok-guest', 'guest', 'connected')")
     conn.commit()
     conn.close()
     from app import create_app
@@ -45,7 +45,7 @@ def test_proxy_to_prepod(tp_db, monkeypatch):
     def fake_open(req, timeout=0):
         seen["url"] = req.full_url
         seen["secret"] = req.headers.get("X-podpod-secret")
-        return _Resp(json.dumps({"sections": [{"id": 1, "speaker": "Patricio", "content": "Hola", "offset_seconds": 12, "speed": "fast", "size": "full"}],
+        return _Resp(json.dumps({"sections": [{"id": 1, "speaker": "Alex", "content": "Hola", "offset_seconds": 12, "speed": "fast", "size": "full"}],
                                  "sponsors": [{"name": "Loma Verde", "copy": "Café"}]}).encode())
     monkeypatch.setattr(urllib.request, "urlopen", fake_open)
     c = tp_db.test_client()
@@ -55,10 +55,10 @@ def test_proxy_to_prepod(tp_db, monkeypatch):
     assert r.status_code == 200
     d = r.get_json()
     assert "slug=demo&episode_id=14" in seen["url"] and seen["secret"]
-    assert d["sections"][0]["speaker"] == "Patricio" and d["sections"][0]["size"] == "full"
+    assert d["sections"][0]["speaker"] == "Alex" and d["sections"][0]["size"] == "full"
     assert d["sponsors"][0]["name"] == "Loma Verde"
     idents = {p["display_name"]: p["identity"] for p in d["participants"]}
-    assert idents["Karelia"].startswith("participant_")
+    assert idents["Sam"].startswith("participant_")
 
 
 def test_guest_token_and_fallback_sponsors(tp_db, monkeypatch):

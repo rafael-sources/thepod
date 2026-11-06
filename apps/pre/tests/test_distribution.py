@@ -33,7 +33,7 @@ def _setup_db(tmp_path, with_cover=True, with_episode=True):
             (slug, f"proj-{id(tmp_path)}", "cover.jpg" if with_cover else None),
         )
         conn.execute(
-            "INSERT INTO landing_config (owner_name, owner_email) VALUES ('Host', 'h@t.com')"
+            "INSERT INTO landing_config (owner_name, owner_email) VALUES ('Host', 'host@example.com')"
         )
         if with_episode:
             conn.execute(

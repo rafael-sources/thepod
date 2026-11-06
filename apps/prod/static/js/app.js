@@ -813,7 +813,7 @@ function _admitOverlay(activeOverlays, msg) {
    Teleprompter (thePod 0.11) — same contract as the Mac app.
    Room message: {type:"teleprompter", action:"show"|"hide", target:"all"|identity,
    title, text, speed: slow|normal|fast, size: quarter|half|full, countdown: sec, event_id}
-   With countdown > 0 EVERYONE sees the notice ("Viene X en 3 s · ATENTO PATRICIO") and, when it ends,
+   With countdown > 0 EVERYONE sees the notice ("Viene X en 3 s · ATENTO ALEX") and, when it ends,
    only the target sees the scrolling text.
    The reader reports when the text finished scrolling (pauses included) or was closed:
    {type:"teleprompter_done", event_id}. The host uses it to release the next chained one.

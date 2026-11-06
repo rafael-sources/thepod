@@ -40,30 +40,30 @@ def test_tp_speaker_roundtrip_and_endpoint(client):
     r = client.post(f"/api/podcasts/{slug}/episodes", json={"title": "Ep 1"})
     assert r.status_code in (200, 201), r.data
     ep = r.get_json()["id"]
-    r = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Patricio", "content": "Hola"})
+    r = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Alex", "content": "Hola"})
     sec = r.get_json()
     r = client.put(f"/api/podcasts/{slug}/script-sections/{sec['id']}",
-                     json={"tp_enabled": True, "tp_offset_seconds": 5, "tp_speaker": "patricio", "tp_size": "full"})
+                     json={"tp_enabled": True, "tp_offset_seconds": 5, "tp_speaker": "alex", "tp_size": "full"})
     assert r.status_code == 200, r.data
     d = r.get_json()
-    assert d["tp_speaker"] == "patricio" and d["tp_offset_seconds"] == 5 and d["tp_size"] == "full"
+    assert d["tp_speaker"] == "alex" and d["tp_offset_seconds"] == 5 and d["tp_size"] == "full"
 
     r = client.get(f"/api/integrations/teleprompter?slug={slug}&episode_id={ep}",
                    headers={"X-PodPod-Secret": config.INTEGRATION_SECRET})
     assert r.status_code == 200, r.data
     s = r.get_json()["sections"]
     assert len(s) == 1
-    assert s[0]["speaker"] == "Patricio" and s[0]["speaker_key"] == "patricio" and s[0]["offset_seconds"] == 5
+    assert s[0]["speaker"] == "Alex" and s[0]["speaker_key"] == "alex" and s[0]["offset_seconds"] == 5
 
 
 def test_chained_offsets(client):
     r = client.post("/api/podcasts", json={"name": "Cadena"})
     slug = r.get_json()["slug"]
     ep = client.post(f"/api/podcasts/{slug}/episodes", json={"title": "Ep"}).get_json()["id"]
-    a = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Patricio", "content": " ".join(["palabra"] * 27)}).get_json()
-    b = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Karelia", "content": "corto"}).get_json()
-    client.put(f"/api/podcasts/{slug}/script-sections/{a['id']}", json={"tp_enabled": True, "tp_offset_seconds": 5, "tp_speaker": "patricio"})
-    client.put(f"/api/podcasts/{slug}/script-sections/{b['id']}", json={"tp_enabled": True, "tp_after_prev": True, "tp_gap_seconds": 0.5, "tp_speaker": "Karelia"})
+    a = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Alex", "content": " ".join(["palabra"] * 27)}).get_json()
+    b = client.post(f"/api/podcasts/{slug}/episodes/{ep}/script", json={"speaker": "Sam", "content": "corto"}).get_json()
+    client.put(f"/api/podcasts/{slug}/script-sections/{a['id']}", json={"tp_enabled": True, "tp_offset_seconds": 5, "tp_speaker": "alex"})
+    client.put(f"/api/podcasts/{slug}/script-sections/{b['id']}", json={"tp_enabled": True, "tp_after_prev": True, "tp_gap_seconds": 0.5, "tp_speaker": "Sam"})
     s = client.get(f"/api/integrations/teleprompter?slug={slug}&episode_id={ep}",
                    headers={"X-PodPod-Secret": config.INTEGRATION_SECRET}).get_json()["sections"]
     # 27 words at 135 wpm = 12 s + 2.5 = 14.5 s → ends at 19.5; the next one 0.5 s later → 20.0

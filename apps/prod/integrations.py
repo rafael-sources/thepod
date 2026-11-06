@@ -143,8 +143,8 @@ def import_from_prepod():
         else:
             description = (episode.get("description") or "").strip()
 
-        # Creator: prefer the owner_username sent by prePod (so when Karelia
-        # owns the podcast in prePod, she becomes the host of the prodPod
+        # Creator: prefer the owner_username sent by prePod (so when a user
+        # owns the podcast in prePod, they become the host of the prodPod
         # session too). Falls back to first known user.
         requested_owner = (data.get("owner_username") or "").strip().lower()
         if requested_owner and requested_owner in USER_PROFILES:

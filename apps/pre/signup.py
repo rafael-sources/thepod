@@ -72,7 +72,7 @@ def _email_taken(email: str) -> bool:
 
 
 def _free_username(email: str) -> str:
-    """Username from the email: «maria.garcia@x.com» → «mariagarcia» (or «mariagarcia2»…)."""
+    """Username from the email: «maria.garcia@example.com» → «mariagarcia» (or «mariagarcia2»…)."""
     from shared_users import get_user
     base = re.sub(r"[^a-z0-9_-]", "", email.split("@")[0].lower())[:28] or "usuario"
     if len(base) < 3:
