@@ -5,6 +5,7 @@ Shared SECRET_KEY across the podpod suite gives SSO for free.
 
 import uuid
 from functools import wraps
+from shared_users import verify_password, hash_password
 
 from flask import Blueprint, jsonify, request, session
 
@@ -43,8 +44,7 @@ def login():
         from shared_users import list_user_rows
         username = next((r["username"] for r in list_user_rows()
                          if (r.get("email") or "").strip().lower() == username), username)
-    expected = USERS.get(username)
-    if not expected or md5(password) != expected:
+    if not verify_password(username, password):
         return jsonify({"error": "usuario o contraseña inválidos"}), 401
 
     session.clear()

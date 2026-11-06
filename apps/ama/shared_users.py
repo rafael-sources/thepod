@@ -37,7 +37,51 @@ _DEFAULT_PALETTE = [
 
 
 def md5(s: str) -> str:
+    """Hash viejo (MD5 sin sal). Solo se usa para reconocer contraseñas guardadas antes de scrypt."""
     return hashlib.md5(s.encode()).hexdigest()
+
+
+# Contraseñas: scrypt con sal propia por usuario, guardado como "scrypt$n$r$p$sal$hash" (hex).
+# La columna se sigue llamando password_md5 por compatibilidad; puede tener un hash viejo de MD5
+# (32 caracteres hex) hasta que ese usuario vuelva a entrar: verify_password lo convierte entonces.
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    h = hashlib.scrypt(password.encode(), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=32)
+    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt.hex()}${h.hex()}"
+
+
+def check_password(password: str, stored: str | None) -> bool:
+    """¿Esta contraseña corresponde a este hash guardado (scrypt o MD5 viejo)?"""
+    if not stored or password is None:
+        return False
+    if stored.startswith("scrypt$"):
+        try:
+            _, n, r, p, salt, h = stored.split("$")
+            got = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=int(n), r=int(r), p=int(p), dklen=len(h) // 2)
+        except (ValueError, TypeError):
+            return False
+        return secrets.compare_digest(got.hex(), h)
+    if len(stored) == 32:
+        return secrets.compare_digest(md5(password), stored)
+    return False
+
+
+def verify_password(username: str, password: str) -> bool:
+    """Comprueba la contraseña de un usuario. Si estaba guardada con el MD5 viejo y es correcta,
+    la vuelve a guardar con scrypt en ese momento: nadie tiene que cambiarla."""
+    user = get_user(username) if username else None
+    stored = (user or {}).get("password_md5")
+    if not check_password(password, stored):
+        return False
+    if not stored.startswith("scrypt$"):
+        try:
+            update_user_fields(username, {"password_md5": hash_password(password)})
+        except Exception:
+            pass
+    return True
 
 
 def random_password(n: int = 12) -> str:
@@ -83,19 +127,34 @@ def _migrate_columns(conn: sqlite3.Connection):
 
 
 def _bootstrap_defaults(conn: sqlite3.Connection):
-    """First-run users (matches the original hardcoded list)."""
-    rows = [
-        ("admin",    md5("CAMBIAR-EN-PRIMER-ARRANQUE"),                  "Admin",    "#e85a4f", 1, None),
-        ("rafael",   md5("CAMBIAR-EN-PRIMER-ARRANQUE"),                 "Rafael",   "#6bb3c4", 1, None),
-        ("karelia",  "00000000000000000000000000000000", "Karelia",  "#b56bd9", 0, 1),
-        ("patricio", "00000000000000000000000000000000", "Patricio", "#8db36a", 0, 1),
-    ]
-    conn.executemany(
+    """Primer arranque con la base vacía: un solo administrador. Usuario y contraseña salen de
+    THEPOD_ADMIN_USER (por defecto "admin") y THEPOD_ADMIN_PASSWORD; si no hay contraseña, se
+    genera una y se escribe una sola vez en el log del servicio."""
+    import logging
+    username = (os.environ.get("THEPOD_ADMIN_USER") or "admin").strip().lower()
+    password = os.environ.get("THEPOD_ADMIN_PASSWORD") or ""
+    if not password:
+        password = random_password(16)
+        logging.getLogger(__name__).warning(
+            "thePod: se creó el administrador '%s' con la contraseña %s — cámbiala al entrar.", username, password)
+    conn.execute(
         "INSERT INTO users (username, password_md5, display_name, avatar_color, is_admin, max_podcasts) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        rows,
+        "VALUES (?, ?, ?, ?, 1, NULL)",
+        (username, hash_password(password), username.title(), _DEFAULT_PALETTE[0]),
     )
     conn.commit()
+
+
+def default_owner() -> str:
+    """Dueño de lo que se creó antes de que hubiera dueños (podcasts y proyectos viejos) y de lo que
+    llega de otra app sin usuario: el primer administrador de la base."""
+    _ensure_initialized()
+    conn = _connect()
+    try:
+        r = conn.execute("SELECT username FROM users WHERE is_admin = 1 ORDER BY rowid LIMIT 1").fetchone()
+        return r["username"] if r else "admin"
+    finally:
+        conn.close()
 
 
 def _import_from_legacy_json(conn: sqlite3.Connection):
@@ -182,6 +241,7 @@ def _row_to_dict(r) -> dict:
 
 
 def list_user_rows() -> list[dict]:
+    _ensure_initialized()
     conn = _connect()
     try:
         rows = conn.execute(
@@ -193,6 +253,7 @@ def list_user_rows() -> list[dict]:
 
 
 def get_user(username: str) -> dict | None:
+    _ensure_initialized()
     if not username:
         return None
     conn = _connect()
@@ -216,7 +277,7 @@ def create_user(username: str, password: str, *, display_name: str = None,
                 conn.execute(
                     "INSERT INTO users (username, password_md5, display_name, email, avatar_color, "
                     "is_admin, max_podcasts) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (username, md5(password),
+                    (username, hash_password(password),
                      (display_name or username).strip().title(),
                      (email or "").strip() or None,
                      (avatar_color or "").strip() or None,

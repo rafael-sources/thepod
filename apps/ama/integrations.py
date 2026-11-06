@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 from pathlib import Path
+from shared_users import default_owner
 
 import requests as http_requests
 from flask import Blueprint, jsonify, request
@@ -33,7 +34,7 @@ def create_event_from_prodpod():
 
     data = request.get_json(silent=True) or {}
     title = data.get("title", "Evento desde prodPod")
-    host_username = data.get("host_username", "admin")
+    host_username = data.get("host_username") or default_owner()
     description = data.get("description", "")
     branding_json = data.get("branding_json")
     prodpod_session_id = data.get("prodpod_session_id")
