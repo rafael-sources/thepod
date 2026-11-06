@@ -1,16 +1,16 @@
 """
-Planes de thePod — el mismo archivo en prePod, prodPod, postPod y thePod.
+thePod plans — the same file in prePod, prodPod, postPod and thePod.
 
-- Completo: sin límites (todas las cuentas que ya existían y las que un admin marque así).
-- Web (de pago): sin límites en la web; en la app de Mac, lo del plan Gratis.
-- Mac (de pago): sin límites en la web y en la app.
-- Gratis: 2 episodios en total (una vez hechos, no se pueden hacer más), grabaciones de hasta
-  15 minutos y video hasta 720p.
+- Completo: no limits (all pre-existing accounts and those an admin marks as such).
+- Web (paid): no limits on the web; in the Mac app, the Gratis plan limits.
+- Mac (paid): no limits on the web or in the app.
+- Gratis: 2 episodes in total (once made, no more can be made), recordings up to
+  15 minutes and video up to 720p.
 
-Se guarda en la base compartida de usuarios (~/.podpod/users.db):
-- users.plan: NULL o "completo" = Completo · "gratis" = Gratis.
-- plan_usage: qué episodios ya contaron (uno por grabación de prodPod, proyecto subido a postPod
-  o proyecto nuevo en la app de Mac). Un episodio que ya contó se puede seguir usando siempre.
+Stored in the shared users database (~/.podpod/users.db):
+- users.plan: NULL or "completo" = Completo · "gratis" = Gratis.
+- plan_usage: which episodes have already counted (one per prodPod recording, project uploaded to postPod
+  or new project in the Mac app). An episode that already counted can always keep being used.
 """
 
 import sqlite3
@@ -20,13 +20,13 @@ USERS_DB = Path.home() / ".podpod" / "users.db"
 
 PLANS = {
     "gratis":   {"name": "Gratis",   "max_episodes": 2,    "max_record_seconds": 15 * 60, "max_height": 720,  "mac": False},
-    # De pago (Lemon Squeezy): Web = todo en el navegador; Mac = web + la app de Mac
+    # Paid (Lemon Squeezy): Web = everything in the browser; Mac = web + the Mac app
     "web":      {"name": "Web",      "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": False},
     "mac":      {"name": "Mac",      "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": True},
-    # Cuentas de antes y las que marca un admin: todo, sin cobro
+    # Older accounts and those an admin marks: everything, free of charge
     "completo": {"name": "Completo", "max_episodes": None, "max_record_seconds": None,    "max_height": None, "mac": True},
 }
-# Sin la app incluida (Gratis y Web), en la Mac rige lo del plan Gratis
+# Without the app included (Gratis and Web), the Gratis plan limits apply on the Mac
 MAC_FREE = {"max_episodes": 2, "max_height": 720}
 
 
@@ -39,7 +39,7 @@ def _connect():
         try:
             c.execute("ALTER TABLE users ADD COLUMN plan TEXT")
         except sqlite3.OperationalError:
-            pass        # otra app la agregó al mismo tiempo
+            pass        # another app added it at the same time
     c.execute("""CREATE TABLE IF NOT EXISTS plan_usage (
         username TEXT NOT NULL, ref TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (username, ref))""")
@@ -73,7 +73,7 @@ def episodes_used(username: str) -> int:
 
 
 def limits_for(username: str) -> dict:
-    """Lo que puede hacer esta cuenta, para mostrar y para que las apps lo apliquen."""
+    """What this account can do, for display and for the apps to enforce."""
     plan = plan_of(username)
     out = {"plan": plan, **PLANS[plan]}
     out["episodes_used"] = episodes_used(username) if username else 0
@@ -82,14 +82,14 @@ def limits_for(username: str) -> dict:
 
 
 def claim_episode(username: str, ref: str):
-    """Cuenta un episodio nuevo. Devuelve (True, None) si se puede, o (False, mensaje) si se acabó el plan.
-    Si `ref` ya contó antes (la misma grabación, el mismo proyecto), siempre se puede."""
+    """Counts a new episode. Returns (True, None) if allowed, or (False, message) if the plan is used up.
+    If `ref` already counted before (same recording, same project), it is always allowed."""
     lim = limits_for(username)
     with _connect() as c:
         if c.execute("SELECT 1 FROM plan_usage WHERE username = ? AND ref = ?", (username, ref)).fetchone():
             return True, None
         if ref.startswith("mac:") and not lim["mac"] and lim["plan"] != "gratis":
-            # Plan Web: la app de Mac funciona como Gratis (cuentan solo los episodios hechos en la Mac)
+            # Web plan: the Mac app works like Gratis (only episodes made on the Mac count)
             used_mac = c.execute("SELECT COUNT(*) FROM plan_usage WHERE username = ? AND ref LIKE 'mac:%'",
                                  (username,)).fetchone()[0]
             if used_mac >= MAC_FREE["max_episodes"]:

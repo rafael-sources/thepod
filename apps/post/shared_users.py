@@ -37,13 +37,13 @@ _DEFAULT_PALETTE = [
 
 
 def md5(s: str) -> str:
-    """Hash viejo (MD5 sin sal). Solo se usa para reconocer contraseñas guardadas antes de scrypt."""
+    """Old hash (unsalted MD5). Only used to recognize passwords stored before scrypt."""
     return hashlib.md5(s.encode()).hexdigest()
 
 
-# Contraseñas: scrypt con sal propia por usuario, guardado como "scrypt$n$r$p$sal$hash" (hex).
-# La columna se sigue llamando password_md5 por compatibilidad; puede tener un hash viejo de MD5
-# (32 caracteres hex) hasta que ese usuario vuelva a entrar: verify_password lo convierte entonces.
+# Passwords: scrypt with a per-user salt, stored as "scrypt$n$r$p$salt$hash" (hex).
+# The column is still called password_md5 for compatibility; it may hold an old MD5 hash
+# (32 hex chars) until that user logs in again: verify_password converts it then.
 _SCRYPT_N, _SCRYPT_R, _SCRYPT_P = 2 ** 14, 8, 1
 
 
@@ -54,7 +54,7 @@ def hash_password(password: str) -> str:
 
 
 def check_password(password: str, stored: str | None) -> bool:
-    """¿Esta contraseña corresponde a este hash guardado (scrypt o MD5 viejo)?"""
+    """Does this password match this stored hash (scrypt or old MD5)?"""
     if not stored or password is None:
         return False
     if stored.startswith("scrypt$"):
@@ -70,8 +70,8 @@ def check_password(password: str, stored: str | None) -> bool:
 
 
 def verify_password(username: str, password: str) -> bool:
-    """Comprueba la contraseña de un usuario. Si estaba guardada con el MD5 viejo y es correcta,
-    la vuelve a guardar con scrypt en ese momento: nadie tiene que cambiarla."""
+    """Checks a user's password. If it was stored with the old MD5 and is correct,
+    it is re-stored with scrypt right then: nobody has to change it."""
     user = get_user(username) if username else None
     stored = (user or {}).get("password_md5")
     if not check_password(password, stored):
@@ -127,16 +127,16 @@ def _migrate_columns(conn: sqlite3.Connection):
 
 
 def _bootstrap_defaults(conn: sqlite3.Connection):
-    """Primer arranque con la base vacía: un solo administrador. Usuario y contraseña salen de
-    THEPOD_ADMIN_USER (por defecto "admin") y THEPOD_ADMIN_PASSWORD; si no hay contraseña, se
-    genera una y se escribe una sola vez en el log del servicio."""
+    """First start with an empty database: a single administrator. Username and password come from
+    THEPOD_ADMIN_USER (default "admin") and THEPOD_ADMIN_PASSWORD; if there is no password, one is
+    generated and written only once to the service log."""
     import logging
     username = (os.environ.get("THEPOD_ADMIN_USER") or "admin").strip().lower()
     password = os.environ.get("THEPOD_ADMIN_PASSWORD") or ""
     if not password:
         password = random_password(16)
         logging.getLogger(__name__).warning(
-            "thePod: se creó el administrador '%s' con la contraseña %s — cámbiala al entrar.", username, password)
+            "thePod: created administrator '%s' with password %s — change it after logging in.", username, password)
     conn.execute(
         "INSERT INTO users (username, password_md5, display_name, avatar_color, is_admin, max_podcasts) "
         "VALUES (?, ?, ?, ?, 1, NULL)",
@@ -146,8 +146,8 @@ def _bootstrap_defaults(conn: sqlite3.Connection):
 
 
 def default_owner() -> str:
-    """Dueño de lo que se creó antes de que hubiera dueños (podcasts y proyectos viejos) y de lo que
-    llega de otra app sin usuario: el primer administrador de la base."""
+    """Owner of whatever was created before there were owners (old podcasts and projects) and of what
+    arrives from another app without a user: the first administrator in the database."""
     _ensure_initialized()
     conn = _connect()
     try:
