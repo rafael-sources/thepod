@@ -395,9 +395,9 @@ struct TrackInspector: View {
         .font(.callout).controlSize(.small)
         .disabled(lane.tunedInStudio)
         Group {
-            eqRow("Graves", $session.project.lanes[i].eq.low)
-            eqRow("Medios", $session.project.lanes[i].eq.mid)
-            eqRow("Agudos", $session.project.lanes[i].eq.high)
+            eqRow(String(localized: "Graves"), $session.project.lanes[i].eq.low)
+            eqRow(String(localized: "Medios"), $session.project.lanes[i].eq.mid)
+            eqRow(String(localized: "Agudos"), $session.project.lanes[i].eq.high)
         }
         .disabled(lane.tunedInStudio).opacity(lane.tunedInStudio ? 0.5 : 1)
         Text("Se oye al instante mientras suena; lo que oyes es lo que se exporta.")

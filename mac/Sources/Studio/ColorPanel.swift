@@ -46,13 +46,13 @@ struct ColorPanel: View {
                 .menuStyle(.borderlessButton).fixedSize().id(tick)
             }
             if g.lut != nil {
-                row("Intensidad", value: Binding(get: { g.amount }, set: { v in set { $0.amount = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row(String(localized: "Intensidad"), value: Binding(get: { g.amount }, set: { v in set { $0.amount = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
             }
-            row("Exposición", value: Binding(get: { g.exposure }, set: { v in set { $0.exposure = v } }), range: -2...2, fmt: { String(format: "%+.1f", $0) })
-            row("Contraste", value: Binding(get: { g.contrast }, set: { v in set { $0.contrast = v } }), range: -50...50, fmt: { String(format: "%+.0f", $0) })
-            row("Temperatura", value: Binding(get: { g.temperature }, set: { v in set { $0.temperature = v } }), range: -100...100, fmt: { String(format: "%+.0f", $0) })
-            row("Saturación", value: Binding(get: { g.saturation }, set: { v in set { $0.saturation = v } }), range: -100...100, fmt: { String(format: "%+.0f", $0) })
-            row("Piel", value: Binding(get: { g.skin }, set: { v in set { $0.skin = v } }), range: -50...50, fmt: { String(format: "%+.0f", $0) })
+            row(String(localized: "Exposición"), value: Binding(get: { g.exposure }, set: { v in set { $0.exposure = v } }), range: -2...2, fmt: { String(format: "%+.1f", $0) })
+            row(String(localized: "Contraste"), value: Binding(get: { g.contrast }, set: { v in set { $0.contrast = v } }), range: -50...50, fmt: { String(format: "%+.0f", $0) })
+            row(String(localized: "Temperatura"), value: Binding(get: { g.temperature }, set: { v in set { $0.temperature = v } }), range: -100...100, fmt: { String(format: "%+.0f", $0) })
+            row(String(localized: "Saturación"), value: Binding(get: { g.saturation }, set: { v in set { $0.saturation = v } }), range: -100...100, fmt: { String(format: "%+.0f", $0) })
+            row(String(localized: "Piel"), value: Binding(get: { g.skin }, set: { v in set { $0.skin = v } }), range: -50...50, fmt: { String(format: "%+.0f", $0) })
         }
     }
 

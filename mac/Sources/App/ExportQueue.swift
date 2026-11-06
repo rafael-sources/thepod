@@ -12,7 +12,7 @@ struct ExportJob: Identifiable, Equatable {
         var title: String {
             switch self {
             case .format(let f): return f.title
-            case .reels: return "Reels"
+            case .reels: return String(localized: "Reels")
             case .stems: return "Pistas por separado (WAV)"
             }
         }
@@ -92,7 +92,7 @@ extension ProjectSession {
                     produced += urls
                     setQueueStatus(next.id, .done(urls))
                 } catch is CancellationError {
-                    setQueueStatus(next.id, .failed("Cancelado"))
+                    setQueueStatus(next.id, .failed(String(localized: "Cancelado")))
                     // Cancelar el trabajo en curso vacía también lo que esperaba: así "Cancelar" significa parar.
                     exportQueue.removeAll { $0.status == .waiting }
                 } catch {

@@ -305,7 +305,7 @@ struct PublishStep: View {
     }
 
     private func platformName(_ p: String) -> String {
-        ["spotify": "Spotify", "apple": String(localized: "Apple Podcasts"), "youtube": "YouTube"][p] ?? p.capitalized
+        ["spotify": String(localized: "Spotify"), "apple": String(localized: "Apple Podcasts"), "youtube": "YouTube"][p] ?? p.capitalized
     }
     private func statusName(_ s: String) -> String {
         ["connected": "conectado", "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s

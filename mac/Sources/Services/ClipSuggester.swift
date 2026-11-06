@@ -69,7 +69,7 @@ enum ClipSuggester {
         }
         let clips = (json["clips"] as? [[String: Any]] ?? []).compactMap { c -> Suggestion? in
             guard let s = (c["start"] as? String).flatMap(parseClock), let e = (c["end"] as? String).flatMap(parseClock), e > s + 5 else { return nil }
-            return Suggestion(title: c["title"] as? String ?? "Clip", reason: c["reason"] as? String ?? "", start: s, end: e)
+            return Suggestion(title: c["title"] as? String ?? String(localized: "Clip"), reason: c["reason"] as? String ?? "", start: s, end: e)
         }
         return (clips, json["summary"] as? String)
     }

@@ -311,7 +311,7 @@ final class AmaStudio: NSObject, ObservableObject {
         tiles = room.remoteParticipants.values.compactMap { p in
             guard let id = p.identity?.stringValue, id.hasPrefix("participant_") else { return nil }
             let cam = p.videoTracks.first { $0.source == .camera }
-            return Tile(id: id, pid: Int(id.dropFirst("participant_".count)), name: p.name ?? "Alguien",
+            return Tile(id: id, pid: Int(id.dropFirst("participant_".count)), name: p.name ?? String(localized: "Alguien"),
                         video: (cam?.isMuted == false) ? cam?.track as? VideoTrack : nil,
                         micOn: p.audioTracks.first.map { !$0.isMuted } ?? false, speaking: p.isSpeaking)
         }

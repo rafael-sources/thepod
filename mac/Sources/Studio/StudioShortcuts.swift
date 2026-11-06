@@ -8,7 +8,7 @@ struct Shortcut: Identifiable, Equatable {
         var name: String {
             switch self {
             case .everywhere: return String(localized: "En toda la app"); case .studio: return "Studio"
-            case .video: return "Studio · Video"; case .audio: return "Studio · Audio"
+            case .video: return "Studio · Video"; case .audio: return String(localized: "Studio · Audio")
             }
         }
     }

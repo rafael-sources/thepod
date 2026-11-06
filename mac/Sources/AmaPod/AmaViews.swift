@@ -184,7 +184,7 @@ private struct AmaEventCard: View {
         let (label, color): (String, Color) = {
             switch event.status {
             case "active": return ("En vivo", .amaPod)
-            case "finished": return ("Terminado", Theme.secondary)
+            case "finished": return (String(localized: "Terminado"), Theme.secondary)
             default: return (String(localized: "Por empezar"), .orange)
             }
         }()
@@ -573,7 +573,7 @@ struct AmaStudioView: View {
                 if let v = studio.myVideo, studio.camOn {
                     SwiftUIVideoView(v, layoutMode: .fill, mirrorMode: .mirror).clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    Avatar(name: PrePodClient.username.isEmpty ? "Host" : PrePodClient.username, size: 40)
+                    Avatar(name: PrePodClient.username.isEmpty ? String(localized: "Host") : PrePodClient.username, size: 40)
                 }
             }
             .frame(width: 220, height: 124)
@@ -616,7 +616,7 @@ struct AmaStudioView: View {
                           color: .orange, filled: false) { studio.censor(p) }
                     .help("Si alguien usa el aire para algo indebido: se le corta el audio y el video al instante")
             }
-            AmaButton(title: studio.waiting.isEmpty ? (studio.onAir == nil ? "Siguiente" : String(localized: "Terminar su turno")) : String(localized: "Siguiente: \(studio.waiting[0].display_name)"),
+            AmaButton(title: studio.waiting.isEmpty ? (studio.onAir == nil ? String(localized: "Siguiente") : String(localized: "Terminar su turno")) : String(localized: "Siguiente: \(studio.waiting[0].display_name)"),
                       symbol: "forward.end.fill", enabled: studio.onAir != nil || !studio.waiting.isEmpty) { studio.next() }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
@@ -629,9 +629,9 @@ struct AmaStudioView: View {
 
     private var side: some View {
         let tabs: [(String, String, Int)] = [("Solicitudes", "hand.raised.fill", studio.requests.count),
-                                             ("Cola", "list.number", studio.waiting.count),
+                                             (String(localized: "Cola"), "list.number", studio.waiting.count),
                                              ("Chat", "bubble.left.and.bubble.right.fill", 0),
-                                             ("Compartir", "link", 0)]
+                                             (String(localized: "Compartir"), "link", 0)]
         return VStack(spacing: 0) {
             HStack(spacing: 2) {
                 ForEach(Array(tabs.enumerated()), id: \.offset) { i, t in
@@ -684,8 +684,8 @@ struct AmaStudioView: View {
                     }
                     questions(p)
                     HStack(spacing: 8) {
-                        AmaButton(title: "Aceptar", symbol: "checkmark") { studio.approve(p) }
-                        AmaButton(title: "Rechazar", symbol: "xmark", color: .red, filled: false) { studio.reject(p) }
+                        AmaButton(title: String(localized: "Aceptar"), symbol: "checkmark") { studio.approve(p) }
+                        AmaButton(title: String(localized: "Rechazar"), symbol: "xmark", color: .red, filled: false) { studio.reject(p) }
                     }
                 }
                 .padding(12)

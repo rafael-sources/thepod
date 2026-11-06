@@ -537,11 +537,11 @@ enum Importer {
         let stem = "\(id)_" + ProjectStore.slugify(src.deletingPathExtension().lastPathComponent)
 
         if nativeExts.contains(ext), await isPlayable(src) {
-            progress("Copiando", 0.1)
+            progress(String(localized: "Copiando"), 0.1)
             let dest = mediaDir.appendingPathComponent("\(stem).\(ext)")
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.copyItem(at: src, to: dest)   // APFS clone when on the same volume
-            progress("Copiando", 1)
+            progress(String(localized: "Copiando"), 1)
             return try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
         }
 
@@ -550,7 +550,7 @@ enum Importer {
         var repairedTemp: URL?
         defer { if let repairedTemp { try? FileManager.default.removeItem(at: repairedTemp) } }
         if ["webm", "mkv"].contains(ext), !(await canOpen(src)) {
-            progress("Reparando", 0)
+            progress(String(localized: "Reparando"), 0)
             let temp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("repaired_\(id).webm")
             guard let fixed = WebMRepair.repair(src, donors: donors, to: temp), await canOpen(fixed) else {
                 throw NSError(domain: "import", code: 3, userInfo: [NSLocalizedDescriptionKey:
@@ -559,7 +559,7 @@ enum Importer {
             input = fixed
             repairedTemp = fixed
         }
-        progress("Midiendo", 0)
+        progress(String(localized: "Midiendo"), 0)
         let duration = try await FFmpeg.probeDuration(input)
         let hasVideo = isVideoExt ? await FFmpeg.hasStream("Video", in: input) : false
         let starts = await FFmpeg.streamStarts(input)
@@ -587,7 +587,7 @@ enum Importer {
             ? String(localized: "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1")
             : (startOffset > 0 ? String(localized: "asetpts=PTS-STARTPTS,aresample=async=1") : String(localized: "aresample=async=1:first_pts=0"))
         args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", "+faststart", dest.path]
-        try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress("Convirtiendo", f) }
+        try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress(String(localized: "Convirtiendo"), f) }
         var media = try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
         media.startOffset = startOffset
         return media

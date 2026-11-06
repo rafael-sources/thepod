@@ -136,9 +136,9 @@ private struct BrandingTab: View {
     @State private var saver = Debouncer()
 
     private let colorFields: [(String, String, WritableKeyPath<PodcastConfig, String?>)] = [
-        ("Principal", "color_primary", \.colorPrimary),
-        ("Secundario", "color_secondary", \.colorSecondary),
-        ("Acento", "color_accent", \.colorAccent),
+        (String(localized: "Principal"), "color_primary", \.colorPrimary),
+        (String(localized: "Secundario"), "color_secondary", \.colorSecondary),
+        (String(localized: "Acento"), "color_accent", \.colorAccent),
         ("Fondo", "color_bg", \.colorBg),
         ("Texto", "color_text", \.colorText),
     ]
@@ -150,7 +150,7 @@ private struct BrandingTab: View {
                 Text("Imágenes").font(.headline)
                 HStack(alignment: .top, spacing: 18) {
                     imageSlot("Logo", kind: "logo", hint: String(localized: "Cuadrado, hasta 500 px"))
-                    imageSlot("Portada", kind: "cover", hint: String(localized: "La del podcast en las plataformas"))
+                    imageSlot(String(localized: "Portada"), kind: "cover", hint: String(localized: "La del podcast en las plataformas"))
                     imageSlot("Fondo", kind: "background", hint: String(localized: "Para videos y tu página"))
                 }
                 Text("Colores").font(.headline)
@@ -167,7 +167,7 @@ private struct BrandingTab: View {
                 }
                 Text("Tipografías").font(.headline)
                 HStack(spacing: 20) {
-                    fontPicker("Títulos", key: "font_heading", kp: \.fontHeading)
+                    fontPicker(String(localized: "Títulos"), key: "font_heading", kp: \.fontHeading)
                     fontPicker("Texto", key: "font_body", kp: \.fontBody)
                 }
                 preview
@@ -272,7 +272,7 @@ private struct TeamTab: View {
                 Card {
                     Text("Conductores").font(.headline)
                     Text("Pueden ver y editar todo el podcast en thePod.").font(.caption).foregroundStyle(Theme.secondary)
-                    if let o = h.owner { row(o, badge: "Dueño", removable: false) {} }
+                    if let o = h.owner { row(o, badge: String(localized: "Dueño"), removable: false) {} }
                     ForEach(h.extraHosts, id: \.self) { u in
                         row(u, badge: h.invitations?[u]?.status == "pendiente" ? String(localized: "Invitación pendiente") : nil, removable: true) {
                             change { try await api.setHosts(slug, h.extraHosts.filter { $0 != u }) }
@@ -654,7 +654,7 @@ private struct SponsorReportSheet: View {
         }
     }
     private func statusName(_ s: String?) -> String {
-        ["idea": "Idea", "planned": "Planificado", "scheduled": "Agendado", "recorded": "Grabado",
-         "editing": String(localized: "En edición"), "published": "Publicado", "archived": "Archivado"][s ?? ""] ?? (s ?? "")
+        ["idea": String(localized: "Idea"), "planned": String(localized: "Planificado"), "scheduled": String(localized: "Agendado"), "recorded": "Grabado",
+         "editing": String(localized: "En edición"), "published": String(localized: "Publicado"), "archived": String(localized: "Archivado")][s ?? ""] ?? (s ?? "")
     }
 }

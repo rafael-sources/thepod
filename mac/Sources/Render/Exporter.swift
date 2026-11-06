@@ -178,7 +178,7 @@ extension Exporter {
         var out: [(time: Double, title: String)] = []
         for (t, title) in raw {
             if out.isEmpty {
-                if t >= 10 { out.append((0, introDuration > 0 ? "Intro" : "Inicio")) }
+                if t >= 10 { out.append((0, introDuration > 0 ? String(localized: "Intro") : String(localized: "Inicio"))) }
                 else { out.append((0, title)); continue }       // el primero se lleva a 00:00
             }
             guard t - out.last!.time >= 10, total - t >= 10 else { continue }

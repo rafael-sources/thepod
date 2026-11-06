@@ -17,7 +17,7 @@ struct CoverStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                StepHeader(title: "Portada",
+                StepHeader(title: String(localized: "Portada"),
                            subtitle: String(localized: "La imagen del episodio: va a Instagram como portada y sirve de miniatura para YouTube."),
                            step: .cover)
 

@@ -550,7 +550,7 @@ struct NextUpCard: View {
         HStack(alignment: .center, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Chip(text: episode.isLate ? "Atrasado" : String(localized: "Próxima grabación"),
+                    Chip(text: episode.isLate ? String(localized: "Atrasado") : String(localized: "Próxima grabación"),
                          symbol: episode.isLate ? "exclamationmark.triangle.fill" : "mic.fill",
                          color: episode.isLate ? .red : model.accent, filled: true)
                     if let r = episode.relativeWhen { Text(r.capitalizedFirst).font(.headline).foregroundStyle(episode.isLate ? .red : .white) }
@@ -569,8 +569,8 @@ struct NextUpCard: View {
             }
             Spacer()
             HStack(spacing: 10) {
-                check("Guion", sections.map { $0 == 0 ? "vacío" : plural($0, "sección", "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
-                check("Rundown", blocks.map { $0 == 0 ? "vacío" : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
+                check(String(localized: "Guion"), sections.map { $0 == 0 ? String(localized: "vacío") : plural($0, String(localized: "sección"), "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
+                check("Rundown", blocks.map { $0 == 0 ? String(localized: "vacío") : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
                 check("Invitados", guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
             }
             Button { model.open = episode } label: {
@@ -636,11 +636,11 @@ struct PreEpisodeView: View {
 
     private struct Page { let title: String; let symbol: String; let help: String }
     private let pages = [
-        Page(title: "Guion", symbol: "text.page", help: String(localized: "Lo que se va a decir, por partes. Escribe libre: se guarda solo.")),
+        Page(title: String(localized: "Guion"), symbol: "text.page", help: String(localized: "Lo que se va a decir, por partes. Escribe libre: se guarda solo.")),
         Page(title: "Rundown", symbol: "list.bullet.rectangle", help: String(localized: "El orden del episodio, bloque por bloque, con sus minutos.")),
         Page(title: "Invitados", symbol: "person.2", help: String(localized: "Quién participa. Invítalos y mándales el correo de preparación.")),
-        Page(title: "Ideas", symbol: "lightbulb", help: String(localized: "Temas y preguntas propuestos por el equipo. Vota las mejores.")),
-        Page(title: "Publicación", symbol: "paperplane", help: String(localized: "Descripción, notas y links que salen al publicar.")),
+        Page(title: String(localized: "Ideas"), symbol: "lightbulb", help: String(localized: "Temas y preguntas propuestos por el equipo. Vota las mejores.")),
+        Page(title: String(localized: "Publicación"), symbol: "paperplane", help: String(localized: "Descripción, notas y links que salen al publicar.")),
     ]
 
     var body: some View {
@@ -790,10 +790,10 @@ struct PreEpisodeView: View {
         let (ss, bb, gg) = await (s, b, g)
         var c: [Int: String] = [:]
         var d: Set<Int> = []
-        if let ss { c[0] = ss.isEmpty ? "Vacío" : plural(ss.count, "sección", "secciones"); if ss.contains(where: { !$0.content.isEmpty }) { d.insert(0) } }
+        if let ss { c[0] = ss.isEmpty ? String(localized: "Vacío") : plural(ss.count, String(localized: "sección"), "secciones"); if ss.contains(where: { !$0.content.isEmpty }) { d.insert(0) } }
         if let bb {
             let m = Int(bb.compactMap(\.durationEstimate).reduce(0, +).rounded())
-            c[1] = bb.isEmpty ? "Vacío" : plural(bb.count, "bloque", "bloques") + (m > 0 ? String(localized: " · \(m) min") : "")
+            c[1] = bb.isEmpty ? String(localized: "Vacío") : plural(bb.count, "bloque", "bloques") + (m > 0 ? String(localized: " · \(m) min") : "")
             if !bb.isEmpty { d.insert(1) }
         }
         if let gg {
@@ -860,7 +860,7 @@ struct ScriptTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(plural(sections.count, "sección", "secciones") + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(sections.count, String(localized: "sección"), "secciones") + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
                 Button { add() } label: { Label("Agregar sección", systemImage: "plus") }.buttonStyle(.borderedProminent)
             }

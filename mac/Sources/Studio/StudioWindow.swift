@@ -297,9 +297,9 @@ struct ChannelStrip: View {
                 .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
                 .help(lane.noiseProfile == nil ? "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla" : "Resta espectral con la huella del segundo más quieto")
                 insertRow(String(localized: "EQ paramétrico"), on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : String(localized: "\(chain.bands.filter(\.enabled).count) bandas")) { openInsert(.eq) }
-                insertRow("Compresor", on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
+                insertRow(String(localized: "Compresor"), on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
                 insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
-                insertRow("Puerta", on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : "apagada") { openInsert(.gate) }
+                insertRow(String(localized: "Puerta"), on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : "apagada") { openInsert(.gate) }
                 ForEach(chain.plugins) { pl in
                     HStack(spacing: 6) {
                         Button {
@@ -570,11 +570,11 @@ struct InsertEditor: View {
     private var compressor: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activo", isOn: chain.compressorOn)
-            param("Umbral", chain.threshold, -60...0, "%.0f dB", auto: ChainSettings.compThreshold)
-            param("Relación", chain.ratio, 1...20, "%.1f:1", auto: ChainSettings.compRatio)
-            param("Ataque", chain.attack, 0.001...0.1, "%.3f s")
-            param("Salida", chain.release, 0.02...1.0, "%.2f s")
-            param("Compensación", chain.makeup, 0...18, "%.0f dB", auto: ChainSettings.compMakeup)
+            param(String(localized: "Umbral"), chain.threshold, -60...0, "%.0f dB", auto: ChainSettings.compThreshold)
+            param(String(localized: "Relación"), chain.ratio, 1...20, "%.1f:1", auto: ChainSettings.compRatio)
+            param(String(localized: "Ataque"), chain.attack, 0.001...0.1, "%.3f s")
+            param(String(localized: "Salida"), chain.release, 0.02...1.0, "%.2f s")
+            param(String(localized: "Compensación"), chain.makeup, 0...18, "%.0f dB", auto: ChainSettings.compMakeup)
             Text("«Voz pareja» del nivel simple = umbral −20, 3:1, ataque 8 ms, salida 140 ms, +4 dB.").font(.caption2).foregroundStyle(Theme.secondary)
         }
         .disabled(false)
@@ -583,7 +583,7 @@ struct InsertEditor: View {
     private var deesser: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activo", isOn: chain.deesserOn)
-            param("Cantidad", chain.deesserAmount, 0...1, "%.2f", auto: ChainSettings.deesserAmount)
+            param(String(localized: "Cantidad"), chain.deesserAmount, 0...1, "%.2f", auto: ChainSettings.deesserAmount)
             Text("Baja solo lo que silba por encima de 5 kHz. «Menos siseo» del nivel simple = 0,50.").font(.caption2).foregroundStyle(Theme.secondary)
         }
     }
@@ -591,7 +591,7 @@ struct InsertEditor: View {
     private var gate: some View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle("Activa", isOn: chain.gateOn)
-            param("Umbral", chain.gateThreshold, -80...(-20), "%.0f dB", auto: ChainSettings.gateThreshold)
+            param(String(localized: "Umbral"), chain.gateThreshold, -80...(-20), "%.0f dB", auto: ChainSettings.gateThreshold)
             Text("Por debajo del umbral el sonido baja el doble (expansión 1:2): respiraciones y ruido de fondo entre frases. Distinta de «bajar a quien no habla», que sigue en Limpiar sonido.").font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

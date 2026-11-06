@@ -36,7 +36,7 @@ struct ColorGrade: Codable, Equatable {
     static let builtIn: [(name: String, grade: ColorGrade)] = [
         (String(localized: "Cálido Studio"), { var g = ColorGrade(); g.temperature = 12; g.contrast = 10; g.saturation = 8; g.exposure = 0.1; g.look = String(localized: "Cálido Studio"); return g }()),
         (String(localized: "Frío noche"), { var g = ColorGrade(); g.temperature = -18; g.contrast = 12; g.saturation = -10; g.look = String(localized: "Frío noche"); return g }()),
-        ("Documental", { var g = ColorGrade(); g.saturation = -22; g.contrast = 8; g.exposure = -0.05; g.look = "Documental"; return g }()),
+        (String(localized: "Documental"), { var g = ColorGrade(); g.saturation = -22; g.contrast = 8; g.exposure = -0.05; g.look = String(localized: "Documental"); return g }()),
     ]
 
     /// Aplica la corrección a un cuadro. Orden: exposición → temperatura → contraste/saturación → piel → LUT (con intensidad).

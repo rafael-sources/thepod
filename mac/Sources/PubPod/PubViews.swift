@@ -371,7 +371,7 @@ struct PubHomeView: View {
     private func currentTitle(_ p: Project) -> String {
         switch choice {
         case .episode: return Exporter.episodeTitle(p)
-        case .reel(let id): return p.reels.first { $0.id == id }?.title ?? "Reel"
+        case .reel(let id): return p.reels.first { $0.id == id }?.title ?? String(localized: "Reel")
         case .file(let u): return u.lastPathComponent
         }
     }
@@ -502,7 +502,7 @@ struct PubHomeView: View {
                         PubThumb(project: p, size: CGSize(width: 180, height: 101))
                     }
                     ForEach(p.reels) { r in
-                        tile(.reel(r.id), r.title.isEmpty ? "Reel" : r.title, String(localized: "Reel · \(EditEngine.clock(r.length))"), wide: false) {
+                        tile(.reel(r.id), r.title.isEmpty ? String(localized: "Reel") : r.title, String(localized: "Reel · \(EditEngine.clock(r.length))"), wide: false) {
                             PubThumb(project: p, reel: r, size: CGSize(width: 57, height: 101))
                         }
                     }
@@ -791,9 +791,9 @@ struct PubPostsList: View {
 
     private func statusText(_ p: PrePodClient.PubPost) -> String {
         if p.status == "scheduled", let d = date(p), d <= Date() { return String(localized: "En cola") }
-        return ["scheduled": "Programado", "publishing": "Publicando…", "published": "Publicado",
+        return ["scheduled": String(localized: "Programado"), "publishing": "Publicando…", "published": String(localized: "Publicado"),
                 "private": String(localized: "Subido en privado"), "inbox": String(localized: "En tu bandeja de TikTok"),
-                "error": String(localized: "No se publicó"), "cancelled": "Cancelado"][p.status] ?? p.status
+                "error": String(localized: "No se publicó"), "cancelled": String(localized: "Cancelado")][p.status] ?? p.status
     }
     private func statusColor(_ p: PrePodClient.PubPost) -> Color {
         switch p.status {

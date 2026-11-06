@@ -273,7 +273,7 @@ struct EQBand: Codable, Equatable, Identifiable, Hashable {
         switch kind {
         case .highpass: return String(localized: "Paso alto")
         case .lowshelf: return String(localized: "Estante bajo")
-        case .peak: return "Campana"
+        case .peak: return String(localized: "Campana")
         case .highshelf: return String(localized: "Estante alto")
         case .lowpass: return String(localized: "Paso bajo")
         }
@@ -679,7 +679,7 @@ struct Reel: Codable, Identifiable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Reel"
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? String(localized: "Reel")
         reason = try c.decodeIfPresent(String.self, forKey: .reason) ?? ""
         start = try c.decodeIfPresent(Double.self, forKey: .start) ?? 0
         end = try c.decodeIfPresent(Double.self, forKey: .end) ?? start
@@ -702,7 +702,7 @@ struct VirtualBackground: Codable, Equatable {
     enum Mode: String, Codable, CaseIterable {
         case blur, podcast, color, image
         var name: String {
-            switch self { case .blur: return "Difuminado"; case .podcast: return String(localized: "Fondo del podcast"); case .color: return "Color"; case .image: return "Imagen" }
+            switch self { case .blur: return String(localized: "Difuminado"); case .podcast: return String(localized: "Fondo del podcast"); case .color: return "Color"; case .image: return "Imagen" }
         }
     }
     var mode: Mode = .blur
@@ -831,14 +831,14 @@ enum LayoutTemplate: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .auto: return "Automático"
+        case .auto: return String(localized: "Automático")
         case .solo: return "Quien habla"
         case .sideBySide: return String(localized: "Lado a lado")
-        case .grid: return "Cuadrícula"
-        case .spotlight: return "Protagonista"
-        case .pip: return "Ventanita"
+        case .grid: return String(localized: "Cuadrícula")
+        case .spotlight: return String(localized: "Protagonista")
+        case .pip: return String(localized: "Ventanita")
         case .stack: return String(localized: "Arriba y abajo")
-        case .studio: return "Estudio"
+        case .studio: return String(localized: "Estudio")
         }
     }
     var symbol: String {
@@ -955,7 +955,7 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     enum Kind: String, Codable { case text, image, sticker }
     /// Estilos de texto: título grande con contorno, texto en caja oscura, etiqueta de color.
     enum Style: String, Codable, CaseIterable { case title, box, label
-        var name: String { switch self { case .title: return "Título"; case .box: return "Caja"; case .label: return "Etiqueta" } }
+        var name: String { switch self { case .title: return "Título"; case .box: return String(localized: "Caja"); case .label: return "Etiqueta" } }
     }
     var id: Int
     var kind: Kind
@@ -1024,7 +1024,7 @@ struct TitleMotion: Codable, Equatable {
         var name: String {
             switch self {
             case .rise: return "Subir"; case .fade: return "Fundido"; case .reveal: return "Escribir"
-            case .grow: return "Crecer"; case .wipe: return "Barrido"; case .drop: return "Caer"
+            case .grow: return String(localized: "Crecer"); case .wipe: return String(localized: "Barrido"); case .drop: return String(localized: "Caer")
             }
         }
     }
@@ -1110,7 +1110,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
 struct Keyframe: Codable, Equatable, Hashable, Identifiable {
     enum Ease: String, Codable, CaseIterable {
         case linear, smooth, hold
-        var name: String { switch self { case .linear: return "Lineal"; case .smooth: return "Suave"; case .hold: return "Pausa" } }
+        var name: String { switch self { case .linear: return String(localized: "Lineal"); case .smooth: return "Suave"; case .hold: return "Pausa" } }
     }
     var id = UUID()
     var t: Double
@@ -1194,7 +1194,7 @@ struct LayerAnimation: Codable, Equatable {
 struct ShapeMask: Codable, Equatable {
     enum Shape: String, Codable, CaseIterable {
         case ellipse, rect
-        var name: String { self == .ellipse ? "Elipse" : "Rectángulo" }
+        var name: String { self == .ellipse ? String(localized: "Elipse") : String(localized: "Rectángulo") }
     }
     var shape: Shape = .ellipse
     var x: Double = 0.5                 // centro, fracción del recuadro (0 = izquierda)
@@ -1231,7 +1231,7 @@ struct Transition: Codable, Equatable {
         var name: String {
             switch self {
             case .cut: return "Corte"; case .fade: return "Fundido"; case .black: return String(localized: "A negro")
-            case .slide: return "Deslizar"; case .zoom: return "Zoom"
+            case .slide: return String(localized: "Deslizar"); case .zoom: return String(localized: "Zoom")
             }
         }
     }
@@ -1350,9 +1350,9 @@ struct DirectorCintillo: Codable, Equatable, Identifiable {
     var tagText: String {
         if let tag { return tag }
         switch kind {
-        case "sponsor": return "PATROCINA"
-        case "banner": return "AHORA"
-        case "segment": return "SEGMENTO"
+        case "sponsor": return String(localized: "PATROCINA")
+        case "banner": return String(localized: "AHORA")
+        case "segment": return String(localized: "SEGMENTO")
         default: return ""
         }
     }
@@ -1626,10 +1626,10 @@ struct CaptionStyle: Codable, Equatable {
         minimal.karaoke = false
 
         return [("clasico", "Clásico", clasico),
-                ("tiktok", "TikTok", tiktok),
-                ("comic", "Cómic", comic),
+                ("tiktok", String(localized: "TikTok"), tiktok),
+                ("comic", String(localized: "Cómic"), comic),
                 ("caja", String(localized: "Caja negra"), caja),
-                ("minimal", "Discreto", minimal)]
+                ("minimal", String(localized: "Discreto"), minimal)]
     }()
 }
 

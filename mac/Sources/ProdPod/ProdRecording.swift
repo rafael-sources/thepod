@@ -432,7 +432,7 @@ extension ProdStudio {
         recSeconds = Int(t)
         // Plan Gratis: aviso un minuto antes y corte al llegar al máximo (lo detiene quien creó la sala)
         if let maxS = session.limits?.max_record_seconds, maxS > 0, !practice {
-            let name = session.limits?.plan_name ?? "Gratis"
+            let name = session.limits?.plan_name ?? String(localized: "Gratis")
             if !planWarned, t >= Double(maxS - 60) {
                 planWarned = true
                 flash(String(localized: "Queda 1 minuto: el plan \(name) graba hasta \(maxS / 60) minutos"))

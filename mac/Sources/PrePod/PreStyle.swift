@@ -166,7 +166,7 @@ extension PreEpisode {
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: Date()), to: cal.startOfDay(for: d)).day ?? 0
         switch days {
         case 0: return "hoy"
-        case 1: return "mañana"
+        case 1: return String(localized: "mañana")
         case -1: return "ayer"
         case 2...: return String(localized: "en \(days) días")
         default: return String(localized: "hace \(-days) días")

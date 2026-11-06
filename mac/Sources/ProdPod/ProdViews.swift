@@ -145,7 +145,7 @@ private struct SessionCard: View {
         let (label, color): (String, Color) = {
             switch session.status {
             case "recording": return ("Grabando", .prodPod)
-            case "finished": return ("Terminada", Theme.good)
+            case "finished": return (String(localized: "Terminada"), Theme.good)
             case "live": return ("En vivo", .prodPod)
             default: return (String(localized: "Lista para grabar"), .orange)
             }
@@ -366,7 +366,7 @@ struct StudioView: View {
                         Label("Calidad de tu grabación", systemImage: "record.circle").font(.headline)
                         if let p = studio.preflight {
                             HStack(spacing: 6) {
-                                if studio.uploadMbps == nil && p.hasPrefix("Midiendo") { ProgressView().controlSize(.small) }
+                                if studio.uploadMbps == nil && p.hasPrefix(String(localized: "Midiendo")) { ProgressView().controlSize(.small) }
                                 else { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.good) }
                                 Text(p).font(.callout)
                             }
@@ -549,7 +549,7 @@ struct StudioView: View {
                     recordingCard
                     if !studio.sounds.isEmpty { soundboard }
                     if !studio.sponsors.isEmpty { sponsorsCard }
-                    peopleCard(title: "Personas")
+                    peopleCard(title: String(localized: "Personas"))
                     chatCard
                     if studio.isOwner && ProdStudio.liveEnabled { liveCard }   // en vivo: al final del plan
                     Card {
@@ -572,8 +572,8 @@ struct StudioView: View {
 
     private var statusBadge: some View {
         let (text, color): (String, Color) = {
-            if studio.recording { return (studio.practice ? "ENSAYO" : "GRABANDO", studio.practice ? .yellow : .prodPod) }
-            if studio.countdown != nil { return ("PREPARADOS", .orange) }
+            if studio.recording { return (studio.practice ? String(localized: "ENSAYO") : String(localized: "GRABANDO"), studio.practice ? .yellow : .prodPod) }
+            if studio.countdown != nil { return (String(localized: "PREPARADOS"), .orange) }
             if studio.sessionEnded { return (String(localized: "GRABACIÓN TERMINADA"), Theme.good) }
             return (String(localized: "EN LA SALA"), Theme.secondary)
         }()

@@ -449,7 +449,7 @@ final class ProdStudio: NSObject, ObservableObject {
         var scr: (String, VideoTrack)?
         for p in room.remoteParticipants.values {
             if let pub = p.videoTracks.first(where: { $0.source == .screenShareVideo }), !pub.isMuted, let t = pub.track as? VideoTrack {
-                scr = (p.name ?? "Alguien", t)
+                scr = (p.name ?? String(localized: "Alguien"), t)
             }
         }
         if (scr == nil) != (remoteScreen == nil) || scr?.1 !== remoteScreen?.track {
@@ -467,7 +467,7 @@ final class ProdStudio: NSObject, ObservableObject {
 
 extension ProdStudio: RoomDelegate {
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        let n = participant.name ?? "Alguien"
+        let n = participant.name ?? String(localized: "Alguien")
         let id = participant.identity?.stringValue ?? ""
         Task { @MainActor in
             if id.hasPrefix("director_") {
@@ -481,7 +481,7 @@ extension ProdStudio: RoomDelegate {
         }
     }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        let n = participant.name ?? "Alguien"
+        let n = participant.name ?? String(localized: "Alguien")
         let id = participant.identity?.stringValue ?? ""
         Task { @MainActor in
             if id.hasPrefix("director_") { self.updateDirectorPresence() } else { self.flash(String(localized: "\(n) salió")) }

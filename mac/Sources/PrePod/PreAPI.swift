@@ -7,12 +7,12 @@ enum EpisodeStatus: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .idea: return "Idea"
-        case .planning: return "Planificando"
+        case .idea: return String(localized: "Idea")
+        case .planning: return String(localized: "Planificando")
         case .scripted: return String(localized: "Con guion")
         case .recorded: return "Grabado"
-        case .published: return "Publicado"
-        case .archived: return "Archivado"
+        case .published: return String(localized: "Publicado")
+        case .archived: return String(localized: "Archivado")
         }
     }
     var symbol: String {
@@ -84,12 +84,12 @@ enum BlockKind: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .intro: return "Intro"
-        case .segment: return "Segmento"
-        case .interview: return "Entrevista"
+        case .intro: return String(localized: "Intro")
+        case .segment: return String(localized: "Segmento")
+        case .interview: return String(localized: "Entrevista")
         case .sponsor: return "Sponsor"
         case .break: return "Pausa"
-        case .outro: return "Cierre"
+        case .outro: return String(localized: "Cierre")
         case .custom: return "Otro"
         }
     }

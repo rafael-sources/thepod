@@ -224,7 +224,7 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     // MARK: Avisos privados
 
-    static let cues = ["CERRAR TEMA", String(localized: "SIGUIENTE TEMA"), "PAUSA", String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
+    static let cues = ["CERRAR TEMA", String(localized: "SIGUIENTE TEMA"), String(localized: "PAUSA"), String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
 
     func sendCue(_ cue: String, text: String = "", target: String = "all") {
         Task {
@@ -436,7 +436,7 @@ final class DirectorStudio: NSObject, ObservableObject {
             do {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/chat", ["text": t, "channel": "director"])
                 let id = r["id"] as? Int ?? 0
-                let author = r["author_name"] as? String ?? "Director"
+                let author = r["author_name"] as? String ?? String(localized: "Director")
                 chat.append((id, author, t))
                 send(["type": "director_chat", "id": id, "author": author, "text": t])
             } catch { self.error = error.localizedDescription }
@@ -476,7 +476,7 @@ final class DirectorStudio: NSObject, ObservableObject {
             guard let id = p.identity?.stringValue, id.hasPrefix("participant_") else { return nil }
             let cam = p.videoTracks.first { $0.source == .camera }
             let scr = p.videoTracks.first { $0.source == .screenShareVideo }
-            return Feed(id: id, pid: Int(id.dropFirst("participant_".count)), name: p.name ?? "Alguien",
+            return Feed(id: id, pid: Int(id.dropFirst("participant_".count)), name: p.name ?? String(localized: "Alguien"),
                         camera: (cam?.isMuted == false) ? cam?.track as? VideoTrack : nil,
                         screen: (scr?.isMuted == false) ? scr?.track as? VideoTrack : nil,
                         speaking: p.isSpeaking, micOn: p.audioTracks.first.map { !$0.isMuted } ?? false)

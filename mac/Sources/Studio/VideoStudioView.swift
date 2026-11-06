@@ -114,8 +114,8 @@ struct VideoInspector: View {
                         staticValue: Binding(get: { session.project.overlays[i].y }, set: { session.project.overlays[i].y = $0 }))
             KeyParamRow(session: session, index: i, param: LayerAnimation.scale, label: "Tamaño", range: 0.2...4, format: { String(format: "%.0f %%", $0 * 100) },
                         staticValue: Binding(get: { session.project.overlays[i].scale }, set: { session.project.overlays[i].scale = $0 }))
-            KeyParamRow(session: session, index: i, param: LayerAnimation.rotation, label: "Giro", range: -180...180, format: { String(format: "%.0f°", $0) }, staticValue: nil, fixed: 0)
-            KeyParamRow(session: session, index: i, param: LayerAnimation.opacity, label: "Opacidad", range: 0...1, format: { String(format: "%.0f %%", $0 * 100) }, staticValue: nil, fixed: 1)
+            KeyParamRow(session: session, index: i, param: LayerAnimation.rotation, label: String(localized: "Giro"), range: -180...180, format: { String(format: "%.0f°", $0) }, staticValue: nil, fixed: 0)
+            KeyParamRow(session: session, index: i, param: LayerAnimation.opacity, label: String(localized: "Opacidad"), range: 0...1, format: { String(format: "%.0f %%", $0 * 100) }, staticValue: nil, fixed: 1)
             Divider()
             if let a = o.animation, !a.isEmpty {
                 HStack {
@@ -129,8 +129,8 @@ struct VideoInspector: View {
                 }
                 Button("Quitar toda la animación", role: .destructive) { session.project.overlays[i].animation = nil }.controlSize(.small)
             }
-            motionRow("Entrada", Binding(get: { session.project.overlays[i].enter }, set: { session.project.overlays[i].enter = $0 }))
-            motionRow("Salida", Binding(get: { session.project.overlays[i].exit }, set: { session.project.overlays[i].exit = $0 }))
+            motionRow(String(localized: "Entrada"), Binding(get: { session.project.overlays[i].enter }, set: { session.project.overlays[i].enter = $0 }))
+            motionRow(String(localized: "Salida"), Binding(get: { session.project.overlays[i].exit }, set: { session.project.overlays[i].exit = $0 }))
             if o.enter == nil && o.exit == nil {
                 Toggle("Entra y sale con fundido", isOn: $session.project.overlays[i].animate).font(.caption)
             }
@@ -267,7 +267,7 @@ struct VideoInspector: View {
     // Clip de música o efecto: fades, cruce con el vecino
     private func soundInspector(_ i: Int) -> some View {
         let c = session.project.audioLane[i]
-        let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
+        let name = session.project.mediaItem(c.mediaId)?.originalName ?? String(localized: "Música")
         let next = session.project.audioLane.filter { $0.id != c.id && $0.tlStart >= c.tlStart }.min { $0.tlStart < $1.tlStart }
         return VStack(alignment: .leading, spacing: 10) {
             header(name, "\(EditEngine.clock(c.tlStart)) → \(EditEngine.clock(c.tlEnd))", color: VideoTracks.musicColor)
@@ -361,7 +361,7 @@ struct VideoInspector: View {
     // Nada seleccionado: cómo decide las cámaras
     private var camerasInspector: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header("Cámaras", String(localized: "cómo se decide qué se ve"), color: EpisodeTimeline.palette[0])
+            header(String(localized: "Cámaras"), String(localized: "cómo se decide qué se ve"), color: EpisodeTimeline.palette[0])
             Toggle("Seguir a quien habla", isOn: $session.project.studioVideo.followSpeaker).font(.caption)
             HStack {
                 Text("Permanencia mínima").font(.caption)
@@ -515,7 +515,7 @@ struct VideoTracks: View {
     static func paramName(_ p: String) -> String {
         switch p {
         case LayerAnimation.x: return "Posición X"; case LayerAnimation.y: return "Posición Y"; case LayerAnimation.scale: return "Tamaño"
-        case LayerAnimation.rotation: return "Giro"; case LayerAnimation.opacity: return "Opacidad"; default: return p
+        case LayerAnimation.rotation: return String(localized: "Giro"); case LayerAnimation.opacity: return String(localized: "Opacidad"); default: return p
         }
     }
 
@@ -727,7 +727,7 @@ struct VideoTracks: View {
 
     private func musicRow(_ w: CGFloat) -> some View {
         ForEach(session.project.audioLane) { c in
-            let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
+            let name = session.project.mediaItem(c.mediaId)?.originalName ?? String(localized: "Música")
             let sel: Bool = { if case .sound(let id) = session.selectedTrack { return id == c.id }; return false }()
             clip(name + (c.speed != 1 ? String(format: " · %.2g×", c.speed) : "") + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? String(localized: " · fades") : ""), start: c.tlStart, dur: c.length, color: Self.musicColor, selected: sel, w: w, height: 28,
                  onSelect: { session.selectedTrack = .sound(c.id); selectedCut = nil },
@@ -857,9 +857,9 @@ struct MaskPanel: View {
                 keyRow(String(localized: "Centro X"), LayerAnimation.x, value: m.x, range: 0...1) { v in set { $0.x = v } }
                 keyRow(String(localized: "Centro Y"), LayerAnimation.y, value: m.y, range: 0...1) { v in set { $0.y = v } }
                 keyRow("Tamaño", LayerAnimation.scale, value: 1, range: 0.3...2.5, fixed: true) { _ in }
-                row("Ancho", value: Binding(get: { m.w }, set: { v in set { $0.w = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
-                row("Alto", value: Binding(get: { m.h }, set: { v in set { $0.h = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
-                row("Suavizado", value: Binding(get: { m.feather }, set: { v in set { $0.feather = v } }), range: 0...120, fmt: { String(format: "%.0f px", $0) })
+                row(String(localized: "Ancho"), value: Binding(get: { m.w }, set: { v in set { $0.w = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row(String(localized: "Alto"), value: Binding(get: { m.h }, set: { v in set { $0.h = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row(String(localized: "Suavizado"), value: Binding(get: { m.feather }, set: { v in set { $0.feather = v } }), range: 0...120, fmt: { String(format: "%.0f px", $0) })
                 row(String(localized: "Oscurecer fuera"), value: Binding(get: { m.dimOutside }, set: { v in set { $0.dimOutside = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 Toggle("Invertir (el color va fuera)", isOn: Binding(get: { m.invert }, set: { v in set { $0.invert = v } })).font(.caption)
                 if let a = m.animation, !a.isEmpty {

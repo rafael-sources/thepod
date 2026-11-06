@@ -50,7 +50,7 @@ extension ProjectSession {
         history.isRestoring = true
         project = p
         history.isRestoring = false
-        flashNote("Deshecho")
+        flashNote(String(localized: "Deshecho"))
     }
 
     func redoChange() {
@@ -58,7 +58,7 @@ extension ProjectSession {
         history.isRestoring = true
         project = p
         history.isRestoring = false
-        flashNote("Rehecho")
+        flashNote(String(localized: "Rehecho"))
     }
 
     func flashNote(_ s: String) {

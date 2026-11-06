@@ -208,9 +208,9 @@ struct EpisodeTimeline: View {
     private var legend: some View {
         HStack(spacing: 12) {
             legendItem(Color.red.opacity(0.55), String(localized: "Se corta"))
-            legendItem(Theme.accent, "Reel")
+            legendItem(Theme.accent, String(localized: "Reel"))
             legendItem(Color.purple.opacity(0.8), "Sponsor")
-            legendItem(Color.white.opacity(0.8), "Efecto")
+            legendItem(Color.white.opacity(0.8), String(localized: "Efecto"))
             legendItem(Color.yellow.opacity(0.75), "Texto")
             HStack(spacing: 4) { Rectangle().fill(Theme.accent).frame(width: 10, height: 1.5); Text("Volumen") }.fixedSize()
         }

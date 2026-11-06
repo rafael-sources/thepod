@@ -693,9 +693,9 @@ struct ReelsStep: View {
             switch self {
             case .look: return "Diseño"
             case .text: return "Subtítulos"
-            case .sound: return "Música"
+            case .sound: return String(localized: "Música")
             case .broll: return "B-roll"
-            case .cintillos: return "Cintillos"
+            case .cintillos: return String(localized: "Cintillos")
             }
         }
     }
@@ -1044,7 +1044,7 @@ struct ReelLookCard: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "music.note").frame(width: 18).foregroundStyle(sel ? Theme.accent : .white)
-                                Text(session.project.mediaItem(m.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Música").lineLimit(1).font(.caption)
+                                Text(session.project.mediaItem(m.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Música")).lineLimit(1).font(.caption)
                                 Spacer()
                                 Text("\(EditEngine.clock(m.tlStart))\(m.loop ? " · bucle" : "") · \(Int(m.volume * 100)) %").font(.caption2).monospacedDigit().foregroundStyle(Theme.secondary)
                             }
@@ -1119,7 +1119,7 @@ struct ReelCard: View {
                 HStack(spacing: 6) {
                     timeStepper(value: $reel.start, label: "Empieza")
                     Text("→").foregroundStyle(Theme.secondary)
-                    timeStepper(value: $reel.end, label: "Termina")
+                    timeStepper(value: $reel.end, label: String(localized: "Termina"))
                     Text("· \(EditEngine.clock(reel.length))").font(.caption).foregroundStyle(reel.length > 90 ? .orange : Theme.secondary)
                 }
                 HStack(spacing: 6) {
@@ -1267,7 +1267,7 @@ struct LookStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Aspecto", subtitle: String(localized: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo."), step: .look)
+                    StepHeader(title: String(localized: "Aspecto"), subtitle: String(localized: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo."), step: .look)
                     let onePerson = session.project.lanes.count <= 1
                     let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
                     let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
@@ -1356,7 +1356,7 @@ struct LookStep: View {
                     Card {
                         Text("Color").font(.headline)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
-                            ForEach([("none", "Original"), ("warm", "Cálido"), ("cool", "Frío"), ("cine", "Cine"), ("bw", "B/N"), ("vivid", "Vivo")], id: \.0) { look in
+                            ForEach([("none", "Original"), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", "B/N"), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
                                 Button { session.project.colorLook = look.0 } label: {
                                     Text(look.1).font(.caption)
                                         .frame(maxWidth: .infinity, minHeight: 32)
@@ -1408,9 +1408,9 @@ struct LookStep: View {
                         Text("Intro y cierre").font(.headline)
                         Text("Una imagen fija unos segundos antes del video y otra al final, con música si quieres. Solo en el video completo (no en reels ni trozos).")
                             .font(.caption).foregroundStyle(Theme.secondary)
-                        bumperRow(title: "Intro", kind: "intro", bumper: session.project.intro)
+                        bumperRow(title: String(localized: "Intro"), kind: "intro", bumper: session.project.intro)
                         Divider()
-                        bumperRow(title: "Cierre", kind: "outro", bumper: session.project.outro)
+                        bumperRow(title: String(localized: "Cierre"), kind: "outro", bumper: session.project.outro)
                     }
                 }
                 .padding(28)
@@ -1562,7 +1562,7 @@ struct ExportStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Exportar", subtitle: String(localized: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto."), step: .export)
+                    StepHeader(title: String(localized: "Exportar"), subtitle: String(localized: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto."), step: .export)
                     ExportReviewCard(session: session)
                     SharedReviewCard(session: session)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -1879,9 +1879,9 @@ struct ReelCintilloCard: View {
         Card {
             Text("Cintillos de este reel").font(.headline)
             HStack(spacing: 8) {
-                Button("Noticiero") { _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: "AHORA", reelId: reel.id) }
+                Button("Noticiero") { _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: String(localized: "AHORA"), reelId: reel.id) }
                 Button("Limpio") { _ = session.addCintillo(style: "clean", kind: "comment", reelId: reel.id) }
-                Button("Sponsor") { _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: "PATROCINA", reelId: reel.id) }
+                Button("Sponsor") { _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: String(localized: "PATROCINA"), reelId: reel.id) }
                 ForEach(session.project.sponsors) { sp in
                     Button("De \(sp.name)") { session.addSponsorCintillo(sp, reelId: reel.id) }
                 }
@@ -2229,7 +2229,7 @@ struct SharedReviewCard: View {
                                         Button(EditEngine.clock(r.timelineTime(c))) { session.seek(timeline: r.timelineTime(c), play: false) }
                                             .buttonStyle(.plain).font(.caption.monospacedDigit()).foregroundStyle(c.resolved ? Theme.secondary : .orange)
                                         VStack(alignment: .leading, spacing: 1) {
-                                            Text(c.author.isEmpty ? "Alguien" : c.author).font(.caption2).foregroundStyle(Theme.secondary)
+                                            Text(c.author.isEmpty ? String(localized: "Alguien") : c.author).font(.caption2).foregroundStyle(Theme.secondary)
                                             Text(c.text).font(.caption).strikethrough(c.resolved).foregroundStyle(c.resolved ? Theme.secondary : .primary)
                                         }
                                     }

@@ -217,7 +217,7 @@ final class RoomProbe: NSObject, ObservableObject {
         guard let room else { remotes = []; return }
         remotes = room.remoteParticipants.values.map { p in
             Remote(id: p.identity?.stringValue ?? UUID().uuidString,
-                   name: p.name ?? p.identity?.stringValue ?? "Alguien",
+                   name: p.name ?? p.identity?.stringValue ?? String(localized: "Alguien"),
                    track: p.videoTracks.first?.track as? VideoTrack,
                    speaking: p.isSpeaking)
         }.sorted { $0.name < $1.name }

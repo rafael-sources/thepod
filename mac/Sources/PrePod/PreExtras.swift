@@ -89,7 +89,7 @@ struct PublicationTab: View {
     @State private var syncing = false
     @State private var error: String?
 
-    private let platforms: [(String, String)] = [("youtube", "YouTube"), ("spotify", "Spotify"),
+    private let platforms: [(String, String)] = [("youtube", "YouTube"), ("spotify", String(localized: "Spotify")),
                                                  ("apple_podcasts", String(localized: "Apple Podcasts")), ("website", String(localized: "Página web"))]
 
     var body: some View {
@@ -451,9 +451,9 @@ struct LandingTab: View {
     @State private var saver = Debouncer()
 
     private let socials: [(String, String, WritableKeyPath<LandingConfig, String?>)] = [
-        ("YouTube", "social_youtube", \.socialYoutube), ("Spotify", "social_spotify", \.socialSpotify),
+        ("YouTube", "social_youtube", \.socialYoutube), (String(localized: "Spotify"), "social_spotify", \.socialSpotify),
         (String(localized: "Apple Podcasts"), "social_apple_podcasts", \.socialApplePodcasts), ("Instagram", "social_instagram", \.socialInstagram),
-        ("TikTok", "social_tiktok", \.socialTiktok), (String(localized: "X / Twitter"), "social_twitter", \.socialTwitter),
+        (String(localized: "TikTok"), "social_tiktok", \.socialTiktok), (String(localized: "X / Twitter"), "social_twitter", \.socialTwitter),
     ]
 
     var body: some View {

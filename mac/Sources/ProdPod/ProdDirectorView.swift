@@ -98,9 +98,9 @@ struct DirectorView: View {
     @AppStorage("directorPestana") private var tab = 0
     @State private var seenChat = 0
 
-    private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), ("Avisos", "megaphone.fill"),
+    private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), (String(localized: "Avisos"), "megaphone.fill"),
                                             ("Sala", "person.2.fill"), ("Chat", "bubble.left.and.bubble.right.fill"),
-                                            ("Sonidos", "speaker.wave.2.fill"), ("Prompter", "text.viewfinder")]
+                                            (String(localized: "Sonidos"), "speaker.wave.2.fill"), (String(localized: "Prompter"), "text.viewfinder")]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -155,7 +155,7 @@ struct DirectorView: View {
                     Text("DIRECTOR").font(.system(size: 10, weight: .heavy)).kerning(0.6)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(Color.prodPod)).foregroundStyle(.black)
-                    if dir.practice { Chip(text: "ENSAYO", color: .yellow, filled: true) }
+                    if dir.practice { Chip(text: String(localized: "ENSAYO"), color: .yellow, filled: true) }
                     if !dir.podcastName.isEmpty {
                         Text(dir.podcastName).font(.caption.weight(.semibold)).foregroundStyle(Theme.secondary).lineLimit(1)
                     }
@@ -398,7 +398,7 @@ struct DirectorView: View {
     private var roomPanel: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(text: "Personas")
+                SectionTitle(text: String(localized: "Personas"))
                 let people = dir.participants.filter { $0.role != "director" }
                 if people.isEmpty { Text("Nadie invitado todavía.").font(.callout).foregroundStyle(Theme.secondary) }
                 ForEach(people) { p in personRow(p) }
@@ -416,7 +416,7 @@ struct DirectorView: View {
                             .foregroundStyle(st == "done" ? Theme.good : st == "error" ? .red : Theme.secondary)
                         Text(name).font(.callout)
                         Spacer()
-                        Text(st == "error" ? "Error" : String(format: "%.0f MB", mb))
+                        Text(st == "error" ? String(localized: "Error") : String(format: "%.0f MB", mb))
                             .font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
                     }
                     .padding(.horizontal, 12).frame(height: 40)
@@ -522,7 +522,7 @@ struct CintillosPanel: View {
     @State private var seconds: Double = 15
 
     private let kinds: [(String, String, Color)] = [("Sponsor", "star.fill", CR.sponsor), ("Podcast", "mic.fill", CR.podcast),
-                                                    ("Segmento", "text.alignleft", CR.segment)]
+                                                    (String(localized: "Segmento"), "text.alignleft", CR.segment)]
     private var accent: Color { kinds[mode].2 }
 
     var body: some View {
@@ -662,7 +662,7 @@ struct CintillosPanel: View {
             CRField(placeholder: String(localized: "Ej.: La pregunta de la semana"), text: $segTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Subtítulo", trailing: "opcional")
+            SectionTitle(text: String(localized: "Subtítulo"), trailing: "opcional")
             CRField(placeholder: String(localized: "Una línea que lo explique"), text: $segSub)
         }
         Text("El segmento se queda en pantalla 12 segundos.").font(.caption).foregroundStyle(Theme.secondary)
@@ -689,7 +689,7 @@ struct CuesPanel: View {
     static let look: [String: (String, String, Color)] = [
         String(localized: "CERRAR TEMA"): (String(localized: "Cerrar tema"), "flag.checkered", Color.orange),
         String(localized: "SIGUIENTE TEMA"): (String(localized: "Siguiente tema"), "forward.end.fill", CR.segment),
-        "PAUSA": ("Pausa", "pause.fill", Color.yellow),
+        String(localized: "PAUSA"): ("Pausa", "pause.fill", Color.yellow),
         String(localized: "MÁS RÁPIDO"): (String(localized: "Más rápido"), "hare.fill", Theme.good),
         String(localized: "MÁS LENTO"): (String(localized: "Más lento"), "tortoise.fill", Color.teal),
         String(localized: "LEER ANUNCIO"): (String(localized: "Leer anuncio"), "megaphone.fill", CR.sponsor),
@@ -698,8 +698,8 @@ struct CuesPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Para")
-                FlowPills(items: [("all", "Todos")] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
+                SectionTitle(text: String(localized: "Para"))
+                FlowPills(items: [("all", String(localized: "Todos"))] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
                           selected: $target)
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -731,7 +731,7 @@ struct CuesPanel: View {
     private func sendCustom() {
         let t = custom.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }
-        dir.sendCue("CUSTOM", text: t, target: target); custom = ""
+        dir.sendCue(String(localized: "CUSTOM"), text: t, target: target); custom = ""
     }
 
     private func cueTile(_ c: String) -> some View {
@@ -776,8 +776,8 @@ struct TeleprompterPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Para", trailing: String(localized: "todos ven el aviso; el texto solo quien lo lee"))
-                FlowPills(items: [("all", "Todos")] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
+                SectionTitle(text: String(localized: "Para"), trailing: String(localized: "todos ven el aviso; el texto solo quien lo lee"))
+                FlowPills(items: [("all", String(localized: "Todos"))] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
                           selected: $target)
             }
             if !dir.sponsors.isEmpty {
@@ -804,7 +804,7 @@ struct TeleprompterPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionTitle(text: "Velocidad")
                     HStack(spacing: 6) {
-                        ForEach([("slow", "Lenta"), ("normal", "Normal"), ("fast", "Rápida")], id: \.0) { v, l in
+                        ForEach([("slow", String(localized: "Lenta")), ("normal", "Normal"), ("fast", String(localized: "Rápida"))], id: \.0) { v, l in
                             Pill(text: l, selected: speed == v) { speed = v }
                         }
                     }
@@ -812,7 +812,7 @@ struct TeleprompterPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionTitle(text: "Tamaño")
                     HStack(spacing: 6) {
-                        ForEach([("quarter", "¼ pantalla"), ("half", "½ pantalla"), ("full", "Toda")], id: \.0) { v, l in
+                        ForEach([("quarter", "¼ pantalla"), ("half", "½ pantalla"), ("full", String(localized: "Toda"))], id: \.0) { v, l in
                             Pill(text: l, selected: size == v) { size = v }
                         }
                     }

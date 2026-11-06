@@ -187,13 +187,13 @@ enum Step: String, CaseIterable, Identifiable {
         case .fix: return "Limpiar sonido"
         case .captions: return "Subtítulos"
         case .sensitive: return "Palabras sensibles"
-        case .look: return "Aspecto"
+        case .look: return String(localized: "Aspecto")
         case .layers: return String(localized: "Textos y stickers")
-        case .cintillos: return "Cintillos"
+        case .cintillos: return String(localized: "Cintillos")
         case .sounds: return String(localized: "Música y efectos")
         case .brands: return "Patrocinios y marcas"
-        case .reels: return "Reels"
-        case .cover: return "Portada"
+        case .reels: return String(localized: "Reels")
+        case .cover: return String(localized: "Portada")
         case .export: return String(localized: "Exportar video")
         case .publish: return "Publicar"
         }
@@ -757,7 +757,7 @@ final class ProjectSession: ObservableObject {
         for c in (result["clips"] as? [[String: Any]]) ?? [] {
             guard let s = (c["start"] as? String).flatMap(ClipSuggester.parseClock),
                   let e = (c["end"] as? String).flatMap(ClipSuggester.parseClock), e > s else { continue }
-            let sug = ClipSuggester.snap(.init(title: (c["title"] as? String) ?? "Momento", reason: (c["reason"] as? String) ?? "",
+            let sug = ClipSuggester.snap(.init(title: (c["title"] as? String) ?? String(localized: "Momento"), reason: (c["reason"] as? String) ?? "",
                                                start: s, end: e), words: p.words, duration: p.duration)
             if p.reels.contains(where: { abs($0.start - sug.start) < 3 }) { continue }
             p.reels.append(Reel(title: sug.title, reason: sug.reason, start: sug.start, end: sug.end))
@@ -784,7 +784,7 @@ final class ProjectSession: ObservableObject {
     }
 
     func export(format: ExportFormat) {
-        run("Exportando") { [self] in
+        run(String(localized: "Exportando")) { [self] in
             let url = try await performExport(format: format)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
@@ -1283,7 +1283,7 @@ final class ProjectSession: ObservableObject {
 
     /// Cintillo de sponsor a partir de un sponsor de prePod (logo y frase ya puestos).
     func addSponsorCintillo(_ sp: Sponsor, reelId: UUID? = nil) {
-        _ = addCintillo(style: "sponsor", kind: "sponsor", title: sp.name, text: sp.copy ?? "", logoFile: sp.logoFile, tag: "PATROCINA", reelId: reelId)
+        _ = addCintillo(style: "sponsor", kind: "sponsor", title: sp.name, text: sp.copy ?? "", logoFile: sp.logoFile, tag: String(localized: "PATROCINA"), reelId: reelId)
     }
 
     /// Acceso a un cintillo por dónde vive (episodio o reel), para el panel bajo el video.
@@ -1687,7 +1687,7 @@ final class ProjectSession: ObservableObject {
     /// Una captura del segundo donde está parado el episodio, para elegirla a mano.
     func addCoverCandidateAtPlayhead() {
         let t = playheadTimeline
-        run("Capturando") { [self] in
+        run(String(localized: "Capturando")) { [self] in
             let img = try await CoverScout.render(project: project, at: t, energy: energy, maxSize: 960)
             guard let data = CoverScout.jpeg(img, quality: 0.85) else { return }
             let folder = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("portadas")

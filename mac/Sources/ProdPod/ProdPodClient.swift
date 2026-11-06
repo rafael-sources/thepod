@@ -43,7 +43,7 @@ actor ProdPodClient {
         var invite_url: String?
         var recording_quality: String?
         var roleTitle: String {
-            ["host": "Conductor", "co-host": "Conductor", "guest": "Invitado", "director": "Director"][role] ?? role
+            ["host": "Conductor", "co-host": "Conductor", "guest": "Invitado", "director": String(localized: "Director")][role] ?? role
         }
     }
 

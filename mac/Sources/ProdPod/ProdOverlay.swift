@@ -51,7 +51,7 @@ struct Overlay: Identifiable, Equatable {
         }
     }
     var tag: String {
-        ["sponsor": "PATROCINA", "banner": "AHORA", "segment": "SEGMENTO", "comment": "COMENTARIO", "countdown": "PAUSA"][kind] ?? ""
+        ["sponsor": String(localized: "PATROCINA"), "banner": String(localized: "AHORA"), "segment": String(localized: "SEGMENTO"), "comment": String(localized: "COMENTARIO"), "countdown": String(localized: "PAUSA")][kind] ?? ""
     }
 }
 

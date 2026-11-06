@@ -9,19 +9,19 @@ struct CintillosStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Cintillos",
+                    StepHeader(title: String(localized: "Cintillos"),
                                subtitle: String(localized: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar."), step: .cintillos)
                     Card {
                         Text("Agregar donde está el video").font(.headline)
                         HStack(spacing: 10) {
                             styleButton("Noticiero", help: String(localized: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.")) {
-                                _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: "AHORA")
+                                _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: String(localized: "AHORA"))
                             } preview: { newsPreview }
                             styleButton("Limpio", help: String(localized: "Una línea de color, título grande y texto chico. Sin cajas.")) {
                                 _ = session.addCintillo(style: "clean", kind: "comment")
                             } preview: { cleanPreview }
                             styleButton("Sponsor", help: String(localized: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.")) {
-                                _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: "PATROCINA")
+                                _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: String(localized: "PATROCINA"))
                             } preview: { sponsorPreview }
                         }
                         if !session.project.sponsors.isEmpty {
@@ -135,7 +135,7 @@ struct CintilloEditor: View {
     let sel: ProjectSession.TrackSel
 
     static let colors = ["#D64545", "#6B8FE6", "#E8B85A", "#2E9E6B", "#7C2D3D", "#111111"]
-    static let tags = ["AHORA", "SEGMENTO", "PATROCINA", String(localized: "EN VIVO"), "DATO", ""]
+    static let tags = ["AHORA", String(localized: "SEGMENTO"), String(localized: "PATROCINA"), String(localized: "EN VIVO"), String(localized: "DATO"), ""]
 
     private var reel: Reel? { if case .reelCintillo(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }
     private var c: Binding<DirectorCintillo> {
