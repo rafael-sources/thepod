@@ -150,10 +150,10 @@ def start_rtmp_egress(room_name: str, rtmp_urls: list, layout: str = "grid"):
 
 
 def start_participant_backup(room_name: str, identity: str, filepath: str):
-    """Respaldo grabado por el servidor: graba cámara + micrófono de UN
-    participante tal como llega a la sala (720p30 H.264) en un MP4.
-    El contenedor de egress debe ver `filepath` en la misma ruta (bind
-    mount de ~/prodpod/sessions). Devuelve EgressInfo o None."""
+    """Server-recorded backup: records camera + microphone of ONE
+    participant as it arrives in the room (720p30 H.264) into an MP4.
+    The egress container must see `filepath` at the same path (bind
+    mount of ~/prodpod/sessions). Returns EgressInfo or None."""
     try:
         from livekit import api
         async def _do():
@@ -179,8 +179,8 @@ def start_participant_backup(room_name: str, identity: str, filepath: str):
 
 
 def egress_info(egress_id: str):
-    """(estado, error, estados de cada destino RTMP) de un egress, o None si no se pudo consultar.
-    Los estados de destino son 'ACTIVE', 'FINISHED' o 'FAILED'."""
+    """(status, error, status of each RTMP destination) of an egress, or None if it could not be queried.
+    Destination statuses are 'ACTIVE', 'FINISHED' or 'FAILED'."""
     try:
         from livekit import api
         async def _do():
@@ -203,8 +203,8 @@ def egress_info(egress_id: str):
 
 
 def egress_status(egress_id: str):
-    """Nombre del estado del egress ('EGRESS_COMPLETE', 'EGRESS_ACTIVE', …)
-    o None si no se pudo consultar."""
+    """Name of the egress status ('EGRESS_COMPLETE', 'EGRESS_ACTIVE', …)
+    or None if it could not be queried."""
     try:
         from livekit import api
         async def _do():

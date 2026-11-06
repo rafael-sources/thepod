@@ -1,4 +1,4 @@
-"""Respaldo grabado por el servidor (LiveKit egress por participante)."""
+"""Server-recorded backup (LiveKit egress per participant)."""
 import os
 from types import SimpleNamespace
 
@@ -65,7 +65,7 @@ def test_detener_cierra_todos_los_respaldos(env):
     c.post("/api/sessions/1/backup/start?token=tg")
     assert ra.stop_session_backups(1) == 2
     assert sorted(stopped) == ["EG_participant_10", "EG_participant_11"]
-    assert ra.stop_session_backups(1) == 0   # idempotente
+    assert ra.stop_session_backups(1) == 0   # idempotent
 
 
 def test_respaldo_reemplaza_solo_a_quien_le_falta_la_grabacion(env):
@@ -73,20 +73,20 @@ def test_respaldo_reemplaza_solo_a_quien_le_falta_la_grabacion(env):
     c.post("/api/sessions/1/backup/start?token=th")
     c.post("/api/sessions/1/backup/start?token=tg")
     ra.stop_session_backups(1)
-    for _, _, path in started:                      # el egress "escribió" los MP4
+    for _, _, path in started:                      # the egress "wrote" the MP4s
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(b"\x00" * 1000)
-    conn = db_mod.get_db()                           # el host sí subió su grabación
+    conn = db_mod.get_db()                           # the host did upload their recording
     conn.execute("INSERT INTO recordings (session_id, participant_id, track_type, filename, file_path, size_bytes) "
                  "VALUES (1, 10, 'video', 'host.webm', '/x', 10)")
     conn.commit(); conn.close()
-    assert ra.adopt_backups(1) == 1                  # solo la invitada
+    assert ra.adopt_backups(1) == 1                  # only the guest
     conn = db_mod.get_db()
     rows = conn.execute("SELECT participant_id, take_id, mime_type FROM recordings ORDER BY id").fetchall()
     conn.close()
     assert [(r["participant_id"], (r["take_id"] or "")[:8]) for r in rows] == [(10, ""), (11, "respaldo")]
-    assert ra.adopt_backups(1) == 0                  # no la adopta dos veces
+    assert ra.adopt_backups(1) == 0                  # does not adopt it twice
 
 
 def test_envio_avisa_inicio_y_fin_y_manda_el_respaldo(env, monkeypatch):
@@ -122,8 +122,8 @@ def test_envio_avisa_inicio_y_fin_y_manda_el_respaldo(env, monkeypatch):
 
 
 def test_envio_interno_y_pista_fija_por_persona(env, monkeypatch):
-    """La pista enviada tarde no cae sobre la de otra persona, y el envío va
-    a la dirección interna de postPod (no al proxy público)."""
+    """A track sent late does not land on someone else's, and the send goes
+    to postPod's internal address (not the public proxy)."""
     c, ra, db_mod, started, stopped, state = env
     rec = db_mod.session_dir(1) / "recordings"
     rec.mkdir(parents=True, exist_ok=True)
@@ -152,4 +152,4 @@ def test_envio_interno_y_pista_fija_por_persona(env, monkeypatch):
     assert body["exported"] == 1, body
     url, track, name = sent[0]
     assert url.startswith(ra.POSTPOD_INTERNAL_URL)
-    assert name.startswith("Invitada") and track == "2"   # la 1 es del host, aunque ya se envió antes
+    assert name.startswith("Invitada") and track == "2"   # track 1 belongs to the host, even though it was already sent

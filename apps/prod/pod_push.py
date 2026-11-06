@@ -1,9 +1,9 @@
 """
-Avisos al teléfono (web push) a través de thePod.
+Phone notifications (web push) through thePod.
 
-Cada app llama a notify(...) y thePod se encarga de mandarlo a los teléfonos donde el usuario
-activó los avisos. Es "best effort": si thePod no responde, no pasa nada y no se bloquea la
-petición (corre en un hilo, con tiempo máximo de 4 s).
+Each app calls notify(...) and thePod takes care of sending it to the phones where the user
+enabled notifications. It is "best effort": if thePod does not respond, nothing happens and the
+request is not blocked (it runs in a thread, with a 4 s timeout).
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Transmisión en vivo: si la plataforma la rechaza o se corta, la sala se entera."""
+"""Live stream: if the platform rejects it or it drops, the room finds out."""
 import pytest
 
 

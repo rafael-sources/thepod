@@ -1,4 +1,4 @@
-"""Teleprompter (thePod 0.11): el proxy a prePod y el acceso por token de invitado."""
+"""Teleprompter (thePod 0.11): the proxy to prePod and access via guest token."""
 
 import io
 import json
@@ -28,9 +28,9 @@ def tp_db(tmp_path):
     from app import create_app
     app = create_app()
     app.testing = True
-    # En producción la cookie de sesión va atada al dominio compartido
-    # (p. ej. .castmedia.space) y el cliente de pruebas, en localhost, no la
-    # enviaría: los tests que inician sesión recibirían 401.
+    # In production the session cookie is bound to the shared domain
+    # (e.g. .castmedia.space) and the test client, on localhost, would not
+    # send it: tests that log in would get 401.
     app.config["SESSION_COOKIE_DOMAIN"] = None
     return app
 

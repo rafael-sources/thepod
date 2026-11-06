@@ -1,4 +1,4 @@
-"""Borrar una sala también borra sus archivos en disco."""
+"""Deleting a room also deletes its files on disk."""
 
 
 def test_borrar_sala_borra_sus_archivos(tmp_path, monkeypatch):
@@ -24,4 +24,4 @@ def test_borrar_sala_borra_sus_archivos(tmp_path, monkeypatch):
         s["username"] = "host"
     r = c.delete("/api/sessions/7", base_url="http://castmedia.space")
     assert r.status_code == 200, r.get_json()
-    assert not (config.SESSIONS_DIR / "7").exists()   # session_dir() la recrearía
+    assert not (config.SESSIONS_DIR / "7").exists()   # session_dir() would recreate it

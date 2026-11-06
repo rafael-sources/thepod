@@ -50,9 +50,9 @@ _FAILED_MSG = ("La transmisión se cortó o la plataforma no la aceptó. Revisa 
 
 
 def _refresh_live(db, rows):
-    """Las transmisiones marcadas como activas se confirman con LiveKit: si la plataforma la
-    rechazó (clave mala, directo no habilitado) o se cortó, se marca y se dice por qué.
-    Antes quedaban «activas» para siempre y nadie se enteraba."""
+    """Streams marked as active are confirmed with LiveKit: if the platform
+    rejected it (bad key, live streaming not enabled) or it dropped, it is flagged with the reason.
+    Previously they stayed "active" forever and nobody noticed."""
     changed = False
     for r in rows:
         if r["status"] not in ("starting", "active") or not r["egress_id"]:

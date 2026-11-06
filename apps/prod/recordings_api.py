@@ -314,9 +314,9 @@ def stream_recording_chunk(sid):
         if not ext.startswith("."):
             ext = "." + ext
 
-        # take_id (opcional): un uuid por grabación. Mismo take_id = misma
-        # toma (los reintentos van al mismo archivo); take_id distinto = toma
-        # nueva que se guarda aparte. Sin take_id: comportamiento histórico.
+        # take_id (optional): one uuid per recording. Same take_id = same
+        # take (retries go to the same file); different take_id = new take
+        # saved separately. Without take_id: historical behavior.
         take_id = re.sub(r"[^A-Za-z0-9_-]", "", request.form.get("take_id") or "")[:64] or None
 
         dest_dir = session_dir(sid) / "recordings"
@@ -334,8 +334,8 @@ def stream_recording_chunk(sid):
                 (sid, participant_id, track_type, take_id),
             ).fetchone()
         else:
-            # Clientes legacy: una grabación por participante+pista, entre
-            # las filas sin take_id (las tomas nuevas no se tocan).
+            # Legacy clients: one recording per participant+track, among
+            # the rows without take_id (new takes are not touched).
             already_finalized = db.execute(
                 "SELECT id, filename, file_path, size_bytes FROM recordings "
                 "WHERE session_id=? AND participant_id=? AND track_type=? AND take_id IS NULL",
@@ -346,7 +346,7 @@ def stream_recording_chunk(sid):
         if chunk:
             offset_raw = request.form.get("offset")
             if offset_raw is None:
-                # Sin offset: comportamiento histórico (append ciego).
+                # No offset: historical behavior (blind append).
                 with open(str(streaming_path), "ab") as out:
                     while True:
                         buf = chunk.stream.read(65536)
@@ -354,9 +354,9 @@ def stream_recording_chunk(sid):
                             break
                         out.write(buf)
             else:
-                # Subida segura por partes: el cliente dice en qué byte
-                # empieza este chunk. Así un reintento nunca duplica datos
-                # y un hueco se detecta con 409 en vez de corromper el archivo.
+                # Safe chunked upload: the client says at which byte
+                # this chunk starts. That way a retry never duplicates data
+                # and a gap is detected with 409 instead of corrupting the file.
                 try:
                     offset = int(offset_raw)
                 except ValueError:
@@ -367,11 +367,11 @@ def stream_recording_chunk(sid):
                                     "bytes_received": cur_size}), 409
                 data = chunk.stream.read()
                 if offset < cur_size and cur_size >= offset + len(data):
-                    pass  # chunk repetido completo: ignorar
+                    pass  # full repeated chunk: ignore
                 else:
-                    # offset == cur_size (caso normal) o el final del archivo
-                    # quedó a medias por un request cortado: truncar al offset
-                    # y volver a escribir el chunk completo.
+                    # offset == cur_size (normal case) or the end of the file
+                    # was left half-written by a cut-off request: truncate to the offset
+                    # and rewrite the full chunk.
                     with open(str(streaming_path), "r+b" if streaming_path.exists() else "wb") as out:
                         out.truncate(offset)
                         out.seek(offset)
@@ -426,7 +426,7 @@ def stream_recording_chunk(sid):
                     row = db.execute("SELECT * FROM recordings WHERE id=?", (cur.lastrowid,)).fetchone()
                     size = row["size_bytes"]
             body = {"finalized": True, "recording": _serialize_recording(row), "size_bytes": size}
-            # Aviso al dueño de la sesión: la pista de esta persona ya está completa en el servidor
+            # Notify the session owner: this person's track is now complete on the server
             try:
                 who = db.execute("SELECT display_name FROM participants WHERE id=?", (participant_id,)).fetchone()
                 mb = round(size / 1048576) if size else 0
@@ -440,7 +440,7 @@ def stream_recording_chunk(sid):
             try:
                 maybe_auto_export(sid)
             except Exception:
-                pass   # el envío automático nunca debe romper el registro de la grabación
+                pass   # the automatic send must never break the recording's registration
             return jsonify(body), 201
 
         size = streaming_path.stat().st_size if streaming_path.exists() else 0
@@ -450,8 +450,8 @@ def stream_recording_chunk(sid):
 
 
 def _resolve_participant(db, sid, token):
-    """Participante por invite token, o por username de la sesión iniciada.
-    El mismo esquema de autorización que el streaming de chunks."""
+    """Participant by invite token, or by the logged-in session's username.
+    The same authorization scheme as chunk streaming."""
     p = None
     if token:
         p = db.execute(
@@ -469,18 +469,18 @@ def _resolve_participant(db, sid, token):
 
 
 def backup_enabled() -> bool:
-    """Respaldo por servidor: solo cuando el contenedor de egress ya monta
-    ~/prodpod/sessions (si no, escribiría el MP4 dentro del contenedor).
-    Se enciende con "egress_backup": true en ~/.podpod/config.json."""
+    """Server backup: only when the egress container already mounts
+    ~/prodpod/sessions (otherwise it would write the MP4 inside the container).
+    Enabled with "egress_backup": true in ~/.podpod/config.json."""
     from shared_config import load_shared_config
     return bool(load_shared_config().get("egress_backup"))
 
 
 @bp.post("/api/sessions/<int:sid>/backup/start")
 def start_backup(sid):
-    """Cada participante pide su propio respaldo al empezar a grabar (así
-    también quedan cubiertos los que entran tarde). El servidor graba su
-    señal de la sala en 720p mientras siga conectado."""
+    """Each participant requests their own backup when recording starts (so
+    late joiners are covered too). The server records their
+    feed from the room at 720p while they stay connected."""
     if not backup_enabled():
         return jsonify({"enabled": False})
     db = get_db()
@@ -527,7 +527,7 @@ def start_backup(sid):
 
 
 def stop_session_backups(sid):
-    """Cierra todos los respaldos activos de la sala (al detener la grabación)."""
+    """Closes all active backups of the room (when recording stops)."""
     from livekit_service import stop_egress
     db = get_db()
     try:
@@ -546,9 +546,9 @@ def stop_session_backups(sid):
 
 @bp.post("/api/net-test")
 def net_test():
-    """Recibe un blob de prueba y lo descarta: el cliente mide Mbps de subida
-    cronometrando este POST. Autoriza cualquier usuario con sesión o cualquier
-    invite token válido."""
+    """Receives a test blob and discards it: the client measures upload Mbps
+    by timing this POST. Authorizes any logged-in user or any
+    valid invite token."""
     authorized = current_user() is not None
     token = request.args.get("token")
     if not authorized and token:
@@ -569,8 +569,8 @@ def net_test():
 
 @bp.post("/api/sessions/<int:sid>/recording-quality")
 def set_recording_quality(sid):
-    """Guarda la calidad de grabación local que decidió la prueba inicial,
-    para mostrarla en el Control Room del director."""
+    """Stores the local recording quality decided by the initial test,
+    to show it in the director's Control Room."""
     db = get_db()
     try:
         sess = db.execute("SELECT id FROM sessions WHERE id=?", (sid,)).fetchone()
@@ -782,14 +782,14 @@ def export_recordings_to_postpod(sid):
     return jsonify(body), status
 
 
-_AUTO_EXPORT_STALE_SECS = 20 * 60   # una subida sin escribir en 20 min se da por abandonada
+_AUTO_EXPORT_STALE_SECS = 20 * 60   # an upload not written to in 20 min is considered abandoned
 
 
 def maybe_auto_export(sid):
-    """Envío automático a postPod: cuando la sala ya terminó y no queda
-    ninguna subida en curso, manda lo pendiente sin que nadie apriete el
-    botón. Se llama al registrarse cada grabación y al detener la sala.
-    Una subida abandonada (pestaña cerrada) no bloquea a las demás."""
+    """Automatic send to postPod: once the room has finished and no
+    upload is still in progress, sends whatever is pending without anyone pressing the
+    button. Called when each recording is registered and when the room stops.
+    An abandoned upload (closed tab) does not block the others."""
     import time
     db = get_db()
     try:
@@ -809,7 +809,7 @@ def maybe_auto_export(sid):
     for f in rec_dir.glob("*_streaming*"):
         try:
             if now - f.stat().st_mtime < _AUTO_EXPORT_STALE_SECS:
-                return False   # alguien sigue subiendo: esperar a su finalize
+                return False   # someone is still uploading: wait for their finalize
         except OSError:
             continue
 
@@ -820,18 +820,18 @@ def maybe_auto_export(sid):
         try:
             body, status = export_session_to_postpod(sid)
             logging.getLogger(__name__).info(
-                "envío automático sesión %s → postPod: %s (exportadas=%s, fallidas=%s)",
+                "auto-send session %s → postPod: %s (exported=%s, failed=%s)",
                 sid, status, body.get("exported"), body.get("failed"))
         except Exception:
-            logging.getLogger(__name__).exception("envío automático sesión %s falló", sid)
+            logging.getLogger(__name__).exception("auto-send session %s failed", sid)
 
     threading.Thread(target=_run, daemon=True).start()
     return True
 
 
 def _postpod_import_status(sess, spid, state, expected=0):
-    """Avisa a postPod que empieza (begin) o termina (end) el envío de pistas
-    de este episodio. Best-effort: si falla, el envío sigue igual."""
+    """Tells postPod that sending this episode's tracks is starting (begin) or ending (end).
+    Best-effort: if it fails, the send goes on anyway."""
     db = get_db()
     try:
         co = db.execute(
@@ -861,9 +861,9 @@ def _postpod_import_status(sess, spid, state, expected=0):
 
 
 def adopt_backups(sid):
-    """Quien no tiene grabación principal (cerró la pestaña, su subida quedó
-    abandonada) pero sí un respaldo terminado en el servidor: registra el
-    respaldo como su grabación para que llegue a postPod. Devuelve cuántos."""
+    """Whoever has no main recording (closed the tab, their upload was
+    abandoned) but does have a finished backup on the server: registers the
+    backup as their recording so it reaches postPod. Returns how many."""
     import time
     from livekit_service import egress_status
     adopted = 0
@@ -885,9 +885,9 @@ def adopt_backups(sid):
                 continue
             st = egress_status(b["egress_id"]) if b["egress_id"] else None
             if st not in ("EGRESS_COMPLETE", None):
-                continue   # todavía cerrándose o falló
+                continue   # still closing or failed
             if st is None and time.time() - path.stat().st_mtime < 120:
-                continue   # sin estado: esperar a que el archivo deje de crecer
+                continue   # no status: wait for the file to stop growing
             dur = 0.0
             try:
                 out = subprocess.run(
@@ -911,15 +911,15 @@ def adopt_backups(sid):
 
 
 def export_session_to_postpod(sid):
-    """Envía a postPod todas las grabaciones de la sesión que aún no se
-    enviaron. Sin chequeo de permisos: lo usan el botón (que ya los revisó)
-    y el envío automático al registrarse la última grabación.
-    Devuelve (dict, status_http)."""
+    """Sends to postPod every recording of the session not yet
+    sent. No permission check: used by the button (which already checked them)
+    and by the automatic send when the last recording is registered.
+    Returns (dict, http_status)."""
     try:
         adopt_backups(sid)
     except Exception:
         import logging
-        logging.getLogger(__name__).exception("no se pudieron adoptar respaldos de la sesión %s", sid)
+        logging.getLogger(__name__).exception("could not adopt backups for session %s", sid)
     db = get_db()
     try:
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
@@ -961,9 +961,9 @@ def export_session_to_postpod(sid):
         return {"exported": 0, "failed": 0, "project": None, "message": "sin pistas nuevas"}, 200
 
     endpoint = POSTPOD_INTERNAL_URL + "/api/integrations/prodpod/import-track"
-    # Pista fija por persona y tipo (cámara/pantalla) según el orden de la
-    # sala, no según la tanda de envío: si una pista llega en un envío aparte
-    # no debe caer encima de otra.
+    # Fixed track per person and type (camera/screen) based on the room
+    # order, not the send batch: if a track arrives in a separate send
+    # it must not land on top of another.
     db = get_db()
     try:
         keys = db.execute(
@@ -988,14 +988,14 @@ def export_session_to_postpod(sid):
     # postPod classifies by extension so both land as 'video'. That's OK for
     # now since .webm isn't in the audio ALLOWED_EXTS; postPod places them as
     # video and the editor can still use them as audio sources.
-    # Avisar a postPod que empieza a llegar este episodio: mientras tanto su
-    # tarjeta queda en rojo ("en proceso, ábrelo bajo tu propio riesgo").
+    # Tell postPod this episode is starting to arrive: meanwhile its
+    # card stays red ("in progress, open it at your own risk").
     _postpod_import_status(sess, spid, "begin", expected=len(pending))
 
     sess_base = session_dir(sid).resolve()
     for idx, r in enumerate(pending):
-        # file_path real (grabaciones en recordings/, respaldos del servidor
-        # en backups/); filas viejas sin file_path caen a recordings/<filename>.
+        # Real file_path (recordings in recordings/, server backups
+        # in backups/); old rows without file_path fall back to recordings/<filename>.
         fpath = Path(r["file_path"]).resolve() if r.get("file_path") else (base / r["filename"]).resolve()
         if not str(fpath).startswith(str(sess_base) + os.sep) or not fpath.is_file():
             failed += 1
@@ -1044,9 +1044,9 @@ def export_session_to_postpod(sid):
                         "track_number": str(track_numbers.get((r["participant_id"], r["track_type"]), idx + 1)),
                     },
                     files={"file": (original_name, fh, r["mime_type"] or "video/webm")},
-                    # (conexión y cada tramo de la subida, respuesta). Ojo: en requests
-                    # el primer valor también limita cada escritura del cuerpo; con
-                    # pistas de varios GB postPod tarda minutos en responder.
+                    # (connect and each upload segment, response). Note: in requests
+                    # the first value also limits each body write; with
+                    # multi-GB tracks postPod takes minutes to respond.
                     timeout=(300, 7200),
                 )
             if resp.status_code not in (200, 201):
@@ -1085,9 +1085,9 @@ def export_session_to_postpod(sid):
 
     _postpod_import_status(sess, spid, "end")
 
-    # Dueño y co-hosts: van en cada push para que, si postPod crea el
-    # proyecto antes de recibir pistas, nazca visible para ellos (y no solo
-    # para los admins).
+    # Owner and co-hosts: sent with every push so that, if postPod creates the
+    # project before receiving tracks, it is visible to them from the start (and not only
+    # to admins).
     db = get_db()
     try:
         _co_rows = db.execute(

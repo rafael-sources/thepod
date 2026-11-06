@@ -161,8 +161,8 @@ def import_from_prepod():
         source_slug = (podcast.get("slug") or "").strip() or None
         source_episode_id = episode.get("id")
 
-        # Branding y sponsors para los cintillos del director: prePod los
-        # manda en el payload; se guardan con la sesión.
+        # Branding and sponsors for the director's lower thirds: prePod sends
+        # them in the payload; they are stored with the session.
         branding = podcast.get("branding") or {}
         podcast_logo_url = (branding.get("logo_url") or "").strip() or None
         sponsors_json = None

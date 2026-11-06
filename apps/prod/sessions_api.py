@@ -96,7 +96,7 @@ def _serialize_session(row):
         d["source_slug"] = row["source_slug"]
     if "source_episode_id" in keys:
         d["source_episode_id"] = row["source_episode_id"]
-    # Plan de quien creó la sala: lo que pueden durar las grabaciones y la resolución máxima
+    # Plan of whoever created the room: how long recordings can last and the max resolution
     try:
         from plans import limits_for
         lim = limits_for(row["created_by"])
@@ -280,9 +280,9 @@ def get_session(sid):
 
 @bp.get("/api/sessions/<int:sid>/teleprompter")
 def session_teleprompter(sid):
-    """Secciones del guion marcadas para teleprompter (de prePod) + sponsors + participantes,
-    para que el host dispare cada teleprompter a quien le toca. Lo puede pedir el host (sesión)
-    o un invitado con su token (?token=)."""
+    """Script sections marked for teleprompter (from prePod) + sponsors + participants,
+    so the host can fire each teleprompter at whoever it belongs to. Can be requested by the host (session)
+    or by a guest with their token (?token=)."""
     import json as _json
     import urllib.error
     import urllib.request
@@ -365,8 +365,8 @@ def delete_session(sid):
         db.commit()
     finally:
         db.close()
-    # Borrar también los archivos de la sala (grabaciones, respaldos, assets
-    # del director): antes quedaban huérfanos en disco ocupando espacio.
+    # Also delete the room's files (recordings, backups, director
+    # assets): previously they were left orphaned on disk taking up space.
     import shutil
     from db import session_dir
     sdir = session_dir(sid)
@@ -389,7 +389,7 @@ def start_recording(sid):
         username = current_user()
         if not _is_host(db, sid, username) and not _is_director(db, sid, username):
             return jsonify({"error": "solo el host o director puede iniciar la grabación"}), 403
-        # Plan Gratis: cada sala grabada cuenta como un episodio (la misma sala se puede volver a grabar)
+        # Gratis plan: each recorded room counts as one episode (the same room can be recorded again)
         owner = db.execute("SELECT created_by FROM sessions WHERE id=?", (sid,)).fetchone()
         from plans import claim_episode
         ok, msg = claim_episode(owner["created_by"] if owner else username, f"prod:{sid}")
@@ -430,8 +430,8 @@ def stop_recording(sid):
         body = _serialize_session(row)
     finally:
         db.close()
-    # Cierra los respaldos grabados por el servidor y, si todas las subidas
-    # ya terminaron antes de detener, envía a postPod ya.
+    # Close the server-recorded backups and, if all uploads
+    # had already finished before stopping, send to postPod right away.
     try:
         from recordings_api import maybe_auto_export, stop_session_backups
         stop_session_backups(sid)

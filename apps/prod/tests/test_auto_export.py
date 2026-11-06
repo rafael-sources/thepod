@@ -1,4 +1,4 @@
-"""Prueba aislada del envío automático (base temporal, sin red)."""
+"""Isolated test of the automatic send (temporary database, no network)."""
 import os
 import time
 
@@ -56,7 +56,7 @@ def test_no_envia_si_alguien_sigue_subiendo(env):
     ra, db_mod, rec_dir, calls = env
     _set_status(db_mod, "finished")
     _add_recording(db_mod, 10)
-    (rec_dir / "p11_video_streaming_tX.webm").write_bytes(b"x")   # subida activa
+    (rec_dir / "p11_video_streaming_tX.webm").write_bytes(b"x")   # active upload
     assert ra.maybe_auto_export(1) is False and calls == []
 
 
@@ -77,7 +77,7 @@ def test_subida_abandonada_no_bloquea(env):
     f = rec_dir / "p11_video_streaming_tX.webm"
     f.write_bytes(b"x")
     viejo = time.time() - 25 * 60
-    os.utime(f, (viejo, viejo))   # sin escribir hace 25 min
+    os.utime(f, (viejo, viejo))   # not written for 25 min
     assert ra.maybe_auto_export(1) is True
     _wait(calls)
     assert calls == [1]

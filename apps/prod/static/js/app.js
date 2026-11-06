@@ -1,6 +1,6 @@
 var { createApp, reactive, ref, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 
-/* thePod móvil: ¿pantalla chica o táctil? (reactivo) */
+/* thePod mobile: small or touch screen? (reactive) */
 var _touchRef = null;
 function useTouch() {
   if (!_touchRef) {
@@ -135,7 +135,7 @@ var LoginView = {
    Dashboard — sessions list
    ========================================================================== */
 
-/* Filas «Instalar thePod» y «Avisos» de la hoja «Yo» (usa window.podPWA de pod-base.js) */
+/* «Instalar thePod» and «Avisos» rows of the «Yo» sheet (uses window.podPWA from pod-base.js) */
 var PodPwaRows = {
   setup: function () {
     var P = window.podPWA || { enabled: false };
@@ -401,9 +401,9 @@ function _mountRemoteVideo(identity, track) {
   return el;
 }
 
-// Puerta de ruido en vivo: cuando no hablas, lo que oyen los demás (y el stream) baja −18 dB,
-// así no se cuelan teclas, el perro o la calle. Tu grabación local sigue siendo el micrófono sin tocar.
-// También aplica la ganancia guardada de la prueba de micrófono. Devuelve el track procesado y controles.
+// Live noise gate: when you are not talking, what others hear (and the stream) drops −18 dB,
+// so keyboard, the dog or the street don't leak in. Your local recording is still the untouched microphone.
+// Also applies the gain saved from the microphone test. Returns the processed track and controls.
 function _micChain(rawTrack, gainDb, gateOn) {
   var AC = window.AudioContext || window.webkitAudioContext;
   var ctx = new AC();
@@ -475,8 +475,8 @@ function _decodeMsg(payload) {
 
 /* Track-based recorder: records a MediaStream into a single webm blob.
    onChunk(blob) is called with each chunk for incremental upload.
-   encOpts (opcional): { videoBitsPerSecond } — fija el bitrate del archivo
-   local; la calidad de grabación NO cambia durante la llamada. */
+   encOpts (optional): { videoBitsPerSecond } — sets the bitrate of the local
+   file; recording quality does NOT change during the call. */
 function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk, encOpts) {
   var types = audioOnly
     ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
@@ -510,12 +510,12 @@ function _startRecorder(stream, onComplete, timesliceMs, audioOnly, onChunk, enc
 }
 
 /* ==========================================================================
-   Calidad de grabación — perfiles, prueba inicial y subida segura por partes
+   Recording quality — profiles, initial test and safe chunked upload
 
-   La calidad de GRABACIÓN (el archivo local que sube a postPod) es
-   independiente de la calidad de la SALA (lo que ven los demás por LiveKit).
-   Una prueba de ~5 s en la pantalla previa decide el perfil de grabación;
-   a la sala siempre se publica una versión reducida (≤720p) con simulcast.
+   RECORDING quality (the local file uploaded to postPod) is
+   independent of ROOM quality (what others see via LiveKit).
+   A ~5 s test on the pre-join screen decides the recording profile;
+   the room always gets a reduced version (≤720p) with simulcast.
    ========================================================================== */
 
 var REC_PROFILES = [
@@ -529,8 +529,8 @@ function recProfileById(id) {
   return REC_PROFILES.find(function (p) { return p.id === id; }) || REC_PROFILES[2];
 }
 
-/* Plan de quien creó la sala. Gratis: grabaciones de hasta 15 min y hasta 720p.
-   Lo fija la sala (host) o la invitación (invitado) al cargarse. */
+/* Plan of whoever created the room. Gratis: recordings up to 15 min and up to 720p.
+   Set by the room (host) or the invitation (guest) on load. */
 var PLAN = { maxHeight: null, maxSeconds: null, name: "" };
 function setPlanLimits(lim) {
   PLAN.maxHeight = (lim && lim.max_height) || null;
@@ -541,8 +541,8 @@ function capProfileToPlan(id) {
   return (PLAN.maxHeight && recProfileById(id).height > PLAN.maxHeight) ? "720p25" : id;
 }
 
-/* Decisión de la prueba: nunca por debajo de 720p, y "equipo justo" fuerza
-   720p aunque la subida alcance para más. */
+/* Test decision: never below 720p, and "borderline device" forces
+   720p even if the upload could handle more. */
 function decideRecProfile(upMbps, device) {
   if (!device.ok1080 || !device.fluid) {
     return upMbps >= 2 ? "720p25" : "720p15";
@@ -553,8 +553,8 @@ function decideRecProfile(upMbps, device) {
   return "720p15";
 }
 
-/* Sube un blob de ~2.5 MB a un endpoint que lo descarta y mide Mbps.
-   Un POST chico primero "calienta" la conexión para no medir el handshake. */
+/* Uploads a ~2.5 MB blob to an endpoint that discards it and measures Mbps.
+   A small POST first "warms up" the connection so the handshake isn't measured. */
 async function measureUploadMbps(token) {
   var qs = token ? ("?token=" + encodeURIComponent(token)) : "";
   function randomBlob(bytes) {
@@ -578,9 +578,9 @@ async function measureUploadMbps(token) {
   }
 }
 
-/* Prueba del equipo: graba ~3 s a 1080p con MediaRecorder desde el track de
-   cámara y mide los fps reales que llegan (requestVideoFrameCallback) — si el
-   equipo no aguanta capturar + codificar 1080p, los fps caen. */
+/* Device test: records ~3 s at 1080p with MediaRecorder from the camera
+   track and measures the real fps arriving (requestVideoFrameCallback) — if the
+   device can't keep up capturing + encoding 1080p, fps drop. */
 async function measureDevice1080(videoTrack) {
   var out = { ok1080: false, fluid: true, fps: 0 };
   if (!videoTrack) return out;
@@ -621,8 +621,8 @@ async function measureDevice1080(videoTrack) {
   return out;
 }
 
-/* Corre la prueba completa (~5 s: subida y equipo en paralelo) sobre el
-   stream de la vista previa. Devuelve { profileId, upMbps, device }. */
+/* Runs the full test (~5 s: upload and device in parallel) on the
+   preview stream. Returns { profileId, upMbps, device }. */
 async function runRecordingPreflight(previewStream, token, opts) {
   opts = opts || {};
   var videoTrack = previewStream ? previewStream.getVideoTracks()[0] : null;
@@ -632,15 +632,15 @@ async function runRecordingPreflight(previewStream, token, opts) {
   ]);
   var upMbps = results[0];
   var device = results[1];
-  // La llamada también sube video a la sala (~1.7 Mbps + capas de simulcast):
-  // esa parte de la subida no queda para la grabación.
+  // The call also uploads video to the room (~1.7 Mbps + simulcast layers):
+  // that part of the upload isn't available for the recording.
   var ROOM_UPLOAD_MBPS = 2.5;
-  // Sin medida de subida (endpoint caído): decidir solo por el equipo.
+  // No upload measurement (endpoint down): decide by the device only.
   var effectiveUp = (upMbps == null) ? 4 : Math.max(0, upMbps - ROOM_UPLOAD_MBPS);
   if (opts.guest) {
-    // Invitados: margen (la grabación usa como mucho ~65% de lo que queda
-    // libre, la conexión de un invitado varía más) y tope de 720p, para
-    // que su subida vaya al día y pueda irse apenas termina la sesión.
+    // Guests: margin (the recording uses at most ~65% of what's left
+    // free, a guest's connection varies more) and a 720p cap, so
+    // their upload keeps up and they can leave as soon as the session ends.
     effectiveUp = effectiveUp * 0.65;
   }
   var profileId = decideRecProfile(effectiveUp, device);
@@ -649,9 +649,9 @@ async function runRecordingPreflight(previewStream, token, opts) {
   return { profileId: profileId, upMbps: upMbps, device: device };
 }
 
-/* --- Cola de chunks persistida en IndexedDB -------------------------------
-   Si la pestaña se cierra a mitad de la subida, los chunks pendientes quedan
-   guardados y se recuperan al volver a entrar a la sesión. */
+/* --- Chunk queue persisted in IndexedDB -----------------------------------
+   If the tab is closed mid-upload, the pending chunks stay
+   stored and are recovered when re-entering the session. */
 var _recIdbPromise = null;
 function _recIdb() {
   if (_recIdbPromise) return _recIdbPromise;
@@ -710,13 +710,13 @@ function _idbDelete(ids) {
   });
 }
 
-/* --- Uploader compartido (host e invitado) --------------------------------
-   - manda cada lote con su offset absoluto (reintento seguro, sin duplicar)
-   - si la cola crece (red lenta), sube MÁS LENTO durante la llamada para no
-     pelearle ancho de banda a la sala, y termina de subir al final
-   - guarda lo pendiente en IndexedDB por si se cierra la pestaña */
-/* Respaldo grabado por el servidor: cada participante lo pide para sí al
-   empezar a grabar. Si el servidor no lo tiene encendido, no pasa nada. */
+/* --- Shared uploader (host and guest) -------------------------------------
+   - sends each batch with its absolute offset (safe retry, no duplicates)
+   - if the queue grows (slow network), uploads SLOWER during the call so it
+     doesn't fight the room for bandwidth, and finishes uploading at the end
+   - stores what's pending in IndexedDB in case the tab is closed */
+/* Server-recorded backup: each participant requests it for themselves when
+   recording starts. If the server doesn't have it enabled, nothing happens. */
 function _requestServerBackup(sid, token) {
   var qs = token ? ("?token=" + encodeURIComponent(token)) : "";
   fetch("/api/sessions/" + sid + "/backup/start" + qs, {
@@ -725,7 +725,7 @@ function _requestServerBackup(sid, token) {
   }).catch(function () {});
 }
 
-/* "unos 12 minutos", "menos de un minuto"… para los avisos de subida. */
+/* "unos 12 minutos", "menos de un minuto"… for the upload notices. */
 function etaText(secs) {
   if (secs == null) return "";
   if (secs < 60) return "menos de un minuto";
@@ -741,9 +741,9 @@ function _newTakeId() {
 }
 
 /* ==========================================================================
-   Cintillos del director (mismo contrato que la app de Mac)
+   Director lower thirds (same contract as the Mac app)
    overlay_inject: {type, event_type, payload, event_id, file_path,
-   duration_seconds} — duration 0 = hasta overlay_remove.
+   duration_seconds} — duration 0 = until overlay_remove.
    ========================================================================== */
 
 var CINTILLO_TYPES = ["sponsor", "banner", "segment"];
@@ -774,10 +774,10 @@ function _dropOverlay(activeOverlays, eventId) {
   }
 }
 
-/* Alta de un overlay: respeta duration_seconds si viene (0 = hasta que lo
-   quiten); si no viene, la tabla histórica. El countdown cuenta de verdad. */
+/* Adds an overlay: honors duration_seconds if present (0 = until it's
+   removed); if absent, the historical table. The countdown really counts down. */
 function _admitOverlay(activeOverlays, msg) {
-  _dropOverlay(activeOverlays, msg.event_id);  // por si llega repetido
+  _dropOverlay(activeOverlays, msg.event_id);  // in case it arrives twice
   activeOverlays.push({
     event_id: msg.event_id,
     event_type: msg.event_type,
@@ -785,7 +785,7 @@ function _admitOverlay(activeOverlays, msg) {
     file_path: msg.file_path || null,
     remaining: null,
   });
-  var ov = activeOverlays[activeOverlays.length - 1];  // proxy reactivo
+  var ov = activeOverlays[activeOverlays.length - 1];  // reactive proxy
   if (msg.event_type === "countdown") {
     var secs = Math.max(0, +((msg.payload || {}).seconds) || 0);
     var endsAt = Date.now() + secs * 1000;
@@ -810,14 +810,14 @@ function _admitOverlay(activeOverlays, msg) {
 
 
 /* ==========================================================================
-   Teleprompter (thePod 0.11) — mismo contrato que la app de Mac.
-   Mensaje de sala: {type:"teleprompter", action:"show"|"hide", target:"all"|identity,
-   title, text, speed: slow|normal|fast, size: quarter|half|full, countdown: seg, event_id}
-   Con countdown > 0 TODOS ven el aviso ("Viene X en 3 s · ATENTO PATRICIO") y, al terminar,
-   solo el destinatario ve el texto corriendo.
-   Quien lee avisa cuando el texto terminó de correr (pausas incluidas) o lo cerró:
-   {type:"teleprompter_done", event_id}. El host lo usa para soltar el siguiente encadenado.
-   Es otro "type" para que las versiones viejas lo ignoren.
+   Teleprompter (thePod 0.11) — same contract as the Mac app.
+   Room message: {type:"teleprompter", action:"show"|"hide", target:"all"|identity,
+   title, text, speed: slow|normal|fast, size: quarter|half|full, countdown: sec, event_id}
+   With countdown > 0 EVERYONE sees the notice ("Viene X en 3 s · ATENTO PATRICIO") and, when it ends,
+   only the target sees the scrolling text.
+   The reader reports when the text finished scrolling (pauses included) or was closed:
+   {type:"teleprompter_done", event_id}. The host uses it to release the next chained one.
+   It's a different "type" so old versions ignore it.
    ========================================================================== */
 
 var TP_WPM = { slow: 95, normal: 135, fast: 180 };
@@ -837,7 +837,7 @@ function _tpSetup(myIdentity, nameOf, opts) {
     _reported[id] = true;
     var m = { type: "teleprompter_done", event_id: id };
     if (opts.send) opts.send(m);
-    if (opts.onDone) opts.onDone(id);     // por si quien lee es el mismo host
+    if (opts.onDone) opts.onDone(id);     // in case the reader is the host themselves
   }
 
   function _durationMs(text, speed) {
@@ -852,7 +852,7 @@ function _tpSetup(myIdentity, nameOf, opts) {
       paused: false, durationMs: _durationMs(msg.text, msg.speed || "normal"),
     };
     tp.scrollKey++;
-    // Mide lo que de verdad corrió el texto (sin las pausas) para avisar cuando termina
+    // Measures how long the text actually scrolled (excluding pauses) to report when it ends
     clearInterval(_doneTick);
     _elapsed = 0; _last = Date.now();
     var id = msg.event_id;
@@ -863,7 +863,7 @@ function _tpSetup(myIdentity, nameOf, opts) {
       _last = now;
       if (_elapsed >= tp.active.durationMs) { clearInterval(_doneTick); _reportDone(id); }
     }, 250);
-    // Se va solo cuando termina de correr (más 4 s de margen), salvo que lo cierren antes
+    // Goes away on its own when it finishes scrolling (plus 4 s margin), unless closed earlier
     _hideTimer = setTimeout(function () { if (tp.active && tp.active.event_id === msg.event_id) tp.active = null; }, tp.active.durationMs + 4000);
   }
   function handle(msg) {
@@ -901,7 +901,7 @@ function _tpSetup(myIdentity, nameOf, opts) {
   return { tp: tp, tpHandle: handle, tpPause: pause, tpRestart: restart, tpClose: close };
 }
 
-/* Capa visual (igual en host e invitado). Va dentro del contenedor del video. */
+/* Visual layer (same for host and guest). Goes inside the video container. */
 var TP_TEMPLATE = `
       <div v-if="tp.notice" class="tp-notice">
         <div class="tp-notice-num">{{ tp.notice.remaining }}</div>
@@ -925,8 +925,8 @@ function createChunkUploader(opts) {
   // opts: { sid, token, trackType, takeId, onStatus(st), sendData(state, bytes) }
   var skey = "s" + opts.sid + ":" + (opts.token || "host") + ":" + (opts.trackType || "video");
   var queue = [];          // [{ idbId, offset, blob }]
-  var nextOffset = 0;      // bytes generados localmente
-  var ackedBytes = 0;      // bytes confirmados por el servidor
+  var nextOffset = 0;      // bytes generated locally
+  var ackedBytes = 0;      // bytes confirmed by the server
   var pendingBytes = 0;
   var ext = ".webm";
   var timer = null;
@@ -935,15 +935,15 @@ function createChunkUploader(opts) {
   var retries = 0;
   var state = { state: "idle", sentBytes: 0, pendingBytes: 0, retries: 0, error: "" };
   var BACKLOG_CATCHUP = 16 * 1024 * 1024;
-  // Ritmo de producción del video (bytes/s), medido sobre lo que entrega el
-  // MediaRecorder. La subida en vivo se fija como múltiplo de este ritmo.
+  // Video production rate (bytes/s), measured on what the
+  // MediaRecorder delivers. The live upload is set as a multiple of this rate.
   var producedBytes = 0;
   var producedSince = 0;
-  var PROD_RATE_DEFAULT = 0.6 * 1024 * 1024;   // hasta tener medida real
+  var PROD_RATE_DEFAULT = 0.6 * 1024 * 1024;   // until there's a real measurement
   var MIN_UPLOAD_RATE = 256 * 1024;
   var MAX_BATCH = 8 * 1024 * 1024;
 
-  // Velocidad real de subida (últimos ~30 s) para estimar cuánto falta.
+  // Real upload speed (last ~30 s) to estimate how much is left.
   var ackLog = [];   // [{t, bytes}]
   function _uploadRate() {
     var now = Date.now();
@@ -999,8 +999,8 @@ function createChunkUploader(opts) {
     var data = null;
     try { data = await resp.json(); } catch (_) {}
     if (resp.status === 409 && data) {
-      // El servidor tiene menos bytes de los que ya dimos por confirmados:
-      // reencolar desde bytes_received lo que todavía tengamos.
+      // The server has fewer bytes than we already counted as confirmed:
+      // re-queue from bytes_received whatever we still have.
       var br = data.bytes_received || 0;
       if (br < (entries.length ? entries[0].offset : ackedBytes)) {
         throw new Error("el servidor perdió parte de la grabación ya subida");
@@ -1040,8 +1040,8 @@ function createChunkUploader(opts) {
       var batch = _takeBatch(capBytes);
       var data = await _postBatch(batch, false);
       if (data.resync != null) {
-        // el servidor va atrás dentro de este mismo lote: reintenta entero
-        // (el server trunca al offset y reescribe — sin duplicados)
+        // the server is behind within this same batch: retry it whole
+        // (the server truncates to the offset and rewrites — no duplicates)
         retries++;
         return false;
       }
@@ -1065,10 +1065,10 @@ function createChunkUploader(opts) {
     emit();
     if (timer) clearInterval(timer);
     timer = setInterval(function () {
-      // La subida en vivo va SIEMPRE por encima del ritmo al que se produce
-      // el video (×1.5; ×3 si hay atraso para ponerse al día), así la cola
-      // no crece sin límite. El tope solo existe para no acaparar toda la
-      // conexión que necesita la llamada; si la red da menos, va a lo que dé.
+      // The live upload ALWAYS runs above the rate at which the video is
+      // produced (×1.5; ×3 if behind, to catch up), so the queue
+      // doesn't grow without bound. The cap only exists to avoid hogging all the
+      // bandwidth the call needs; if the network gives less, it goes as fast as it can.
       if (uploading || !queue.length) return;
       var now = Date.now();
       if (now < nextFlushAt) return;
@@ -1127,8 +1127,8 @@ function createChunkUploader(opts) {
     return true;
   }
 
-  /* Reconstruye la cola desde registros de IndexedDB (recuperación tras un
-     cierre de pestaña), conservando los offsets absolutos originales. */
+  /* Rebuilds the queue from IndexedDB records (recovery after a
+     tab close), keeping the original absolute offsets. */
   function seed(rows) {
     rows.forEach(function (r) {
       queue.push({ idbId: r.id, offset: r.offset, blob: r.blob });
@@ -1147,16 +1147,16 @@ function createChunkUploader(opts) {
            seed: seed, status: state, skey: skey };
 }
 
-/* Al entrar a una sesión: si quedaron chunks de una grabación interrumpida
-   (pestaña cerrada a mitad de subida), termina de subirlos y finaliza esa
-   grabación para que no se pierda. */
+/* On entering a session: if chunks were left from an interrupted recording
+   (tab closed mid-upload), finishes uploading them and finalizes that
+   recording so it isn't lost. */
 async function recoverPendingUpload(sid, token, trackType) {
   var skey = "s" + sid + ":" + (token || "host") + ":" + (trackType || "video");
   var rows = await _idbAllFor(skey);
   if (!rows.length) return false;
   rows.sort(function (a, b) { return a.offset - b.offset; });
-  // La toma interrumpida conserva su take_id: los offsets se corresponden
-  // con SU archivo de streaming en el servidor, no con el de otra toma.
+  // The interrupted take keeps its take_id: the offsets correspond
+  // to ITS streaming file on the server, not another take's.
   var up = createChunkUploader({ sid: sid, token: token, trackType: trackType,
                                  takeId: rows[0].take || null });
   up.seed(rows);
@@ -1182,7 +1182,7 @@ var StudioView = {
 
     var room = null;
     var localVideoEl = ref(null);
-    var _rawMicTrack = null;      // micrófono sin procesar (para grabar)
+    var _rawMicTrack = null;      // unprocessed microphone (for recording)
     var localStream = null;
 
     // ---- Pre-join state: device picker + camera/mic preview ----
@@ -1360,8 +1360,8 @@ var StudioView = {
       // "OverconstrainedError"), retry with browser-default devices and
       // forget the stale selection.
       async function _grab(useStored) {
-        // Se pide 1080p30 "ideal": si la cámara no llega, el navegador da lo
-        // máximo que tenga. Esta captura es la que evalúa la prueba de calidad.
+        // 1080p30 is requested as "ideal": if the camera can't reach it, the browser gives
+        // the most it has. This capture is what the quality test evaluates.
         var video = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
         if (useStored && deviceSelection.cameraId) video.deviceId = { exact: deviceSelection.cameraId };
         var constraints = {
@@ -1398,7 +1398,7 @@ var StudioView = {
         }
         // After permission granted the device labels become populated.
         await listDevices();
-        // Prueba de calidad de grabación (~5 s), en paralelo a la vista previa.
+        // Recording quality test (~5 s), in parallel with the preview.
         if (recPreflight.state === "idle") runRecPreflight();
       } catch (e) {
         prejoinError.value = "Cámara/mic no accesibles: " + e.message;
@@ -1435,9 +1435,9 @@ var StudioView = {
     var spotlightId = ref(null);    // identity of the spotlighted participant (or "__local__")
 
 
-    // Al detener: cuenta regresiva grande (3, 2, 1) antes de apagar cámara y
-    // micrófono, en vez de cortarlos de golpe. La grabación ya se detuvo en
-    // el instante exacto del "detener"; esto es solo la transición visual.
+    // On stop: big countdown (3, 2, 1) before turning off camera and
+    // microphone, instead of cutting them abruptly. Recording already stopped at
+    // the exact moment of "stop"; this is only the visual transition.
     var endCountdown = ref(null);
     var camsOffAfterRec = ref(false);
     function startEndCountdown() {
@@ -1484,8 +1484,8 @@ var StudioView = {
     var screenRecordOnly = ref(false);  // I am sharing but NOT publishing to LiveKit
     var screenStream = null;            // local MediaStream from getDisplayMedia
     var screenRecorder = null;          // MediaRecorder for the screen
-    var _screenUploader = null;         // subida por chunks de la pantalla
-    var _screenStartMs = null;          // inicio del share, para duration_seconds
+    var _screenUploader = null;         // chunked upload of the screen
+    var _screenStartMs = null;          // share start, for duration_seconds
     var screenPub = null;               // LiveKit screen track publication
     var remoteScreen = ref(null);       // {identity, name} of the participant currently sharing
     // Soundboard triggers are logged with their offset from record-start
@@ -1498,15 +1498,15 @@ var StudioView = {
       sendData({ type: "practice_mode", active: v });
     });
     var handsRaised = reactive({});  // identity -> bool (from hand_raise data msgs)
-    // ---- Calidad de GRABACIÓN: la decide la prueba de la pantalla previa.
-    // La calidad de la SALA es independiente (≤720p con simulcast, LiveKit
-    // adapta lo que recibe cada uno).
+    // ---- RECORDING quality: decided by the pre-join screen test.
+    // ROOM quality is independent (≤720p with simulcast, LiveKit
+    // adapts what each one receives).
     var recPreflight = reactive({
       state: "idle",     // idle | testing | done
       upMbps: null,
       fps: 0,
-      profileId: null,   // techo que dio la prueba
-      choiceId: null,    // elección final (nunca por encima del techo)
+      profileId: null,   // ceiling given by the test
+      choiceId: null,    // final choice (never above the ceiling)
     });
     var recProfileChoices = computed(function () {
       if (!recPreflight.profileId) return REC_PROFILES.filter(function (p) { return !PLAN.maxHeight || p.height <= PLAN.maxHeight; });
@@ -1546,14 +1546,14 @@ var StudioView = {
       } catch (_) {}
     }
     function _roomPublishLayers() {
-      // Capas bajas del simulcast; la capa alta es el track publicado (≤720p).
+      // Low simulcast layers; the high layer is the published track (≤720p).
       return [
         { width: 320, height: 180, encoding: { maxBitrate: 200000, maxFramerate: 15 } },
         { width: 640, height: 360, encoding: { maxBitrate: 500000, maxFramerate: 24 } },
       ];
     }
     var myIdentity = ref("");
-    // Teleprompter: quién es quién (identity → nombre) para los avisos
+    // Teleprompter: who is who (identity → name) for the notices
     function _tpNameOf(identity) {
       if (identity === myIdentity.value) return props.user.display_name || props.user.username;
       var r = remoteMap[identity]; if (r && r.name) return r.name;
@@ -1561,7 +1561,7 @@ var StudioView = {
       return p ? p.display_name : "";
     }
     var _tpH = _tpSetup(myIdentity, _tpNameOf, { send: function (m) { sendData(m); }, onDone: _tpOnDone });
-    // Teleprompter del guion (prePod): el host lo dispara a quien le toca cuando la grabación llega al minuto
+    // Script teleprompter (prePod): the host fires it at whoever it belongs to when the recording reaches the minute
     var _tpScript = [];
     var _tpFired = {};
     async function loadTeleprompterScript() {
@@ -1576,7 +1576,7 @@ var StudioView = {
     function _tpIdentityFor(speaker) {
       var sp = (speaker || "").trim().toLowerCase();
       if (!sp) return "all";
-      // 1) usuario o nombre exacto (lo que elige prePod en «lo lee»); 2) parecido por nombre
+      // 1) exact username or name (what prePod picks in «lo lee»); 2) name similarity
       var exact = _tpPeople.find(function (p) {
         return (p.username || "").toLowerCase() === sp || (p.display_name || "").toLowerCase() === sp;
       });
@@ -1602,14 +1602,14 @@ var StudioView = {
         var prev = i > 0 ? _tpScript[i - 1] : null;
         var countdown = 3;
         if (sec.after_prev && prev && _tpFired[prev.id] != null) {
-          // «Después del anterior»: sale cuando el anterior terminó de verdad (avisa quien lo lee).
-          // Si nadie avisa (versión vieja, se cayó), sale 15 s después de lo calculado.
+          // «Después del anterior»: fires when the previous one really finished (the reader reports it).
+          // If nobody reports (old version, dropped), it fires 15 s after the computed time.
           var run = Math.max(0, (+prev.ends_seconds || 0) - (+prev.offset_seconds || 0));
           var fallback = _tpFired[prev.id] + 3 + run + 15;
           if (!_tpDone[prev.id] && now < fallback) return;
           countdown = Math.max(3, Math.round(+sec.gap_seconds || 0));
         } else {
-          var at = +sec.offset_seconds - 3;   // 3 s de aviso antes
+          var at = +sec.offset_seconds - 3;   // 3 s of notice beforehand
           if (now < at || now > at + 2) return;
         }
         _tpFired[sec.id] = now;
@@ -1617,7 +1617,7 @@ var StudioView = {
                     title: "Guion · " + (sec.speaker || ""), text: sec.content || "", speed: sec.speed || "normal",
                     size: sec.size || "half", countdown: countdown };
         sendData(msg);
-        _tpH.tpHandle(msg);   // también para mí (el host)
+        _tpH.tpHandle(msg);   // for me too (the host)
       });
     }
     var _tpInterval = null;
@@ -1663,7 +1663,7 @@ var StudioView = {
     var newSound = reactive({ name: "", shortcut_key: "", color: "#5a8bff" });
 
     var chat = ref([]);
-    // En teléfono/tablet el panel lateral se abre por pestañas: chat, personas, sponsors
+    // On phone/tablet the side panel opens by tabs: chat, people, sponsors
     var sideTab = ref(null);
     var chatSeenH = ref(0);
     var chatUnreadH = computed(function () { return sideTab.value === "chat" ? 0 : Math.max(0, chat.value.length - chatSeenH.value); });
@@ -1999,7 +1999,7 @@ var StudioView = {
       streams.value.forEach(function (x) { before[x.id] = x.status; });
       try { streams.value = await api("/api/sessions/" + props.session.id + "/streams"); }
       catch (_) { return; }
-      // Si una transmisión que estaba en vivo se cortó o la plataforma la rechazó, se avisa.
+      // If a stream that was live dropped or the platform rejected it, notify.
       streams.value.forEach(function (x) {
         if (x.status === "failed" && (before[x.id] === "active" || before[x.id] === "starting")) {
           streamStatus.value = "❌ " + (x.error || "La transmisión se cortó.");
@@ -2007,7 +2007,7 @@ var StudioView = {
         }
       });
     }
-    // Mientras hay una transmisión en vivo, se revisa cada 10 s que siga saliendo.
+    // While a stream is live, check every 10 s that it keeps going out.
     var streamWatch = setInterval(function () {
       if (streams.value.some(function (x) { return x.status === "active" || x.status === "starting"; })) loadStreams();
     }, 10000);
@@ -2230,9 +2230,9 @@ var StudioView = {
         }
       }
 
-      // Local MediaRecorder for the upload to postPod. La pantalla sube por
-      // /recordings/stream con offset (igual que la cámara): si la conexión
-      // se corta no se pierde. En ensayo se graba y descarta, sin subir.
+      // Local MediaRecorder for the upload to postPod. The screen uploads via
+      // /recordings/stream with offset (same as the camera): if the connection
+      // drops nothing is lost. In rehearsal it records and discards, without uploading.
       try {
         _screenStartMs = Date.now();
         if (practiceMode.value) {
@@ -2354,7 +2354,7 @@ var StudioView = {
         readyMap[msg.identity] = !!msg.ready;
         if (props.user.username === props.session.created_by && !_hasDirector()) maybeFireCountdown();
       } else if (msg.type === "ready_request") {
-        // Alguien (p. ej. un director recién conectado) pide los estados.
+        // Someone (e.g. a newly connected director) asks for the states.
         sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
       } else if (msg.type === "countdown_start") {
         beginCountdown(msg.start_at_ms);
@@ -2415,8 +2415,8 @@ var StudioView = {
 
     function triggerSound(s, ev) {
       playLocalSound(s);
-      // Alt+click = "cue" — sólo se escucha en tus auriculares, no se
-      // transmite al room ni se loggea como trigger.
+      // Alt+click = "cue" — only heard in your headphones, not
+      // transmitted to the room nor logged as a trigger.
       var isCue = ev && (ev.altKey || ev.metaKey);
       if (isCue) return;
       if (recording.value && recordingStartedAtMs != null && s.filename) {
@@ -2509,8 +2509,8 @@ var StudioView = {
         var newRoom = new LK.Room({
           adaptiveStream: true,
           dynacast: true,
-          // La cámara se captura a la resolución de GRABACIÓN (hasta 1080p);
-          // a la sala se publica un clon reducido a ≤720p (ver más abajo).
+          // The camera is captured at RECORDING resolution (up to 1080p);
+          // a clone reduced to ≤720p is published to the room (see below).
           videoCaptureDefaults: { resolution: _recCaptureOpts() },
           publishDefaults: {
             simulcast: true,
@@ -2525,7 +2525,7 @@ var StudioView = {
           if (p.identity && p.identity.startsWith("director_")) {
             directorConnected.value = true;
             if (window.toast) window.toast({ type: "info", text: "Director conectado" });
-            // El director entró tarde: reenviarle mi estado de PREPARADO.
+            // The director joined late: resend my PREPARADO state to them.
             sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
           } else {
             if (window.toast) window.toast({ type: "info", text: name + " entró al estudio" });
@@ -2641,9 +2641,9 @@ var StudioView = {
         var micPub = await newRoom.localParticipant.setMicrophoneEnabled(true, micOpts);
         var camPub = await newRoom.localParticipant.setCameraEnabled(true, camOpts);
 
-        // Separar grabación y sala: la captura quedó a la resolución de
-        // grabación (hasta 1080p). Guardamos ese track completo para el
-        // MediaRecorder y a la sala le mandamos un clon reducido a ≤720p.
+        // Split recording and room: the capture stayed at recording
+        // resolution (up to 1080p). We keep that full track for the
+        // MediaRecorder and send the room a clone reduced to ≤720p.
         _fullResCamTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
         if (_fullResCamTrack) {
           var camSet = _fullResCamTrack.getSettings ? _fullResCamTrack.getSettings() : {};
@@ -2654,8 +2654,8 @@ var StudioView = {
               await camPub.track.replaceTrack(roomTrack, true);
               _roomCamTrack = roomTrack;
             } catch (_) {
-              // Si el navegador no reduce el clon, la sala recibe la captura
-              // completa con el bitrate capado — la grabación no cambia.
+              // If the browser doesn't downscale the clone, the room gets the full
+              // capture with a capped bitrate — the recording doesn't change.
             }
           }
         }
@@ -2666,7 +2666,7 @@ var StudioView = {
         // re-negotiation. Skip for ≈0 dB to avoid the extra graph.
         var savedMicGainDb = _readMicGainFor(deviceSelection.micId);
         var rawMicTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
-        _rawMicTrack = rawMicTrack;   // la grabación usa este (sin puerta ni ganancia); la sala recibe el procesado
+        _rawMicTrack = rawMicTrack;   // the recording uses this one (no gate or gain); the room gets the processed one
         if (rawMicTrack) {
           try {
             micGainCtx = _micChain(rawMicTrack, savedMicGainDb, gateOn.value);
@@ -2678,8 +2678,8 @@ var StudioView = {
           }
         }
 
-        // Para la grabación usamos el track de captura COMPLETO (no el clon
-        // reducido que ve la sala) y el micrófono SIN la puerta (postPod la aplica mejor después).
+        // For the recording we use the FULL capture track (not the reduced
+        // clone the room sees) and the microphone WITHOUT the gate (postPod applies it better later).
         var camTrack = _fullResCamTrack;
         var micTrack = rawMicTrack;
         if (camTrack && micTrack) localStream = new MediaStream([camTrack, micTrack]);
@@ -2702,7 +2702,7 @@ var StudioView = {
 
         await loadParticipants();
         await loadChat();
-        persistRecQuality();  // guarda la calidad de grabación para el director
+        persistRecQuality();  // stores the recording quality for the director
 
         // Mount tracks from participants already in the room
         function mountExistingRemotes() {
@@ -2732,8 +2732,8 @@ var StudioView = {
     async function disconnect() {
       // Full state cleanup so a stale session never survives into a new one.
       stopLocalRecorders();
-      // Tracks propios de la separación grabación/sala: LiveKit no los
-      // conoce como suyos, así que los soltamos nosotros.
+      // Our own tracks from the recording/room split: LiveKit doesn't
+      // know them as its own, so we release them ourselves.
       if (_roomCamTrack) { try { _roomCamTrack.stop(); } catch (_) {} _roomCamTrack = null; }
       if (_fullResCamTrack) { try { _fullResCamTrack.stop(); } catch (_) {} _fullResCamTrack = null; }
       // Screen share: stop recorder + unpublish + release stream.
@@ -2790,7 +2790,7 @@ var StudioView = {
       var next = !localMuted.value;
       await room.localParticipant.setMicrophoneEnabled(!next);
       localMuted.value = next;
-      // La grabación usa el micrófono crudo: silenciarlo también ahí (si no, se grabaría la tos que quisiste tapar)
+      // The recording uses the raw microphone: mute it there too (otherwise it would record the cough you meant to hide)
       if (_hostRecStream) _hostRecStream.getAudioTracks().forEach(function (t) { t.enabled = !next; });
     }
     async function toggleCam() {
@@ -2803,8 +2803,8 @@ var StudioView = {
     /* ---------- recording (ready + countdown + sync start) ---------- */
 
     function _hasDirector() {
-      // Director "presente" = conectado AHORA a la sala de LiveKit, no
-      // apenas registrado con ese rol (pudo entrar una vez e irse).
+      // Director "present" = connected to the LiveKit room NOW, not
+      // merely registered with that role (they may have joined once and left).
       if (!room) return false;
       var found = false;
       room.remoteParticipants.forEach(function (p) {
@@ -2867,7 +2867,7 @@ var StudioView = {
       if (!practiceMode.value && props.user.username === props.session.created_by) {
         try { await api("/api/sessions/" + props.session.id + "/start", { method: "POST" }); }
         catch (e) {
-          // Plan Gratis sin episodios: no se graba (y se avisa a los demás para que tampoco)
+          // Gratis plan with no episodes left: don't record (and tell the others so they don't either)
           if (e && e.data && e.data.code === "plan_limit") {
             sendData({ type: "recording_stop" });
             error.value = e.message;
@@ -2885,7 +2885,7 @@ var StudioView = {
       if (timerHandle) clearInterval(timerHandle);
       timerHandle = setInterval(function () {
         timecode.value = (Date.now() - recordingStart.value) / 1000;
-        // Plan Gratis: aviso un minuto antes y corte a los 15 minutos (lo detiene quien creó la sala)
+        // Gratis plan: warning one minute before and cut at 15 minutes (stopped by whoever created the room)
         if (PLAN.maxSeconds && !practiceMode.value) {
           if (!planWarned && timecode.value >= PLAN.maxSeconds - 60) {
             planWarned = true;
@@ -2910,8 +2910,8 @@ var StudioView = {
     }
 
     var _hostRecStream = null;
-    var _fullResCamTrack = null;   // captura completa (hasta 1080p) — para grabar
-    var _roomCamTrack = null;      // clon reducido ≤720p — lo que ve la sala
+    var _fullResCamTrack = null;   // full capture (up to 1080p) — for recording
+    var _roomCamTrack = null;      // reduced clone ≤720p — what the room sees
 
     var _hostUploader = null;
     var hostUploadStatus = reactive({ state: "idle", sizeMB: "", error: "" });
@@ -2924,11 +2924,11 @@ var StudioView = {
       if (room) {
         var camPub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera);
         var micPub = room.localParticipant.getTrackPublication(LK.Track.Source.Microphone);
-        // Grabar SIEMPRE desde la captura completa, no desde el clon de la sala.
+        // ALWAYS record from the full capture, not from the room clone.
         var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
           ? _fullResCamTrack
           : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
-        // Micrófono crudo: tras replaceTrack, micPub.track.mediaStreamTrack es el de la sala (con auto-silencio).
+        // Raw microphone: after replaceTrack, micPub.track.mediaStreamTrack is the room one (with auto-mute).
         var micTrack = (_rawMicTrack && _rawMicTrack.readyState === "live")
           ? _rawMicTrack
           : (micPub && micPub.track ? micPub.track.mediaStreamTrack : null);
@@ -2944,8 +2944,8 @@ var StudioView = {
         }
       }
       if (!recorder && localStream) {
-        // ENSAYO: se graba local para probar el flujo, pero los chunks se
-        // descartan — nada llega al servidor.
+        // REHEARSAL: records locally to test the flow, but the chunks are
+        // discarded — nothing reaches the server.
         if (practiceMode.value) {
           _hostUploader = null;
           recorder = _startRecorder(localStream, function () {}, 1000, false, null,
@@ -3028,7 +3028,7 @@ var StudioView = {
       if (!triggerLog.length) return;
       var batch = triggerLog.slice();
       triggerLog = [];
-      if (practiceMode.value) return;  // ensayo: no subir
+      if (practiceMode.value) return;  // rehearsal: don't upload
       try {
         await api("/api/sessions/" + props.session.id + "/sound-triggers", {
           method: "POST", body: { triggers: batch },
@@ -3047,7 +3047,7 @@ var StudioView = {
     async function stopRecording() {
       if (!recording.value) return;
       try {
-        // En ensayo NO se llama /stop: la sesión no debe quedar 'finished'.
+        // In rehearsal /stop is NOT called: the session must not end up 'finished'.
         if (!practiceMode.value && props.user.username === props.session.created_by) {
           try { await api("/api/sessions/" + props.session.id + "/stop", { method: "POST" }); } catch (_) {}
         }
@@ -3150,8 +3150,8 @@ var StudioView = {
       listDevices();
       startPrejoinPreview();
       window.addEventListener("keydown", onKey);
-      // Si quedó una subida a medias de una visita anterior (pestaña cerrada
-      // durante la grabación), termina de subirla ahora.
+      // If an upload was left half-done from a previous visit (tab closed
+      // during recording), finish uploading it now.
       recoverPendingUpload(props.session.id, null, "video").then(function (ok) {
         if (ok && window.toast) window.toast({ type: "success", text: "Se recuperó y subió una grabación pendiente" });
       });
@@ -4098,7 +4098,7 @@ var GuestStudioView = {
   setup: function (props) {
     var localVideoEl = ref(null);
 
-    // ---- Prueba de calidad de grabación en la pantalla previa ----
+    // ---- Recording quality test on the pre-join screen ----
     var preflightVideoEl = ref(null);
     var _preflightStream = null;
     var _preflightMeterStop = null;
@@ -4161,7 +4161,7 @@ var GuestStudioView = {
     var localMuted = ref(false);
     var gateOn = ref(_gatePref());
     function toggleGate() { gateOn.value = !gateOn.value; _setGatePref(gateOn.value); if (micGainCtx && micGainCtx.setGate) micGainCtx.setGate(gateOn.value); }
-    var micGainCtx = null;  // cadena de micrófono (ganancia + puerta) publicada a la sala
+    var micGainCtx = null;  // microphone chain (gain + gate) published to the room
     var localCamOff = ref(false);
     var remoteMap = reactive({});
     var localMeter = ref(0);
@@ -4192,7 +4192,7 @@ var GuestStudioView = {
     var left = ref(false);
     var awayWhileRecording = ref(false);
 
-    // Pantalla encendida mientras estás en la sala: si el teléfono se bloquea, Safari corta la cámara y la grabación.
+    // Screen kept on while you're in the room: if the phone locks, Safari cuts the camera and the recording.
     var _wakeLock = null;
     async function keepAwake() {
       try {
@@ -4241,9 +4241,9 @@ var GuestStudioView = {
     var countdownHandle = null;
 
 
-    // Al detener: cuenta regresiva grande (3, 2, 1) antes de apagar cámara y
-    // micrófono, en vez de cortarlos de golpe. La grabación ya se detuvo en
-    // el instante exacto del "detener"; esto es solo la transición visual.
+    // On stop: big countdown (3, 2, 1) before turning off camera and
+    // microphone, instead of cutting them abruptly. Recording already stopped at
+    // the exact moment of "stop"; this is only the visual transition.
     var endCountdown = ref(null);
     var camsOffAfterRec = ref(false);
     function startEndCountdown() {
@@ -4412,15 +4412,15 @@ var GuestStudioView = {
     }
 
     var _recStream = null;
-    var _rawMicTrack = null;       // micrófono sin auto-silencio — para grabar
-    var _fullResCamTrack = null;   // captura completa (hasta 1080p) — para grabar
-    var _roomCamTrack = null;      // clon reducido ≤720p — lo que ve la sala
+    var _rawMicTrack = null;       // microphone without auto-mute — for recording
+    var _fullResCamTrack = null;   // full capture (up to 1080p) — for recording
+    var _roomCamTrack = null;      // reduced clone ≤720p — what the room sees
 
     function _buildRecordingStream() {
       var tracks = [];
       var camPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Camera) || _savedCamPub;
       var micPub = room && room.localParticipant.getTrackPublication(LK.Track.Source.Microphone) || _savedMicPub;
-      // Grabar SIEMPRE desde la captura completa, no desde el clon de la sala.
+      // ALWAYS record from the full capture, not from the room clone.
       var camTrack = (_fullResCamTrack && _fullResCamTrack.readyState === "live")
         ? _fullResCamTrack
         : (camPub && camPub.track ? camPub.track.mediaStreamTrack : null);
@@ -4451,8 +4451,8 @@ var GuestStudioView = {
         recordingCaps.hasMic = hasMic;
         recorder = _startRecorder(stream, function () {}, 1000, false, _onRecordingChunk,
                                   { videoBitsPerSecond: recProfileG().bitrate });
-        // ENSAYO: sin uploader — _onRecordingChunk descarta los chunks y
-        // nada se sube al servidor.
+        // REHEARSAL: no uploader — _onRecordingChunk discards the chunks and
+        // nothing is uploaded to the server.
         if (!practiceMode.value) {
           _startChunkStreaming(recorder._ext ? ("." + recorder._ext) : ".webm");
           _requestServerBackup(props.joinData.session_id, props.inviteToken);
@@ -4582,15 +4582,15 @@ var GuestStudioView = {
       connectStep.value = "Preparando…";
       try {
         myIdentity.value = "participant_" + props.joinData.participant_id;
-        // La vista previa de la prueba suelta la cámara antes de que LiveKit
-        // la vuelva a pedir (Safari no comparte el device entre dos gUM).
+        // The test preview releases the camera before LiveKit
+        // asks for it again (Safari doesn't share the device between two gUM).
         stopGuestPreflight();
         var recProf = recProfileG();
         var newRoom = new LK.Room({
           adaptiveStream: true,
           dynacast: true,
-          // Captura a la resolución de GRABACIÓN decidida por la prueba;
-          // a la sala se publica un clon reducido a ≤720p (ver más abajo).
+          // Capture at the RECORDING resolution decided by the test;
+          // a clone reduced to ≤720p is published to the room (see below).
           videoCaptureDefaults: {
             resolution: { width: recProf.width, height: recProf.height, frameRate: recProf.frameRate },
           },
@@ -4624,7 +4624,7 @@ var GuestStudioView = {
         newRoom.on(LK.RoomEvent.ParticipantConnected, function (p) {
           if (p.identity.startsWith("director_")) {
             directorConnected.value = true;
-            // Director recién conectado: que sepa si ya estoy PREPARADO.
+            // Newly connected director: let them know if I'm already PREPARADO.
             sendData({ type: "ready_toggle", identity: myIdentity.value, ready: ownReady.value });
           }
         });
@@ -4668,8 +4668,8 @@ var GuestStudioView = {
         _savedCamPub = camPub;
         _savedMicPub = micPub;
 
-        // Separar grabación y sala: el track de captura completo queda para
-        // el MediaRecorder; a la sala va un clon reducido a ≤720p.
+        // Split recording and room: the full capture track stays for
+        // the MediaRecorder; the room gets a clone reduced to ≤720p.
         _fullResCamTrack = camPub && camPub.track ? camPub.track.mediaStreamTrack : null;
         if (_fullResCamTrack) {
           var camSet = _fullResCamTrack.getSettings ? _fullResCamTrack.getSettings() : {};
@@ -4679,7 +4679,7 @@ var GuestStudioView = {
               await roomTrack.applyConstraints({ width: { ideal: 1280 }, height: { ideal: 720 } });
               await camPub.track.replaceTrack(roomTrack, true);
               _roomCamTrack = roomTrack;
-            } catch (_) { /* fallback: la sala recibe la captura completa capada por bitrate */ }
+            } catch (_) { /* fallback: the room gets the full capture capped by bitrate */ }
           }
         }
 
@@ -4688,7 +4688,7 @@ var GuestStudioView = {
         var camTrack = _fullResCamTrack;
         var micTrack = micPub && micPub.track ? micPub.track.mediaStreamTrack : null;
         _rawMicTrack = micTrack;
-        // A la sala va el micrófono con la puerta (si está activa); la grabación local queda sin tocar.
+        // The room gets the microphone with the gate (if active); the local recording stays untouched.
         if (micTrack) {
           try {
             micGainCtx = _micChain(micTrack, 0, gateOn.value);
@@ -4706,7 +4706,7 @@ var GuestStudioView = {
         room = newRoom;
         connected.value = true;
         keepAwake();
-        persistRecQuality();  // guarda la calidad de grabación para el director
+        persistRecQuality();  // stores the recording quality for the director
         await nextTick();
         // Try several times to attach the local video — the <video> ref might
         // not be mounted on the very first tick depending on render timing.
@@ -4755,7 +4755,7 @@ var GuestStudioView = {
       var next = !localMuted.value;
       await room.localParticipant.setMicrophoneEnabled(!next);
       localMuted.value = next;
-      // La grabación usa el micrófono crudo: silenciarlo también ahí
+      // The recording uses the raw microphone: mute it there too
       if (_recStream) _recStream.getAudioTracks().forEach(function (t) { t.enabled = !next; });
     }
     async function toggleCam() {
@@ -4791,7 +4791,7 @@ var GuestStudioView = {
     onMounted(function () {
       loadSounds();
       startGuestPreflight();
-      // Subida interrumpida en una visita anterior: recuperarla.
+      // Upload interrupted on a previous visit: recover it.
       recoverPendingUpload(props.joinData.session_id, props.inviteToken, "video").then(function (ok) {
         if (ok && window.toast) window.toast({ type: "success", text: "Se recuperó y subió una grabación pendiente" });
       });
@@ -4839,7 +4839,7 @@ var GuestStudioView = {
         <div class="end-countdown-sub">Apagamos cámara y micrófono en</div>
         <div class="end-countdown-num">{{ endCountdown }}</div>
       </div>
-      <!-- Terminó: gracias -->
+      <!-- Finished: thank you -->
       <div v-if="left" class="guest-end">
         <div class="guest-end-icon">{{ error ? "✕" : "✓" }}</div>
         <h2>{{ error ? error : "¡Gracias por participar!" }}</h2>
@@ -5144,25 +5144,25 @@ var DirectorView = {
     var countdown = ref(null);
     var countdownHandle = null;
 
-    // Injection forms (comment / countdown — pestaña "Otros")
+    // Injection forms (comment / countdown — "Otros" tab)
     var injectType = ref("comment");
     var injectFields = reactive({
       author: "", text: "", platform: "youtube",
       seconds: 180, label: "Volvemos en",
     });
 
-    // ---- Cintillos (Sponsor / Podcast / Segmento), mismo contrato que la Mac ----
+    // ---- Lower thirds (Sponsor / Podcast / Segment), same contract as the Mac ----
     var branding = ref({ podcast_name: "", podcast_logo_url: null, sponsors: [] });
     var cin = reactive({
       tab: "sponsor",          // sponsor | podcast | segment | otros
       sponsorIdx: 0,
-      text: "",                // texto editable (copy del sponsor / momento del podcast)
-      podTitle: "",            // título del cintillo de podcast (default: nombre)
+      text: "",                // editable text (sponsor copy / podcast moment)
+      podTitle: "",            // podcast lower-third title (default: name)
       segTitle: "", segSubtitle: "",
-      duration: 8,             // 8 | 15 | 30 | 0 (hasta quitarlo)
+      duration: 8,             // 8 | 15 | 30 | 0 (until removed)
       busy: false,
     });
-    var _assetCache = {};      // logo_url -> file_path (subido una vez por sesión)
+    var _assetCache = {};      // logo_url -> file_path (uploaded once per session)
 
     async function loadBranding() {
       try {
@@ -5181,7 +5181,7 @@ var DirectorView = {
       else if (t === "podcast") cin.text = "";
     });
 
-    // Vista previa exacta: mismo objeto que se manda por overlay_inject.
+    // Exact preview: same object sent via overlay_inject.
     var cinPreview = computed(function () {
       if (cin.tab === "sponsor") {
         var sp = (branding.value.sponsors || [])[cin.sponsorIdx] || {};
@@ -5217,7 +5217,7 @@ var DirectorView = {
       try {
         var file_path = null;
         try { file_path = await _assetFor(pv.logo); }
-        catch (_) { /* sin logo: el cintillo sale igual */ }
+        catch (_) { /* no logo: the lower third still shows */ }
         var res = await api("/api/sessions/" + props.session.id + "/director/inject", {
           method: "POST",
           body: { event_type: pv.event_type, payload: pv.payload,
@@ -5239,7 +5239,7 @@ var DirectorView = {
     // Cue target
     var cueTarget = ref("all");
 
-    // ---- Teleprompter inyectado por el director (texto libre o de un sponsor) ----
+    // ---- Teleprompter injected by the director (free text or from a sponsor) ----
     var tpForm = reactive({ target: "all", title: "", text: "", speed: "normal", size: "half", countdown: 3 });
     var tpSponsorIdx = ref(-1);
     var tpLastId = ref(null);
@@ -5317,7 +5317,7 @@ var DirectorView = {
       catch (_) {}
     }
 
-    // --- Overlay injection (pestaña "Otros": comentario y countdown) ---
+    // --- Overlay injection ("Otros" tab: comment and countdown) ---
     async function injectOverlay() {
       var payload = {};
       var t = injectType.value;
@@ -5453,7 +5453,7 @@ var DirectorView = {
     var directorChatInput = ref("");
 
     function _chatRow(r) {
-      // El servidor guarda author_name/message_text; el front usa author/text.
+      // The server stores author_name/message_text; the front end uses author/text.
       return { id: r.id, author: r.author_name || r.author || "",
                text: r.message_text || r.text || "" };
     }
@@ -5504,7 +5504,7 @@ var DirectorView = {
           countdown.value = 0;
           recording.value = true;
           api("/api/sessions/" + props.session.id + "/start", { method: "POST" }).catch(function (e) {
-            // Plan Gratis sin episodios: se corta enseguida y se avisa
+            // Gratis plan with no episodes left: cut immediately and notify
             if (e && e.data && e.data.code === "plan_limit") {
               recording.value = false;
               if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
@@ -5602,7 +5602,7 @@ var DirectorView = {
         await room.connect(tokenData.livekit_ws_url, tokenData.livekit_token);
         connected.value = true;
         if (window.toast) window.toast({ type: "success", text: "Conectado al Control Room" });
-        // Pedir a todos su estado de PREPARADO (por si el director entra tarde).
+        // Ask everyone for their PREPARADO state (in case the director joins late).
         setTimeout(function () {
           try { room.localParticipant.publishData(_encodeMsg({ type: "ready_request" }), LK.DataPacket_Kind.RELIABLE); } catch (_) {}
         }, 800);
@@ -5649,7 +5649,7 @@ var DirectorView = {
       if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
     }
 
-    // --- Teléfono/tablet: paneles por pestaña (hoja inferior) y pantalla encendida ---
+    // --- Phone/tablet: tabbed panels (bottom sheet) and screen kept on ---
     var dTab = ref(null);
     var dChatSeen = ref(0);
     var dChatUnread = computed(function () { return dTab.value === "chat" ? 0 : Math.max(0, directorChat.value.length - dChatSeen.value); });

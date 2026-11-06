@@ -304,9 +304,9 @@ def list_assets(sid):
 @bp.get("/api/sessions/<int:sid>/director/branding")
 @require_auth
 def director_branding(sid):
-    """Branding del podcast + sponsors del episodio, para armar cintillos.
-    Sesiones viejas sin sponsors_json caen a los sponsors de los bloques
-    (chapter markers) que prePod ya importó."""
+    """Podcast branding + episode sponsors, for building lower thirds.
+    Old sessions without sponsors_json fall back to the block sponsors
+    (chapter markers) that prePod already imported."""
     db = get_db()
     try:
         sess = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
@@ -340,8 +340,8 @@ def director_branding(sid):
 @bp.post("/api/sessions/<int:sid>/director/assets/from-url")
 @require_auth
 def upload_asset_from_url(sid):
-    """Descarga una imagen (p. ej. el logo alojado en prePod) y la guarda
-    como asset del director — evita el CORS de re-subirla desde el navegador."""
+    """Downloads an image (e.g. the logo hosted on prePod) and saves it
+    as a director asset — avoids the CORS issue of re-uploading it from the browser."""
     db = get_db()
     try:
         _require_director(db, sid)
@@ -383,8 +383,8 @@ def upload_asset_from_url(sid):
 
 @bp.get("/api/sessions/<int:sid>/director/assets/<path:filename>")
 def serve_asset(sid, filename):
-    # Con sesión iniciada (host/director) o con el invite token de un
-    # participante de ESTA sesión — los invitados también ven los logos.
+    # With a logged-in session (host/director) or with the invite token of a
+    # participant of THIS session — guests also see the logos.
     if not current_user():
         token = request.args.get("token") or ""
         db = get_db()
@@ -413,7 +413,7 @@ def serve_asset(sid, filename):
 # ---------------------------------------------------------------------------
 
 def _require_director_or_host(db, sid):
-    """Director, host o co-host de la sesión (los invitados no)."""
+    """Director, host or co-host of the session (not guests)."""
     username = current_user()
     if _is_director(db, sid, username):
         return username

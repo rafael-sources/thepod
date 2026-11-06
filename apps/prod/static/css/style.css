@@ -1,6 +1,6 @@
 /* ==========================================================================
    prodPod — "On Air / Live Booth" design system
-   Familia: misma base warm-dark + fuentes; signal = rojo rec/tally.
+   Family: same warm-dark base + fonts; signal = rec/tally red.
    ========================================================================== */
 
 :root {
@@ -16,7 +16,7 @@
 
   --paper:       #efe3d0;
   --paper-soft:  #c7b894;
-  --paper-dim:   #9d9078;   /* 5.8:1 sobre --ink (WCAG AA) */
+  --paper-dim:   #9d9078;   /* 5.8:1 on --ink (WCAG AA) */
   --paper-faint: #5c5240;
 
   /* Signal — RED "ON AIR" */
@@ -30,7 +30,7 @@
   --signal-amber:   #f4c770;
   --signal-cyan:    #6bb3c4;
   --signal-blue:    #5a8bff;
-  --accent:         #f4c770; /* usado por el panel del director; antes no existía y la pestaña activa quedaba invisible */
+  --accent:         #f4c770; /* used by the director panel; it did not exist before and the active tab was invisible */
 
   --r-sm: 3px;
   --r-md: 6px;
@@ -1729,9 +1729,9 @@ a.mark:hover { opacity: 0.8; }
   to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 
-/* Cintillo tipo noticiero (mismo diseño que la app de Mac): logo a la
-   izquierda, barra de color con el título en MAYÚSCULAS y barra blanca con
-   el texto. Abajo a la izquierda del video, entra desde la izquierda. */
+/* News-style lower third (same design as the Mac app): logo on the
+   left, color bar with the title in UPPERCASE and white bar with
+   the text. Bottom-left of the video, slides in from the left. */
 .cintillo-layer {
   position: fixed;
   bottom: 64px;
@@ -1803,7 +1803,7 @@ a.mark:hover { opacity: 0.8; }
   from { opacity: 0; transform: translateX(-48px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-/* Vista previa dentro del Control Room (misma pieza, sin posición fija) */
+/* Preview inside the Control Room (same piece, no fixed position) */
 .cintillo-preview { transform: scale(0.72); transform-origin: left top; }
 .cintillo-preview .cintillo { animation: none; }
 
@@ -2171,10 +2171,10 @@ a.mark:hover { opacity: 0.8; }
 }
 
 /* ==========================================================================
-   Invitado — pensado primero para teléfono y tablet
+   Guest — designed phone and tablet first
    ========================================================================== */
 
-/* Link de invitación */
+/* Invite link */
 .invite-wrapper { padding: 24px 16px; overflow-x: hidden; }
 .invite-card { width: 100%; max-width: 460px; box-sizing: border-box; }
 .invite-card h2 { font-size: clamp(26px, 7vw, 36px); line-height: 1.1; overflow-wrap: anywhere; }
@@ -2190,11 +2190,11 @@ a.mark:hover { opacity: 0.8; }
   width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none;
   background: rgba(255,59,59,0.14); color: var(--signal); font-size: 12px; font-weight: 700;
 }
-.invite-card input { font-size: 16px; padding: 12px 14px; }   /* 16px: iPhone no hace zoom al escribir */
+.invite-card input { font-size: 16px; padding: 12px 14px; }   /* 16px: iPhone does not zoom when typing */
 .invite-go { width: 100%; margin-top: 12px; padding: 15px; font-size: 16px; }
 .invite-note { text-align: center; font-size: 12px; color: var(--paper-dim); margin: 12px 0 0; }
 
-/* Sala del invitado (todos los tamaños) */
+/* Guest room (all sizes) */
 .guest-studio .guest-title { min-width: 0; }
 .guest-studio .guest-title h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .guest-studio .guest-sub { font-size: 12px; color: var(--paper-dim); margin-top: 2px; }
@@ -2248,7 +2248,7 @@ a.mark:hover { opacity: 0.8; }
 .guest-studio .guest-post-big { font-size: 22px; font-weight: 700; color: var(--paper); margin: 4px 0 10px; }
 .guest-studio .guest-post-btn { margin-top: 20px; padding: 16px 56px; font-size: 18px; }
 
-/* Teléfono y tablet (cualquier pantalla táctil) */
+/* Phone and tablet (any touch screen) */
 @media (max-width: 900px), (pointer: coarse) {
   .guest-studio {
     display: flex; flex-direction: column;
@@ -2266,7 +2266,7 @@ a.mark:hover { opacity: 0.8; }
   .guest-studio .prejoin { padding: 4px 0 16px; align-items: flex-start; }
   .guest-studio .prejoin-card { padding: 16px; border-radius: 14px; }
 
-  /* En la sala: tarjetas 16:9 una debajo de otra (con 3 o más, en dos columnas) */
+  /* In the room: 16:9 cards stacked (with 3 or more, in two columns) */
   .guest-studio .guest-grid { display: grid; grid-template-columns: 1fr; gap: 10px; align-content: start; }
   .guest-studio .guest-grid.n2, .guest-studio .guest-grid.n3 { grid-template-columns: 1fr 1fr; }
   .guest-studio .guest-grid .participant-card { aspect-ratio: 16 / 9; }
@@ -2279,7 +2279,7 @@ a.mark:hover { opacity: 0.8; }
   .guest-studio .studio-top .timecode::before { content: ""; position: absolute; left: 7px; top: 50%; width: 8px; height: 8px; margin-top: -4px;
     border-radius: 50%; background: var(--signal); box-shadow: 0 0 8px var(--signal); }
 
-  /* Chat como panel que sube desde abajo; el soundboard no va en el teléfono */
+  /* Chat as a panel sliding up from the bottom; no soundboard on the phone */
   .guest-studio .guest-side {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
     height: 70vh; height: 70dvh; border-radius: 16px 16px 0 0; border: 1px solid var(--ink-line);
@@ -2292,7 +2292,7 @@ a.mark:hover { opacity: 0.8; }
   .guest-studio .guest-chat-input input { font-size: 16px; padding: 12px; }
   .guest-studio .guest-chat-input button { padding: 12px 18px; }
 
-  /* Botones grandes abajo */
+  /* Big buttons at the bottom */
   .guest-studio .guest-controls {
     padding: 10px 12px max(10px, env(safe-area-inset-bottom)); gap: 8px; flex-wrap: wrap;
   }
@@ -2302,14 +2302,14 @@ a.mark:hover { opacity: 0.8; }
   .guest-studio .gc-leave { font-size: 14px; }
   .guest-studio .director-badge, .guest-studio .ifb-indicator { order: 10; width: 100%; text-align: center; font-size: 12px; }
 
-  /* Cintillos y avisos a la medida */
+  /* Lower thirds and notices sized to fit */
   .guest-studio .cintillo-layer { left: 12px; right: 12px; bottom: calc(96px + env(safe-area-inset-bottom)); }
   .guest-studio .cintillo-layer .cintillo { max-width: 100%; }
   .guest-studio .director-cue { font-size: 22px; left: 12px; right: 12px; transform: translateY(-50%); padding: 22px 18px; text-align: center; }
   .guest-studio .countdown-num { font-size: 150px; }
 }
 
-/* Teléfono acostado: todo el ancho para la sala */
+/* Phone in landscape: full width for the room */
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
   .guest-studio .studio-top { padding: 6px 12px; }
   .guest-studio .guest-sub { display: none; }
@@ -2318,7 +2318,7 @@ a.mark:hover { opacity: 0.8; }
   .guest-studio .gc-btn, .guest-studio .gc-leave { min-height: 42px; }
 }
 
-/* Tablet acostada: la sala en dos columnas y el chat como panel a la derecha */
+/* Tablet in landscape: the room in two columns and the chat as a panel on the right */
 @media (pointer: coarse) and (min-width: 1000px) {
   .guest-studio .guest-grid, .guest-studio .guest-grid.n1 { grid-template-columns: 1fr 1fr; }
   .guest-studio .guest-side {
@@ -2333,7 +2333,7 @@ a.mark:hover { opacity: 0.8; }
 }
 
 /* ==========================================================================
-   Anfitrión en teléfono/tablet (modo emergencia): lo esencial, grande y claro
+   Host on phone/tablet (emergency mode): the essentials, big and clear
    ========================================================================== */
 .m-only { display: none !important; }
 .host-studio .hs-sheet-head { display: none; }
@@ -2344,17 +2344,17 @@ a.mark:hover { opacity: 0.8; }
   .d-only { display: none !important; }
   .m-only { display: inline-flex !important; }
 
-  /* Encabezado de la app */
+  /* App header */
   .app-header { padding: 10px 14px; gap: 10px; padding-top: max(10px, env(safe-area-inset-top)); }
   .app-header .user-chip { gap: 6px; }
   .app-header .user-chip .name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Entrar */
+  /* Log in */
   .login-wrapper { padding: 24px 16px; overflow-x: hidden; }
   .login-card { width: 100%; max-width: 400px; box-sizing: border-box; padding: 28px 22px 22px; }
   .login-card input { font-size: 16px; }
 
-  /* Lista de salas */
+  /* Room list */
   .container { padding: 16px 14px; }
   .page-head { flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
   .page-head h2 { font-size: 30px; }
@@ -2364,7 +2364,7 @@ a.mark:hover { opacity: 0.8; }
   .modal { width: calc(100vw - 28px) !important; max-width: 480px; box-sizing: border-box; }
   .modal input, .modal select, .modal textarea { font-size: 16px; }
 
-  /* Sala del anfitrión */
+  /* Host room */
   .host-studio { display: flex; flex-direction: column; height: calc(100vh - 54px); height: calc(100dvh - 54px); position: relative; }
   .host-studio .studio-top { padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
   .host-studio .studio-top h3 { flex: 1; min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2384,14 +2384,14 @@ a.mark:hover { opacity: 0.8; }
   .host-studio .prejoin-controls select { font-size: 16px; }
   .host-studio .prejoin-controls .primary { font-size: 17px; padding: 16px !important; }
 
-  /* Videos: tarjetas 16:9, dos columnas si hay varios */
+  /* Videos: 16:9 cards, two columns if there are several */
   .host-studio .participants-grid { grid-template-columns: 1fr; gap: 10px; }
   .host-studio .spotlight-layout { display: block; }
   .host-studio .spotlight-sidebar { display: none; }
   .host-studio .recordings-panel { margin-top: 12px; }
   .host-studio .recordings-head { flex-wrap: wrap; gap: 8px; }
 
-  /* Panel de abajo: chat, personas, sponsors */
+  /* Bottom panel: chat, people, sponsors */
   .host-studio .hs-side {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
     height: 72vh; height: 72dvh; border-radius: 16px 16px 0 0; border: 1px solid var(--ink-line);
@@ -2412,7 +2412,7 @@ a.mark:hover { opacity: 0.8; }
   .host-studio .hs-side .invite-row { font-size: 14px; padding: 10px; }
   .host-studio .hs-side .icon { min-width: 40px; min-height: 40px; }
 
-  /* Botones grandes abajo */
+  /* Big buttons at the bottom */
   .host-studio .hs-controls { padding: 8px 10px max(8px, env(safe-area-inset-bottom)); gap: 6px; flex-wrap: nowrap; overflow-x: auto; }
   .host-studio .hs-btn, .host-studio .hs-leave { min-height: 52px; min-width: 58px; flex-direction: column; gap: 2px; padding: 6px 8px; font-size: 20px; border-radius: 12px; flex: none; }
   .host-studio .hs-btn.on { border-color: var(--signal); }
@@ -2433,8 +2433,8 @@ a.mark:hover { opacity: 0.8; }
 .host-studio .hs-leave { white-space: nowrap; }
 
 /* ==========================================================================
-   Director en teléfono/tablet (modo emergencia): videos al centro, lo demás
-   en hojas que suben desde abajo. En computador no cambia nada.
+   Director on phone/tablet (emergency mode): videos in the center, the rest
+   in sheets sliding up from the bottom. Nothing changes on desktop.
    ========================================================================== */
 .control-room .cr-sheet-head, .control-room .cr-mbar, .control-room .cr-m-status,
 .control-room .cr-m-txt, .control-room .cr-m-only-block, .control-room .cr-wait-m { display: none; }
@@ -2455,7 +2455,7 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-top .cr-rec { flex: none; padding: 10px 14px; font-size: 14px; min-height: 42px; }
   .control-room .cr-top .cr-count { flex: none; }
 
-  /* Centro: videos 16:9 uno debajo de otro (dos columnas con 2 o más) */
+  /* Center: 16:9 videos stacked (two columns with 2 or more) */
   .control-room .cr-center { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; }
   .control-room .cr-multiview { grid-template-columns: 1fr; gap: 10px; align-content: start; }
   .control-room .cr-multiview.n2, .control-room .cr-multiview.n3, .control-room .cr-multiview.n4 { grid-template-columns: 1fr 1fr; }
@@ -2473,7 +2473,7 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-m-rec { color: var(--signal); font-weight: 700; }
   .control-room .cr-m-status .active-overlay-pill { cursor: pointer; }
 
-  /* Paneles izquierdo y derecho: hojas que suben desde abajo, una sección a la vez */
+  /* Left and right panels: sheets sliding up from the bottom, one section at a time */
   .control-room .cr-left, .control-room .cr-right {
     display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
     height: 72vh; height: 72dvh; border-radius: 16px 16px 0 0; border: 1px solid var(--ink-line);
@@ -2496,7 +2496,7 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-m-only-block { display: block; }
   .control-room .cr-bottom { display: none; }
 
-  /* Dentro de las hojas: todo más grande para el dedo */
+  /* Inside the sheets: everything bigger for fingers */
   .control-room .cr-participant { padding: 10px 12px; }
   .control-room .cr-participant .cr-p-thumb { width: 72px; height: 40px; }
   .control-room .cr-participant .cr-p-name { font-size: 15px; }
@@ -2522,7 +2522,7 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-sec-mas > div[style*="font-size:11px"] { font-size: 14px !important; }
   .control-room .active-overlay-pill { font-size: 13px; padding: 8px 12px; }
 
-  /* Barra de abajo con botones grandes */
+  /* Bottom bar with big buttons */
   .control-room .cr-mbar {
     display: flex; gap: 4px; flex-wrap: nowrap;
     padding: 8px 8px max(8px, env(safe-area-inset-bottom));
@@ -2541,24 +2541,24 @@ a.mark:hover { opacity: 0.8; }
   .control-room .cr-mbadge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
     background: var(--signal); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
 }
-/* Teléfono acostado */
+/* Phone in landscape */
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
   .control-room .cr-multiview, .control-room .cr-multiview.n1 { grid-template-columns: 1fr 1fr; }
   .control-room .cr-mbar { padding: 6px 10px; }
   .control-room .cr-mbtn { min-height: 42px; }
 }
-/* Tablet acostada: las hojas como panel a la derecha */
+/* Tablet in landscape: the sheets as a panel on the right */
 @media (pointer: coarse) and (min-width: 1000px) {
   .control-room .cr-multiview, .control-room .cr-multiview.n1 { grid-template-columns: 1fr 1fr; }
   .control-room .cr-multiview.n3, .control-room .cr-multiview.n4 { grid-template-columns: 1fr 1fr; }
   .control-room .cr-left, .control-room .cr-right { left: auto; top: 0; width: 420px; height: 100%; border-radius: 0; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
 }
 
-/* Auto-silencio (puerta de ruido en vivo): botón encendido */
+/* Auto-mute (live noise gate): button on */
 .guest-studio .gc-btn.on, .host-studio .hs-btn.on { border-color: var(--signal-cool); color: var(--signal-cool); }
 
 /* ==========================================================================
-   Teleprompter (thePod 0.11): aviso para todos y panel con el texto corriendo
+   Teleprompter (thePod 0.11): notice for everyone and panel with scrolling text
    ========================================================================== */
 .tp-notice {
   position: fixed; top: 18%; left: 50%; transform: translateX(-50%);
@@ -2606,7 +2606,7 @@ a.mark:hover { opacity: 0.8; }
   .tp-panel { width: 96vw; bottom: 8%; }
 }
 
-/* Aviso grande de subida al terminar (anfitrión) y tiempo estimado */
+/* Big upload notice when finishing (host) and estimated time */
 .upload-overlay {
   position: fixed; inset: 0; z-index: 950;
   display: flex; align-items: center; justify-content: center;
@@ -2623,7 +2623,7 @@ a.mark:hover { opacity: 0.8; }
 .upload-heads-up { font-size: 12.5px; line-height: 1.45; color: var(--paper-dim); background: rgba(255,255,255,0.05);
   border: 1px solid var(--ink-line); border-radius: 8px; padding: 10px 12px; margin: 12px 0; text-align: left; }
 
-/* Fin de grabación: cuenta regresiva grande y estado de subida en cada cuadro */
+/* End of recording: big countdown and upload status on each tile */
 .end-countdown {
   position: fixed; inset: 0; z-index: 960; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -2642,14 +2642,14 @@ a.mark:hover { opacity: 0.8; }
 .tile-upload .tu-sub { font-size: 13px; color: var(--paper-dim); margin-top: 4px; }
 .tile-upload .tu-ok { font-size: 20px; font-weight: 800; color: var(--signal-cool); }
 .tile-upload .tu-bad { font-size: 18px; font-weight: 700; color: #f66; }
-/* El aviso grande del anfitrión deja ver los cuadros con el progreso de cada uno */
+/* The host's big notice lets the tiles with each one's progress show through */
 .upload-overlay { inset: auto; top: 72px; left: 50%; right: auto; bottom: auto; transform: translateX(-50%);
   width: min(560px, 92vw); background: rgba(20, 16, 12, 0.96); border: 2px solid var(--signal-cool);
   border-radius: 14px; padding: 18px 24px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); backdrop-filter: none; }
 .upload-overlay .upload-overlay-icon { font-size: 40px; margin-bottom: 6px; }
 
 /* ==========================================================================
-   thePod móvil · capa compartida (misma que prePod/amaPod, señal roja)
+   thePod mobile · shared layer (same as prePod/amaPod, red signal)
    ========================================================================== */
 @media (max-width: 900px), (pointer: coarse) {
   :root { --m-tab-h: 56px; --m-top-h: 52px; }
