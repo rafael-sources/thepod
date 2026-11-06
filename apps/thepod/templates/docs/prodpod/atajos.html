@@ -1,0 +1,88 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Atajos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">ATAJOS DE TECLADO</div>
+  <h1>Teclas rápidas del estudio</h1>
+  <p class="lede">Atajos pensados para grabar sin soltar el teclado — controla el estudio mientras hablas.</p>
+</header>
+
+<section id="estudio">
+  <h2><span class="num">01</span> En el estudio</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>M</kbd></div></td>
+        <td class="desc"><strong>Silenciar / activar micrófono</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>V</kbd></div></td>
+        <td class="desc"><strong>Encender / apagar cámara</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>C</kbd></div></td>
+        <td class="desc"><strong>Crear marcador de capítulo</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>R</kbd></div></td>
+        <td class="desc"><strong>Levantar / bajar la mano</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Los atajos de teclado solo funcionan cuando no tienes el cursor dentro de un campo de texto (chat, etiqueta de marcador, etc.).</p></div>
+  </div>
+</section>
+
+<section id="soundboard">
+  <h2><span class="num">02</span> Soundboard</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>1</kbd>–<kbd>9</kbd></div></td>
+        <td class="desc"><strong>Disparar el pad correspondiente</strong> — reproduce y transmite a todos</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Alt</kbd>+clic en pad</div></td>
+        <td class="desc"><strong>Preview (cue)</strong> — solo en tus auriculares, no se transmite</td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Esc</kbd></div></td>
+        <td class="desc"><strong>Detener todos los sonidos</strong> en reproducción</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="chat">
+  <h2><span class="num">03</span> Chat</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><div class="kgroup"><kbd>Enter</kbd></div></td>
+        <td class="desc"><strong>Enviar mensaje</strong></td>
+      </tr>
+      <tr>
+        <td><div class="kgroup"><kbd>Shift</kbd>+<kbd>Enter</kbd></div></td>
+        <td class="desc"><strong>Nueva línea</strong> sin enviar</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#estudio">En el estudio</a>
+  <a href="#soundboard">Soundboard</a>
+  <a href="#chat">Chat</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Integrations — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRATIONS</div>
+  <h1>How postPod connects with the suite</h1>
+  <p class="lede">postPod is the last layer: it receives the material from prodPod and produces the final files ready to publish.</p>
+</header>
+
+<section id="desde-prodpod">
+  <h2><span class="num">01</span> From prodPod</h2>
+  <p>When a recording in prodPod is sent to postPod, a project is created (or updated) with:</p>
+  <ul>
+    <li><strong>Audio and video tracks</strong> for each participant as separate files, ready to add to the timeline.</li>
+    <li><strong>Screen share recordings</strong> as additional tracks.</li>
+    <li><strong>Chapter markers</strong>: both the ones planned in the prePod rundown and the ones created live during the recording. They arrive as moments on the timeline.</li>
+    <li><strong>Soundboard timestamps</strong>: every sound trigger with its exact time, so you can find them while editing.</li>
+  </ul>
+  <p>You don't need to upload anything by hand — everything arrives in the project automatically.</p>
+</section>
+
+<section id="desde-prepod">
+  <h2><span class="num">02</span> From prePod</h2>
+  <p>
+    If the episode was planned in prePod and recorded in prodPod, the postPod project stays linked to the original episode.
+    When you send the episode from prePod, postPod automatically imports and downloads:
+  </p>
+  <ul>
+    <li><strong>Podcast branding</strong>: logo, background and cover, ready for overlays and exports.</li>
+    <li><strong>Sponsor logos</strong> for the episode, linked to their rundown segments.</li>
+    <li><strong>Soundboard sounds</strong> for the podcast, with their metadata (name, shortcut, color) in a manifest.</li>
+    <li><strong>Guest photos</strong>, tied to each participant for banners and credits.</li>
+    <li><strong>Rundown with planned offsets</strong>: each block arrives with the minute it was scheduled for, so you can compare it with what happened in the recording.</li>
+  </ul>
+  <p>
+    If you send the episode again from prePod, the existing project is <strong>refreshed</strong>: sponsors,
+    sounds, guests and branding are updated without touching your edit. All this material also travels inside the bundle when you export
+    or import the project between teams.
+  </p>
+</section>
+
+<section id="captions-whisper">
+  <h2><span class="num">03</span> Captions with Whisper</h2>
+  <p>
+    postPod uses Whisper (an AI model) to generate word-by-word subtitles in multiple languages. Captions can:
+  </p>
+  <ul>
+    <li><strong>Show live</strong> during playback (CC button in the player).</li>
+    <li><strong>Be burned into the video</strong> on export (always visible, no need for a player that supports SRT).</li>
+    <li><strong>Be exported as a standalone SRT</strong> for platforms that accept subtitle files.</li>
+  </ul>
+</section>
+
+<section id="exportacion">
+  <h2><span class="num">04</span> Exporting to platforms</h2>
+  <p>The export presets are optimized for each platform:</p>
+  <table>
+    <thead>
+      <tr><th>Platform</th><th>Format</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>YouTube</td><td>MP4, H.264 + AAC</td><td>1080p or 4K, 30 or 60 fps</td></tr>
+      <tr><td>TikTok / Reels</td><td>MP4, 1080x1920 vertical</td><td>Ready to upload</td></tr>
+      <tr><td>Instagram</td><td>MP4, 1080x1080 square</td><td>Square format</td></tr>
+      <tr><td>WhatsApp</td><td>MP4, 720p compressed</td><td>Small file for quick sharing</td></tr>
+      <tr><td>Podcast</td><td>MP3 or M4A</td><td>Audio only, optimized for directories</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="notas-capitulos">
+  <h2><span class="num">05</span> Chapter notes</h2>
+  <p>When you export with the “Generate notes” option, postPod creates a .txt file with:</p>
+  <ul>
+    <li><strong>Chapters in YouTube format</strong> (00:00 Title) ready to paste into the video description.</li>
+    <li>Credits and episode metadata.</li>
+  </ul>
+  <p>Compatible with Spotify, Apple Podcasts, YouTube and other directories that support chapters.</p>
+</section>
+
+<section id="audio-profesional">
+  <h2><span class="num">06</span> Professional audio</h2>
+  <p>A processing option at export time that applies:</p>
+  <ul>
+    <li>Background noise reduction.</li>
+    <li>Voice EQ (low-frequency cut, clarity in the upper mids).</li>
+    <li>Compression for a more even volume.</li>
+    <li>Normalization to -16 LUFS (broadcast standard).</li>
+  </ul>
+  <p>It only affects the voice track — background music passes through unchanged.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#desde-prodpod">From prodPod</a>
+  <a href="#desde-prepod">From prePod</a>
+  <a href="#captions-whisper">Captions with Whisper</a>
+  <a href="#exportacion">Exporting to platforms</a>
+  <a href="#notas-capitulos">Chapter notes</a>
+  <a href="#audio-profesional">Professional audio</a>
+</nav>
+{% endblock %}

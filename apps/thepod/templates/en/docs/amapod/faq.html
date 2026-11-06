@@ -1,0 +1,116 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Frequently asked questions</h1>
+  <p class="lede">Quick answers to the most common questions about amaPod.</p>
+</header>
+
+<section id="faq-general">
+  <h2><span class="num">01</span> General</h2>
+
+  <details>
+    <summary>Does the audience need an account to participate?</summary>
+    <div class="ans">
+      <p>No. Participants sign up with their name from the public link and get their own access token. Viewers don't need an account either. Only the host/moderator signs in with their thePod account.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How many people can be in the video room at once?</summary>
+    <div class="ans">
+      <p>Up to 10 simultaneous participants: the host, whoever is on air and the pre-connected ones. The general audience watches from the viewers' page and doesn't take up a spot in the room.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I delete an event?</summary>
+    <div class="ans">
+      <p>Only while it's in the Created state. An active or ended event keeps its history of participants and questions.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I reuse an event's settings?</summary>
+    <div class="ans">
+      <p>Yes — save them as a template and create the next event from it. The template keeps the title, description, chat mode and branding.</p>
+    </div>
+  </details>
+</section>
+
+<section id="faq-cola">
+  <h2><span class="num">02</span> Queue and participants</h2>
+
+  <details>
+    <summary>How many questions can each participant send?</summary>
+    <div class="ans">
+      <p>Up to 3 pre-questions, which they can edit while waiting in the queue. The moderator sees them before giving them the air.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What exactly is pre-connection?</summary>
+    <div class="ans">
+      <p>The first 3 in the queue connect to the room ahead of time — they choose their camera and microphone and wait on standby, without being visible. When it's their turn, they appear instantly without the classic “can you hear me?”.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What happens if someone says something inappropriate on air?</summary>
+    <div class="ans">
+      <p>Use the censor button: it cuts their audio and video immediately without interrupting the event. The participant is marked as censored.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can a participant leave the queue?</summary>
+    <div class="ans">
+      <p>Yes, they can withdraw at any time. Their position is freed up and the queue renumbers automatically.</p>
+    </div>
+  </details>
+</section>
+
+<section id="faq-chat-grabacion">
+  <h2><span class="num">03</span> Chat and recording</h2>
+
+  <details>
+    <summary>How does moderated chat work?</summary>
+    <div class="ans">
+      <p>Messages from the audience go into an approval inbox and are only posted when the host approves them. The host's messages are posted directly. You can also use open chat or turn it off completely.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Is the recording the same as prodPod's?</summary>
+    <div class="ans">
+      <p>No. prodPod records separate tracks per participant (ideal for multitrack editing). amaPod records the event's composite view as a single MP4 — meant for archiving and clips.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What happens to the recording when the event ends?</summary>
+    <div class="ans">
+      <p>It's exported automatically to postPod as an editing project. You can also download the MP4 directly from the event panel.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I use amaPod during a podcast recording?</summary>
+    <div class="ans">
+      <p>Yes — link the event to the prodPod session and the host will see the Q&amp;A panel embedded in the studio, with the question queue ready to put on air.</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#faq-general">General</a>
+  <a href="#faq-cola">Queue and participants</a>
+  <a href="#faq-chat-grabacion">Chat and recording</a>
+</nav>
+{% endblock %}

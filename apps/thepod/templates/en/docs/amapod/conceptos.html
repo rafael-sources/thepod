@@ -1,0 +1,111 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Concepts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTS</div>
+  <h1>The amaPod vocabulary</h1>
+  <p class="lede">The key terms for understanding how a live Q&amp;A event works.</p>
+</header>
+
+<section id="evento">
+  <h2><span class="num">01</span> Event</h2>
+  <p>A question-and-answer session. It goes through three states:</p>
+  <p><strong>Created</strong> → <strong>Active</strong> → <strong>Ended</strong></p>
+  <ul>
+    <li><strong>Created</strong>: in preparation. The audience can't participate yet. It can only be deleted in this state.</li>
+    <li><strong>Active</strong>: the video room is open, the queue works in real time.</li>
+    <li><strong>Ended</strong>: the room has closed. If there was a recording, it travels to postPod.</li>
+  </ul>
+</section>
+
+<section id="participante">
+  <h2><span class="num">02</span> Participant</h2>
+  <p>
+    Someone in the audience who wants to ask a question. They sign up with their name from the public
+    link — <strong>no account, no sign-up</strong>. They get their own access token that identifies
+    their place in the queue.
+  </p>
+  <p>When signing up they can write up to <strong>3 pre-questions</strong> so the moderator knows what they want to talk about.</p>
+</section>
+
+<section id="cola">
+  <h2><span class="num">03</span> The queue</h2>
+  <p>The heart of amaPod. Each participant moves through these states:</p>
+  <p><strong>Pending</strong> → <strong>In queue</strong> → <strong>On air</strong> → <strong>Handled</strong></p>
+  <ul>
+    <li><strong>Pending</strong>: asked to participate, waiting for the moderator's approval.</li>
+    <li><strong>In queue</strong>: approved, with a position number. Positions are renumbered automatically.</li>
+    <li><strong>On air</strong>: connected to the video room, asking their question live.</li>
+    <li><strong>Handled</strong>: their turn is over.</li>
+  </ul>
+  <p>A participant can also end up <strong>rejected</strong> (the moderator discarded their request) or <strong>withdrawn</strong> (they left before their turn).</p>
+</section>
+
+<section id="preconexion">
+  <h2><span class="num">04</span> Pre-connection</h2>
+  <p>
+    The <strong>first 3</strong> in the queue connect to the room ahead of time: they choose their camera and microphone
+    and wait on standby, invisible to the public. When the moderator gives them the air, they appear instantly.
+    This gets rid of the usual dead time of “let's see… can you hear me?”.
+  </p>
+</section>
+
+<section id="censura">
+  <h2><span class="num">05</span> Censor</h2>
+  <p>
+    An emergency button for the moderator: it mutes and hides the participant who's on air immediately,
+    without closing the event. Useful if someone uses the air for something inappropriate.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">06</span> Chat modes</h2>
+  <ul>
+    <li><strong>Open</strong>: all messages are posted instantly.</li>
+    <li><strong>Moderated</strong>: messages from the audience need the host's approval before they're visible.</li>
+    <li><strong>Off</strong>: there's no chat.</li>
+  </ul>
+</section>
+
+<section id="espectador">
+  <h2><span class="num">07</span> Viewer</h2>
+  <p>
+    Someone watching the event with no intention of asking. They come in through the event's public page,
+    without an account, and can give <strong>likes</strong>. If chat is on, they can write too.
+  </p>
+</section>
+
+<section id="sala">
+  <h2><span class="num">08</span> Video room</h2>
+  <p>
+    The event's live video call (WebRTC technology with LiveKit). It holds up to
+    <strong>10 simultaneous participants</strong>: the host, whoever is on air and the pre-connected ones.
+    The general audience doesn't take up a spot in the room — they watch from the viewers' page.
+  </p>
+</section>
+
+<section id="plantilla">
+  <h2><span class="num">09</span> Event template</h2>
+  <p>
+    A reusable format: title, description, chat mode and branding saved to create
+    recurring events in one click (for example, “Friday AMA”).
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#evento">Event</a>
+  <a href="#participante">Participant</a>
+  <a href="#cola">The queue</a>
+  <a href="#preconexion">Pre-connection</a>
+  <a href="#censura">Censor</a>
+  <a href="#chat">Chat modes</a>
+  <a href="#espectador">Viewer</a>
+  <a href="#sala">Video room</a>
+  <a href="#plantilla">Template</a>
+</nav>
+{% endblock %}

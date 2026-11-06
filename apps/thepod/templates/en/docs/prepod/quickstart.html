@@ -1,0 +1,149 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Getting started — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">GETTING STARTED</div>
+  <h1>Your first podcast in prePod</h1>
+  <p class="lede">
+    From zero to an episode ready to record in under ten minutes. No technical knowledge needed — just a name and an idea.
+  </p>
+</header>
+
+<section id="entrar">
+  <h2><span class="num">01</span> Open prePod</h2>
+  <p>
+    Open thePod in your browser and sign in. You use the same credentials for all four apps
+    (prePod, prodPod, postPod, amaPod). From the hub, click the prePod card.
+  </p>
+</section>
+
+<section id="crear-podcast">
+  <h2><span class="num">02</span> Create your first podcast</h2>
+  <p>
+    On the main screen you'll see your podcasts as visual cards. Click <strong>+ New podcast</strong>
+    and type the name of your show. It's created with default values you can customize.
+  </p>
+</section>
+
+<section id="branding">
+  <h2><span class="num">03</span> Set up the branding</h2>
+  <p>When you open the podcast, the first tab is <strong>Branding</strong>. This is where you define your show's identity:</p>
+  <ul>
+    <li><strong>Identity</strong>: name, tagline and description.</li>
+    <li><strong>Colors</strong>: five pickers (primary, secondary, accent, background and text) with hex input.</li>
+    <li><strong>Typography</strong>: heading font, body font and text alignment.</li>
+    <li><strong>Assets</strong>: upload your logo (up to 500x500) and cover art (up to 1200x800).</li>
+  </ul>
+  <p>In the right column you'll see a live preview that reflects your changes instantly.</p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>You don't need to fill everything in now. You can come back to Branding any time. Changes are saved automatically.</p></div>
+  </div>
+</section>
+
+<section id="crear-episodio">
+  <h2><span class="num">04</span> Create your first episode</h2>
+  <p>
+    Go to the <strong>Episodes</strong> tab. You'll see a kanban board with six columns.
+    Click <strong>+ New episode</strong> in whichever column you prefer (for example, "Planning") and fill in:
+  </p>
+  <ul>
+    <li><strong>Episode number</strong>: suggested automatically.</li>
+    <li><strong>Title</strong>: the name of the episode.</li>
+    <li><strong>Template</strong> (optional): if you've already created one, select it to pre-fill the rundown and script.</li>
+  </ul>
+  <p>The episode shows up as a card you can drag between columns as it progresses.</p>
+</section>
+
+<section id="rundown">
+  <h2><span class="num">05</span> Build the rundown</h2>
+  <p>
+    Click the episode card to open its detail view. In the <strong>Rundown</strong> section,
+    add blocks to define the structure:
+  </p>
+  <ul>
+    <li><strong>Intro</strong>: the episode opening.</li>
+    <li><strong>Segment</strong>: a content section.</li>
+    <li><strong>Interview</strong>: a Q&amp;A block.</li>
+    <li><strong>Sponsor</strong>: an ad slot (you can link a registered sponsor).</li>
+    <li><strong>Break</strong>: a cut or transition.</li>
+    <li><strong>Outro</strong>: the episode closing.</li>
+  </ul>
+  <p>
+    Each block has a title, an estimated duration and notes.
+    Drag the six-dot handle to reorder. At the bottom you'll see the total estimated duration.
+  </p>
+</section>
+
+<section id="guion">
+  <h2><span class="num">06</span> Write the script</h2>
+  <p>In the <strong>Script</strong> section, add more detailed sections:</p>
+  <ul>
+    <li><strong>Speaker</strong>: who talks in this section.</li>
+    <li><strong>Content</strong>: the text or the speaker's notes.</li>
+    <li><strong>Notes</strong>: technical cues or context.</li>
+    <li><strong>Duration</strong>: estimated time in seconds.</li>
+  </ul>
+  <p>The script saves automatically every time you stop typing. Use the arrows to reorder sections.</p>
+</section>
+
+<section id="invitados">
+  <h2><span class="num">07</span> Add guests</h2>
+  <p>In the <strong>Guests (Roster)</strong> panel, click "Add guest" and fill in:</p>
+  <ul>
+    <li><strong>Name</strong>: the guest's name.</li>
+    <li><strong>Email</strong> (optional): to send the invitation by email.</li>
+    <li><strong>Role</strong>: Host, Co-host or Guest.</li>
+  </ul>
+  <p>To confirm attendance, you have two options:</p>
+  <ul>
+    <li>Click "Invite" to send an email with the RSVP link.</li>
+    <li>Copy the invitation link and send it however you like (WhatsApp, manual email, etc.).</li>
+  </ul>
+  <p>The guest confirms with a single click, no thePod account needed.</p>
+</section>
+
+<section id="agendar">
+  <h2><span class="num">08</span> Schedule the date</h2>
+  <p>
+    In the episode detail view, set the recording date and time. You can also use the
+    <strong>Calendar</strong> tab to see all your episodes on a monthly calendar and drag them between days to reschedule.
+  </p>
+  <p>Download an <strong>.ics</strong> file for a single episode or for the whole calendar to import it into Google Calendar, Outlook or Apple Calendar.</p>
+</section>
+
+<section id="enviar-prodpod">
+  <h2><span class="num">09</span> Send to prodPod</h2>
+  <p>
+    When everything is ready to record, click <strong>Send to prodPod</strong> in the episode's integration bar.
+    This automatically creates a recording session in <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> with:
+  </p>
+  <ul>
+    <li>The guest roster (names, roles and emails for the invitations).</li>
+    <li>Your full soundboard.</li>
+    <li>The planned chapter markers (from the rundown blocks).</li>
+  </ul>
+  <p>From that point on, prePod shows you the recording status: "recording now" while the session is active, or "recording ready" when it's done.</p>
+  <div class="callout">
+    <div class="ctag">NEXT</div>
+    <div class="cbody"><p>Head to the <a href="/docs/prodpod/quickstart">prodPod Quickstart</a> to learn how the live studio works.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#entrar">Open prePod</a>
+  <a href="#crear-podcast">Create podcast</a>
+  <a href="#branding">Branding</a>
+  <a href="#crear-episodio">Create episode</a>
+  <a href="#rundown">Rundown</a>
+  <a href="#guion">Script</a>
+  <a href="#invitados">Guests</a>
+  <a href="#agendar">Schedule date</a>
+  <a href="#enviar-prodpod">Send to prodPod</a>
+</nav>
+{% endblock %}

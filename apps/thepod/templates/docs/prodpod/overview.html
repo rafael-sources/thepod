@@ -1,0 +1,86 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Vista general — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>prodPod</h1>
+  <p class="lede">
+    Tu estudio de grabación remoto. Conecta a todos los participantes de tu podcast por video y audio,
+    y graba cada pista de forma independiente directamente en el navegador de cada persona.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> ¿Qué es prodPod?</h2>
+  <p class="dropcap">
+    prodPod es el estudio de grabación de thePod. Conecta a hosts e invitados en una sala de video y audio
+    con calidad de estudio. Cada participante graba <strong>localmente en su navegador</strong>, lo que significa
+    que la calidad de la grabación no depende de tu conexión a internet. Aunque la videollamada se entrecorte,
+    el archivo local de cada persona sale limpio y en alta calidad.
+  </p>
+  <p>
+    Al finalizar la sesión, todas las pistas (audio y video separados por participante) se envían a
+    <a class="x-link postpod" href="/docs/postpod">postPod</a> para edición, junto con los marcadores de capítulo
+    y los disparos de soundboard — todo posicionado en el timeline, listo para trabajar.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> ¿Qué puedes hacer?</h2>
+  <ul>
+    <li>Grabar <strong>audio y video</strong> de cada participante por separado (pistas independientes).</li>
+    <li>Ejecutar un <strong>asistente de nivel de micrófono</strong> antes de empezar.</li>
+    <li>Disparar efectos de sonido y jingles desde el <strong>soundboard</strong>.</li>
+    <li>Marcar <strong>capítulos</strong> en tiempo real durante la grabación.</li>
+    <li><strong>Compartir pantalla</strong> (se graba como pista separada).</li>
+    <li>Coordinar con tu equipo por el <strong>chat de backstage</strong> (invisible para los invitados).</li>
+    <li>Transmitir en vivo a <strong>YouTube o Twitch</strong> vía RTMP, en paralelo a la grabación local.</li>
+    <li>Enviar todas las pistas a <strong>postPod</strong> para edición cuando termines.</li>
+  </ul>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">03</span> ¿Para quién es?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">BÁSICO</div>
+      <h4>Grabación rápida</h4>
+      <p>Graba un podcast de 1 a 3 personas. Entra al estudio, inicia la grabación y listo. No necesitas configurar nada más.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">INTERMEDIO</div>
+      <h4>Producción con herramientas</h4>
+      <p>Usa el mic check para optimizar niveles, dispara sonidos del soundboard durante la grabación y marca capítulos para la edición posterior.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">AVANZADO</div>
+      <h4>Streaming + grabación</h4>
+      <p>Transmite en vivo a YouTube o Twitch mientras grabas en alta calidad. Coordina con tu equipo por el chat de backstage sin que los invitados lo vean.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">04</span> ¿Qué encuentras acá?</h2>
+  <ul>
+    <li><a href="/docs/prodpod/quickstart">Primeros pasos</a> — tu primera grabación paso a paso.</li>
+    <li><a href="/docs/prodpod/conceptos">Conceptos</a> — sesión, participante, soundboard, backstage, pistas.</li>
+    <li><a href="/docs/prodpod/funcionalidades">Funcionalidades</a> — cada herramienta del estudio en detalle.</li>
+    <li><a href="/docs/prodpod/atajos">Atajos</a> — teclas rápidas para grabar sin soltar el teclado.</li>
+    <li><a href="/docs/prodpod/integraciones">Integraciones</a> — qué llega de <a class="x-link prepod" href="/docs/prepod">prePod</a> y qué se envía a <a class="x-link postpod" href="/docs/postpod">postPod</a>.</li>
+    <li><a href="/docs/prodpod/faq">FAQ</a> — preguntas frecuentes.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-es">¿Qué es prodPod?</a>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#para-quien">¿Para quién es?</a>
+  <a href="#que-hay-aca">¿Qué encuentras acá?</a>
+</nav>
+{% endblock %}

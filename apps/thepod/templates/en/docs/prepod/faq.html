@@ -1,0 +1,97 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Frequently asked questions</h1>
+  <p class="lede">Answers to the most common questions about prePod.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>Can I have more than one podcast?</summary>
+    <div class="ans">
+      <p>Yes. You can create multiple podcasts, each with its own branding, episodes, sponsors and landing page.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How do I add a co-host?</summary>
+    <div class="ans">
+      <p>In the Branding section, look for "Hosts" and type the person's username. They need a thePod account.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Do my guests need a thePod account?</summary>
+    <div class="ans">
+      <p>No. Guests get an RSVP link that works without an account. They only need an account if they're going to take part as a co-host with access to the podcast's editing panel.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I change my podcast's name (slug)?</summary>
+    <div class="ans">
+      <p>Not directly. The slug is generated when the podcast is created. If you need to change it, create a new podcast and move the content over.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How does autosave work?</summary>
+    <div class="ans">
+      <p>In branding and episodes, changes are saved automatically after 60 seconds without editing. You can also save manually with the "Save" button. The script is saved per section every time you stop typing for half a second.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Email invitations aren't arriving?</summary>
+    <div class="ans">
+      <p>Email delivery depends on your instance's configuration. If it isn't working, use the copy invitation link option and send it some other way (WhatsApp, manual email, etc.).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How do I generate the show notes?</summary>
+    <div class="ans">
+      <p>They're generated automatically when the episode moves to the "Published" state. They appear with the rundown chapters in a YouTube-compatible format, ready to copy and paste into whichever platform you use.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I reorder the episodes on the landing page?</summary>
+    <div class="ans">
+      <p>Yes. Use the position arrows (up/down) on each kanban card to change the order they appear in on the public landing page.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How do I export a sponsor report?</summary>
+    <div class="ans">
+      <p>In the Sponsors panel, click the sponsor's report icon. You'll see a summary with the total episodes and minutes, and a button to download a CSV with the details.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Does the calendar sync automatically?</summary>
+    <div class="ans">
+      <p>No. The .ics file is a one-time download. If you change an episode's date, you need to download the .ics again to update your external calendar.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>I changed a template's rundown — do old episodes update?</summary>
+    <div class="ans">
+      <p>No. The template is applied at the moment the episode is created. Changing the template afterwards only affects episodes you create in the future.</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#faq">All questions</a>
+</nav>
+{% endblock %}

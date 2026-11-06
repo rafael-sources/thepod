@@ -1,0 +1,79 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Quickstart — Docs · thePod{% endblock %}
+{% block description %}Tu primera publicación con pubPod en cinco minutos: conectar una red, elegir un reel, escribir el texto y publicar.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">QUICKSTART · 5 MINUTOS</div>
+  <h1>Tu primera publicación</h1>
+  <p class="lede">
+    De un reel en post a tu Instagram, Shorts o TikTok. Necesitas thePod para Mac con tu cuenta conectada y un episodio con al menos un reel.
+  </p>
+</header>
+
+<section id="conectar">
+  <h2><span class="num">01</span> Conecta una red</h2>
+  <p>
+    En la app, arriba, toca <strong>pre</strong> → tu podcast → <strong>Configurar podcast</strong> → <strong>Redes</strong>. Toca
+    <strong>Conectar</strong> junto a YouTube, Instagram o TikTok. Se abre el navegador, das el permiso, y al volver a la app
+    aparece tu usuario junto a la cuenta. También puedes hacerlo tocando una estrella punteada en pub.
+  </p>
+  <div class="callout">
+    Instagram pide una <strong>cuenta profesional</strong> (Creador o Empresa). Si la tuya es personal, en la app de Instagram:
+    Ajustes → Tipo de cuenta → Cambiar a cuenta profesional. Es gratis y toma un minuto.
+  </div>
+</section>
+
+<section id="elegir">
+  <h2><span class="num">02</span> Elige qué publicas</h2>
+  <p>
+    Toca <strong>pub</strong>. A la izquierda, tus episodios; elige uno. Aparecen las tarjetas con miniatura:
+    <strong>Episodio completo</strong>, cada <strong>reel</strong> y <strong>Desde la compu</strong>. Toca un reel.
+  </p>
+  <p>
+    Arriba, en el arco, se encienden las estrellas que le corresponden a un reel: Shorts, Reels y TikTok. Si una está punteada,
+    tócala para conectarla. Si no quieres una de las encendidas en esta publicación, ábrela por el nombre y toca <strong>Quitar de esta publicación</strong>.
+  </p>
+</section>
+
+<section id="texto">
+  <h2><span class="num">03</span> Escribe el texto</h2>
+  <p>
+    Abajo hay una pestaña por destino. Escribe el texto de cada una: el del Short, el de Instagram con sus hashtags, el que vas a pegar en TikTok.
+    Si tienes una firma en <strong>Siempre al final</strong> para esa red, se agrega sola al pie; no la repitas.
+  </p>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">04</span> Publica</h2>
+  <p>
+    Deja <strong>Ahora</strong> y toca <strong>Exportar y publicar</strong>. La app exporta el reel si hace falta (se ve el porcentaje), lo sube, y
+    cada estrella avisa cómo quedó. Puedes cerrar la app: thePod termina solo.
+  </p>
+  <ul>
+    <li><strong>Shorts</strong>: queda <em>Subido en privado</em> hasta que Google verifique la app. Ábrelo en YouTube y cámbialo a Público.</li>
+    <li><strong>Reels</strong>: queda <em>Publicado</em>, con el link.</li>
+    <li><strong>TikTok</strong>: queda <em>En tu bandeja de TikTok</em>. Abre TikTok en el teléfono, pega el texto que copiaste y publícalo desde ahí.</li>
+  </ul>
+</section>
+
+<section id="programar">
+  <h2><span class="num">05</span> La próxima, prográmala</h2>
+  <p>
+    Mismo camino, pero en vez de Ahora toca <strong>Programar</strong>, elige fecha y hora y <strong>Exportar y programar</strong>. La verás en
+    <strong>Publicaciones</strong> como Programada, con Cancelar hasta que empiece. Más en <a href="/docs/pubpod/programar">Programar</a>.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#conectar">Conecta una red</a>
+  <a href="#elegir">Elige qué publicas</a>
+  <a href="#texto">Escribe el texto</a>
+  <a href="#publicar">Publica</a>
+  <a href="#programar">Prográmala</a>
+</nav>
+{% endblock %}

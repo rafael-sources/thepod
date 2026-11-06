@@ -1,0 +1,162 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Primeros pasos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">PRIMEROS PASOS</div>
+  <h1>Tu primera edición paso a paso.</h1>
+  <p class="lede">
+    Una guía rápida para ir de archivos crudos a un episodio exportado.
+    Si tu proyecto viene de <a class="x-link prodpod" href="/docs/prodpod">prodPod</a>,
+    los archivos y marcadores ya están incluidos — puedes saltar al paso 3.
+  </p>
+</header>
+
+<section id="abrir-proyecto">
+  <h2><span class="num">01</span> Abre el proyecto</h2>
+  <p>
+    Los proyectos llegan desde prodPod (con las grabaciones y marcadores ya incluidos),
+    o puedes crear uno manualmente desde la lista de proyectos.
+  </p>
+  <p>
+    La interfaz principal tiene: reproductor de video arriba, timeline en el centro,
+    panel de archivos a la izquierda, momentos debajo del timeline, y panel de clips/operaciones a la derecha.
+  </p>
+</section>
+
+<section id="subir-archivos">
+  <h2><span class="num">02</span> Sube archivos (si es necesario)</h2>
+  <p>
+    Si tu proyecto viene de prodPod, los archivos ya están ahí. Si no, ve al panel de
+    Archivos (izquierda), haz clic en subir y selecciona tus archivos.
+    Formatos soportados: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (imagen).
+    Tamaño máximo por archivo: 2 GB.
+  </p>
+</section>
+
+<section id="armar-timeline">
+  <h2><span class="num">03</span> Agrega clips al timeline</h2>
+  <p>
+    En el panel de archivos, haz clic en un archivo de video o audio para agregarlo al timeline.
+    Los clips aparecen en la barra del timeline en secuencia. Puedes reordenarlos arrastrando
+    en el panel de Clips (derecha) usando el asa de 6 puntos.
+  </p>
+  <p>
+    Para recortar un clip, haz clic en él en el panel de Clips y ajusta los puntos de inicio (IN) y fin (OUT).
+  </p>
+</section>
+
+<section id="navegar">
+  <h2><span class="num">04</span> Reproduce y navega</h2>
+  <ul>
+    <li><kbd>Espacio</kbd> — reproducir / pausar.</li>
+    <li><kbd>←</kbd> <kbd>→</kbd> — saltar 5 segundos.</li>
+    <li><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> — saltar 1 segundo.</li>
+    <li>Clic en la regla del timeline — mover el playhead a ese punto.</li>
+    <li>Arrastrar el playhead (cursor rojo) — scrubbing frame a frame.</li>
+  </ul>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Marca momentos</h2>
+  <p>
+    Presiona <kbd>M</kbd> para capturar un momento en el tiempo actual.
+    Dale una etiqueta descriptiva (doble clic en el nombre para editarla).
+    Los momentos son los puntos de anclaje donde puedes aplicar operaciones.
+  </p>
+  <p>
+    Si tu proyecto viene de prodPod, los marcadores de capítulo de la grabación
+    ya aparecen como momentos en el timeline.
+  </p>
+</section>
+
+<section id="operaciones">
+  <h2><span class="num">06</span> Aplica operaciones</h2>
+  <p>
+    Selecciona un momento en la lista. En el panel de Operaciones (derecha),
+    agrega una operación: zoom, efecto de color, subtítulo, mezcla de audio,
+    recorte vertical para TikTok, texto animado, eliminación de silencios, y más.
+    El reproductor muestra el efecto en tiempo real.
+  </p>
+  <p>
+    Cada momento tiene botones de acción rápida: saltar al punto del timeline,
+    previsualizar el efecto, exportar solo ese momento, o eliminar.
+  </p>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">07</span> Edita el transcript (opcional)</h2>
+  <p>
+    Abre el Editor de Transcript desde la barra de herramientas. Verás el texto del audio de tus clips.
+    Si borras un fragmento de texto, ese fragmento de audio/video se corta del export.
+    Es la forma más intuitiva de eliminar muletillas o secciones no deseadas.
+  </p>
+  <ul>
+    <li>Clic en una palabra — el reproductor salta a ese punto.</li>
+    <li>Selecciona texto y presiona <kbd>Delete</kbd> — crea un corte (no-destructivo, reversible).</li>
+    <li>Activa "Resaltar muletillas" para detectar automáticamente "eh", "um", "este", "o sea" y similares.</li>
+    <li>Usa "Eliminar muletillas en lote" para cortarlas todas de una vez.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="ctag">REQUISITO</div>
+    <div class="cbody"><p>Para usar el editor de transcript, primero genera captions del archivo (paso 8).</p></div>
+  </div>
+</section>
+
+<section id="captions">
+  <h2><span class="num">08</span> Genera captions (opcional)</h2>
+  <p>
+    En el panel de Archivos, haz clic en el botón de captions de un archivo de video o audio.
+    Selecciona el idioma (español, inglés, portugués, etc.) y el modelo.
+    Whisper genera subtítulos palabra por palabra en segundo plano — puedes seguir editando mientras se generan.
+  </p>
+</section>
+
+<section id="exportar">
+  <h2><span class="num">09</span> Exporta</h2>
+  <p>
+    Haz clic en <strong>Exportar</strong> en la barra de herramientas. Elige un preset:
+  </p>
+  <ul>
+    <li><strong>YouTube</strong> — 1080p o 4K, 30 o 60 fps.</li>
+    <li><strong>TikTok / Reels</strong> — 1080x1920 vertical.</li>
+    <li><strong>Instagram</strong> — 1080x1080 cuadrado.</li>
+    <li><strong>WhatsApp</strong> — 720p comprimido.</li>
+    <li><strong>Podcast</strong> — MP3 o M4A (solo audio).</li>
+  </ul>
+  <p>
+    Opciones adicionales al exportar:
+  </p>
+  <ul>
+    <li><strong>Quemar captions</strong> — incrusta los subtítulos en el video.</li>
+    <li><strong>Generar notas</strong> — crea capítulos en formato YouTube y créditos.</li>
+    <li><strong>Audio profesional</strong> — reducción de ruido, ecualización, compresión y normalización.</li>
+    <li><strong>Exportar solo el rango</strong> — si tienes un rango seleccionado, exporta solo esa porción.</li>
+  </ul>
+  <p>
+    El render corre en segundo plano con barra de progreso. Cuando termine, descarga el archivo o reprodúcelo directamente.
+  </p>
+
+  <div class="callout">
+    <div class="ctag">NO-DESTRUCTIVO</div>
+    <div class="cbody"><p>Todo es no-destructivo: tus archivos originales nunca se modifican. Puedes experimentar libremente con operaciones y deshacerlas sin perder nada. Y puedes exportar el mismo proyecto varias veces con diferentes presets.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#abrir-proyecto">Abrir proyecto</a>
+  <a href="#subir-archivos">Subir archivos</a>
+  <a href="#armar-timeline">Armar timeline</a>
+  <a href="#navegar">Reproducir y navegar</a>
+  <a href="#momentos">Marcar momentos</a>
+  <a href="#operaciones">Aplicar operaciones</a>
+  <a href="#transcript">Editor de transcript</a>
+  <a href="#captions">Generar captions</a>
+  <a href="#exportar">Exportar</a>
+</nav>
+{% endblock %}

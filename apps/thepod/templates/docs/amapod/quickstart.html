@@ -1,0 +1,107 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Primeros pasos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">PRIMEROS PASOS</div>
+  <h1>Tu primer evento de Q&amp;A</h1>
+  <p class="lede">
+    De cero a un evento en vivo con cola de preguntas moderada. Tu audiencia solo necesita un link.
+  </p>
+</header>
+
+<section id="entrar">
+  <h2><span class="num">01</span> Entra a amaPod</h2>
+  <p>
+    Abre thePod desde tu navegador e inicia sesión — las mismas credenciales de las cuatro apps
+    (prePod, prodPod, postPod, amaPod). Desde el hub, haz clic en la tarjeta de amaPod.
+    Solo el host necesita cuenta: los participantes y espectadores entran con links públicos.
+  </p>
+</section>
+
+<section id="crear-evento">
+  <h2><span class="num">02</span> Crea el evento</h2>
+  <p>Haz clic en <strong>+ Nuevo evento</strong> y completa:</p>
+  <ul>
+    <li><strong>Título y descripción</strong>: lo que verá la audiencia al entrar.</li>
+    <li><strong>Modo de chat</strong>: libre, moderado (los mensajes requieren tu aprobación) o apagado.</li>
+    <li><strong>Plantilla</strong> (opcional): si guardaste un formato de evento anterior, úsalo para pre-llenar todo.</li>
+  </ul>
+  <p>El evento nace en estado <strong>Creado</strong> — todavía no es visible como transmisión.</p>
+</section>
+
+<section id="compartir">
+  <h2><span class="num">03</span> Comparte los links</h2>
+  <ul>
+    <li><strong>Link de participación</strong>: quien lo abra puede anotarse con su nombre y escribir hasta 3 preguntas. Sin registro.</li>
+    <li><strong>Link de espectador</strong>: página pública para seguir el evento en vivo y dar likes.</li>
+  </ul>
+</section>
+
+<section id="activar">
+  <h2><span class="num">04</span> Activa el evento</h2>
+  <p>
+    Cuando estés listo para arrancar, haz clic en <strong>Activar</strong>. Se crea la sala de video en vivo
+    y el evento pasa a estado <strong>Activo</strong>. A partir de aquí la cola funciona en tiempo real.
+  </p>
+</section>
+
+<section id="moderar">
+  <h2><span class="num">05</span> Modera la cola</h2>
+  <p>Las solicitudes de la audiencia llegan como <strong>pendientes</strong>. Para cada una puedes:</p>
+  <ul>
+    <li><strong>Aprobar</strong>: el participante entra a la cola con un número de posición.</li>
+    <li><strong>Rechazar</strong>: la solicitud se descarta.</li>
+    <li><strong>Reordenar</strong>: cambia las posiciones según el interés de las preguntas.</li>
+  </ul>
+  <p>
+    Los primeros 3 de la cola se <strong>preconectan</strong> automáticamente: su cámara y micrófono
+    quedan listos antes de salir al aire, así no hay esperas entre pregunta y pregunta.
+  </p>
+</section>
+
+<section id="al-aire">
+  <h2><span class="num">06</span> Pon preguntas al aire</h2>
+  <p>
+    Haz clic en <strong>Al aire</strong> sobre el primero de la cola: el participante entra a la sala de video
+    y hace su pregunta en vivo. Cuando termina, pasas al siguiente — el anterior queda marcado como atendido.
+    Ves las pre-preguntas de cada participante antes de darle el aire.
+  </p>
+</section>
+
+<section id="grabar">
+  <h2><span class="num">07</span> Graba (opcional)</h2>
+  <p>
+    Activa la grabación desde el panel del evento. El servidor graba la sala como archivo MP4
+    que luego puedes descargar o enviar a postPod.
+  </p>
+</section>
+
+<section id="finalizar">
+  <h2><span class="num">08</span> Finaliza el evento</h2>
+  <p>
+    Al hacer clic en <strong>Finalizar</strong>, la sala se cierra y el evento pasa a estado <strong>Finalizado</strong>.
+    Si hubo grabación, se exporta automáticamente a <a class="x-link postpod" href="/docs/postpod">postPod</a>
+    como proyecto de edición.
+  </p>
+  <div class="callout">
+    <div class="ctag">SIGUIENTE</div>
+    <div class="cbody"><p>¿Vas a usar el Q&amp;A dentro de una grabación de podcast? Mira las <a href="/docs/amapod/integraciones">integraciones con prodPod</a>.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#entrar">Entrar</a>
+  <a href="#crear-evento">Crear evento</a>
+  <a href="#compartir">Compartir links</a>
+  <a href="#activar">Activar</a>
+  <a href="#moderar">Moderar la cola</a>
+  <a href="#al-aire">Al aire</a>
+  <a href="#grabar">Grabar</a>
+  <a href="#finalizar">Finalizar</a>
+</nav>
+{% endblock %}

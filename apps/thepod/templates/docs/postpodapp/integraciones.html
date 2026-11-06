@@ -1,0 +1,112 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod para Mac · Integraciones — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRACIONES</div>
+  <h1>Cómo la app se conecta con la suite</h1>
+  <p class="lede">
+    Usa la misma cuenta que el resto de thePod. Trae de <a class="x-link postpod" href="/docs/postpod">postPod</a> el proyecto,
+    de <a class="x-link prepod" href="/docs/prepod">prePod</a> todo lo del episodio, y publica con lo que prePod ya tiene configurado.
+  </p>
+</header>
+
+<section id="cuenta">
+  <h2><span class="num">01</span> Una sola cuenta</h2>
+  <p>
+    El usuario y la contraseña son los de thePod. La app inicia sesión en prePod y en postPod con esas credenciales
+    y solo ve lo que tu cuenta puede ver en la web (tus proyectos, o todos si eres administrador).
+    La cuenta queda guardada en tu Mac, en <code>~/Library/Application Support/postPod/cuenta.dat</code> (no en el llavero,
+    para que macOS no pida tu clave en cada actualización).
+  </p>
+</section>
+
+<section id="pre">
+  <h2><span class="num">02</span> La sección pre es prePod</h2>
+  <p>
+    Lo que haces en <strong>pre</strong> se guarda directo en prePod, al instante: episodios, guion, rundown, invitados, ideas,
+    plantillas, branding, equipo, sponsors, soundboard, tu página y la distribución. Lo ves igual en la web y en la app,
+    y los correos a los invitados salen desde prePod.
+  </p>
+  <p>
+    Las secciones de <strong>teleprompter</strong> del guion (quién lo lee, cuándo, velocidad, tamaño, encadenado) también se guardan en prePod,
+    y es prePod quien se las entrega a la sala de prodPod, esté la sala en la Mac o en la web.
+  </p>
+</section>
+
+<section id="prod">
+  <h2><span class="num">03</span> La sección prod es prodPod</h2>
+  <p>
+    La sala de la app entra a la misma sala que prodPod web: conductores y director desde la Mac o la web, mezclados; los invitados por web.
+    Lo que la Mac aporta: la grabación se hace en tu Mac en 1080p (o 720p si la conexión no da) y se sube por partes mientras grabas,
+    así que si se cae la conexión no se pierde nada. Los <strong>cintillos</strong> que el director lanza en vivo, los <strong>sponsors</strong>
+    que se marcan en su momento, los <strong>efectos</strong> del soundboard y los <strong>momentos</strong> llegan a post ya puestos en su segundo.
+  </p>
+</section>
+
+<section id="desde-postpod">
+  <h2><span class="num">04</span> Desde postPod</h2>
+  <p>
+    <strong>Traer a la Mac</strong> baja el proyecto desde postPod (lo mismo que el botón de exportar
+    de la web) y lo abre. De ahí, la app usa:
+  </p>
+  <ul>
+    <li><strong>Pistas</strong> de cada participante (video y audio), con su desfase en el tiempo.</li>
+    <li><strong>Participantes</strong> y sus nombres.</li>
+    <li><strong>Transcripciones</strong> ya hechas, si existen, y los <strong>cortes</strong> del editor de transcript.</li>
+    <li><strong>Momentos</strong>, que se convierten en reels.</li>
+    <li><strong>Estilo de subtítulos</strong> configurado en la web.</li>
+    <li><strong>Efectos</strong> ya puestos en la línea de audio, en su momento exacto, y el <strong>soundboard</strong> del podcast para agregar más.</li>
+    <li><strong>Fotos de los invitados</strong>, que salen junto a su nombre en el video.</li>
+    <li><strong>Cintillos del director</strong>, con su segundo exacto, marcados «del director».</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">SOLO IDA</div>
+    <div class="cbody"><p>La app trae proyectos, pero no devuelve la edición a postPod web. Si cambias algo en la web (por ejemplo, marcas más momentos), usa <strong>Traer de nuevo</strong>.</p></div>
+  </div>
+</section>
+
+<section id="desde-prepod">
+  <h2><span class="num">05</span> Desde prePod</h2>
+  <p>Si el episodio fue planificado en prePod, el paquete trae y la app usa:</p>
+  <ul>
+    <li><strong>Datos del episodio</strong>: número, título, descripción, resumen del podcast y links. Van a los metadatos y a las notas del export.</li>
+    <li><strong>Branding</strong>: el logo como marca de agua y el fondo del podcast en el layout <em>Estudio</em>.</li>
+    <li><strong>Sponsors</strong> con su logo: aparecen en el video en el bloque del guion que les corresponde (el minuto real si prodPod lo marcó, si no el planificado).</li>
+    <li><strong>Guion</strong>: visible en <em>Tu grabación</em> y usado para los capítulos.</li>
+  </ul>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">06</span> Publicar con prePod</h2>
+  <p>La app no guarda claves de ninguna red: publica a través de prePod, donde las cuentas se conectan una sola vez (Configurar podcast → Redes). En la app, la sección <strong>pub</strong> es la que publica.</p>
+  <table>
+    <thead><tr><th>Destino</th><th>Cómo llega</th><th>Qué necesita en prePod</th></tr></thead>
+    <tbody>
+      <tr><td>Spotify y Apple Podcasts</td><td>La app envía el audio a prePod y prePod lo publica en tu podcast. Las plataformas lo muestran solas.</td><td>Tu podcast configurado para publicar.</td></tr>
+      <tr><td>YouTube</td><td>La app sube el video 16:9; prePod lo publica en tu canal. Hasta que Google verifique la app, queda en privado: lo cambias a Público en YouTube.</td><td>Canal conectado en Redes.</td></tr>
+      <tr><td>YouTube Shorts</td><td>El reel vertical, publicado como Short en el mismo canal.</td><td>El mismo canal.</td></tr>
+      <tr><td>Instagram y Reels</td><td>El reel como Reel, o un cuadro del episodio como portada con texto.</td><td>Cuenta profesional (Creador o Empresa) conectada en Redes; mientras la app está en revisión de Meta, solo cuentas evaluadoras.</td></tr>
+      <tr><td>TikTok</td><td>El reel llega a tu bandeja de TikTok con el texto listo para pegar; lo publicas desde el teléfono. Hasta 5 pendientes por día.</td><td>Cuenta de TikTok conectada en Redes.</td></tr>
+      <tr><td>Facebook</td><td>Próximamente.</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Si se corta la conexión mientras sube, la app lo vuelve a intentar sola; una publicación programada la hace thePod a la hora
+    aunque la app esté cerrada. Al terminar, te muestra el link publicado en la lista de publicaciones de pub.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#cuenta">Una sola cuenta</a>
+  <a href="#pre">La sección pre es prePod</a>
+  <a href="#prod">La sección prod es prodPod</a>
+  <a href="#desde-postpod">Desde postPod</a>
+  <a href="#desde-prepod">Desde prePod</a>
+  <a href="#publicar">Publicar con prePod</a>
+</nav>
+{% endblock %}

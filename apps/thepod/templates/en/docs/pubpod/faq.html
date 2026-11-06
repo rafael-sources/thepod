@@ -1,0 +1,75 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · FAQ — Docs · thePod{% endblock %}
+{% block description %}pubPod frequently asked questions: dotted stars, Instagram that won't connect, TikTok not showing on the profile, YouTube as private, where pubPod is on the web.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Frequently asked questions</h1>
+  <p class="lede">What beta testers ask most.</p>
+</header>
+
+<section class="faq" id="faq">
+  <h2><span class="num">01</span> General</h2>
+
+  <details>
+    <summary>Where is pubPod on the web?</summary>
+    <div class="ans"><p>It isn't: pub is a section of thePod for Mac. On the web, prePod → Set up podcast → Networks only connects the accounts. Publishing the episode to the feed and to YouTube can still be done from prePod, as always.</p></div>
+  </details>
+
+  <details>
+    <summary>A star shows as dotted</summary>
+    <div class="ans"><p>That account isn't connected, or its permission expired. Tap it: the browser opens to grant the permission and, when you come back, the star is filled. They can also be connected in pre → Set up podcast → Networks.</p></div>
+  </details>
+
+  <details>
+    <summary>What happens if I close the app while it's publishing?</summary>
+    <div class="ans"><p>If the file has already finished uploading, nothing: thePod finishes on its own and scheduled posts go out at their time. If you close before the upload finishes, when you come back you'll see the post with Retry.</p></div>
+  </details>
+
+  <details>
+    <summary>Does anything get published without me asking?</summary>
+    <div class="ans"><p>No. Only what you tap Export and publish on goes out, or what you scheduled. Connecting an account doesn't publish anything.</p></div>
+  </details>
+
+  <h2><span class="num">02</span> By network</h2>
+
+  <details>
+    <summary>Instagram won't let me connect</summary>
+    <div class="ans"><p>It has to be a professional account (Creator or Business); you switch it in the Instagram app, Settings → Account type. And while thePod is under Meta review, only accounts added as testers can publish: write to us with your username and we'll add you.</p></div>
+  </details>
+
+  <details>
+    <summary>I published to TikTok and it doesn't show on my profile</summary>
+    <div class="ans"><p>That's normal: the video lands in your TikTok inbox (the “You have a video ready” notification). You open it on your phone, paste the text the app left you and publish it from there. Until TikTok reviews the app, publishing directly to the profile isn't possible.</p></div>
+  </details>
+
+  <details>
+    <summary>TikTok says I have too many pending videos</summary>
+    <div class="ans"><p>TikTok allows at most 5 videos waiting in the inbox per day. Publish or discard the ones you have on your phone and retry.</p></div>
+  </details>
+
+  <details>
+    <summary>The video uploaded to YouTube but as private</summary>
+    <div class="ans"><p>Until Google verifies the app, everything that uploads stays private. Open it on YouTube and switch it to Public. Pub marks it “Uploaded as private” so you don't miss it.</p></div>
+  </details>
+
+  <details>
+    <summary>Spotify and Apple Podcasts are still dotted</summary>
+    <div class="ans"><p>Both depend on the feed: the podcast has to be set up to publish in prePod (Set up podcast → Distribution). Once that's done, they light up together.</p></div>
+  </details>
+
+  <details>
+    <summary>What about Facebook?</summary>
+    <div class="ans"><p>It's the eighth star and it's in the arc, but it still shows as “coming very soon”.</p></div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#faq">Frequently asked questions</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Integrations — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRATIONS</div>
+  <h1>How prePod connects with the suite</h1>
+  <p class="lede">prePod is the first layer: everything you plan here flows to the other two apps automatically.</p>
+</header>
+
+<section id="hacia-prodpod">
+  <h2><span class="num">01</span> prePod to prodPod</h2>
+  <p>When you click <strong>Send to prodPod</strong> on an episode, a recording session is created automatically with:</p>
+  <ul>
+    <li><strong>Guest roster</strong>: names, roles and emails so you can invite them straight from prodPod.</li>
+    <li><strong>Soundboard</strong>: every sound you set up in the podcast's library, ready to use during the recording.</li>
+    <li><strong>Planned markers</strong>: the rundown blocks become chapter markers the host can trigger during the recording.</li>
+  </ul>
+  <p>Once the recording is underway, the episode in prePod shows the status in real time: "recording now" or "recording ready".</p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>Sending the same episode again updates the existing session — it doesn't create a new one. Handy if you added a guest at the last minute.</p></div>
+  </div>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> prePod to postPod</h2>
+  <p>
+    When you click <strong>Send to postPod</strong>, an editing project linked to the episode is created.
+    If the episode was already recorded in prodPod, the recordings are already available in the project.
+  </p>
+  <p>
+    Along with the episode go the branding (logo, background, cover), the sponsor logos, the soundboard
+    sounds, the guest photos and the rundown with its planned offsets. If you send the
+    episode again, the project in postPod is refreshed with the updated data without touching the edit.
+    The details are in the <a href="/docs/postpod/integraciones#desde-prepod">postPod doc</a>.
+  </p>
+</section>
+
+<section id="calendario-ics">
+  <h2><span class="num">03</span> Calendar and .ics</h2>
+  <p>You can download the recording schedule as an .ics file:</p>
+  <ul>
+    <li><strong>Per episode</strong>: "Download .ics" button in the episode detail view.</li>
+    <li><strong>Whole podcast</strong>: download button in the Calendar view.</li>
+  </ul>
+  <p>The files are compatible with Google Calendar, Outlook and Apple Calendar.</p>
+  <div class="callout">
+    <div class="ctag">NOTE</div>
+    <div class="cbody"><p>The .ics is a one-time download. If you change an episode's date, download the file again to update your external calendar.</p></div>
+  </div>
+</section>
+
+<section id="invitaciones-email">
+  <h2><span class="num">04</span> Email invitations</h2>
+  <p>
+    If your instance has email configured, RSVP invitations are sent straight to the guest's inbox
+    with an .ics file attached. If it isn't configured, you can copy the invitation link and send it
+    manually by any other means (WhatsApp, email, etc.).
+  </p>
+  <p>The guest confirms with a single click, no thePod account needed.</p>
+</section>
+
+<section id="landing-rss">
+  <h2><span class="num">05</span> Public landing page and RSS</h2>
+  <p>Your podcast's public landing page can be visited without logging in. It includes:</p>
+  <ul>
+    <li>Episode list (if you turned it on).</li>
+    <li>Team section.</li>
+    <li>Custom content (text blocks, images, etc.).</li>
+    <li><strong>RSS feed</strong> compatible with Apple Podcasts, Spotify, Google Podcasts and other podcast directories.</li>
+  </ul>
+</section>
+
+<section id="redes">
+  <h2><span class="num">06</span> Social networks</h2>
+  <p>
+    In Podcast settings → Social you connect YouTube, Instagram and TikTok (and the feed for Spotify and Apple Podcasts).
+    prePod stores the permission to publish on your behalf, never your password. Nothing is published from there: that's done by
+    <strong>pubPod</strong>, in thePod for Mac, with what comes out of postPod. Instagram requires a professional account; TikTok leaves
+    the video in your inbox so you can publish it from your phone; YouTube stays private until Google verifies the app.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#hacia-prodpod">prePod to prodPod</a>
+  <a href="#hacia-postpod">prePod to postPod</a>
+  <a href="#calendario-ics">Calendar .ics</a>
+  <a href="#invitaciones-email">Invitations</a>
+  <a href="#landing-rss">Landing page and RSS</a>
+  <a href="#redes">Social networks</a>
+</nav>
+{% endblock %}

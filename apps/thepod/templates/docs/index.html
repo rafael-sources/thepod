@@ -1,0 +1,141 @@
+{% extends "docs/_base.html" %}
+
+{% set theme = "hub" %}
+{% block title %}Docs · thePod{% endblock %}
+{% block description %}Documentación de la suite thePod: prePod (preproducción), prodPod (estudio en vivo), amaPod (Q&A en vivo), postPod (edición), pubPod (publicar) y thePod para Mac.{% endblock %}
+
+{% block body %}
+<div style="max-width: 980px; margin: 0 auto;">
+
+  <section class="docs-index-hero">
+    <div class="eyebrow" style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 14px;">
+      DOCUMENTACIÓN · de punta a punta
+    </div>
+    <h1>De la <em>idea</em> a tus redes.</h1>
+    <p class="lede">
+      Cinco módulos que se hablan entre sí, y la app para Mac que los reúne. Qué hace cada uno, cómo se conectan y cómo sacarles todo.
+    </p>
+  </section>
+
+  <a href="/docs/postpodapp/quickstart" class="docs-start">
+    <div>
+      <div class="k">Empezar por aquí</div>
+      <div class="t">Tu primer episodio en una hora</div>
+      <div class="d">Quickstart: de pre a pub, paso a paso.</div>
+    </div>
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
+  </a>
+
+  <div class="docs-index-grid">
+
+    <a href="/docs/prepod" class="docs-index-card theme-prepod" style="--accent: #5a8bff; --accent-soft: rgba(90,139,255,0.14); --accent-dim: rgba(90,139,255,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/prepod.svg') }}" alt="">
+      <div class="tag">Preproducción</div>
+      <div class="name">prePod</div>
+      <p class="desc">Branding del podcast, kanban de episodios, rundown, guion, invitados con RSVP, calendario y plantillas recurrentes.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/prodpod" class="docs-index-card theme-prodpod" style="--accent: #ff3b3b; --accent-soft: rgba(255,59,59,0.14); --accent-dim: rgba(255,59,59,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/prodpod.svg') }}" alt="">
+      <div class="tag">Estudio en vivo</div>
+      <div class="name">prodPod</div>
+      <p class="desc">Grabación remota WebRTC con video multipista, mic check, soundboard, chat backstage, screen share y RTMP a YouTube/Twitch.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/postpod" class="docs-index-card theme-postpod" style="--accent: #f4c770; --accent-soft: rgba(244,199,112,0.14); --accent-dim: rgba(244,199,112,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/postpod.svg') }}" alt="">
+      <div class="tag">Edición y publicación</div>
+      <div class="name">postPod</div>
+      <p class="desc">Edición no-destructiva, momentos, captions Whisper, edición por transcripción, speech enhancement y export con notas auto.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/amapod" class="docs-index-card theme-amapod" style="--accent: #14b8a6; --accent-soft: rgba(20,184,166,0.14); --accent-dim: rgba(20,184,166,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/amapod.svg') }}" alt="">
+      <div class="tag">Q&amp;A en vivo</div>
+      <div class="name">amaPod</div>
+      <p class="desc">Eventos AMA con cola de preguntas moderada, participantes sin cuenta, preconexión, chat moderado, espectadores con likes y grabación.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Conceptos</span><span>Funcionalidades</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/pubpod" class="docs-index-card pub theme-pubpod" style="--accent: #ffffff; --accent-soft: rgba(255,255,255,0.12); --accent-dim: rgba(255,255,255,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/pubpod.svg') }}" alt="">
+      <div class="tag">Publicar</div>
+      <div class="name">pubPod</div>
+      <p class="desc">Ocho destinos: el episodio a YouTube, Spotify y Apple Podcasts; los reels a Shorts, Reels y TikTok. Ahora o programado.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Las estrellas</span><span>Qué pide cada red</span><span>FAQ</span>
+      </div>
+    </a>
+
+    <a href="/docs/postpodapp" class="docs-index-card mac theme-postpod" style="--accent: #E8C47A; --accent-soft: rgba(232,196,122,0.14); --accent-dim: rgba(232,196,122,0.45);">
+      <img class="icon" src="{{ url_for('static', filename='icons/postpodapp.svg') }}" alt="">
+      <div class="tag">App para Mac</div>
+      <div class="name">thePod para Mac</div>
+      <p class="desc">Las cinco secciones en tu Mac: trae el episodio, arregla el sonido, subtítulos, reels desde momentos, la portada donde todos sonríen, y publica desde pub.</p>
+      <div class="toc-mini">
+        <span>Quickstart</span><span>Funcionalidades</span><span>Atajos</span><span>FAQ</span>
+      </div>
+    </a>
+
+  </div>
+
+  <section style="margin-top: 56px; padding-top: 36px; border-top: 1px solid var(--ink-line);">
+    <div class="eyebrow" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--paper-dim); font-weight: 600; margin-bottom: 12px;">
+      ¿CÓMO SE CONECTAN?
+    </div>
+    <h2 style="font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: -0.018em; margin: 0 0 14px;">
+      El flujo natural
+    </h2>
+
+    <div class="docs-flow-h" style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr auto 1fr; gap: 12px; align-items: stretch; margin-top: 24px;">
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #5a8bff;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #5a8bff; font-weight: 700;">PREPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Planeas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Episodio + guion + invitados + calendario.</p>
+      </div>
+      <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #ff3b3b;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ff3b3b; font-weight: 700;">PRODPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Grabas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Sesión en vivo, video multipista, marcadores.</p>
+      </div>
+      <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #f4c770;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #f4c770; font-weight: 700;">POSTPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Editas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Cortes, subtítulos, sonido de estudio, reels.</p>
+      </div>
+      <div style="display: grid; place-items: center; color: var(--paper-dim); font-size: 22px;">→</div>
+      <div style="padding: 18px; background: var(--ink-panel); border: 1px solid var(--ink-line); border-radius: 10px; border-left: 3px solid #ffffff;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #ffffff; font-weight: 700;">PUBPOD</div>
+        <div style="font-family: var(--font-display); font-size: 17px; margin: 6px 0;">Publicas</div>
+        <p style="font-size: 13px; line-height: 1.55; color: var(--paper-soft); margin: 0;">Episodio y reels a tus ocho destinos.</p>
+      </div>
+    </div>
+
+    <div class="docs-flow-v">
+      <div class="step" style="--c:#5a8bff"><div class="dotcol"><span class="dot"></span><span class="line"></span></div><div class="txt"><span class="nm">prePod</span><span class="vb">Planeas</span><div class="wh">Episodio, guion, invitados, calendario. Conectas tus redes.</div></div></div>
+      <div class="step" style="--c:#ff3b3b"><div class="dotcol"><span class="dot"></span><span class="line"></span></div><div class="txt"><span class="nm">prodPod</span><span class="vb">Grabas</span><div class="wh">Sesión en vivo, cada voz en su pista, marcadores.</div></div></div>
+      <div class="step" style="--c:#14b8a6"><div class="dotcol"><span class="dot"></span><span class="line"></span></div><div class="txt"><span class="nm">amaPod</span><span class="vb">Preguntas</span><div class="wh">La audiencia entra con sus preguntas al estudio.</div></div></div>
+      <div class="step" style="--c:#f4c770"><div class="dotcol"><span class="dot"></span><span class="line"></span></div><div class="txt"><span class="nm">postPod</span><span class="vb">Editas</span><div class="wh">Cortes, subtítulos, sonido de estudio, reels.</div></div></div>
+      <div class="step" style="--c:#ffffff"><div class="dotcol"><span class="dot"></span></div><div class="txt"><span class="nm">pubPod</span><span class="vb">Publicas</span><div class="wh">Episodio y reels a tus ocho destinos, ahora o programado.</div></div></div>
+    </div>
+
+    <p style="margin-top: 22px; font-size: 14.5px; color: var(--paper-soft); line-height: 1.65; max-width: 70ch;">
+      Cada app le pasa el contexto a la siguiente: prePod le dice a prodPod quién participa y cuándo, prodPod le entrega a postPod las pistas con marcadores, amaPod suma las preguntas de la audiencia dentro del estudio, y pubPod publica lo que postPod exportó. Una cuenta, cero copiar y pegar.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

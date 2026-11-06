@@ -1,0 +1,31 @@
+[Unit]
+Description=thePod (suite landing/hub) — Flask via gunicorn
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thepod
+Group=thepod
+WorkingDirectory=/srv/thepod/thepod
+Environment=PATH=/srv/thepod/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/thepod/.local/bin/gunicorn \
+    --workers 1 \
+    --threads 4 \
+    --bind 0.0.0.0:5003 \
+    --timeout 60 \
+    --access-logfile - \
+    --error-logfile - \
+    'app:create_app()'
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/srv/thepod/thepod /srv/thepod/.podpod
+
+[Install]
+WantedBy=multi-user.target

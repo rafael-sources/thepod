@@ -1,0 +1,113 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Primeros pasos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">PRIMEROS PASOS</div>
+  <h1>Tu primera grabación paso a paso</h1>
+  <p class="lede">
+    Desde abrir la sesión hasta tener las pistas grabadas y listas para editar en
+    <a class="x-link postpod" href="/docs/postpod">postPod</a>.
+    Si tu episodio ya fue enviado desde <a class="x-link prepod" href="/docs/prepod">prePod</a>,
+    la sesión te estará esperando.
+  </p>
+</header>
+
+<section id="abrir-sesion">
+  <h2><span class="num">01</span> Abre la sesión</h2>
+  <p>
+    Al entrar a prodPod verás la lista de sesiones disponibles. Las sesiones llegan desde prePod
+    cuando el host envía un episodio a producción. Haz clic en la sesión que quieres grabar para abrirla.
+  </p>
+  <div class="callout">
+    <div class="ctag">SI NO LA VES</div>
+    <div class="cbody"><p>Confirma con el host que haya enviado el episodio desde prePod haciendo clic en "Enviar a prodPod". Solo los participantes del roster ven la sesión.</p></div>
+  </div>
+</section>
+
+<section id="prejoin">
+  <h2><span class="num">02</span> Configura tu cámara y micrófono</h2>
+  <p>Antes de entrar al estudio, llegarás a la pantalla de pre-join. Aquí puedes:</p>
+  <ul>
+    <li>Seleccionar tu <strong>cámara</strong> desde el menú desplegable.</li>
+    <li>Seleccionar tu <strong>micrófono</strong> desde el menú desplegable.</li>
+    <li>Ejecutar el <strong>asistente de mic check</strong>: haz clic en "Mic check", habla con normalidad durante 10 segundos y el sistema analizará tu nivel de audio. Al terminar, te sugerirá un ajuste de ganancia para que tu voz se escuche clara y pareja.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>El mic check recuerda tu configuración para cada micrófono. Si siempre usas el mismo, solo necesitas hacerlo una vez.</p></div>
+  </div>
+</section>
+
+<section id="entrar">
+  <h2><span class="num">03</span> Entra al estudio</h2>
+  <p>
+    Haz clic en "Entrar" para acceder al estudio. Verás la grilla de video con todos los participantes
+    que ya están conectados. Cada recuadro muestra el nombre del participante y su rol (host, co-host o invitado).
+    El participante que esté hablando se destaca con un borde de color.
+  </p>
+</section>
+
+<section id="ready-record">
+  <h2><span class="num">04</span> Inicia la grabación</h2>
+  <p>
+    Cuando todos estén listos, el host hace clic en <strong>"Listo"</strong> (Ready).
+    Esto inicia una <strong>cuenta regresiva de 3 segundos</strong> que aparece sincronizada en la pantalla de todos los participantes.
+  </p>
+  <p>
+    Al llegar a cero, la grabación comienza automáticamente en el navegador de cada persona.
+    El audio y video se graban localmente, lo que significa que la calidad no depende de la conexión a internet
+    — aunque la videollamada se entrecorte, el archivo local sale limpio.
+  </p>
+</section>
+
+<section id="durante-grab">
+  <h2><span class="num">05</span> Graba tu episodio</h2>
+  <p>Durante la grabación puedes:</p>
+  <ul>
+    <li><strong>Disparar sonidos</strong> del soundboard (clic en un pad o teclas 1-9).</li>
+    <li><strong>Marcar capítulos</strong> con el botón de capítulo o la tecla <kbd>C</kbd>.</li>
+    <li><strong>Compartir pantalla</strong> para mostrar contenido a los participantes (se graba como pista separada).</li>
+    <li><strong>Usar el chat</strong> para comunicarte por texto (hay un canal de backstage solo para host y co-host, invisible para invitados).</li>
+    <li><strong>Levantar la mano</strong> (tecla <kbd>R</kbd>) para señalar que quieres intervenir.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">NOTA</div>
+    <div class="cbody"><p>Si un invitado pierde la conexión momentáneamente, su grabación local sigue corriendo en su navegador. Al reconectarse, volverá a ver a los demás.</p></div>
+  </div>
+</section>
+
+<section id="terminar">
+  <h2><span class="num">06</span> Finaliza y envía a postPod</h2>
+  <p>
+    Cuando termines, el host hace clic en <strong>"Detener grabación"</strong>. Las pistas quedan guardadas:
+    un archivo de audio y uno de video por cada participante, más las grabaciones de pantalla si las hubo.
+  </p>
+  <p>
+    Desde la pantalla de sesión finalizada, haz clic en <strong>"Enviar a postPod"</strong> para crear
+    (o actualizar) un proyecto en postPod con:
+  </p>
+  <ul>
+    <li>Cada pista como clip listo para el timeline.</li>
+    <li>Los marcadores de capítulo como momentos.</li>
+    <li>Los disparos de sonido como referencias de tiempo.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">SIGUIENTE</div>
+    <div class="cbody"><p>Ve al <a href="/docs/postpod/quickstart">Quickstart de postPod</a> para saber qué hacer con esas pistas.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#abrir-sesion">Abrir sesión</a>
+  <a href="#prejoin">Cámara y micrófono</a>
+  <a href="#entrar">Entrar al estudio</a>
+  <a href="#ready-record">Iniciar grabación</a>
+  <a href="#durante-grab">Durante la grabación</a>
+  <a href="#terminar">Finalizar y enviar</a>
+</nav>
+{% endblock %}

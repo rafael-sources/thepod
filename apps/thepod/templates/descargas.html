@@ -1,0 +1,72 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}Descargas · thePod{% endblock %}
+{% block description %}Descarga thePod para Mac.{% endblock %}
+
+{% block body %}
+<div style="max-width: 760px; margin: 0 auto; padding-top: 24px;">
+
+  <header class="docs-header">
+    <div class="eyebrow">DESCARGAS</div>
+    <h1>thePod para Mac</h1>
+    <p class="lede">
+      La suite en tu Mac. Hoy trae la etapa <strong>post</strong>: traes tus episodios de postPod y los terminas ahí
+      —sonido de estudio, sin silencios ni muletillas, subtítulos, reels y publicación— con pocos botones.
+    </p>
+  </header>
+
+  {% if not username %}
+    <div class="callout">
+      <div class="ctag">INICIA SESIÓN</div>
+      <div class="cbody"><p>La descarga es para quienes usan thePod. <a href="/">Entra con tu cuenta</a> y vuelve a esta página.</p></div>
+    </div>
+  {% elif not mac_app %}
+    <div class="callout">
+      <div class="ctag">PRONTO</div>
+      <div class="cbody"><p>Todavía no hay una versión publicada. Vuelve en un rato.</p></div>
+    </div>
+  {% else %}
+    <section id="descargar" style="display:flex; align-items:center; gap:22px; flex-wrap:wrap; padding:22px; background:var(--ink-panel); border:1px solid var(--ink-line); border-radius:14px; margin-bottom:34px;">
+      <img src="{{ url_for('static', filename='icons/thepod-compact.svg') }}" alt="" width="72" height="72" style="border-radius:16px;">
+      <div style="flex:1; min-width:220px;">
+        <div style="font-family:var(--font-display); font-size:22px; font-weight:600;">thePod {{ mac_app.version or '' }}</div>
+        <div style="color:var(--paper-dim); font-size:13.5px; margin-top:4px;">
+          Para Mac con chip de Apple (M1 o posterior) y macOS 15 o posterior
+          · {{ ((mac_app.size or 0) / 1048576) | round | int }} MB
+        </div>
+      </div>
+      <a href="/descargas/thepod-mac" style="background:var(--accent); color:#1A1510; font-weight:700; padding:12px 22px; border-radius:10px; text-decoration:none;">Descargar</a>
+    </section>
+  {% endif %}
+
+  <section id="instalar">
+    <h2><span class="num">01</span> Instálala</h2>
+    <ol>
+      <li>Abre el archivo que descargaste (<strong>thePod</strong>, en tu carpeta Descargas).</li>
+      <li>Arrastra <strong>thePod</strong> a la carpeta <strong>Aplicaciones</strong> que aparece al lado.</li>
+      <li>Ábrela desde Aplicaciones o Launchpad.</li>
+    </ol>
+  </section>
+
+  <section id="primera-vez">
+    <h2><span class="num">02</span> La primera vez que la abres</h2>
+    <p>
+      La app está firmada y revisada por Apple: se abre sin avisos de seguridad. La primera vez te pide tres permisos, una sola vez:
+    </p>
+    <ol>
+      <li><strong>Cámara</strong> y <strong>micrófono</strong>, para grabar en prod.</li>
+      <li>Acceso a tu contraseña guardada: elige <strong>Permitir siempre</strong> para que no vuelva a preguntar.</li>
+    </ol>
+  </section>
+
+  <section id="empezar">
+    <h2><span class="num">03</span> Empieza</h2>
+    <p>
+      En <strong>Ajustes</strong> de la app escribe tu usuario y contraseña de thePod. En la pantalla de inicio verás tus
+      episodios de postPod: toca <strong>Traer a la Mac</strong> y sigue los pasos.
+      La guía completa está en la <a href="/docs/postpodapp">documentación de thePod para Mac</a>.
+    </p>
+  </section>
+
+</div>
+{% endblock %}

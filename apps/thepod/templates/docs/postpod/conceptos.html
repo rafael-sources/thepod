@@ -1,0 +1,178 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Conceptos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTOS</div>
+  <h1>El vocabulario de postPod</h1>
+  <p class="lede">Los términos clave que necesitas conocer para editar en postPod. Si vienes de otro editor de video, te van a sonar conocidos.</p>
+</header>
+
+<section id="proyecto">
+  <h2><span class="num">01</span> Proyecto</h2>
+  <p>
+    Tu espacio de trabajo de edición. Contiene todos los archivos multimedia, el timeline, los momentos y el historial de exports. Cada proyecto es independiente.
+    Si tu proyecto viene de <a class="x-link prodpod" href="/docs/prodpod">prodPod</a>, ya incluye las grabaciones y los marcadores de capítulo.
+  </p>
+</section>
+
+<section id="archivos">
+  <h2><span class="num">02</span> Archivos (media files)</h2>
+  <p>
+    Archivos de video, audio e imagen en tu proyecto. Los subes manualmente o llegan desde prodPod.
+    <strong>Los archivos originales nunca se modifican</strong> — son la fuente intacta sobre la que se construyen las ediciones.
+  </p>
+  <p>
+    Formatos soportados: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (imagen). Tamaño máximo por archivo: 2 GB.
+  </p>
+</section>
+
+<section id="timeline-clips">
+  <h2><span class="num">03</span> Timeline y clips</h2>
+  <p>
+    El timeline es la secuencia de clips que forma tu resultado final. Un <strong>clip</strong> es una referencia a un archivo multimedia
+    (o una porción de él) colocada en una posición específica. Puedes reordenar, recortar y eliminar clips sin tocar el archivo original.
+  </p>
+  <p>
+    Los clips pueden estar en diferentes <strong>tracks</strong> (Track 1, Track 2) para flujos de trabajo multicámara,
+    permitiéndote alternar entre ángulos de cámara durante la edición.
+  </p>
+</section>
+
+<section id="audio-lane">
+  <h2><span class="num">04</span> Audio lane</h2>
+  <p>
+    Una pista de audio paralela debajo del timeline principal, ideal para música de fondo, ambiente o cortinas de intro/outro.
+    Suena junto con el contenido principal. Cada clip en el audio lane tiene su propio control de volumen y puntos de inicio/fin.
+  </p>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Momentos</h2>
+  <p>
+    Marcas de tiempo que colocas en el timeline para anclar operaciones. Un momento puede ser:
+  </p>
+  <ul>
+    <li><strong>Relativo</strong> (por defecto): se mueve si agregas o quitas clips antes de él. Es el tipo más útil en la mayoría de los casos.</li>
+    <li><strong>Absoluto</strong>: permanece en un tiempo fijo sin importar los cambios en el timeline.</li>
+  </ul>
+  <p>
+    Puedes asignarle una <strong>duración</strong> al momento para definir un rango (inicio a fin) donde se aplican las operaciones.
+    Si tu proyecto vino de prodPod, los marcadores de capítulo de la grabación ya aparecen como momentos.
+  </p>
+</section>
+
+<section id="operaciones">
+  <h2><span class="num">06</span> Operaciones</h2>
+  <p>
+    Efectos y transformaciones que se aplican en un momento. Puedes agregar múltiples operaciones al mismo momento.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Operación</th><th>Qué hace</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Zoom in / out</td><td>Acerca o aleja la imagen en un punto específico</td></tr>
+      <tr><td>Efecto de color</td><td>Aplica blanco y negro, sepia o colores invertidos</td></tr>
+      <tr><td>Subtítulo</td><td>Texto en la parte superior o inferior del video</td></tr>
+      <tr><td>Audio mix</td><td>Mezcla un sonido sobre el audio principal</td></tr>
+      <tr><td>Audio replace</td><td>Reemplaza el audio por otro archivo</td></tr>
+      <tr><td>Switch video</td><td>Cambia de cámara (track) en ese punto</td></tr>
+      <tr><td>To vertical (9:16)</td><td>Recorta el frame a formato vertical para TikTok/Reels</td></tr>
+      <tr><td>Vertical split</td><td>Apila múltiples cámaras en vertical para 9:16</td></tr>
+      <tr><td>Text overlay</td><td>Sticker de texto estilo cómic con animación</td></tr>
+      <tr><td>Remove silences</td><td>Detecta y corta los silencios automáticamente</td></tr>
+      <tr><td>Jump to moment</td><td>Salta a otro momento (omite el contenido intermedio)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="rango">
+  <h2><span class="num">07</span> Rango seleccionado</h2>
+  <p>
+    Una banda amarilla en el timeline que creas arrastrando sobre la regla. Sirve para:
+  </p>
+  <ul>
+    <li><strong>Export parcial</strong>: exportar solo esa porción del video (ideal para clips de redes sociales).</li>
+    <li><strong>Loop de preview</strong>: reproducir en bucle esa sección para revisar los efectos antes de exportar.</li>
+    <li><strong>Zoom de timeline</strong>: presiona <kbd>Z</kbd> para hacer zoom a la selección y editar con más precisión.</li>
+  </ul>
+</section>
+
+<section id="transcript-cuts">
+  <h2><span class="num">08</span> Transcript cuts</h2>
+  <p>
+    Ediciones hechas en el Editor de Transcript. Cuando borras texto del transcript, el audio/video correspondiente se corta del export.
+    Es la forma más intuitiva de eliminar muletillas, pausas largas o secciones que no quieres.
+    Todos los cortes son no-destructivos y reversibles.
+  </p>
+</section>
+
+<section id="captions">
+  <h2><span class="num">09</span> Captions</h2>
+  <p>
+    Subtítulos palabra por palabra generados por Whisper (un modelo de inteligencia artificial). Disponibles en múltiples idiomas.
+    Pueden mostrarse en vivo durante la reproducción, quemarse en el video exportado, o exportarse como archivos SRT independientes.
+  </p>
+</section>
+
+<section id="export-jobs">
+  <h2><span class="num">10</span> Export jobs</h2>
+  <p>
+    Cada exportación es una tarea en segundo plano. Eliges un preset, opcionalmente activas opciones
+    (quemar captions, mejora de audio, generar notas, rango parcial), y el job muestra el progreso hasta completarse.
+    Puedes descargar el resultado o reproducirlo directamente.
+  </p>
+</section>
+
+<section id="presets">
+  <h2><span class="num">11</span> Presets de exportación</h2>
+  <p>Perfiles preconfigurados optimizados para cada plataforma:</p>
+  <table>
+    <thead>
+      <tr><th>Preset</th><th>Resolución</th><th>Formato</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>YouTube 1080p</td><td>1920x1080</td><td>MP4</td></tr>
+      <tr><td>YouTube 4K</td><td>3840x2160</td><td>MP4</td></tr>
+      <tr><td>TikTok / Reels vertical</td><td>1080x1920</td><td>MP4</td></tr>
+      <tr><td>Instagram cuadrado</td><td>1080x1080</td><td>MP4</td></tr>
+      <tr><td>WhatsApp</td><td>1280x720 (comprimido)</td><td>MP4</td></tr>
+      <tr><td>Podcast MP3</td><td>Solo audio</td><td>MP3</td></tr>
+      <tr><td>Podcast M4A</td><td>Solo audio</td><td>M4A</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="no-destructivo">
+  <h2><span class="num">12</span> Edición no-destructiva</h2>
+  <p>
+    El principio central de postPod. Tus archivos originales permanecen intactos. Cada corte, operación y ajuste se guarda
+    como instrucciones en el proyecto. Al exportar, todas las instrucciones se aplican para generar el archivo final.
+  </p>
+  <ul>
+    <li>Puedes modificar, quitar o agregar operaciones en cualquier momento sin perder nada.</li>
+    <li>Puedes exportar el mismo proyecto varias veces con diferentes presets.</li>
+    <li>Si eliminas una operación, el efecto desaparece — no hay que restaurar nada.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#proyecto">Proyecto</a>
+  <a href="#archivos">Archivos</a>
+  <a href="#timeline-clips">Timeline y clips</a>
+  <a href="#audio-lane">Audio lane</a>
+  <a href="#momentos">Momentos</a>
+  <a href="#operaciones">Operaciones</a>
+  <a href="#rango">Rango seleccionado</a>
+  <a href="#transcript-cuts">Transcript cuts</a>
+  <a href="#captions">Captions</a>
+  <a href="#export-jobs">Export jobs</a>
+  <a href="#presets">Presets</a>
+  <a href="#no-destructivo">No-destructivo</a>
+</nav>
+{% endblock %}

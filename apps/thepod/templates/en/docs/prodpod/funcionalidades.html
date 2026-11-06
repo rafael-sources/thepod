@@ -1,0 +1,234 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Features — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FEATURES</div>
+  <h1>Every studio tool in detail</h1>
+  <p class="lede">A detailed guide to every tool available in the prodPod studio.</p>
+</header>
+
+<section id="prejoin">
+  <h2><span class="num">01</span> Pre-join and mic check</h2>
+  <p>
+    Before entering the studio, you pick your camera and microphone from the dropdown menus.
+    You see a preview of your camera and a real-time audio level meter.
+  </p>
+  <p>
+    The <strong>mic check assistant</strong> records 10 seconds of your voice, analyzes the level and suggests a gain adjustment.
+    Your adjustment is remembered for that specific microphone.
+  </p>
+  <p>You can choose the video quality before connecting: Low (360p), Medium (480p) or High (720p).</p>
+</section>
+
+<section id="grilla">
+  <h2><span class="num">02</span> Participant grid</h2>
+  <p>
+    The studio's main view shows every participant in a video grid.
+    The active speaker (whoever is talking) gets a highlighted border.
+    Each tile shows the name, role, mute indicator and audio meter.
+  </p>
+  <p>Invited participants who haven't connected yet appear dimmed in the grid.</p>
+</section>
+
+<section id="ready-record">
+  <h2><span class="num">03</span> Ready, countdown and recording</h2>
+  <p>When the host is ready to record:</p>
+  <ol>
+    <li><strong>Get set</strong>: the host clicks “Get set” to signal they're almost ready.</li>
+    <li><strong>Ready</strong>: clicking “Ready” starts a 3-second countdown visible on every screen.</li>
+    <li><strong>Recording</strong>: when it hits zero, recording starts simultaneously in every browser. A red indicator appears with the elapsed time.</li>
+    <li><strong>Stop</strong>: the host clicks “Stop” to end the recording for every participant.</li>
+  </ol>
+</section>
+
+<section id="soundboard">
+  <h2><span class="num">04</span> Soundboard</h2>
+  <p>A panel of sound pads in the sidebar. Each pad has a name, a shortcut key and a color.</p>
+  <ul>
+    <li><strong>Click a pad</strong> (or its shortcut key): plays the sound and broadcasts it to every participant.</li>
+    <li><strong>Alt+click</strong>: private preview (cue) — only you hear it, it isn't broadcast.</li>
+    <li><strong>Esc</strong> or the “Stop all” button: stops every sound that's playing.</li>
+  </ul>
+  <p>
+    While a sound plays, voice audio is lowered automatically (ducking) so the effect comes through clearly.
+    Each pad has its own volume control.
+  </p>
+  <p>Soundboard triggers are logged with their exact time so postPod can place them on the timeline.</p>
+</section>
+
+<section id="screen-share">
+  <h2><span class="num">05</span> Screen sharing</h2>
+  <p>
+    Click the screen button to share your screen, a window or a browser tab.
+    Only one person can share at a time.
+  </p>
+  <p>
+    The shared screen appears as a large tile above the grid and is recorded as a separate track.
+    You can turn on “screen only” mode, where participants see only your screen, without your camera
+    — handy for demos or presentations.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">06</span> Chat (studio and backstage)</h2>
+  <p>Two chat panels:</p>
+  <ul>
+    <li><strong>Studio chat</strong>: every participant sees it. For general communication during the recording.</li>
+    <li><strong>Backstage</strong>: only the host and co-hosts see it. For private coordination (“we wrap in 2 minutes”, “skip this topic”, “good spot for the cut”).</li>
+  </ul>
+  <p>Messages are saved in the session history.</p>
+</section>
+
+<section id="hand-raise">
+  <h2><span class="num">07</span> Raise hand</h2>
+  <p>
+    Participants can raise their hand to signal they want to speak or have something to say.
+    A visual indicator appears on their video tile. Click again to lower it. Shortcut: <kbd>R</kbd> key.
+  </p>
+</section>
+
+<section id="markers">
+  <h2><span class="num">08</span> Chapter markers</h2>
+  <p>
+    The host can create markers while recording by clicking the moment button or pressing <kbd>C</kbd>.
+  </p>
+  <p>
+    Planned markers (imported from the prePod rundown) show up in a list — activate them when you reach that point in the recording.
+    Live markers are created on the fly.
+  </p>
+  <p>Every marker includes a timestamp and becomes a moment when the recording reaches postPod.</p>
+</section>
+
+<section id="practice">
+  <h2><span class="num">09</span> Practice mode</h2>
+  <p>
+    A rehearsal mode that works exactly like a real session but doesn't record.
+    Use the “Rehearsal” toggle in the top bar.
+  </p>
+  <p>
+    Use it to test audio levels, practice with the soundboard, check screen sharing
+    and make sure everything works before the real take.
+  </p>
+</section>
+
+<section id="rtmp">
+  <h2><span class="num">10</span> RTMP streaming</h2>
+  <p>Stream the session live to YouTube, Twitch or a custom RTMP server:</p>
+  <ol>
+    <li>Click the “Stream” button (only the host sees it).</li>
+    <li>Choose a preset (YouTube or Twitch) or enter a custom RTMP URL. Paste your stream key.</li>
+    <li>The stream runs alongside the local recording. You get both: the high-quality local files and the live broadcast.</li>
+  </ol>
+  <div class="callout">
+    <div class="ctag">NOTE</div>
+    <div class="cbody"><p>You need at least 5 Mbps of stable upload speed for a stream without dropouts.</p></div>
+  </div>
+</section>
+
+<section id="diagnostico">
+  <h2><span class="num">11</span> Diagnostics</h2>
+  <p>
+    A host tool that checks the state of the connection and the room.
+    It shows how many participants are connected and whether there are any discrepancies.
+    Use it if something doesn't seem to be working right.
+  </p>
+</section>
+
+<section id="kick">
+  <h2><span class="num">12</span> Remove a participant</h2>
+  <p>The host can remove a participant from the session with the kick button. Use it if someone joined by mistake or there's a disruption.</p>
+</section>
+
+<section id="invitado">
+  <h2><span class="num">13</span> Guest experience</h2>
+  <p>
+    Guests get a link to join without needing a thePod account.
+    When they open it, they see the session info and a button to enter.
+  </p>
+  <p>
+    Before entering, they go through the same pre-join (camera/microphone selection, preview).
+    Once inside, they see the grid, the soundboard and the chat, and they can raise their hand,
+    but they don't have access to the host controls (stop recording, streaming, diagnostics, invitations, kick).
+  </p>
+  <p>Their audio and video are recorded locally in their browser at the same quality as every other participant.</p>
+</section>
+
+<section id="layouts">
+  <h2><span class="num">14</span> Grid and spotlight views</h2>
+  <p>
+    The grid has two view modes: <strong>Grid</strong> (every participant at the same size) and
+    <strong>Spotlight</strong> (the active speaker large, everyone else as thumbnails). Spotlight
+    automatically follows whoever is speaking.
+  </p>
+</section>
+
+<section id="director">
+  <h2><span class="num">15</span> Control room (director)</h2>
+  <p>
+    A separate view for a production director, with tools that don't interrupt the participants:
+  </p>
+  <ul>
+    <li><strong>Live overlays</strong>: text banners, sponsor banners, featured comments, segment lower thirds, countdowns and graphics. They're turned on and off in real time and logged with their timestamp for postPod.</li>
+    <li><strong>Cues to the host</strong>: cue buttons — WRAP TOPIC, NEXT TOPIC, PAUSE, FASTER, SLOWER, READ AD or a custom message. The host sees them as a discreet on-screen notice.</li>
+    <li><strong>IFB (talkback)</strong>: private push-to-talk from the director into the host's ear — the other participants and the recording don't hear it.</li>
+    <li><strong>Force-mute</strong>: instantly mute any participant's microphone.</li>
+    <li><strong>Soundboard and chat</strong>: the director can fire sounds and write in the backstage.</li>
+    <li><strong>Recording control</strong>: start and stop recording from the control room.</li>
+  </ul>
+</section>
+
+<section id="teleprompter-sponsors">
+  <h2><span class="num">16</span> Sponsor teleprompter</h2>
+  <p>
+    Sponsor segments planned in the prePod rundown generate automatic alerts during the recording:
+    as the ad moment approaches, the host sees a notice with a countdown and the sponsor copy to read.
+    You can dismiss the alert if the timing changed.
+  </p>
+</section>
+
+<section id="panel-amapod">
+  <h2><span class="num">17</span> amaPod panel (Q&amp;A)</h2>
+  <p>
+    If the session has a linked amaPod event, an embedded panel appears with the audience question queue.
+    The host sees the approved questions and puts them on air without leaving the studio.
+  </p>
+</section>
+
+<section id="enviar-postpod">
+  <h2><span class="num">18</span> Send to postPod</h2>
+  <p>
+    When the recording ends, the recordings panel shows every track
+    (video + audio per participant, screen recordings). From there:
+  </p>
+  <ul>
+    <li><strong>Download ZIP</strong>: downloads every track in one compressed file.</li>
+    <li><strong>Send to postPod</strong>: creates or updates a project in postPod with every track as a clip, the chapter markers as moments, and the soundboard triggers with their timestamps.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#prejoin">Pre-join and mic check</a>
+  <a href="#grilla">Grid</a>
+  <a href="#ready-record">Ready / Record</a>
+  <a href="#soundboard">Soundboard</a>
+  <a href="#screen-share">Screen sharing</a>
+  <a href="#chat">Chat / Backstage</a>
+  <a href="#hand-raise">Raise hand</a>
+  <a href="#markers">Markers</a>
+  <a href="#practice">Practice mode</a>
+  <a href="#rtmp">RTMP streaming</a>
+  <a href="#diagnostico">Diagnostics</a>
+  <a href="#kick">Remove</a>
+  <a href="#invitado">Guest experience</a>
+  <a href="#layouts">Grid / Spotlight</a>
+  <a href="#director">Control room</a>
+  <a href="#teleprompter-sponsors">Sponsor teleprompter</a>
+  <a href="#panel-amapod">amaPod panel</a>
+  <a href="#enviar-postpod">Send to postPod</a>
+</nav>
+{% endblock %}

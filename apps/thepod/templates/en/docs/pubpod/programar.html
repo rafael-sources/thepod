@@ -1,0 +1,74 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Schedule — Docs · thePod{% endblock %}
+{% block description %}Scheduling posts in pubPod: date and time, what happens if you close the app, cancelling, retrying and publishing a video from your computer.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">SCHEDULE</div>
+  <h1>Now or at its time</h1>
+  <p class="lede">
+    Everything you publish can go out right away or be scheduled. Scheduled posts are handled by thePod on the server: it doesn't need the app open or your Mac on.
+  </p>
+</header>
+
+<section id="como">
+  <h2><span class="num">01</span> How to schedule</h2>
+  <ol>
+    <li>Pick what to publish and write the texts, same as for publishing now.</li>
+    <li>Tap <strong>Schedule</strong> instead of Now and pick a date and time (in your local time). A date that's already passed isn't accepted.</li>
+    <li>Tap <strong>Export and schedule</strong>. The app exports and uploads the file right then, so that at the set time all that's left is to publish.</li>
+  </ol>
+  <p>In <strong>Posts</strong> it shows as Scheduled, with the time. Each destination is a separate post: you can cancel the TikTok one and keep the Reels one.</p>
+</section>
+
+<section id="cerrar">
+  <h2><span class="num">02</span> If you close the app</h2>
+  <p>
+    Once the app has finished uploading the file (the bar reaches 100 %), you can close it or shut down your Mac: the post still goes out at its time.
+    If you close before the upload finishes, the post is left without a file and pub lets you know when you come back, with Retry.
+  </p>
+</section>
+
+<section id="cancelar">
+  <h2><span class="num">03</span> Cancel and retry</h2>
+  <ul>
+    <li><strong>Cancel</strong>: in the list, as long as it says Scheduled. Once it starts publishing it can't be cancelled; if it went out, delete it on the network.</li>
+    <li><strong>Retry</strong>: on one that says Not published. “View details…” gives the reason (expired permission, text too long, the network didn't respond). If the reason is the permission, connect the account again and retry.</li>
+    <li>If thePod was restarting right at that time, the post goes out as soon as it's back; it isn't lost.</li>
+  </ul>
+</section>
+
+<section id="desde-compu">
+  <h2><span class="num">04</span> A video from your computer</h2>
+  <p>
+    The <strong>From your computer</strong> card is for publishing a video that didn't come out of post: a vertical you edited in another program, for example.
+    The same stars light up as for a reel (Shorts, Reels, TikTok). Formats: MP4 or MOV, in 9:16 vertical so the networks show it as a reel.
+  </p>
+</section>
+
+<section id="limites">
+  <h2><span class="num">05</span> Limits to keep in mind</h2>
+  <table>
+    <thead><tr><th>Network</th><th>Text</th><th>Other</th></tr></thead>
+    <tbody>
+      <tr><td>Instagram and Reels</td><td>Up to 2,200 characters</td><td>Reel from 3 s to 15 min, 9:16</td></tr>
+      <tr><td>YouTube and Shorts</td><td>Description up to 5,000</td><td>Short of up to 3 min</td></tr>
+      <tr><td>TikTok</td><td>You paste the text yourself on your phone</td><td>Up to 5 pending per day</td></tr>
+      <tr><td>Spotify and Apple</td><td>The episode notes</td><td>MP3 audio</td></tr>
+    </tbody>
+  </table>
+  <p>If a text goes over, pub warns you before publishing. The “Always at the end” signature counts toward the limit.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#como">How to schedule</a>
+  <a href="#cerrar">If you close the app</a>
+  <a href="#cancelar">Cancel and retry</a>
+  <a href="#desde-compu">From your computer</a>
+  <a href="#limites">Limits</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,162 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Getting started — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">GETTING STARTED</div>
+  <h1>Your first edit, step by step.</h1>
+  <p class="lede">
+    A quick guide to go from raw files to an exported episode.
+    If your project comes from <a class="x-link prodpod" href="/docs/prodpod">prodPod</a>,
+    the files and markers are already included — you can skip to step 3.
+  </p>
+</header>
+
+<section id="abrir-proyecto">
+  <h2><span class="num">01</span> Open the project</h2>
+  <p>
+    Projects arrive from prodPod (with the recordings and markers already included),
+    or you can create one manually from the project list.
+  </p>
+  <p>
+    The main interface has: the video player at the top, the timeline in the center,
+    the files panel on the left, moments below the timeline, and the clips/operations panel on the right.
+  </p>
+</section>
+
+<section id="subir-archivos">
+  <h2><span class="num">02</span> Upload files (if needed)</h2>
+  <p>
+    If your project comes from prodPod, the files are already there. If not, go to the
+    Files panel (left), click upload and pick your files.
+    Supported formats: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (image).
+    Maximum size per file: 2 GB.
+  </p>
+</section>
+
+<section id="armar-timeline">
+  <h2><span class="num">03</span> Add clips to the timeline</h2>
+  <p>
+    In the files panel, click a video or audio file to add it to the timeline.
+    Clips show up in the timeline bar in sequence. You can reorder them by dragging
+    in the Clips panel (right) using the 6-dot handle.
+  </p>
+  <p>
+    To trim a clip, click it in the Clips panel and adjust the start (IN) and end (OUT) points.
+  </p>
+</section>
+
+<section id="navegar">
+  <h2><span class="num">04</span> Play and navigate</h2>
+  <ul>
+    <li><kbd>Espacio</kbd> — play / pause.</li>
+    <li><kbd>←</kbd> <kbd>→</kbd> — jump 5 seconds.</li>
+    <li><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> — jump 1 second.</li>
+    <li>Click the timeline ruler — move the playhead to that point.</li>
+    <li>Drag the playhead (red cursor) — scrub frame by frame.</li>
+  </ul>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Mark moments</h2>
+  <p>
+    Press <kbd>M</kbd> to capture a moment at the current time.
+    Give it a descriptive label (double-click the name to edit it).
+    Moments are the anchor points where you can apply operations.
+  </p>
+  <p>
+    If your project comes from prodPod, the chapter markers from the recording
+    already show up as moments in the timeline.
+  </p>
+</section>
+
+<section id="operaciones">
+  <h2><span class="num">06</span> Apply operations</h2>
+  <p>
+    Select a moment in the list. In the Operations panel (right),
+    add an operation: zoom, color effect, subtitle, audio mix,
+    vertical crop for TikTok, animated text, silence removal, and more.
+    The player shows the effect in real time.
+  </p>
+  <p>
+    Each moment has quick-action buttons: jump to that point in the timeline,
+    preview the effect, export just that moment, or delete it.
+  </p>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">07</span> Edit the transcript (optional)</h2>
+  <p>
+    Open the Transcript Editor from the toolbar. You'll see the text of your clips' audio.
+    If you delete a fragment of text, that fragment of audio/video is cut from the export.
+    It's the most intuitive way to remove filler words or unwanted sections.
+  </p>
+  <ul>
+    <li>Click a word — the player jumps to that point.</li>
+    <li>Select text and press <kbd>Delete</kbd> — creates a cut (non-destructive, reversible).</li>
+    <li>Turn on “Highlight filler words” to automatically detect “eh”, “um”, “este”, “o sea” and similar.</li>
+    <li>Use “Remove filler words in bulk” to cut them all at once.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="ctag">REQUIREMENT</div>
+    <div class="cbody"><p>To use the transcript editor, generate captions for the file first (step 8).</p></div>
+  </div>
+</section>
+
+<section id="captions">
+  <h2><span class="num">08</span> Generate captions (optional)</h2>
+  <p>
+    In the Files panel, click the captions button on a video or audio file.
+    Pick the language (Spanish, English, Portuguese, etc.) and the model.
+    Whisper generates word-by-word subtitles in the background — you can keep editing while they're generated.
+  </p>
+</section>
+
+<section id="exportar">
+  <h2><span class="num">09</span> Export</h2>
+  <p>
+    Click <strong>Export</strong> in the toolbar. Choose a preset:
+  </p>
+  <ul>
+    <li><strong>YouTube</strong> — 1080p or 4K, 30 or 60 fps.</li>
+    <li><strong>TikTok / Reels</strong> — 1080x1920 vertical.</li>
+    <li><strong>Instagram</strong> — 1080x1080 square.</li>
+    <li><strong>WhatsApp</strong> — 720p compressed.</li>
+    <li><strong>Podcast</strong> — MP3 or M4A (audio only).</li>
+  </ul>
+  <p>
+    Extra options when exporting:
+  </p>
+  <ul>
+    <li><strong>Burn captions</strong> — embeds the subtitles into the video.</li>
+    <li><strong>Generate notes</strong> — creates YouTube-style chapters and credits.</li>
+    <li><strong>Professional audio</strong> — noise reduction, equalization, compression and normalization.</li>
+    <li><strong>Export range only</strong> — if you have a range selected, exports just that portion.</li>
+  </ul>
+  <p>
+    The render runs in the background with a progress bar. When it finishes, download the file or play it right away.
+  </p>
+
+  <div class="callout">
+    <div class="ctag">NON-DESTRUCTIVE</div>
+    <div class="cbody"><p>Everything is non-destructive: your original files are never modified. You can experiment freely with operations and undo them without losing anything. And you can export the same project several times with different presets.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#abrir-proyecto">Open the project</a>
+  <a href="#subir-archivos">Upload files</a>
+  <a href="#armar-timeline">Build the timeline</a>
+  <a href="#navegar">Play and navigate</a>
+  <a href="#momentos">Mark moments</a>
+  <a href="#operaciones">Apply operations</a>
+  <a href="#transcript">Transcript editor</a>
+  <a href="#captions">Generate captions</a>
+  <a href="#exportar">Export</a>
+</nav>
+{% endblock %}

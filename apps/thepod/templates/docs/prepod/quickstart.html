@@ -1,0 +1,149 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Primeros pasos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">PRIMEROS PASOS</div>
+  <h1>Tu primer podcast en prePod</h1>
+  <p class="lede">
+    De cero a un episodio listo para grabar en menos de diez minutos. No necesitas conocimiento técnico — solo un nombre y una idea.
+  </p>
+</header>
+
+<section id="entrar">
+  <h2><span class="num">01</span> Entra a prePod</h2>
+  <p>
+    Abre thePod desde tu navegador e inicia sesión. Usas las mismas credenciales para las cuatro apps
+    (prePod, prodPod, postPod, amaPod). Desde el hub, haz clic en la tarjeta de prePod.
+  </p>
+</section>
+
+<section id="crear-podcast">
+  <h2><span class="num">02</span> Crea tu primer podcast</h2>
+  <p>
+    En la pantalla principal verás tus podcasts como tarjetas visuales. Haz clic en <strong>+ Nuevo podcast</strong>
+    y escribe el nombre de tu show. Se creará con valores por defecto que puedes personalizar.
+  </p>
+</section>
+
+<section id="branding">
+  <h2><span class="num">03</span> Configura el branding</h2>
+  <p>Al entrar al podcast, la primera pestaña es <strong>Branding</strong>. Aquí defines la identidad de tu show:</p>
+  <ul>
+    <li><strong>Identidad</strong>: nombre, tagline y descripción.</li>
+    <li><strong>Colores</strong>: cinco selectores (primario, secundario, acento, fondo y texto) con entrada hexadecimal.</li>
+    <li><strong>Tipografía</strong>: fuente para títulos, fuente para cuerpo y alineación de texto.</li>
+    <li><strong>Assets</strong>: sube tu logo (hasta 500x500) y portada (hasta 1200x800).</li>
+  </ul>
+  <p>En la columna derecha verás una vista previa en vivo que refleja tus cambios al instante.</p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>No necesitas completar todo ahora. Puedes volver a Branding en cualquier momento. Los cambios se guardan automáticamente.</p></div>
+  </div>
+</section>
+
+<section id="crear-episodio">
+  <h2><span class="num">04</span> Crea tu primer episodio</h2>
+  <p>
+    Ve a la pestaña <strong>Episodios</strong>. Verás un tablero kanban con seis columnas.
+    Haz clic en <strong>+ Nuevo episodio</strong> en la columna que prefieras (por ejemplo, "Planificando") y completa:
+  </p>
+  <ul>
+    <li><strong>Número de episodio</strong>: se sugiere automáticamente.</li>
+    <li><strong>Título</strong>: el nombre del episodio.</li>
+    <li><strong>Plantilla</strong> (opcional): si ya creaste una, selecciónala para pre-llenar el rundown y guion.</li>
+  </ul>
+  <p>El episodio aparece como una tarjeta que puedes arrastrar entre columnas a medida que avanza.</p>
+</section>
+
+<section id="rundown">
+  <h2><span class="num">05</span> Arma el rundown</h2>
+  <p>
+    Haz clic en la tarjeta del episodio para abrir el detalle. En la sección <strong>Rundown</strong>,
+    agrega bloques para definir la estructura:
+  </p>
+  <ul>
+    <li><strong>Intro</strong>: apertura del episodio.</li>
+    <li><strong>Segmento</strong>: sección de contenido.</li>
+    <li><strong>Entrevista</strong>: bloque de preguntas y respuestas.</li>
+    <li><strong>Sponsor</strong>: espacio publicitario (puedes vincular un sponsor registrado).</li>
+    <li><strong>Pausa</strong>: corte o transición.</li>
+    <li><strong>Outro</strong>: cierre del episodio.</li>
+  </ul>
+  <p>
+    Cada bloque tiene un título, una duración estimada y notas.
+    Arrastra el asa de seis puntos para reordenar. En la parte inferior verás la duración total estimada.
+  </p>
+</section>
+
+<section id="guion">
+  <h2><span class="num">06</span> Escribe el guion</h2>
+  <p>En la sección <strong>Guion</strong>, agrega secciones más detalladas:</p>
+  <ul>
+    <li><strong>Speaker</strong>: quién habla en esta sección.</li>
+    <li><strong>Contenido</strong>: el texto o las notas del speaker.</li>
+    <li><strong>Notas</strong>: indicaciones técnicas o contexto.</li>
+    <li><strong>Duración</strong>: tiempo estimado en segundos.</li>
+  </ul>
+  <p>El guion se guarda automáticamente cada vez que dejas de escribir. Usa las flechas para reordenar secciones.</p>
+</section>
+
+<section id="invitados">
+  <h2><span class="num">07</span> Agrega invitados</h2>
+  <p>En el panel <strong>Invitados (Roster)</strong>, haz clic en "Agregar invitado" y completa:</p>
+  <ul>
+    <li><strong>Nombre</strong>: nombre del invitado.</li>
+    <li><strong>Email</strong> (opcional): para enviar la invitación por correo.</li>
+    <li><strong>Rol</strong>: Host, Co-host o Invitado.</li>
+  </ul>
+  <p>Para confirmar asistencia, tienes dos opciones:</p>
+  <ul>
+    <li>Haz clic en "Invitar" para enviar un correo con el link de RSVP.</li>
+    <li>Copia el link de invitación y envíalo por el medio que prefieras (WhatsApp, email manual, etc.).</li>
+  </ul>
+  <p>El invitado confirma con un solo clic, sin necesitar cuenta en thePod.</p>
+</section>
+
+<section id="agendar">
+  <h2><span class="num">08</span> Programa la fecha</h2>
+  <p>
+    En el detalle del episodio, establece la fecha y hora de grabación. También puedes usar la pestaña
+    <strong>Calendario</strong> para ver todos tus episodios en un calendario mensual y arrastrarlos entre días para reprogramar.
+  </p>
+  <p>Descarga un archivo <strong>.ics</strong> del episodio individual o de todo el calendario para importarlo en Google Calendar, Outlook o Apple Calendar.</p>
+</section>
+
+<section id="enviar-prodpod">
+  <h2><span class="num">09</span> Envía a prodPod</h2>
+  <p>
+    Cuando todo esté listo para grabar, haz clic en <strong>Enviar a prodPod</strong> en la barra de integración del episodio.
+    Esto crea automáticamente una sesión de grabación en <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> con:
+  </p>
+  <ul>
+    <li>El roster de invitados (nombres, roles e emails para las invitaciones).</li>
+    <li>Tu soundboard completo.</li>
+    <li>Los marcadores de capítulos planificados (desde los bloques del rundown).</li>
+  </ul>
+  <p>A partir de este momento, prePod te mostrará el estado de la grabación: "grabando ahora" cuando la sesión esté activa, o "grabación lista" cuando termine.</p>
+  <div class="callout">
+    <div class="ctag">SIGUIENTE</div>
+    <div class="cbody"><p>Ve al <a href="/docs/prodpod/quickstart">Quickstart de prodPod</a> para entender cómo funciona el estudio en vivo.</p></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#entrar">Entrar</a>
+  <a href="#crear-podcast">Crear podcast</a>
+  <a href="#branding">Branding</a>
+  <a href="#crear-episodio">Crear episodio</a>
+  <a href="#rundown">Rundown</a>
+  <a href="#guion">Guion</a>
+  <a href="#invitados">Invitados</a>
+  <a href="#agendar">Programar fecha</a>
+  <a href="#enviar-prodpod">Enviar a prodPod</a>
+</nav>
+{% endblock %}

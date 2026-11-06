@@ -1,0 +1,86 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Overview — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>prodPod</h1>
+  <p class="lede">
+    Your remote recording studio. Connect every participant in your podcast over video and audio,
+    and record each track independently, right in each person's browser.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> What is prodPod?</h2>
+  <p class="dropcap">
+    prodPod is thePod's recording studio. It brings hosts and guests together in a studio-quality
+    video and audio room. Each participant records <strong>locally in their browser</strong>, which means
+    the recording quality doesn't depend on your internet connection. Even if the video call stutters,
+    everyone's local file comes out clean and in high quality.
+  </p>
+  <p>
+    When the session ends, all the tracks (separate audio and video per participant) are sent to
+    <a class="x-link postpod" href="/docs/postpod">postPod</a> for editing, along with the chapter markers
+    and the soundboard triggers — all placed on the timeline, ready to work with.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> What can you do?</h2>
+  <ul>
+    <li>Record <strong>audio and video</strong> from each participant separately (independent tracks).</li>
+    <li>Run a <strong>mic level assistant</strong> before you start.</li>
+    <li>Trigger sound effects and jingles from the <strong>soundboard</strong>.</li>
+    <li>Mark <strong>chapters</strong> in real time while recording.</li>
+    <li><strong>Share your screen</strong> (recorded as a separate track).</li>
+    <li>Coordinate with your team over the <strong>backstage chat</strong> (invisible to guests).</li>
+    <li>Stream live to <strong>YouTube or Twitch</strong> via RTMP, alongside the local recording.</li>
+    <li>Send all the tracks to <strong>postPod</strong> for editing when you're done.</li>
+  </ul>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">03</span> Who is it for?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">BASIC</div>
+      <h4>Quick recording</h4>
+      <p>Record a podcast with 1 to 3 people. Enter the studio, start recording, done. Nothing else to set up.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">INTERMEDIATE</div>
+      <h4>Production with tools</h4>
+      <p>Use the mic check to dial in your levels, fire soundboard sounds while recording, and mark chapters for editing later.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">ADVANCED</div>
+      <h4>Streaming + recording</h4>
+      <p>Stream live to YouTube or Twitch while you record in high quality. Coordinate with your team over the backstage chat without your guests seeing it.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">04</span> What's in here?</h2>
+  <ul>
+    <li><a href="/docs/prodpod/quickstart">Getting started</a> — your first recording, step by step.</li>
+    <li><a href="/docs/prodpod/conceptos">Concepts</a> — session, participant, soundboard, backstage, tracks.</li>
+    <li><a href="/docs/prodpod/funcionalidades">Features</a> — every studio tool in detail.</li>
+    <li><a href="/docs/prodpod/atajos">Shortcuts</a> — hotkeys for recording without leaving the keyboard.</li>
+    <li><a href="/docs/prodpod/integraciones">Integrations</a> — what comes in from <a class="x-link prepod" href="/docs/prepod">prePod</a> and what goes out to <a class="x-link postpod" href="/docs/postpod">postPod</a>.</li>
+    <li><a href="/docs/prodpod/faq">FAQ</a> — frequently asked questions.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#que-es">What is prodPod?</a>
+  <a href="#que-puedes">What can you do?</a>
+  <a href="#para-quien">Who is it for?</a>
+  <a href="#que-hay-aca">What's in here?</a>
+</nav>
+{% endblock %}

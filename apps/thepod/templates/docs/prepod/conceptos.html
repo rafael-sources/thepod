@@ -1,0 +1,146 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Conceptos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTOS</div>
+  <h1>El vocabulario de prePod</h1>
+  <p class="lede">Los términos clave que necesitas conocer para sacarle provecho a prePod.</p>
+</header>
+
+<section id="podcast">
+  <h2><span class="num">01</span> Podcast</h2>
+  <p>
+    Tu show. Cada podcast tiene su propio branding (nombre, colores, logo, portada), episodios, sonidos, plantillas, sponsors y landing pública.
+    Puedes tener múltiples podcasts en una misma cuenta, cada uno completamente independiente.
+  </p>
+</section>
+
+<section id="episodio">
+  <h2><span class="num">02</span> Episodio</h2>
+  <p>Una edición individual de tu podcast. Cada episodio se mueve por el tablero kanban a través de seis estados:</p>
+  <p><strong>Idea</strong> → <strong>Planificando</strong> → <strong>Con guion</strong> → <strong>Grabado</strong> → <strong>Publicado</strong> → <strong>Archivado</strong></p>
+  <p>
+    Un episodio contiene: rundown, guion, roster de invitados, fecha programada y links de distribución.
+    Al pasar a "Publicado", se generan automáticamente las show notes.
+  </p>
+</section>
+
+<section id="kanban">
+  <h2><span class="num">03</span> Kanban</h2>
+  <p>
+    El tablero visual donde gestionas tus episodios. Las seis columnas representan las etapas de producción
+    (la columna Archivado viene oculta por defecto — actívala desde el selector de columnas).
+    Arrastras las tarjetas de episodio entre columnas para reflejar su progreso.
+    Cada tarjeta muestra el número de episodio, título, fecha programada y duración estimada.
+  </p>
+</section>
+
+<section id="rundown">
+  <h2><span class="num">04</span> Rundown</h2>
+  <p>
+    La estructura esquelética de un episodio. Es una secuencia de bloques ordenados,
+    donde cada bloque tiene un tipo, un título, una duración estimada y notas.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Tipo</th><th>Uso típico</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Intro</td><td>Apertura del episodio</td></tr>
+      <tr><td>Segmento</td><td>Sección de contenido</td></tr>
+      <tr><td>Entrevista</td><td>Preguntas y respuestas</td></tr>
+      <tr><td>Sponsor</td><td>Espacio publicitario</td></tr>
+      <tr><td>Pausa</td><td>Corte o transición</td></tr>
+      <tr><td>Outro</td><td>Cierre del episodio</td></tr>
+      <tr><td>Otro</td><td>Cualquier bloque que no encaje en las categorías anteriores</td></tr>
+    </tbody>
+  </table>
+  <p>Piensa en el rundown como el esqueleto: define el orden y los tiempos, pero no el contenido detallado.</p>
+</section>
+
+<section id="guion">
+  <h2><span class="num">05</span> Guion (Script)</h2>
+  <p>
+    El contenido detallado de cada episodio. Más granular que el rundown: cada sección tiene un speaker (quién habla),
+    el texto o notas de lo que se dice, indicaciones técnicas y una duración estimada en segundos.
+    El guion complementa al rundown con el detalle fino.
+  </p>
+</section>
+
+<section id="plantilla">
+  <h2><span class="num">06</span> Plantilla (Template)</h2>
+  <p>
+    Una estructura reutilizable que combina un rundown base y un guion base.
+    Cuando creas un episodio nuevo, puedes elegir una plantilla para pre-llenar la estructura.
+    Ideal si tu podcast tiene un formato recurrente (por ejemplo, siempre abres con la misma intro, luego tres segmentos y un cierre).
+  </p>
+  <p>Puedes marcar una plantilla como <strong>default</strong> para que se aplique automáticamente a cada episodio nuevo.</p>
+</section>
+
+<section id="roster">
+  <h2><span class="num">07</span> Roster (Invitados)</h2>
+  <p>La lista de participantes de un episodio. Cada invitado tiene:</p>
+  <ul>
+    <li><strong>Nombre</strong> y <strong>email</strong> (opcional).</li>
+    <li><strong>Rol</strong>: Host, Co-host o Invitado.</li>
+    <li><strong>Estado RSVP</strong>: Pendiente, Sí, No o Quizá.</li>
+    <li><strong>Bio</strong>: descripción breve del invitado.</li>
+  </ul>
+  <p>
+    Los invitados no necesitan cuenta en thePod. Reciben un link de RSVP y confirman con un clic.
+    Cuando envías el episodio a prodPod, el roster viaja completo.
+  </p>
+</section>
+
+<section id="sponsors">
+  <h2><span class="num">08</span> Sponsors</h2>
+  <p>
+    Anunciantes asociados a tu podcast. Cada sponsor tiene nombre, URL, texto del ad-read, notas y un estado activo/pausado.
+    Los vinculas a bloques de tipo "Sponsor" en el rundown.
+  </p>
+  <p>
+    prePod lleva la cuenta de cuántos episodios y minutos ha tenido cada sponsor,
+    y puedes exportar un reporte en CSV para compartir con el anunciante.
+  </p>
+</section>
+
+<section id="landing">
+  <h2><span class="num">09</span> Landing pública</h2>
+  <p>Una página web de tu podcast accesible sin login. Incluye:</p>
+  <ul>
+    <li>Información del podcast (nombre, descripción, portada).</li>
+    <li>Lista de episodios publicados.</li>
+    <li>Sección de equipo (fotos, nombres, roles, redes sociales).</li>
+    <li>Contenido personalizado con editor visual.</li>
+    <li>Feed RSS compatible con Apple Podcasts, Spotify y otras plataformas.</li>
+  </ul>
+  <p>Hay tres plantillas de diseño disponibles: <strong>Minimal</strong>, <strong>Bold</strong> y <strong>Classic</strong>.</p>
+</section>
+
+<section id="show-notes">
+  <h2><span class="num">10</span> Show notes</h2>
+  <p>
+    Texto generado automáticamente cuando un episodio pasa al estado "Publicado".
+    Contiene los capítulos del episodio (derivados de los bloques del rundown) en formato compatible con YouTube.
+    Puedes copiar el texto completo o solo los capítulos con un clic.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#podcast">Podcast</a>
+  <a href="#episodio">Episodio</a>
+  <a href="#kanban">Kanban</a>
+  <a href="#rundown">Rundown</a>
+  <a href="#guion">Guion</a>
+  <a href="#plantilla">Plantilla</a>
+  <a href="#roster">Roster</a>
+  <a href="#sponsors">Sponsors</a>
+  <a href="#landing">Landing</a>
+  <a href="#show-notes">Show notes</a>
+</nav>
+{% endblock %}

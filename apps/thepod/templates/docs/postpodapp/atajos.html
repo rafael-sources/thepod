@@ -1,0 +1,101 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod para Mac · Atajos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">ATAJOS DE TECLADO</div>
+  <h1>Teclas y gestos del editor</h1>
+  <p class="lede">Para moverte por el episodio, marcar reels y deshacer sin soltar el teclado. Valen en post cuando no estás escribiendo en un campo de texto.</p>
+</header>
+
+<section id="reproducir">
+  <h2><span class="num">01</span> Moverse y reproducir</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td><div class="kgroup"><kbd>Espacio</kbd> / <kbd>K</kbd></div></td><td class="desc"><strong>Reproducir / pausar</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>←</kbd> <kbd>→</kbd></div></td><td class="desc"><strong>Un segundo atrás / adelante</strong> Con <kbd>⇧</kbd>, cinco segundos.</td></tr>
+      <tr><td><div class="kgroup"><kbd>J</kbd> / <kbd>L</kbd></div></td><td class="desc"><strong>Cinco segundos atrás / adelante</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>⌘</kbd> + <kbd>O</kbd></div></td><td class="desc"><strong>Importar grabación</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>⌘</kbd> + <kbd>,</kbd></div></td><td class="desc"><strong>Ajustes</strong></td></tr>
+    </tbody>
+  </table>
+  <p>El reloj grande encima del video tiene un botón de teclado: escribes un tiempo en <code>h:mm:ss</code> y el video va ahí. Todos los campos de tiempo de la app (músicas, textos, cintillos, reels) aceptan ese mismo formato.</p>
+</section>
+
+<section id="reels">
+  <h2><span class="num">02</span> Marcar momentos y reels</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td><div class="kgroup"><kbd>M</kbd></div></td><td class="desc"><strong>Marcar momento</strong> Crea un reel de 60 s desde donde está el video.</td></tr>
+      <tr><td><div class="kgroup"><kbd>I</kbd></div></td><td class="desc"><strong>Marcar el inicio</strong> de un reel en el tiempo del reloj.</td></tr>
+      <tr><td><div class="kgroup"><kbd>O</kbd></div></td><td class="desc"><strong>Marcar el fin y crear el reel</strong> Si estás viendo un reel, <kbd>O</kbd> ajusta su fin.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="editar">
+  <h2><span class="num">03</span> Editar y deshacer</h2>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td><div class="kgroup"><kbd>⌘</kbd> + <kbd>Z</kbd></div></td><td class="desc"><strong>Deshacer</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>Z</kbd></div></td><td class="desc"><strong>Rehacer</strong></td></tr>
+      <tr><td><div class="kgroup"><kbd>Suprimir</kbd></div></td><td class="desc"><strong>Quitar el punto de volumen elegido</strong> en la línea amarilla del timeline.</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Deshacer</strong> cubre cualquier cambio del episodio: cortes, borrados, textos, cintillos, reels, diseño, puntos de volumen. Guarda hasta 120 pasos; los cambios seguidos (arrastrar un control) cuentan como uno. Dentro de un campo de texto, <kbd>⌘</kbd> <kbd>Z</kbd> deshace lo escrito, no el episodio.</p>
+</section>
+
+<section id="raton">
+  <h2><span class="num">04</span> Con el ratón, en el timeline</h2>
+  <table>
+    <thead><tr><th>Gesto</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td>Clic</td><td>Lleva el video a ese punto.</td></tr>
+      <tr><td>Arrastrar sobre la regla o una fila</td><td>Marca un trozo. Aparecen <strong>Oír</strong>, <strong>Silenciar solo a X</strong>, <strong>−6 dB a X</strong> y <strong>Cortar de todos</strong>.</td></tr>
+      <tr><td>Doble clic sobre una persona</td><td>Agrega un punto de volumen en la línea amarilla.</td></tr>
+      <tr><td>Arrastrar un punto</td><td>Arriba y abajo cambia el volumen (−60 a +12 dB, de a 1 dB; el valor se ve mientras arrastras), a los lados lo mueve en el tiempo.</td></tr>
+      <tr><td><strong>S</strong> / <strong>M</strong> junto al nombre</td><td>Solo (se oye solo esa persona) y Mudo.</td></tr>
+      <tr><td>Clic en el nombre de una persona o una música</td><td>Abre su panel debajo del video.</td></tr>
+      <tr><td>Arrastrar sobre la vista previa</td><td>Mueve textos, stickers, imágenes y el recuadro de los subtítulos; la esquina cambia el tamaño.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="studio">
+  <h2><span class="num">05</span> En Studio</h2>
+  <p>Los de arriba valen también en Studio (⌘E audio, ⇧⌘E video). Además, y en el botón «?» de la ventana:</p>
+  <table class="shortcuts">
+    <thead><tr><th>Tecla</th><th>Acción</th></tr></thead>
+    <tbody>
+      <tr><td><div class="kgroup"><kbd>⇧</kbd> + <kbd>⌘</kbd> + <kbd>B</kbd></div></td><td class="desc"><strong>A/B</strong> Oír las voces sin cadena mientras suena.</td></tr>
+      <tr><td><div class="kgroup"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></div></td><td class="desc"><strong>Multicámara</strong> Cortar a esa cámara en el segundo actual (pestaña Video).</td></tr>
+      <tr><td><div class="kgroup"><kbd>?</kbd></div></td><td class="desc"><strong>La lista de atajos</strong></td></tr>
+      <tr><td>Clic derecho en la pista Cámaras</td><td class="desc">Fijar una cámara o una plantilla en ese segundo; arrastra sus bordes para alargar el tramo.</td></tr>
+      <tr><td>Rombo junto a un control</td><td class="desc">Poner o quitar un keyframe en este segundo.</td></tr>
+      <tr><td>Doble clic en un carril de automatización</td><td class="desc">Borrar ese punto.</td></tr>
+      <tr><td><kbd>⌥</kbd> + clic en un fader</td><td class="desc">Volver ese fader a 0 dB.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="prod">
+  <h2><span class="num">06</span> En la sala (prod)</h2>
+  <p>Las teclas de la sala son las mismas que en <a class="x-link prodpod" href="/docs/prodpod/atajos">prodPod web</a>. Para hablarle al oído a alguien desde el cuarto de control, mantén presionado el botón de esa persona.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#reproducir">Moverse y reproducir</a>
+  <a href="#reels">Momentos y reels</a>
+  <a href="#editar">Editar y deshacer</a>
+  <a href="#raton">Con el ratón</a>
+  <a href="#studio">En Studio</a>
+  <a href="#prod">En la sala</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Vista general — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>postPod</h1>
+  <p class="lede">
+    Editor no-destructivo de video y audio para postproducción de podcasts y videocasts.
+    Tus archivos originales nunca se modifican — todos los cortes, efectos y operaciones se guardan como instrucciones
+    y se aplican al exportar.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> ¿Qué es postPod?</h2>
+  <p class="dropcap">
+    postPod es un editor de video y audio pensado para la postproducción de podcasts y videocasts.
+    Su principio fundamental es la <strong>edición no-destructiva</strong>: nunca toca tus archivos originales.
+    Todo lo que haces — cortes, zooms, efectos de color, subtítulos, mezclas de audio, reformateo a vertical —
+    se guarda como instrucciones en el proyecto. Al exportar, se genera un archivo nuevo aplicando todas las instrucciones en una sola pasada.
+  </p>
+  <p>
+    Esto significa que puedes experimentar libremente: agregar operaciones, quitarlas, cambiarlas, sin riesgo de perder nada.
+    Y puedes generar múltiples versiones del mismo episodio (YouTube 16:9, TikTok 9:16, podcast MP3) sin rehacer el trabajo.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> ¿Qué puedes hacer?</h2>
+  <ul>
+    <li>Armar un <strong>timeline</strong> con clips de video y audio, reordenarlos y recortarlos.</li>
+    <li>Marcar <strong>momentos</strong> y aplicar <strong>operaciones</strong>: zoom, efectos de color, subtítulos, mezcla de audio, recorte vertical para TikTok, stickers de texto animados.</li>
+    <li>Editar el <strong>transcript</strong> de forma visual: borrar texto elimina el audio/video correspondiente.</li>
+    <li>Generar <strong>captions</strong> (subtítulos palabra por palabra) con Whisper en múltiples idiomas.</li>
+    <li>Agregar <strong>música de fondo</strong> en el audio lane.</li>
+    <li><strong>Exportar</strong> a YouTube, TikTok/Reels, Instagram, WhatsApp, o podcast (solo audio), con opciones de mejora de audio profesional y notas de capítulos automáticas.</li>
+  </ul>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">03</span> ¿Para quién es?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">BÁSICO</div>
+      <h4>Edición rápida</h4>
+      <p>Armas el timeline con clips, recortas las partes que no sirven, y exportas. Lo esencial para publicar un episodio editado.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">INTERMEDIO</div>
+      <h4>Edición con efectos</h4>
+      <p>Usas momentos y operaciones para agregar zooms, efectos y subtítulos. Editas el transcript para cortar muletillas. Generas captions con Whisper.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">AVANZADO</div>
+      <h4>Multi-formato profesional</h4>
+      <p>Creas clips verticales para TikTok, agregas text overlays animados, usas el audio lane para música, y activas audio profesional al exportar.</p>
+    </div>
+  </div>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">04</span> ¿Qué encuentras acá?</h2>
+  <ul>
+    <li><a href="/docs/postpod/quickstart">Primeros pasos</a> — tu primera edición paso a paso.</li>
+    <li><a href="/docs/postpod/conceptos">Conceptos</a> — timeline, clips, momentos, operaciones, presets.</li>
+    <li><a href="/docs/postpod/funcionalidades">Funcionalidades</a> — cada herramienta en detalle.</li>
+    <li><a href="/docs/postpod/atajos">Atajos</a> — teclas rápidas y gestos de mouse.</li>
+    <li><a href="/docs/postpod/integraciones">Integraciones</a> — qué llega de <a class="x-link prodpod" href="/docs/prodpod">prodPod</a> y cómo exportar.</li>
+    <li><a href="/docs/postpod/faq">FAQ</a> — preguntas frecuentes.</li>
+    <li><a href="/docs/postpodapp">thePod para Mac</a> — termina y publica tus episodios en tu Mac con Apple Silicon.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-es">¿Qué es postPod?</a>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#para-quien">¿Para quién es?</a>
+  <a href="#que-hay-aca">¿Qué encuentras acá?</a>
+</nav>
+{% endblock %}

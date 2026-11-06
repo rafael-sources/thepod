@@ -1,0 +1,104 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Frequently asked questions</h1>
+  <p class="lede">Answers to the most common questions about the prodPod recording studio.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>My camera or microphone doesn't show up?</summary>
+    <div class="ans">
+      <p>Make sure you've given the browser permission to access your camera and microphone. If you denied it before, go to your browser settings and reset the permissions for the site. Use Chrome or Firefox for the best compatibility.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>I don't see the session in the list?</summary>
+    <div class="ans">
+      <p>Sessions are created from prePod. If you don't see any, check with the host that they sent the episode to prodPod. If you're the host, go to prePod and click “Send to prodPod” on the episode in question.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The countdown started but nothing is recording?</summary>
+    <div class="ans">
+      <p>Recording starts automatically with the countdown. If you don't see the recording indicator, reload the page and rejoin the session. Your local recording should have started correctly.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The recording file is tiny or empty?</summary>
+    <div class="ans">
+      <p>This can happen if you closed the browser before the recording finished processing. Always wait for the “recording saved” confirmation to appear before closing the tab.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>I can't hear the soundboard?</summary>
+    <div class="ans">
+      <p>Check that your volume isn't muted. Soundboard sounds come through the same audio connection as the voices. If other participants can hear it but you can't, check your browser volume and your operating system volume.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The backstage chat doesn't show up?</summary>
+    <div class="ans">
+      <p>Backstage is only visible to the host and co-host. If you're a guest, you don't have access — that's by design, so the host can coordinate without guests seeing it.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The RTMP stream keeps dropping?</summary>
+    <div class="ans">
+      <p>Check your upload speed (you need at least 5 Mbps, stable). Confirm your stream key is correct and that the destination (YouTube/Twitch) is set up to receive the broadcast.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can I record a practice session?</summary>
+    <div class="ans">
+      <p>No. Practice mode is designed for rehearsing without recording. When you're ready to record for real, turn off the “Rehearsal” toggle and use the normal Ready, countdown and recording flow.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can two people share their screen at the same time?</summary>
+    <div class="ans">
+      <p>No. Only one person can share their screen at a time. If someone else needs to share, the first person has to stop sharing first.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What happens if I lose my connection while recording?</summary>
+    <div class="ans">
+      <p>Your local recording keeps running in your browser. When your connection comes back, you'll see the other participants again. If you close the browser, the recording is saved up to the point where you closed it.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The mic check suggests a very high gain?</summary>
+    <div class="ans">
+      <p>If the suggestion is above +18dB, your microphone is probably too far away or your input volume is too low. Move the microphone closer or raise the volume in your operating system settings before repeating the mic check.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Do guests need a thePod account?</summary>
+    <div class="ans">
+      <p>No. Guests get an invitation link that works without an account. All they need is a compatible browser (Chrome or Firefox recommended).</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#faq">All questions</a>
+</nav>
+{% endblock %}

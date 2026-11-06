@@ -1,0 +1,75 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · FAQ — Docs · thePod{% endblock %}
+{% block description %}Preguntas frecuentes de pubPod: estrellas punteadas, Instagram que no conecta, TikTok que no aparece en el perfil, YouTube en privado, dónde está pubPod en la web.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Lo que más preguntan los beta testers.</p>
+</header>
+
+<section class="faq" id="faq">
+  <h2><span class="num">01</span> General</h2>
+
+  <details>
+    <summary>¿Dónde está pubPod en la web?</summary>
+    <div class="ans"><p>No está: pub es una sección de thePod para Mac. En la web, prePod → Configurar podcast → Redes solo conecta las cuentas. Publicar el episodio en el feed y en YouTube sí se puede desde prePod, como siempre.</p></div>
+  </details>
+
+  <details>
+    <summary>Una estrella sale punteada</summary>
+    <div class="ans"><p>Esa cuenta no está conectada, o su permiso venció. Tócala: se abre el navegador para dar el permiso y, al volver, la estrella queda llena. También se conectan en pre → Configurar podcast → Redes.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa si cierro la app mientras publica?</summary>
+    <div class="ans"><p>Si el archivo ya terminó de subir, nada: thePod termina solo y lo programado sale a su hora. Si cierras antes de que termine de subir, al volver verás la publicación con Reintentar.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Se publica algo sin que yo lo pida?</summary>
+    <div class="ans"><p>No. Solo sale lo que tú tocas en Exportar y publicar, o lo que programaste. Conectar una cuenta no publica nada.</p></div>
+  </details>
+
+  <h2><span class="num">02</span> Por red</h2>
+
+  <details>
+    <summary>Instagram no me deja conectar</summary>
+    <div class="ans"><p>Tiene que ser una cuenta profesional (Creador o Empresa); se cambia en la app de Instagram, Ajustes → Tipo de cuenta. Y mientras thePod está en revisión de Meta, solo publican las cuentas agregadas como evaluadoras: escríbenos con tu usuario y te agregamos.</p></div>
+  </details>
+
+  <details>
+    <summary>Publiqué en TikTok y no aparece en mi perfil</summary>
+    <div class="ans"><p>Es normal: el video llega a tu bandeja de TikTok (la notificación «Tienes un video listo»). Lo abres en el teléfono, pegas el texto que la app te dejó y lo publicas desde ahí. Hasta que TikTok revise la app, no se puede publicar directo al perfil.</p></div>
+  </details>
+
+  <details>
+    <summary>TikTok dice que tengo demasiados videos pendientes</summary>
+    <div class="ans"><p>TikTok permite como máximo 5 videos esperando en la bandeja por día. Publica o descarta los que tienes en el teléfono y reintenta.</p></div>
+  </details>
+
+  <details>
+    <summary>El video subió a YouTube pero en privado</summary>
+    <div class="ans"><p>Hasta que Google verifique la app, todo lo que sube queda en privado. Ábrelo en YouTube y cámbialo a Público. Pub lo marca «Subido en privado» para que no se te pase.</p></div>
+  </details>
+
+  <details>
+    <summary>Spotify y Apple Podcasts siguen punteadas</summary>
+    <div class="ans"><p>Las dos dependen del feed: el podcast tiene que estar configurado para publicar en prePod (Configurar podcast → Distribución). Hecho eso, se encienden juntas.</p></div>
+  </details>
+
+  <details>
+    <summary>¿Y Facebook?</summary>
+    <div class="ans"><p>Es la octava estrella y está en el arco, pero todavía aparece como «muy pronto».</p></div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq">Preguntas frecuentes</a>
+</nav>
+{% endblock %}

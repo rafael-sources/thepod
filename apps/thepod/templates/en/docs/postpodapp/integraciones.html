@@ -1,0 +1,112 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod for Mac · Integrations — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRATIONS</div>
+  <h1>How the app connects with the suite</h1>
+  <p class="lede">
+    It uses the same account as the rest of thePod. It brings the project from <a class="x-link postpod" href="/docs/postpod">postPod</a>,
+    everything about the episode from <a class="x-link prepod" href="/docs/prepod">prePod</a>, and publishes with what prePod already has set up.
+  </p>
+</header>
+
+<section id="cuenta">
+  <h2><span class="num">01</span> One account</h2>
+  <p>
+    The username and password are your thePod ones. The app signs in to prePod and postPod with those credentials
+    and only sees what your account can see on the web (your projects, or all of them if you're an administrator).
+    Your account is stored on your Mac, in <code>~/Library/Application Support/postPod/cuenta.dat</code> (not in the keychain,
+    so macOS doesn't ask for your password on every update).
+  </p>
+</section>
+
+<section id="pre">
+  <h2><span class="num">02</span> The pre section is prePod</h2>
+  <p>
+    What you do in <strong>pre</strong> is saved straight to prePod, instantly: episodes, script, rundown, guests, ideas,
+    templates, branding, team, sponsors, soundboard, your page and distribution. You see the same thing on the web and in the app,
+    and emails to guests go out from prePod.
+  </p>
+  <p>
+    The script's <strong>teleprompter</strong> sections (who reads it, when, speed, size, chaining) are also saved in prePod,
+    and it's prePod that hands them to the prodPod room, whether the room is on the Mac or on the web.
+  </p>
+</section>
+
+<section id="prod">
+  <h2><span class="num">03</span> The prod section is prodPod</h2>
+  <p>
+    The app's room joins the same room as prodPod web: hosts and director from the Mac or the web, mixed; guests via the web.
+    What the Mac adds: the recording happens on your Mac in 1080p (or 720p if the connection can't keep up) and uploads in chunks while you record,
+    so if the connection drops nothing is lost. The <strong>lower thirds</strong> the director launches live, the <strong>sponsors</strong>
+    marked at their moment, the soundboard <strong>effects</strong> and the <strong>moments</strong> arrive in post already placed at their second.
+  </p>
+</section>
+
+<section id="desde-postpod">
+  <h2><span class="num">04</span> From postPod</h2>
+  <p>
+    <strong>Bring to the Mac</strong> downloads the project from postPod (the same thing the web's export button
+    does) and opens it. From there, the app uses:
+  </p>
+  <ul>
+    <li><strong>Tracks</strong> for each participant (video and audio), with their time offset.</li>
+    <li><strong>Participants</strong> and their names.</li>
+    <li><strong>Transcripts</strong> already made, if they exist, and the <strong>cuts</strong> from the transcript editor.</li>
+    <li><strong>Moments</strong>, which become reels.</li>
+    <li><strong>Subtitle style</strong> set up on the web.</li>
+    <li><strong>Effects</strong> already placed on the audio line, at their exact moment, and the podcast's <strong>soundboard</strong> to add more.</li>
+    <li><strong>Guest photos</strong>, which show next to their name in the video.</li>
+    <li><strong>The director's lower thirds</strong>, with their exact second, marked “from the director”.</li>
+  </ul>
+  <div class="callout">
+    <div class="ctag">ONE WAY</div>
+    <div class="cbody"><p>The app brings projects in, but doesn't send the edit back to postPod web. If you change something on the web (for example, mark more moments), use <strong>Bring again</strong>.</p></div>
+  </div>
+</section>
+
+<section id="desde-prepod">
+  <h2><span class="num">05</span> From prePod</h2>
+  <p>If the episode was planned in prePod, the package brings and the app uses:</p>
+  <ul>
+    <li><strong>Episode data</strong>: number, title, description, podcast summary and links. They go into the metadata and the export notes.</li>
+    <li><strong>Branding</strong>: the logo as a watermark and the podcast background in the <em>Studio</em> layout.</li>
+    <li><strong>Sponsors</strong> with their logo: they appear in the video at the script block they belong to (the real minute if prodPod marked it, otherwise the planned one).</li>
+    <li><strong>Script</strong>: visible in <em>Your recording</em> and used for the chapters.</li>
+  </ul>
+</section>
+
+<section id="publicar">
+  <h2><span class="num">06</span> Publishing with prePod</h2>
+  <p>The app stores no credentials for any network: it publishes through prePod, where accounts are connected once (Podcast settings → Networks). In the app, the <strong>pub</strong> section is the one that publishes.</p>
+  <table>
+    <thead><tr><th>Destination</th><th>How it gets there</th><th>What it needs in prePod</th></tr></thead>
+    <tbody>
+      <tr><td>Spotify and Apple Podcasts</td><td>The app sends the audio to prePod and prePod publishes it to your podcast. The platforms pick it up on their own.</td><td>Your podcast set up for publishing.</td></tr>
+      <tr><td>YouTube</td><td>The app uploads the 16:9 video; prePod publishes it to your channel. Until Google verifies the app, it stays private: you switch it to Public on YouTube.</td><td>Channel connected in Networks.</td></tr>
+      <tr><td>YouTube Shorts</td><td>The vertical reel, published as a Short on the same channel.</td><td>The same channel.</td></tr>
+      <tr><td>Instagram and Reels</td><td>The reel as a Reel, or a frame of the episode as a cover with text.</td><td>Professional account (Creator or Business) connected in Networks; while the app is under Meta review, tester accounts only.</td></tr>
+      <tr><td>TikTok</td><td>The reel lands in your TikTok inbox with the text ready to paste; you publish it from the phone. Up to 5 pending per day.</td><td>TikTok account connected in Networks.</td></tr>
+      <tr><td>Facebook</td><td>Coming soon.</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <p>
+    If the connection drops during upload, the app retries on its own; a scheduled publication is handled by thePod at the set time
+    even if the app is closed. When it's done, it shows you the published link in pub's publications list.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#cuenta">One account</a>
+  <a href="#pre">The pre section is prePod</a>
+  <a href="#prod">The prod section is prodPod</a>
+  <a href="#desde-postpod">From postPod</a>
+  <a href="#desde-prepod">From prePod</a>
+  <a href="#publicar">Publishing with prePod</a>
+</nav>
+{% endblock %}

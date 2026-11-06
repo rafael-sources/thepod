@@ -1,0 +1,111 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Conceptos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTOS</div>
+  <h1>El vocabulario de amaPod</h1>
+  <p class="lede">Los términos clave para entender cómo funciona un evento de Q&amp;A en vivo.</p>
+</header>
+
+<section id="evento">
+  <h2><span class="num">01</span> Evento</h2>
+  <p>Una sesión de preguntas y respuestas. Pasa por tres estados:</p>
+  <p><strong>Creado</strong> → <strong>Activo</strong> → <strong>Finalizado</strong></p>
+  <ul>
+    <li><strong>Creado</strong>: en preparación. La audiencia todavía no puede participar. Solo en este estado se puede eliminar.</li>
+    <li><strong>Activo</strong>: la sala de video está abierta, la cola funciona en tiempo real.</li>
+    <li><strong>Finalizado</strong>: la sala se cerró. Si hubo grabación, viaja a postPod.</li>
+  </ul>
+</section>
+
+<section id="participante">
+  <h2><span class="num">02</span> Participante</h2>
+  <p>
+    Una persona de la audiencia que quiere hacer una pregunta. Se anota con su nombre desde el link
+    público — <strong>sin cuenta ni registro</strong>. Recibe un token de acceso propio que identifica
+    su lugar en la cola.
+  </p>
+  <p>Al anotarse puede escribir hasta <strong>3 pre-preguntas</strong> para que el moderador sepa de qué quiere hablar.</p>
+</section>
+
+<section id="cola">
+  <h2><span class="num">03</span> La cola</h2>
+  <p>El corazón de amaPod. Cada participante avanza por estos estados:</p>
+  <p><strong>Pendiente</strong> → <strong>En cola</strong> → <strong>Al aire</strong> → <strong>Atendido</strong></p>
+  <ul>
+    <li><strong>Pendiente</strong>: pidió participar, espera aprobación del moderador.</li>
+    <li><strong>En cola</strong>: aprobado, con número de posición. Las posiciones se renumeran automáticamente.</li>
+    <li><strong>Al aire</strong>: conectado a la sala de video, haciendo su pregunta en vivo.</li>
+    <li><strong>Atendido</strong>: su turno terminó.</li>
+  </ul>
+  <p>Un participante también puede quedar <strong>rechazado</strong> (el moderador descartó su solicitud) o <strong>retirado</strong> (se fue antes de su turno).</p>
+</section>
+
+<section id="preconexion">
+  <h2><span class="num">04</span> Preconexión</h2>
+  <p>
+    Los <strong>primeros 3</strong> de la cola se conectan a la sala por adelantado: eligen cámara y micrófono
+    y quedan en espera, invisibles para el público. Cuando el moderador les da el aire, aparecen al instante.
+    Esto elimina los tiempos muertos típicos de "a ver... ¿me escuchas?".
+  </p>
+</section>
+
+<section id="censura">
+  <h2><span class="num">05</span> Censura</h2>
+  <p>
+    Un botón de emergencia del moderador: silencia y oculta al participante que está al aire de inmediato,
+    sin cerrar el evento. Útil si alguien aprovecha el aire para algo indebido.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">06</span> Modos de chat</h2>
+  <ul>
+    <li><strong>Libre</strong>: todos los mensajes se publican al instante.</li>
+    <li><strong>Moderado</strong>: los mensajes de la audiencia requieren aprobación del host antes de ser visibles.</li>
+    <li><strong>Apagado</strong>: no hay chat.</li>
+  </ul>
+</section>
+
+<section id="espectador">
+  <h2><span class="num">07</span> Espectador</h2>
+  <p>
+    Quien mira el evento sin intención de preguntar. Entra por la página pública del evento,
+    sin cuenta, y puede dar <strong>likes</strong>. Si el chat está activo también puede escribir.
+  </p>
+</section>
+
+<section id="sala">
+  <h2><span class="num">08</span> Sala de video</h2>
+  <p>
+    La videollamada en vivo del evento (tecnología WebRTC con LiveKit). Admite hasta
+    <strong>10 participantes simultáneos</strong>: el host, quien está al aire y los preconectados.
+    La audiencia general no ocupa lugar en la sala — mira desde la página de espectadores.
+  </p>
+</section>
+
+<section id="plantilla">
+  <h2><span class="num">09</span> Plantilla de evento</h2>
+  <p>
+    Un formato reutilizable: título, descripción, modo de chat y branding guardados para crear
+    eventos recurrentes en un clic (por ejemplo, "AMA de los viernes").
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#evento">Evento</a>
+  <a href="#participante">Participante</a>
+  <a href="#cola">La cola</a>
+  <a href="#preconexion">Preconexión</a>
+  <a href="#censura">Censura</a>
+  <a href="#chat">Modos de chat</a>
+  <a href="#espectador">Espectador</a>
+  <a href="#sala">Sala de video</a>
+  <a href="#plantilla">Plantilla</a>
+</nav>
+{% endblock %}

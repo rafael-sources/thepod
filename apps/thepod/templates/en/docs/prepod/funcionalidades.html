@@ -1,0 +1,301 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Features — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FEATURES</div>
+  <h1>Every tool in detail</h1>
+  <p class="lede">Everything you can do in prePod, explained step by step.</p>
+</header>
+
+<section id="branding">
+  <h2><span class="num">01</span> Branding</h2>
+  <p>The branding editor has four main sections:</p>
+  <ul>
+    <li><strong>Identity</strong>: podcast name, tagline (a short phrase) and long description.</li>
+    <li><strong>Colors</strong>: five color pickers with hex input (primary, secondary, accent, background and text).</li>
+    <li><strong>Typography</strong>: heading font, body text font and alignment.</li>
+    <li><strong>Assets</strong>: upload the logo (up to 500x500 pixels) and the cover art (up to 1200x800 pixels).</li>
+  </ul>
+  <p>In the right column there's a <strong>live preview</strong> that reflects every change instantly.</p>
+  <p>
+    <strong>Hosts</strong>: below the identity, you can add co-hosts by typing their thePod username.
+    The podcast owner is marked with a crown.
+  </p>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>Changes are saved automatically after 60 seconds of inactivity. You can also save manually with the "Save" button.</p></div>
+  </div>
+</section>
+
+<section id="episodios">
+  <h2><span class="num">02</span> Episode board (Kanban)</h2>
+  <p>Six columns that represent the production flow:</p>
+  <ol>
+    <li><strong>Idea</strong>: episodes at the concept stage.</li>
+    <li><strong>Planning</strong>: in active preparation.</li>
+    <li><strong>With script</strong>: rundown and script completed.</li>
+    <li><strong>Recorded</strong>: the recording is done.</li>
+    <li><strong>Published</strong>: episode published and distributed.</li>
+    <li><strong>Archived</strong>: closed episodes that leave the day-to-day view (column hidden by default).</li>
+  </ol>
+  <p>Each card shows the number (EP #), title, scheduled date and estimated duration.</p>
+  <p>Available actions:</p>
+  <ul>
+    <li>Drag cards between columns to change the status.</li>
+    <li>Click a card to open its detail view.</li>
+    <li>Use the arrows (up/down) to change the order on the public landing page.</li>
+    <li>Click <strong>+ New episode</strong> in any column to create one directly in that state.</li>
+  </ul>
+</section>
+
+<section id="detalle-episodio">
+  <h2><span class="num">03</span> Episode detail</h2>
+  <p>When you open an episode, you'll find:</p>
+  <ul>
+    <li><strong>Header</strong>: status (dropdown), episode number (editable) and title (editable inline).</li>
+    <li><strong>Description</strong>: a free-form text area to describe the episode.</li>
+    <li><strong>Metadata</strong>: status picker, date and time, estimated duration in minutes.</li>
+    <li><strong>Download .ics</strong>: export this episode as a calendar event.</li>
+    <li><strong>Show notes</strong>: appear automatically when the episode moves to "Published".</li>
+    <li><strong>Integration bar</strong>: shows the production status and the buttons to send to prodPod or postPod.</li>
+  </ul>
+</section>
+
+<section id="rundown">
+  <h2><span class="num">04</span> Rundown</h2>
+  <p>The rundown editor lets you build the episode structure with blocks. Each block has:</p>
+  <ul>
+    <li><strong>Type</strong>: Intro, Segment, Interview, Sponsor, Break, Outro or Other.</li>
+    <li><strong>Title</strong>: a descriptive name for the block.</li>
+    <li><strong>Estimated duration</strong>: in minutes.</li>
+    <li><strong>Notes</strong>: cues or reference content.</li>
+    <li><strong>Sponsor</strong> (Sponsor blocks only): a picker to link a registered advertiser.</li>
+  </ul>
+  <p>
+    Drag the six-dot handle to reorder blocks. The <strong>total estimated duration</strong> is shown at the bottom.
+    Rundown blocks become chapter markers when you send the episode to prodPod,
+    and show notes when the episode is published.
+  </p>
+</section>
+
+<section id="guion">
+  <h2><span class="num">05</span> Script</h2>
+  <p>The script editor is more detailed than the rundown. Each section has:</p>
+  <ul>
+    <li><strong>Speaker</strong>: the name of who's talking.</li>
+    <li><strong>Content</strong>: the text or guide for what's said.</li>
+    <li><strong>Notes</strong>: technical or production cues.</li>
+    <li><strong>Duration</strong>: estimated time in seconds.</li>
+  </ul>
+  <p>Use the up/down arrows to reorder sections. The script saves automatically every time you stop typing.</p>
+</section>
+
+<section id="invitados">
+  <h2><span class="num">06</span> Guests (Roster)</h2>
+  <p>To add a guest:</p>
+  <ol>
+    <li>Click "Add guest".</li>
+    <li>Fill in name, email (optional) and role (Host, Co-host or Guest).</li>
+    <li>Optionally, add a bio, a <strong>photo</strong> and their social links (X/Twitter, Instagram, YouTube, TikTok).</li>
+  </ol>
+  <p>The photo and social links travel with the episode: prodPod and postPod use them for banners and credits.</p>
+  <p><strong>RSVP system</strong>: to confirm attendance you have two paths:</p>
+  <ul>
+    <li><strong>Invite by email</strong>: click "Invite" and an automatic email is sent with the confirmation link.</li>
+    <li><strong>Copy link</strong>: if there's no email available, copy the RSVP link and send it manually.</li>
+  </ul>
+  <p>The status updates automatically: Pending, Yes, No or Maybe. Guests don't need a thePod account.</p>
+</section>
+
+<section id="ideas">
+  <h2><span class="num">07</span> Ideas and voting</h2>
+  <p>The Ideas side panel lets you capture quick concepts for future episodes:</p>
+  <ul>
+    <li>Write an idea (up to 500 characters) and submit it with <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</li>
+    <li>Each team member can vote once per idea.</li>
+    <li>Accept or reject ideas with the corresponding buttons.</li>
+    <li>Accepted ideas can be turned into episodes.</li>
+  </ul>
+</section>
+
+<section id="calendario">
+  <h2><span class="num">08</span> Calendar</h2>
+  <p>The <strong>Calendar</strong> tab shows a monthly calendar with all your episodes:</p>
+  <ul>
+    <li>Move between months with the arrows or jump back to today.</li>
+    <li><strong>Click an empty day</strong>: creates a new episode on that date.</li>
+    <li><strong>Click an episode</strong>: opens its detail view.</li>
+    <li><strong>Drag an episode to another day</strong>: reschedules the date.</li>
+    <li><strong>Download .ics</strong>: exports the whole calendar to import into your calendar app.</li>
+  </ul>
+</section>
+
+<section id="sounds">
+  <h2><span class="num">09</span> Sounds (Soundboard)</h2>
+  <p>The <strong>Sounds</strong> tab manages your library of audio effects:</p>
+  <ul>
+    <li>Upload sounds with the "Upload sound" button.</li>
+    <li>Each sound has an editable name, a keyboard shortcut (a single key) and a custom color.</li>
+    <li>Play each sound with the play button.</li>
+    <li>Access a global library of sounds shared across all your podcasts.</li>
+  </ul>
+  <p>When you send an episode to prodPod, your full soundboard goes along so you can use it during the live recording.</p>
+</section>
+
+<section id="plantillas">
+  <h2><span class="num">10</span> Templates</h2>
+  <p>Templates speed up creating episodes with a recurring format:</p>
+  <ul>
+    <li><strong>Create</strong>: click "+ New template" and give it a name.</li>
+    <li><strong>Edit</strong>: each template has a description, a base rundown and a base script.</li>
+    <li><strong>Use</strong>: when creating a new episode, select the template to pre-fill the structure.</li>
+    <li><strong>Default</strong>: mark a template as the default so it's applied automatically to every new episode.</li>
+  </ul>
+</section>
+
+<section id="sponsors">
+  <h2><span class="num">11</span> Sponsors and reports</h2>
+  <p>The <strong>Sponsors</strong> panel lets you manage advertisers:</p>
+  <ul>
+    <li><strong>Create sponsor</strong>: name, URL, ad-read text, notes.</li>
+    <li><strong>Status</strong>: active or paused (toggle).</li>
+    <li><strong>Link</strong>: in the rundown, "Sponsor" blocks show a picker to choose the advertiser.</li>
+    <li><strong>Report</strong>: total episodes, blocks, estimated minutes and a detailed table per episode.</li>
+    <li><strong>Export CSV</strong>: download a file with the full detail to share with the advertiser.</li>
+  </ul>
+</section>
+
+<section id="show-notes">
+  <h2><span class="num">12</span> Show notes</h2>
+  <p>
+    Generated automatically when an episode moves to the <strong>Published</strong> state. They contain the title,
+    chapters derived from the rundown blocks with YouTube-compatible timestamps, and credits.
+  </p>
+  <p>Two quick-copy buttons:</p>
+  <ul>
+    <li><strong>Copy all</strong>: title + chapters + credits.</li>
+    <li><strong>Chapters only</strong>: YouTube format, ready to paste.</li>
+  </ul>
+</section>
+
+<section id="landing">
+  <h2><span class="num">13</span> Public landing page + RSS</h2>
+  <p>The <strong>Landing</strong> tab creates a web page for your podcast:</p>
+  <ul>
+    <li><strong>Design</strong>: choose from three templates (Minimal, Bold, Classic).</li>
+    <li><strong>RSS feed</strong>: generated automatically. Compatible with Apple Podcasts, Spotify and other platforms.</li>
+    <li><strong>Platform links</strong>: add your podcast's URLs on YouTube, Spotify, Apple Podcasts, Instagram, TikTok and X/Twitter.</li>
+    <li><strong>Team</strong>: add members with avatar, name, role, bio and social links.</li>
+    <li><strong>Custom content</strong>: visual (WYSIWYG) editor with headings, paragraphs, lists, quotes and images.</li>
+    <li><strong>Advanced customization</strong>: fields for custom CSS and analytics code.</li>
+  </ul>
+  <p>Includes a preview with a reload button so you can see changes before publishing.</p>
+</section>
+
+<section id="links-distribucion">
+  <h2><span class="num">14</span> Distribution links</h2>
+  <p>
+    In each episode's detail view, the links section lets you record the URLs where it was published.
+    Available platforms: YouTube, Spotify, Apple Podcasts, Google Podcasts, Podbean, Overcast, Castbox, iHeart and your own site.
+    These links can be shown on your public landing page.
+  </p>
+</section>
+
+<section id="publicacion">
+  <h2><span class="num">15</span> Publishing the episode</h2>
+  <p>
+    In the episode detail view, <strong>Publish</strong> section: pick the final MP3 or M4A from your
+    computer and tap <strong>Upload and publish</strong>. It uploads in chunks with a progress bar, the
+    episode moves to <strong>Published</strong> and the feed updates on its own, ready for Spotify and Apple
+    Podcasts to pick it up. If you picked the wrong file, “Replace audio” swaps it out.
+  </p>
+</section>
+
+<section id="panel-distribucion">
+  <h2><span class="num">16</span> Distribution panel</h2>
+  <p>Tools to get your RSS feed into the podcast directories:</p>
+  <ul>
+    <li><strong>Feed validation</strong>: checks that your RSS meets Apple/Spotify requirements before you submit it.</li>
+    <li><strong>Status per platform</strong>: record which directories you've already submitted the podcast to (Spotify, Apple Podcasts, YouTube, etc.) and their status.</li>
+    <li><strong>Automatic check</strong>: verifies that the feed responds correctly from the outside.</li>
+  </ul>
+</section>
+
+<section id="youtube">
+  <h2><span class="num">17</span> Upload to YouTube</h2>
+  <p>
+    Connect the podcast's YouTube channel once (<strong>Connect YouTube</strong> button in the episode's
+    Publish section). Then pick the video, adjust the title and whether it's Public, Unlisted or
+    Private, and tap <strong>Upload to YouTube</strong>: you'll see the upload progress and the video
+    link appears when it's done. The description is built from the episode notes. You can disconnect the account
+    whenever you want.
+  </p>
+</section>
+
+<section id="redes">
+  <h2><span class="num">18</span> Social: connecting your accounts</h2>
+  <p>
+    In <strong>Podcast settings → Social</strong> you connect, just once, the accounts where the podcast
+    gets published. It's only for connecting: publishing reels and episodes happens in <strong>pubPod</strong>, inside
+    thePod for Mac. Each account lights up its stars there:
+  </p>
+  <ul>
+    <li><strong>Podcast feed</strong>: Spotify and Apple Podcasts. Ready to go once the podcast is set up for publishing.</li>
+    <li><strong>YouTube</strong>: YouTube and Shorts. It's the same connection as the YouTube upload.</li>
+    <li><strong>Instagram</strong>: Instagram and Reels. Needs a professional account (Creator or Business); while thePod
+      is under Meta review, only accounts added as testers.</li>
+    <li><strong>TikTok</strong>: reels land in your TikTok inbox, with the text ready, and you publish them from your phone.</li>
+    <li><strong>Facebook</strong>: coming soon.</li>
+  </ul>
+  <p>
+    <strong>Connect</strong> opens the network to grant permission and comes back to prePod on its own; you'll see the connected user and
+    <strong>Disconnect</strong> removes the permission. The only permission you grant is to publish on your behalf; passwords are never
+    stored. What thePod publishes can be reviewed in <a href="/privacidad">Privacy</a>.
+  </p>
+</section>
+
+<section id="notas-ai">
+  <h2><span class="num">19</span> AI notes from postPod</h2>
+  <p>
+    If you generated a summary and highlights with AI in postPod, those texts sync back to the episode
+    in prePod (<em>AI summary</em> and <em>AI highlights</em>) so you can use them in show notes and descriptions.
+  </p>
+</section>
+
+<section id="mac-app">
+  <h2><span class="num">20</span> API for the desktop app (Mac)</h2>
+  <p>
+    prePod exposes a chunked publishing API designed for the macOS desktop app:
+    large file uploads in chunks, audio publishing to hosting + RSS, video upload to
+    YouTube and social publishing (pubPod: Instagram, Shorts, TikTok, right away or scheduled), with progress polling. If you only use the browser, there's nothing to set up.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#branding">Branding</a>
+  <a href="#episodios">Kanban</a>
+  <a href="#detalle-episodio">Episode detail</a>
+  <a href="#rundown">Rundown</a>
+  <a href="#guion">Script</a>
+  <a href="#invitados">Guests</a>
+  <a href="#ideas">Ideas</a>
+  <a href="#calendario">Calendar</a>
+  <a href="#sounds">Sounds</a>
+  <a href="#plantillas">Templates</a>
+  <a href="#sponsors">Sponsors</a>
+  <a href="#show-notes">Show notes</a>
+  <a href="#landing">Landing + RSS</a>
+  <a href="#links-distribucion">Links</a>
+  <a href="#publicacion">Publishing</a>
+  <a href="#panel-distribucion">Distribution</a>
+  <a href="#youtube">YouTube</a>
+  <a href="#redes">Social</a>
+  <a href="#notas-ai">AI notes</a>
+  <a href="#mac-app">Desktop app</a>
+</nav>
+{% endblock %}

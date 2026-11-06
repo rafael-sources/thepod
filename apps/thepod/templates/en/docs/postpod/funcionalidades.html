@@ -1,0 +1,386 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · Features — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FEATURES</div>
+  <h1>Every tool in detail</h1>
+  <p class="lede">A detailed guide to every panel and editing tool available in postPod.</p>
+</header>
+
+<section id="panel-archivos">
+  <h2><span class="num">01</span> Files panel</h2>
+  <p>In the left sidebar. It has two tabs:</p>
+  <ul>
+    <li><strong>Project</strong>: files uploaded to this project (or received from prodPod).</li>
+    <li><strong>Global</strong>: a shared asset library (music, sound effects) available to every project.</li>
+  </ul>
+  <p>Actions per file:</p>
+  <ul>
+    <li>Click to add it to the timeline.</li>
+    <li>Captions button to generate subtitles with Whisper.</li>
+    <li>Move to the global library.</li>
+    <li>Delete.</li>
+  </ul>
+  <p>Supports uploads of up to 2 GB per file. Formats: MP4, MOV, WebM (video), MP3, WAV, M4A (audio), JPG, PNG, GIF (image).</p>
+</section>
+
+<section id="timeline">
+  <h2><span class="num">02</span> Timeline</h2>
+  <p>The horizontal bar in the center that shows the clips in sequence. Each clip shows its name, track and waveform.</p>
+  <p>Interactions:</p>
+  <ul>
+    <li><strong>Click the ruler</strong> (empty area): move the playhead to that point.</li>
+    <li><strong>Drag across the ruler</strong>: select a range (yellow band). While you drag, a tooltip shows the time and duration.</li>
+    <li><strong>Drag the playhead</strong> (red cursor): scrub frame by frame.</li>
+    <li><strong>Click a marker</strong> (diamond): select that moment and jump to it.</li>
+  </ul>
+  <p>Moments appear as diamond-shaped markers above the timeline. Below the main timeline is the <strong>audio lane</strong> for background music.</p>
+</section>
+
+<section id="reproductor">
+  <h2><span class="num">03</span> Video player</h2>
+  <p>
+    Shows the current frame with every active effect applied in real time: zooms, color filters, subtitles, text overlays, vertical preview.
+    When a vertical operation is active, the player automatically switches to 9:16 mode.
+  </p>
+  <p>Controls:</p>
+  <ul>
+    <li><strong>Space</strong>: play/pause.</li>
+    <li><strong>Click the video</strong>: toggle playback.</li>
+    <li><strong>CC button</strong>: turn live captions on/off.</li>
+    <li><strong>Volume control</strong>: adjust playback volume.</li>
+    <li><strong>Range button</strong>: play the visible range at normal speed.</li>
+    <li><strong>Slow button</strong>: stretch a range to 10 seconds for detailed review.</li>
+  </ul>
+</section>
+
+<section id="zoom-timeline">
+  <h2><span class="num">04</span> Timeline zoom</h2>
+  <p>Controls to zoom the timeline view in or out:</p>
+  <ul>
+    <li><strong>+</strong> and <strong>-</strong> buttons (or the <kbd>+</kbd> / <kbd>-</kbd> keys): 10% zoom per step.</li>
+    <li><kbd>Z</kbd>: zoom to the selected range.</li>
+    <li><kbd>Esc</kbd>: reset the zoom to the full view.</li>
+  </ul>
+  <p>Zoom only changes the view, not the content. It's useful for precise editing of short sections.</p>
+</section>
+
+<section id="tracks">
+  <h2><span class="num">05</span> Tracks (multi-camera)</h2>
+  <p>
+    Clips can be assigned to Track 1, Track 2 or more. This is for multi-camera recordings where you want to switch between angles.
+  </p>
+  <p>
+    In the Clips panel (right), each clip has a track toggle (T1/T2). Use the <strong>switch_video</strong> operation on a moment
+    to switch camera at that point. The quick T1, T2 buttons and the toggle in the moments list create track switches instantly.
+  </p>
+</section>
+
+<section id="momentos-operaciones">
+  <h2><span class="num">06</span> Moments and operations</h2>
+  <p>Moments are created by pressing <kbd>M</kbd> or from the moments panel below the timeline.</p>
+  <p>When you select a moment, the operations panel (right) shows:</p>
+  <ul>
+    <li>Moment summary: label (double-click to edit), start and end time (editable), type (relative/absolute, click the chip to change).</li>
+    <li>List of existing operations with edit and delete buttons.</li>
+    <li>Selector to add a new operation.</li>
+  </ul>
+  <p>Each moment has quick-action buttons:</p>
+  <ul>
+    <li><strong>Jump</strong>: go to the moment on the timeline.</li>
+    <li><strong>Preview</strong>: play from slightly before to watch the effect come in.</li>
+    <li><strong>Export</strong>: open the export dialog with the moment's range preloaded.</li>
+    <li><strong>Delete</strong>.</li>
+  </ul>
+</section>
+
+<section id="zoom-inout">
+  <h2><span class="num">07</span> Zoom in and zoom out</h2>
+  <p><strong>Zoom in</strong> magnifies the image at a specific point. You set:</p>
+  <ul>
+    <li><strong>Scale</strong> (1.0 to 3.0): how much it zooms in.</li>
+    <li><strong>Focal point</strong> (origin x/y): where the zoom is centered.</li>
+    <li><strong>Duration</strong>: how long the effect lasts.</li>
+  </ul>
+  <p><strong>Zoom out</strong> returns to the normal view. You only need to set the duration. The effect shows in real time in the player.</p>
+</section>
+
+<section id="color">
+  <h2><span class="num">08</span> Color effects</h2>
+  <p>Applies a visual filter to the video over a time range:</p>
+  <ul>
+    <li><strong>Grayscale</strong>: black and white.</li>
+    <li><strong>Sepia</strong>: a warm vintage tone.</li>
+    <li><strong>Invert</strong>: inverted colors.</li>
+  </ul>
+  <p>Set the effect's duration. It previews in real time.</p>
+</section>
+
+<section id="subtitulos">
+  <h2><span class="num">09</span> Subtitles (subtitle)</h2>
+  <p>
+    Text that appears over the video at the top or bottom. You set the text, the position (top/bottom) and the duration.
+    Different from Whisper-generated captions — this is manual text you write yourself.
+  </p>
+</section>
+
+<section id="audio-ops">
+  <h2><span class="num">10</span> Audio mix and audio replace</h2>
+  <ul>
+    <li><strong>Audio mix</strong>: mixes a sound file over the existing audio. You can pick local files from the project or from the global library. You adjust volume and duration.</li>
+    <li><strong>Audio replace</strong>: completely replaces the video's audio with another file for a specific duration.</li>
+  </ul>
+</section>
+
+<section id="to-vertical">
+  <h2><span class="num">11</span> To vertical (9:16)</h2>
+  <p>
+    Crops a 16:9 video to vertical 9:16 format for TikTok, Reels or Shorts. You set:
+  </p>
+  <ul>
+    <li><strong>Horizontal center</strong> (crop x): a slider to frame the subject. 0.0 = left, 0.5 = center, 1.0 = right.</li>
+    <li><strong>Duration</strong>: how long the crop lasts (empty = until the next moment or the end of the timeline).</li>
+  </ul>
+  <p>Use this mode when your video has <strong>a single camera</strong> and you want to crop to vertical. The player switches to a 9:16 preview while this operation is active.</p>
+</section>
+
+<section id="vertical-split">
+  <h2><span class="num">12</span> Vertical split (stacked TikTok)</h2>
+  <p>
+    For <strong>composite</strong> videos (two or more cameras side by side in the same file).
+    It takes the horizontal frame and stacks the cameras vertically for 9:16.
+  </p>
+  <p>You set:</p>
+  <ul>
+    <li><strong>Number of cameras</strong> (2, 3 or 4).</li>
+    <li><strong>Horizontal center per panel</strong>: one slider per camera to center the face.</li>
+    <li><strong>Duration</strong>.</li>
+  </ul>
+  <p>Steps:</p>
+  <ol>
+    <li>Select a moment, add “Vertical 9:16 stacked (TikTok)” and configure the cameras.</li>
+    <li>The player shows the stacked panels. If you have clips on multiple tracks, it shows them combined.</li>
+    <li>Click the moment's export button (arrow icon). The dialog opens with the range preloaded. Pick the <strong>TikTok / Reels vertical</strong> preset (1080x1920) and export.</li>
+  </ol>
+  <div class="callout">
+    <div class="ctag">TIP</div>
+    <div class="cbody"><p>The export button on each moment is the fastest way to generate a vertical clip of a specific section.</p></div>
+  </div>
+</section>
+
+<section id="text-overlay">
+  <h2><span class="num">13</span> Text overlay (text sticker)</h2>
+  <p>Comic-style text that appears over the video with animation. You set:</p>
+  <ul>
+    <li><strong>Text</strong>: what you want it to say (e.g. “POW!”, “BOOM!”, “WOW”).</li>
+    <li><strong>Font</strong>: Bangers, Titan One, Luckiest Guy or Permanent Marker.</li>
+    <li><strong>Color</strong>: color picker.</li>
+    <li><strong>Size</strong>: percentage of the frame.</li>
+    <li><strong>Position</strong>: drag directly in the player to move the text.</li>
+    <li><strong>Rotation</strong>: use the rotation handle in the player to tilt it.</li>
+    <li><strong>Outline and shadow</strong>: toggle border and shadow on/off.</li>
+    <li><strong>Duration</strong>: how long the sticker stays on screen.</li>
+    <li><strong>Sound</strong> (optional): pick an audio file to play when the text appears.</li>
+  </ul>
+  <p>Editing is WYSIWYG: you move, resize and rotate the text directly over the video in the player.</p>
+</section>
+
+<section id="remove-silences">
+  <h2><span class="num">14</span> Remove silences</h2>
+  <p>Analyzes a range of audio and automatically cuts the silent sections. You set:</p>
+  <ul>
+    <li><strong>Threshold (dB)</strong>: how quiet it has to be to count as silence (more negative = deeper silence).</li>
+    <li><strong>Minimum duration</strong>: how long a silence has to last to be cut.</li>
+    <li><strong>Range</strong>: the length of audio to analyze starting from the moment.</li>
+  </ul>
+  <p>The system shows how many segments it found and how many seconds would be removed before applying.</p>
+</section>
+
+<section id="transcript">
+  <h2><span class="num">15</span> Transcript editor</h2>
+  <p>A full text editor that shows the transcription of your clips. Open it from the toolbar.</p>
+  <ul>
+    <li><strong>Click a word</strong>: the player jumps to that point in the video.</li>
+    <li><strong>Select and delete text</strong>: creates a transcript cut — that fragment of audio/video is removed from the export.</li>
+    <li><strong>Highlight filler words</strong>: a checkbox that automatically highlights “eh”, “um”, “este”, “o sea” and similar.</li>
+    <li><strong>Remove filler words in bulk</strong>: a button that cuts every detected filler word at once.</li>
+    <li><strong>Restore cuts</strong>: each cut can be undone individually, or all at once.</li>
+  </ul>
+  <p>Cuts are non-destructive — the original file is never touched.</p>
+</section>
+
+<section id="captions">
+  <h2><span class="num">16</span> Captions (Whisper)</h2>
+  <p>Generates word-by-word subtitles for any video or audio file. In the Files panel, click the file's captions button:</p>
+  <ol>
+    <li>Pick the <strong>language</strong> (Spanish, English, Portuguese, etc.).</li>
+    <li>Pick the <strong>model</strong> (tiny, base, small, medium, large — bigger = more accurate but slower).</li>
+    <li>The process runs in the background. When it finishes, the captions show up as live subtitles during playback.</li>
+    <li>Once done, each word is shifted to where the voice is actually heard: subtitles no longer appear before the person speaks. Files transcribed before this change get adjusted if you transcribe them again.</li>
+  </ol>
+  <p>When exporting, you can choose to <strong>burn the captions</strong> into the video (always visible) or keep them as a standalone SRT file.</p>
+</section>
+
+<section id="audio-lane">
+  <h2><span class="num">17</span> Audio lane (parallel track)</h2>
+  <p>A secondary audio track that plays along with the main timeline. Ideal for:</p>
+  <ul>
+    <li>Background music.</li>
+    <li>Ambient sound.</li>
+    <li>Intro/outro stingers.</li>
+  </ul>
+  <p>Each clip in the audio lane has:</p>
+  <ul>
+    <li><strong>Start and end</strong> on the timeline.</li>
+    <li>Individual <strong>volume control</strong>.</li>
+    <li>A descriptive <strong>label</strong>.</li>
+  </ul>
+  <p>Click a clip in the lane to edit it. Drag to reposition.</p>
+</section>
+
+<section id="exportacion">
+  <h2><span class="num">18</span> Export</h2>
+  <p>Click <strong>Export</strong> in the toolbar. At the top you'll see <strong>Before exporting</strong>, a short list of things worth checking: whether subtitles are missing or not aligned to the voice, whether they're still being generated, whether silences haven't been removed, whether the AI hasn't read the episode yet, and up to what quality your plan exports. You can export anyway; it only stops you if the timeline is empty or a file is missing, because the export would fail. If nothing is pending it says “All set”.</p>
+  <p>Then choose a preset:</p>
+  <ul>
+    <li><strong>YouTube</strong>: 1080p or 4K, 30 or 60 fps.</li>
+    <li><strong>TikTok / Reels</strong>: 1080x1920 vertical, 30 fps.</li>
+    <li><strong>Instagram</strong>: 1080x1080 square, 30 fps.</li>
+    <li><strong>WhatsApp</strong>: 720p compressed.</li>
+    <li><strong>Podcast</strong>: MP3 or M4A (audio only).</li>
+  </ul>
+  <p>Extra options:</p>
+  <ul>
+    <li><strong>Burn captions</strong>: embeds the subtitles into the video (pick the language).</li>
+    <li><strong>Generate notes</strong>: creates a .txt file with chapters (YouTube format) and credits, ready to paste into Spotify, Apple or YouTube.</li>
+    <li><strong>Professional audio</strong>: a studio processing chain — low cut (highpass 80 Hz), FFT noise reduction, voice EQ, compression and normalization to -16 LUFS. It only affects the voice — background music passes through unchanged.</li>
+    <li><strong>Export range only</strong>: if you have a range selected on the timeline, you can export just that portion.</li>
+  </ul>
+  <p>The job runs in the background with a progress bar. When it finishes: download, play in a new tab, or download the notes.</p>
+</section>
+
+<section id="exportar-momento">
+  <h2><span class="num">19</span> Export this moment</h2>
+  <p>Each moment in the list has an export button (arrow icon). When you click it:</p>
+  <ol>
+    <li>The moment's range is calculated (from its start to its end, or to the next moment if it has no set duration).</li>
+    <li>The export dialog opens with the range preloaded and the “Export selected range only” checkbox already on.</li>
+    <li>You only need to pick the preset and export.</li>
+  </ol>
+  <p>Especially handy for <strong>vertical split</strong>: apply the operation to the moment, click export, pick TikTok vertical, and you get a clip ready to upload.</p>
+  <h3>One-step reel (🎬)</h3>
+  <p>Each moment also has the <strong>🎬</strong> button. It opens the same window already set up for a reel: it comes out vertical (TikTok, Reels, Shorts), with subtitles painted word by word if the recording has them, and you pick one of three designs:</p>
+  <ul>
+    <li><strong>Simple</strong>: just the video and the subtitles.</li>
+    <li><strong>With title</strong>: the moment's name at the top.</li>
+    <li><strong>With your brand</strong>: the podcast background instead of black bars, plus the title.</li>
+  </ul>
+  <p>Tap <strong>Make reel</strong>. “Other format or options” shows the full window if you want to change anything.</p>
+  <div class="callout"><div class="ctag">SUBTITLES</div><div class="cbody"><p>Burned-in subtitles follow the video that comes out: if you removed silences, cut in the transcript or export only a moment, each word appears when it's spoken. What you cut doesn't show up.</p></div></div>
+</section>
+
+<section id="reordenar">
+  <h2><span class="num">20</span> Reorder clips</h2>
+  <p>
+    In the Clips panel (right), drag clips by the handle (6-dot icon) to reorder them on the timeline.
+    The timeline updates immediately.
+  </p>
+  <p>Each clip shows: file name, current track, move up/down buttons, a seek button (go to that clip), trim (IN/OUT) and delete.</p>
+</section>
+
+<section id="volumen-clip">
+  <h2><span class="num">21</span> Per-clip volume</h2>
+  <p>
+    Each clip can have its own volume setting. Click a clip in the Clips panel to open the editor,
+    where you can adjust its individual volume along with the trim points and track assignment.
+  </p>
+</section>
+
+<section id="estilo-subtitulos">
+  <h2><span class="num">22</span> Subtitle style (karaoke)</h2>
+  <p>Captions generated with Whisper can be styled visually from the style panel:</p>
+  <ul>
+    <li><strong>Font and size</strong>: small, medium or large.</li>
+    <li><strong>Text and outline color</strong>: independent color pickers.</li>
+    <li><strong>Background</strong> (optional): a colored box behind the text for maximum readability.</li>
+    <li><strong>Karaoke highlight</strong>: the color each word lights up with as it's spoken, TikTok style.</li>
+    <li><strong>Position</strong>: top, center or bottom of the frame.</li>
+  </ul>
+  <p>
+    The style previews live in the player and is respected when captions are burned in on export.
+    You can also fix individual words in the transcript before exporting.
+  </p>
+</section>
+
+<section id="composicion-multitrack">
+  <h2><span class="num">23</span> Multitrack composition (layouts)</h2>
+  <p>
+    When the project has clips on multiple tracks (multi-camera recordings from prodPod), the export dialog
+    shows a <strong>composition</strong> selector with ready-made templates:
+  </p>
+  <ul>
+    <li><strong>Side by side</strong>: participants in horizontal panels.</li>
+    <li><strong>Grid</strong>: a balanced grid for 3+ cameras.</li>
+    <li><strong>Spotlight</strong>: the active speaker large, the rest as thumbnails.</li>
+    <li><strong>PiP</strong>: picture-in-picture — you choose the corner and which track is the main one.</li>
+    <li><strong>Speaker only</strong>: just the active speaker, full screen.</li>
+  </ul>
+  <p>No need to configure operations by hand: pick the template and the export composes the video.</p>
+</section>
+
+<section id="banners-momentos">
+  <h2><span class="num">24</span> Moment and participant banners</h2>
+  <p>
+    When exporting you can turn on <strong>moment banners</strong>: each moment on the timeline appears as a
+    news-style (CNN) lower third with its label, in the position you choose (top or bottom).
+  </p>
+  <p>
+    From the <strong>Participants and banners</strong> panel you assign each participant to a track, so their
+    name and photo appear as a banner when that camera is in the spotlight. Participant data
+    (names, roles, photos) arrives automatically from prePod/prodPod.
+  </p>
+</section>
+
+<section id="bundles">
+  <h2><span class="num">25</span> Project bundles (export / import)</h2>
+  <p>
+    A whole project can be packaged as a .zip file to move it to another postPod instance or
+    archive it. The bundle includes: project metadata, the timeline database, media, branding,
+    sponsor logos, soundboard sounds, guest photos, director assets and referenced global audio.
+  </p>
+  <p>When you import the bundle on another machine, the project is fully functional with all its editing intact.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#panel-archivos">Files panel</a>
+  <a href="#timeline">Timeline</a>
+  <a href="#reproductor">Player</a>
+  <a href="#zoom-timeline">Timeline zoom</a>
+  <a href="#tracks">Tracks</a>
+  <a href="#momentos-operaciones">Moments and operations</a>
+  <a href="#zoom-inout">Zoom in/out</a>
+  <a href="#color">Color effects</a>
+  <a href="#subtitulos">Subtitles</a>
+  <a href="#audio-ops">Audio mix/replace</a>
+  <a href="#to-vertical">To vertical</a>
+  <a href="#vertical-split">Vertical split</a>
+  <a href="#text-overlay">Text overlay</a>
+  <a href="#remove-silences">Remove silences</a>
+  <a href="#transcript">Transcript</a>
+  <a href="#captions">Captions</a>
+  <a href="#audio-lane">Audio lane</a>
+  <a href="#exportacion">Export</a>
+  <a href="#exportar-momento">Export moment</a>
+  <a href="#reordenar">Reorder clips</a>
+  <a href="#volumen-clip">Per-clip volume</a>
+  <a href="#estilo-subtitulos">Subtitle style</a>
+  <a href="#composicion-multitrack">Multitrack composition</a>
+  <a href="#banners-momentos">Banners</a>
+  <a href="#bundles">Project bundles</a>
+</nav>
+{% endblock %}

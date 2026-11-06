@@ -1,0 +1,104 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Respuestas a las dudas más comunes sobre el estudio de grabación de prodPod.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>¿La cámara o el micrófono no aparecen?</summary>
+    <div class="ans">
+      <p>Asegúrate de dar permiso al navegador para acceder a la cámara y micrófono. Si los denegaste antes, ve a la configuración del navegador y restablece los permisos para el sitio. Usa Chrome o Firefox para mejor compatibilidad.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿No veo la sesión en la lista?</summary>
+    <div class="ans">
+      <p>Las sesiones se crean desde prePod. Si no ves ninguna, confirma con el host que haya enviado el episodio a prodPod. Si tú eres el host, ve a prePod y haz clic en "Enviar a prodPod" en el episodio correspondiente.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿La cuenta regresiva empezó pero no se está grabando?</summary>
+    <div class="ans">
+      <p>La grabación empieza automáticamente con la cuenta regresiva. Si no ves el indicador de grabación, recarga la página y vuelve a entrar a la sesión. Tu grabación local debería haberse iniciado correctamente.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El archivo de grabación es muy pequeño o está vacío?</summary>
+    <div class="ans">
+      <p>Esto puede pasar si cerraste el navegador antes de que la grabación terminara de procesarse. Siempre espera a que aparezca la confirmación de "grabación guardada" antes de cerrar la pestaña.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿No escucho el soundboard?</summary>
+    <div class="ans">
+      <p>Verifica que tu volumen no esté en mute. Los sonidos del soundboard se transmiten por la misma conexión de audio que las voces. Si otros participantes lo escuchan pero tú no, revisa el volumen del navegador y de tu sistema operativo.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El chat de backstage no aparece?</summary>
+    <div class="ans">
+      <p>El backstage solo es visible para host y co-host. Si eres invitado, no tienes acceso — es por diseño, para que el host pueda coordinar sin que los invitados lo vean.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El streaming RTMP se corta?</summary>
+    <div class="ans">
+      <p>Verifica tu velocidad de subida (necesitas al menos 5 Mbps estables). Confirma que la clave de stream sea correcta y que el destino (YouTube/Twitch) esté configurado para recibir la transmisión.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo grabar una sesión de práctica?</summary>
+    <div class="ans">
+      <p>No. El modo práctica está diseñado para ensayar sin grabar. Cuando estés listo para grabar de verdad, desactiva el toggle de "Ensayo" y usa el flujo normal de Ready, cuenta regresiva y grabación.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Dos personas pueden compartir pantalla al mismo tiempo?</summary>
+    <div class="ans">
+      <p>No. Solo una persona puede compartir pantalla a la vez. Si otra persona necesita compartir, la primera debe dejar de compartir primero.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué pasa si pierdo la conexión durante la grabación?</summary>
+    <div class="ans">
+      <p>Tu grabación local sigue corriendo en tu navegador. Cuando recuperes la conexión, volverás a ver a los demás participantes. Si cierras el navegador, la grabación se guarda hasta el punto de cierre.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El mic check sugiere una ganancia muy alta?</summary>
+    <div class="ans">
+      <p>Si la sugerencia supera +18dB, probablemente el micrófono esté muy lejos o el volumen de entrada es muy bajo. Acerca el micrófono o sube el volumen en la configuración de tu sistema operativo antes de repetir el mic check.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Los invitados necesitan cuenta en thePod?</summary>
+    <div class="ans">
+      <p>No. Los invitados reciben un link de invitación que funciona sin cuenta. Solo necesitan un navegador compatible (Chrome o Firefox recomendados).</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq">Todas las preguntas</a>
+</nav>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod para Mac · Vista general — Docs · thePod{% endblock %}
+{% block description %}thePod para Mac: planea, graba, edita y publica tus episodios en una sola app nativa para Mac.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>thePod para Mac</h1>
+  <p class="lede">
+    La suite entera en una app nativa para tu Mac: <strong>pre</strong> para planear, <strong>prod</strong> para grabar
+    con otras personas, <strong>ama</strong> para las preguntas del público, <strong>post</strong> para editar y <strong>pub</strong> para publicar.
+    Pensada para quien nunca editó un video.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> ¿Qué es thePod para Mac?</h2>
+  <p class="dropcap">
+    Es la misma suite que usas en la web, en una app para Mac con chip de Apple. Arriba, junto al nombre, eliges la sección:
+    <strong>pre</strong> (lo mismo que <a class="x-link prepod" href="/docs/prepod">prePod</a>),
+    <strong>prod</strong> (la sala de <a class="x-link prodpod" href="/docs/prodpod">prodPod</a>, grabando en tu Mac),
+    <strong>ama</strong> (<a class="x-link amapod" href="/docs/amapod">amaPod</a>),
+    <strong>post</strong>, la parte más grande: toma la grabación y la deja lista para YouTube, Spotify, reels y TikTok, y
+    <strong>pub</strong>: ocho estrellas, un destino cada una, donde publicas lo que salió de post, al momento o programado.
+  </p>
+  <p>
+    Todo lo pesado pasa en tu Mac: transcribir, separar a las personas del fondo, mezclar, renderizar. No manda audio ni video
+    a ningún servidor salvo cuando subes la grabación a prodPod o tocas Publicar. Lleva su propio ffmpeg adentro: no hay que instalar nada.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> ¿Qué puedes hacer?</h2>
+  <p><strong>En post</strong> (editar y publicar), en tres bloques:</p>
+  <ul>
+    <li><strong>Preparar</strong>: revisar la grabación, <em>limpiar sonido</em> (estudio, sin silencios, sin muletillas, ecualizador, voz pareja, menos siseo), subtítulos frase por frase y <em>palabras sensibles</em> (pitido encima y subtítulo suavizado).</li>
+    <li><strong>Armar</strong>: aspecto (diseños de cámaras, fondo virtual, color, marca, intro y cierre), textos, stickers y b-roll, música y efectos (con voz artificial), cintillos tipo noticiero y sponsors en su momento.</li>
+    <li><strong>Mezcla</strong>: ondas, solo y mudo, medidores, volumen dibujado por persona, −16 LUFS al exportar y pistas WAV separadas.</li>
+    <li><strong>Entregar</strong>: reels con diseño, subtítulos, música, b-roll y cintillos propios; la <em>portada</em> del episodio, buscando los segundos donde todas las personas sonríen; exportar a YouTube, reels, cuadrado o MP3; publicar un reel en redes desde su tarjeta.</li>
+  </ul>
+  <p><strong>En pre</strong>: tablero, calendario, guion (con secciones de teleprompter: quién lo lee, cuándo, encadenados), rundown, invitados, ideas, plantillas, página, equipo y configuración del podcast.</p>
+  <p><strong>En prod</strong>: la sala de grabación con cuenta regresiva, ensayo, grabación en la Mac con subida por partes, teleprompter automático, soundboard, sponsors, auto-silencio, y el cuarto de control del director (cintillos, avisos, prompter, hablar al oído).</p>
+  <p><strong>En ama</strong>: eventos, cola de preguntas, al aire, chat moderado y grabación.</p>
+  <p><strong>En pub</strong>: el episodio completo a YouTube, Spotify, Apple Podcasts y la portada a Instagram; los reels a Shorts, Reels y TikTok. Eliges qué, escribes el texto de cada destino, y «Exportar y publicar», ahora o a una hora. Las cuentas se conectan una sola vez en pre → Redes.</p>
+</section>
+
+<section id="actualizar">
+  <h2><span class="num">03</span> Cómo se actualiza</h2>
+  <p>
+    Al abrir, la app busca si hay versión nueva; también en Ajustes → <strong>Buscar ahora</strong>. Descarga, verifica el archivo
+    y reemplaza al reiniciar. Si algo falla, la versión anterior queda intacta.
+  </p>
+  <div class="callout">
+    <div class="ctag">FIRMADA Y REVISADA POR APPLE</div>
+    <div class="cbody"><p>Desde la 0.29.2 la app está firmada con Developer ID y notarizada por Apple: se instala y se abre sin avisos de seguridad. Si vienes de una versión anterior, al abrirla por primera vez vuelve a pedir permiso para la cámara y el micrófono, porque cambió la firma; después no vuelve a pasar.</p></div>
+  </div>
+</section>
+
+<section id="donde">
+  <h2><span class="num">04</span> Dónde quedan las cosas</h2>
+  <table>
+    <thead><tr><th>Qué</th><th>Dónde</th></tr></thead>
+    <tbody>
+      <tr><td>Episodios (proyecto, medios, caché y la carpeta <code>exports/</code>)</td><td><code>~/Movies/postPod/&lt;episodio&gt;/</code></td></tr>
+      <tr><td>Grabaciones de la sala</td><td><code>~/Library/Application Support/postPod/grabaciones/</code></td></tr>
+      <tr><td>Plantillas de reel</td><td><code>~/Library/Application Support/postPod/plantillas-reel.json</code></td></tr>
+      <tr><td>Modelo de Whisper para transcribir (se baja una vez, ~600 MB)</td><td><code>~/Library/Application Support/postPod/whisper</code></td></tr>
+      <tr><td>Tu cuenta (no usa el llavero: así no pide la clave de la Mac en cada versión)</td><td><code>~/Library/Application Support/postPod/cuenta.dat</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="requisitos">
+  <h2><span class="num">05</span> Requisitos</h2>
+  <ul>
+    <li>Mac con chip de Apple (M1 o posterior).</li>
+    <li>macOS 15 o posterior.</li>
+    <li>Tu cuenta de thePod.</li>
+    <li>Internet la primera vez que transcribes (baja el modelo una sola vez), para traer y subir grabaciones, y para publicar.</li>
+  </ul>
+</section>
+
+<section id="que-hay-aca">
+  <h2><span class="num">06</span> ¿Qué encuentras acá?</h2>
+  <ul>
+    <li><a href="/docs/postpodapp/quickstart">Quickstart</a> — instalar, conectar tu cuenta y hacer un episodio de punta a punta.</li>
+    <li><a href="/docs/postpodapp/conceptos">Conceptos</a> — proyecto, pistas, cortes, capas, cintillos, volumen dibujado, momentos y reels.</li>
+    <li><a href="/docs/postpodapp/funcionalidades">Funcionalidades</a> — el manual completo, pantalla por pantalla.</li>
+    <li><a href="/docs/postpodapp/atajos">Atajos</a> — teclas y gestos del editor.</li>
+    <li><a href="/docs/postpodapp/integraciones">Integraciones</a> — qué se guarda en prePod, qué llega de prodPod y postPod, y cómo se publica.</li>
+    <li><a href="/docs/postpodapp/faq">FAQ</a> — preguntas frecuentes y límites conocidos.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-es">¿Qué es thePod para Mac?</a>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#actualizar">Cómo se actualiza</a>
+  <a href="#donde">Dónde quedan las cosas</a>
+  <a href="#requisitos">Requisitos</a>
+  <a href="#que-hay-aca">¿Qué encuentras acá?</a>
+</nav>
+{% endblock %}

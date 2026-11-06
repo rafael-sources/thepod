@@ -1,0 +1,74 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Programar — Docs · thePod{% endblock %}
+{% block description %}Programar publicaciones en pubPod: fecha y hora, qué pasa si cierras la app, cancelar, reintentar y publicar un video desde la computadora.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">PROGRAMAR</div>
+  <h1>Ahora o a su hora</h1>
+  <p class="lede">
+    Todo lo que publicas puede salir al momento o quedar programado. Lo programado lo hace thePod en el servidor: no necesita la app abierta ni tu Mac encendida.
+  </p>
+</header>
+
+<section id="como">
+  <h2><span class="num">01</span> Cómo se programa</h2>
+  <ol>
+    <li>Elige qué publicas y escribe los textos, igual que para publicar ahora.</li>
+    <li>Toca <strong>Programar</strong> en vez de Ahora y elige fecha y hora (en tu hora local). Una fecha que ya pasó no se acepta.</li>
+    <li>Toca <strong>Exportar y programar</strong>. La app exporta y sube el archivo en ese momento, para que a la hora solo quede publicar.</li>
+  </ol>
+  <p>En <strong>Publicaciones</strong> aparece como Programado, con la hora. Cada destino es una publicación aparte: puedes cancelar la de TikTok y dejar la de Reels.</p>
+</section>
+
+<section id="cerrar">
+  <h2><span class="num">02</span> Si cierras la app</h2>
+  <p>
+    Una vez que la app terminó de subir el archivo (la barra llega al 100 %), puedes cerrarla o apagar la Mac: la publicación sale igual a su hora.
+    Si cierras antes de que termine de subir, la publicación queda sin archivo y pub te lo avisa al volver, con Reintentar.
+  </p>
+</section>
+
+<section id="cancelar">
+  <h2><span class="num">03</span> Cancelar y reintentar</h2>
+  <ul>
+    <li><strong>Cancelar</strong>: en la lista, mientras diga Programado. Una vez que empieza a publicar ya no se puede; si salió, bórralo en la red.</li>
+    <li><strong>Reintentar</strong>: en una que diga No se publicó. «Ver detalles…» dice el motivo (permiso vencido, texto muy largo, la red no respondió). Si el motivo es el permiso, conecta de nuevo la cuenta y reintenta.</li>
+    <li>Si thePod estaba reiniciándose justo a la hora, la publicación sale apenas vuelve; no se pierde.</li>
+  </ul>
+</section>
+
+<section id="desde-compu">
+  <h2><span class="num">04</span> Un video desde la computadora</h2>
+  <p>
+    La tarjeta <strong>Desde la compu</strong> sirve para publicar un video que no salió de post: un vertical que editaste en otro programa, por ejemplo.
+    Se enciende lo mismo que para un reel (Shorts, Reels, TikTok). Formatos: MP4 o MOV, en vertical 9:16 para que las redes lo muestren como reel.
+  </p>
+</section>
+
+<section id="limites">
+  <h2><span class="num">05</span> Límites a tener en cuenta</h2>
+  <table>
+    <thead><tr><th>Red</th><th>Texto</th><th>Otros</th></tr></thead>
+    <tbody>
+      <tr><td>Instagram y Reels</td><td>Hasta 2.200 caracteres</td><td>Reel de 3 s a 15 min, 9:16</td></tr>
+      <tr><td>YouTube y Shorts</td><td>Descripción hasta 5.000</td><td>Short de hasta 3 min</td></tr>
+      <tr><td>TikTok</td><td>El texto lo pegas tú en el teléfono</td><td>Hasta 5 pendientes por día</td></tr>
+      <tr><td>Spotify y Apple</td><td>Las notas del episodio</td><td>Audio MP3</td></tr>
+    </tbody>
+  </table>
+  <p>Si un texto se pasa, pub lo avisa antes de publicar. La firma de «Siempre al final» cuenta dentro del límite.</p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#como">Cómo se programa</a>
+  <a href="#cerrar">Si cierras la app</a>
+  <a href="#cancelar">Cancelar y reintentar</a>
+  <a href="#desde-compu">Desde la computadora</a>
+  <a href="#limites">Límites</a>
+</nav>
+{% endblock %}

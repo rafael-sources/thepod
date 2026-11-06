@@ -1,0 +1,125 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}postPod · FAQ — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FAQ</div>
+  <h1>Preguntas frecuentes</h1>
+  <p class="lede">Respuestas a las dudas más comunes sobre la edición en postPod.</p>
+</header>
+
+<section class="faq" id="faq">
+  <details>
+    <summary>¿Mis archivos originales se modifican?</summary>
+    <div class="ans">
+      <p>No, nunca. postPod es 100% no-destructivo. Todos los cortes, efectos y operaciones se guardan como instrucciones. Los archivos originales permanecen intactos. Al exportar, se genera un archivo nuevo aplicando todas las instrucciones.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo deshacer una operación?</summary>
+    <div class="ans">
+      <p>Sí. Selecciona el momento, ve al panel de operaciones y elimina o edita la operación que quieras cambiar. Como la edición es no-destructiva, no hay límite para modificar.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo hago un clip vertical para TikTok?</summary>
+    <div class="ans">
+      <p>Depende de tu material:</p>
+      <ul>
+        <li><strong>Una sola cámara</strong> (video normal 16:9): aplica la operación <strong>To vertical (9:16)</strong> en un momento. Ajusta el centro horizontal para encuadrar al sujeto.</li>
+        <li><strong>Video composite</strong> (dos o más cámaras lado a lado en un mismo archivo): aplica <strong>Vertical split</strong>. Configura la cantidad de cámaras y el centro de cada panel.</li>
+      </ul>
+      <p>En ambos casos, haz clic en el botón de exportar del momento para renderizar solo esa sección con el preset <strong>TikTok / Reels vertical</strong>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo exporto solo una parte del video?</summary>
+    <div class="ans">
+      <p>Tienes dos opciones:</p>
+      <ol>
+        <li><strong>Selección manual</strong>: arrastra sobre la regla del timeline para crear un rango (banda amarilla). Abre Exportar y marca "Exportar solo el rango seleccionado".</li>
+        <li><strong>Desde un momento</strong>: haz clic en el botón de exportar (icono de flecha) en cualquier momento de la lista. Se abre el modal con el rango del momento ya cargado.</li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Las captions son automáticas?</summary>
+    <div class="ans">
+      <p>Sí. En el panel de archivos, haz clic en el botón de captions de un archivo de video o audio, selecciona el idioma y el modelo, y el sistema genera subtítulos palabra por palabra. El proceso corre en segundo plano — puedes seguir editando mientras se generan.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué es el audio profesional?</summary>
+    <div class="ans">
+      <p>Es un procesamiento opcional que se aplica al exportar. Incluye: reducción de ruido de fondo, ecualización para claridad de voz, compresión para volumen parejo, y normalización a -16 LUFS (estándar de broadcast). Solo afecta la voz — la música de fondo pasa sin cambios.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Momentos relativos y absolutos: cuál uso?</summary>
+    <div class="ans">
+      <p>Usa <strong>relativos</strong> (por defecto) si quieres que el momento se mueva cuando agregas o quitas clips antes de él. Usa <strong>absolutos</strong> si necesitas que el momento se quede en un tiempo fijo sin importar los cambios en el timeline. En la mayoría de los casos, relativo es lo correcto.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Cómo funciona el editor de transcript?</summary>
+    <div class="ans">
+      <p>Abre el editor y verás el texto del audio de tus clips. Si borras un fragmento de texto, ese fragmento de audio/video se corta del export. Es la forma más intuitiva de eliminar muletillas, pausas largas o secciones que no quieres. Puedes activar el resaltado de muletillas para detectarlas automáticamente y eliminarlas en lote.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo agregar música de fondo?</summary>
+    <div class="ans">
+      <p>Sí. Sube el archivo de audio al proyecto, agrégalo al <strong>audio lane</strong> (la pista paralela debajo del timeline, no al timeline principal). Ajusta el volumen y los puntos de inicio/fin. La música sonará por debajo del contenido principal.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El export tarda mucho, es normal?</summary>
+    <div class="ans">
+      <p>Depende de la duración del video y la resolución. Un video de 1 hora en 1080p puede tardar varios minutos. Si activaste "audio profesional", agrega tiempo extra por el procesamiento. Puedes seguir trabajando mientras el export corre en segundo plano.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Puedo exportar el mismo proyecto varias veces con distintos presets?</summary>
+    <div class="ans">
+      <p>Sí. Puedes exportar tantas veces como quieras, con diferentes presets y opciones. Cada export es independiente. El historial de exports aparece en el modal de exportación.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿Qué formatos de archivo puedo subir?</summary>
+    <div class="ans">
+      <ul>
+        <li><strong>Video</strong>: MP4, MOV, WebM</li>
+        <li><strong>Audio</strong>: MP3, WAV, M4A</li>
+        <li><strong>Imagen</strong>: JPG, PNG, GIF</li>
+      </ul>
+      <p>El tamaño máximo por archivo es 2 GB.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>¿El audio lane se escucha más fuerte que la voz?</summary>
+    <div class="ans">
+      <p>Ajusta el volumen del clip en el audio lane. Para música de fondo bajo voz, lo típico es un volumen entre 15% y 25%. Si tienes audio profesional activo, asegúrate de que la música ya esté baja en el mix antes de exportar.</p>
+    </div>
+  </details>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#faq">Todas las preguntas</a>
+</nav>
+{% endblock %}

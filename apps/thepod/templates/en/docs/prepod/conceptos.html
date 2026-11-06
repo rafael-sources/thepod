@@ -1,0 +1,146 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prepod" %}
+{% block title %}prePod · Concepts — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTS</div>
+  <h1>The prePod vocabulary</h1>
+  <p class="lede">The key terms you need to know to get the most out of prePod.</p>
+</header>
+
+<section id="podcast">
+  <h2><span class="num">01</span> Podcast</h2>
+  <p>
+    Your show. Each podcast has its own branding (name, colors, logo, cover art), episodes, sounds, templates, sponsors and public landing page.
+    You can have multiple podcasts in one account, each fully independent.
+  </p>
+</section>
+
+<section id="episodio">
+  <h2><span class="num">02</span> Episode</h2>
+  <p>A single edition of your podcast. Each episode moves across the kanban board through six states:</p>
+  <p><strong>Idea</strong> → <strong>Planning</strong> → <strong>With script</strong> → <strong>Recorded</strong> → <strong>Published</strong> → <strong>Archived</strong></p>
+  <p>
+    An episode contains: rundown, script, guest roster, scheduled date and distribution links.
+    When it moves to "Published", the show notes are generated automatically.
+  </p>
+</section>
+
+<section id="kanban">
+  <h2><span class="num">03</span> Kanban</h2>
+  <p>
+    The visual board where you manage your episodes. The six columns represent the production stages
+    (the Archived column is hidden by default — turn it on from the column picker).
+    You drag episode cards between columns to reflect their progress.
+    Each card shows the episode number, title, scheduled date and estimated duration.
+  </p>
+</section>
+
+<section id="rundown">
+  <h2><span class="num">04</span> Rundown</h2>
+  <p>
+    The skeletal structure of an episode. It's an ordered sequence of blocks,
+    where each block has a type, a title, an estimated duration and notes.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Type</th><th>Typical use</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Intro</td><td>Episode opening</td></tr>
+      <tr><td>Segment</td><td>Content section</td></tr>
+      <tr><td>Interview</td><td>Questions and answers</td></tr>
+      <tr><td>Sponsor</td><td>Ad slot</td></tr>
+      <tr><td>Break</td><td>Cut or transition</td></tr>
+      <tr><td>Outro</td><td>Episode closing</td></tr>
+      <tr><td>Other</td><td>Any block that doesn't fit the categories above</td></tr>
+    </tbody>
+  </table>
+  <p>Think of the rundown as the skeleton: it defines the order and timings, but not the detailed content.</p>
+</section>
+
+<section id="guion">
+  <h2><span class="num">05</span> Script</h2>
+  <p>
+    The detailed content of each episode. More granular than the rundown: each section has a speaker (who talks),
+    the text or notes of what's said, technical cues and an estimated duration in seconds.
+    The script complements the rundown with the fine detail.
+  </p>
+</section>
+
+<section id="plantilla">
+  <h2><span class="num">06</span> Template</h2>
+  <p>
+    A reusable structure that combines a base rundown and a base script.
+    When you create a new episode, you can pick a template to pre-fill the structure.
+    Ideal if your podcast has a recurring format (for example, you always open with the same intro, then three segments and a closing).
+  </p>
+  <p>You can mark a template as <strong>default</strong> so it's applied automatically to every new episode.</p>
+</section>
+
+<section id="roster">
+  <h2><span class="num">07</span> Roster (Guests)</h2>
+  <p>The list of participants in an episode. Each guest has:</p>
+  <ul>
+    <li><strong>Name</strong> and <strong>email</strong> (optional).</li>
+    <li><strong>Role</strong>: Host, Co-host or Guest.</li>
+    <li><strong>RSVP status</strong>: Pending, Yes, No or Maybe.</li>
+    <li><strong>Bio</strong>: a short description of the guest.</li>
+  </ul>
+  <p>
+    Guests don't need a thePod account. They get an RSVP link and confirm with one click.
+    When you send the episode to prodPod, the full roster goes along with it.
+  </p>
+</section>
+
+<section id="sponsors">
+  <h2><span class="num">08</span> Sponsors</h2>
+  <p>
+    Advertisers tied to your podcast. Each sponsor has a name, URL, ad-read text, notes and an active/paused status.
+    You link them to "Sponsor" blocks in the rundown.
+  </p>
+  <p>
+    prePod keeps track of how many episodes and minutes each sponsor has had,
+    and you can export a CSV report to share with the advertiser.
+  </p>
+</section>
+
+<section id="landing">
+  <h2><span class="num">09</span> Public landing page</h2>
+  <p>A web page for your podcast that anyone can visit without logging in. It includes:</p>
+  <ul>
+    <li>Podcast info (name, description, cover art).</li>
+    <li>List of published episodes.</li>
+    <li>Team section (photos, names, roles, social links).</li>
+    <li>Custom content with a visual editor.</li>
+    <li>RSS feed compatible with Apple Podcasts, Spotify and other platforms.</li>
+  </ul>
+  <p>Three design templates are available: <strong>Minimal</strong>, <strong>Bold</strong> and <strong>Classic</strong>.</p>
+</section>
+
+<section id="show-notes">
+  <h2><span class="num">10</span> Show notes</h2>
+  <p>
+    Text generated automatically when an episode moves to the "Published" state.
+    It contains the episode chapters (derived from the rundown blocks) in a YouTube-compatible format.
+    You can copy the full text or just the chapters with one click.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#podcast">Podcast</a>
+  <a href="#episodio">Episode</a>
+  <a href="#kanban">Kanban</a>
+  <a href="#rundown">Rundown</a>
+  <a href="#guion">Script</a>
+  <a href="#plantilla">Template</a>
+  <a href="#roster">Roster</a>
+  <a href="#sponsors">Sponsors</a>
+  <a href="#landing">Landing page</a>
+  <a href="#show-notes">Show notes</a>
+</nav>
+{% endblock %}

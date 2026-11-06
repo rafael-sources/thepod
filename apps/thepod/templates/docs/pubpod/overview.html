@@ -1,0 +1,97 @@
+{% extends "docs/_base.html" %}
+{% set theme = "pubpod" %}
+{% block title %}pubPod · Vista general — Docs · thePod{% endblock %}
+{% block description %}pubPod: publica el episodio y los reels de postPod en YouTube, Shorts, Instagram, Reels, TikTok, Spotify y Apple Podcasts, ahora o programado.{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">{{ app_cfg.tag }}</div>
+  <h1>pubPod</h1>
+  <p class="lede">
+    Donde se publica lo que sale de post. Ocho destinos. Eliges el episodio
+    completo o un reel, escribes el texto de cada red, y <strong>Exportar y publicar</strong>: ahora o a la hora que digas.
+    Es la sección blanca de <a class="x-link postpod" href="/docs/postpodapp">thePod para Mac</a>.
+  </p>
+</header>
+
+<section id="que-es">
+  <h2><span class="num">01</span> ¿Qué es?</h2>
+  <p class="dropcap">
+    pubPod no es una app aparte: es la sección <strong>pub</strong> de thePod para Mac, junto a pre, prod, ama y post.
+    Toma lo que post exportó (o lo exporta en el momento) y lo sube a tus redes con el permiso que diste una sola vez
+    en prePod. Si cierras la app, thePod sigue solo: una publicación programada sale a su hora igual.
+  </p>
+  <p>
+    Las ocho estrellas son los ocho destinos: <strong>Spotify, Apple Podcasts, YouTube, Instagram, Shorts, Reels, TikTok</strong> y
+    <strong>Facebook</strong> (muy pronto). Una estrella llena está conectada; una punteada, no.
+  </p>
+</section>
+
+<section id="que-puedes">
+  <h2><span class="num">02</span> ¿Qué puedes hacer?</h2>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="ftag">EPISODIO</div>
+      <h4>El episodio completo</h4>
+      <p>El video 16:9 a YouTube, el audio al feed (Spotify y Apple Podcasts lo leen solos) y la portada, un cuadro del video con texto, a Instagram.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">REELS</div>
+      <h4>Cada reel</h4>
+      <p>El vertical 9:16, tal como se ve en el editor, a Shorts, Reels y TikTok. También un video que ya tengas en la computadora.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">TEXTO</div>
+      <h4>Un texto por destino</h4>
+      <p>Una pestaña por red: la descripción de YouTube, el texto del Short, el de Instagram con hashtags, las notas del episodio, el texto para pegar en TikTok.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">FIRMA</div>
+      <h4>Siempre al final</h4>
+      <p>Una firma o hashtags por destino que se agregan solos al pie de cada publicación. Se escribe una vez, en el panel de la estrella.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">CUÁNDO</div>
+      <h4>Ahora o programado</h4>
+      <p>Al momento, o con fecha y hora. Lo programado sale aunque la app esté cerrada, y se puede cancelar hasta que empieza.</p>
+    </div>
+    <div class="feat-card">
+      <div class="ftag">SEGUIMIENTO</div>
+      <h4>Publicaciones</h4>
+      <p>La lista de lo que salió y lo que viene, con su estado y su link: Programado, Publicando, Publicado, Subido en privado, En tu bandeja, No se publicó.</p>
+    </div>
+  </div>
+</section>
+
+<section id="para-quien">
+  <h2><span class="num">03</span> Cómo encaja con el resto</h2>
+  <ul>
+    <li><a class="x-link prepod" href="/docs/prepod/funcionalidades#redes">prePod → Redes</a> conecta las cuentas, una sola vez. No publica.</li>
+    <li><a class="x-link postpod" href="/docs/postpodapp/funcionalidades#post-entregar">post</a> edita y marca los reels. Cada reel tiene además un botón ✈️ para publicarlo sin salir del editor.</li>
+    <li><strong>pub</strong> elige, escribe y publica, y lleva el registro.</li>
+  </ul>
+  <div class="callout">
+    <strong>No se guardan contraseñas.</strong> Lo que das al conectar una red es solo el permiso de publicar en tu nombre, y se quita con «Desconectar». Lo que thePod hace con cada red está en <a href="/privacidad">Privacidad</a>.
+  </div>
+</section>
+
+<section id="seguir">
+  <h2><span class="num">04</span> Por dónde seguir</h2>
+  <ul>
+    <li><a href="/docs/pubpod/quickstart">Quickstart</a> — tu primera publicación en cinco minutos.</li>
+    <li><a href="/docs/pubpod/estrellas">Las estrellas</a> — qué enciende cada cosa y el panel de cada destino.</li>
+    <li><a href="/docs/pubpod/redes">Qué pide cada red</a> — cuenta profesional, bandeja de TikTok, videos en privado.</li>
+    <li><a href="/docs/pubpod/programar">Programar</a> — fechas, cancelar, reintentar.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#que-es">¿Qué es?</a>
+  <a href="#que-puedes">¿Qué puedes hacer?</a>
+  <a href="#para-quien">Cómo encaja</a>
+  <a href="#seguir">Por dónde seguir</a>
+</nav>
+{% endblock %}

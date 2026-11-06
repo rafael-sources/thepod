@@ -1,0 +1,121 @@
+{% extends "docs/_base.html" %}
+{% set theme = "amapod" %}
+{% block title %}amaPod · Funcionalidades — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">FUNCIONALIDADES</div>
+  <h1>Cada herramienta en detalle</h1>
+  <p class="lede">Guía detallada de las herramientas de moderación y transmisión de amaPod.</p>
+</header>
+
+<section id="eventos">
+  <h2><span class="num">01</span> Gestión de eventos</h2>
+  <p>La pantalla principal lista tus eventos con su estado (Creado, Activo, Finalizado). Para cada evento:</p>
+  <ul>
+    <li><strong>Crear</strong>: título, descripción y modo de chat. Opcionalmente desde una plantilla.</li>
+    <li><strong>Editar</strong>: ajusta los datos mientras el evento no haya finalizado.</li>
+    <li><strong>Activar</strong>: abre la sala de video y habilita la cola en tiempo real.</li>
+    <li><strong>Finalizar</strong>: cierra la sala y dispara la exportación a postPod si hubo grabación.</li>
+    <li><strong>Eliminar</strong>: solo disponible en estado Creado — un evento activo o finalizado conserva su historial.</li>
+  </ul>
+</section>
+
+<section id="plantillas">
+  <h2><span class="num">02</span> Plantillas</h2>
+  <p>
+    Guarda la configuración de un evento como plantilla (título, descripción, modo de chat, branding)
+    y crea eventos recurrentes en un clic. Ideal para formatos semanales.
+  </p>
+</section>
+
+<section id="cola-moderacion">
+  <h2><span class="num">03</span> Cola de moderación</h2>
+  <p>El panel central durante un evento activo. Está dividido en:</p>
+  <ul>
+    <li><strong>Pendientes</strong>: solicitudes nuevas con nombre y pre-preguntas. Botones para aprobar o rechazar.</li>
+    <li><strong>En cola</strong>: participantes aprobados, ordenados por posición. Puedes reordenarlos en cualquier momento — las posiciones se renumeran solas.</li>
+    <li><strong>Al aire</strong>: quien está haciendo su pregunta ahora. Al pasar al siguiente, el actual queda como atendido.</li>
+  </ul>
+  <p>Cada tarjeta muestra las pre-preguntas del participante para que el host sepa qué viene.</p>
+</section>
+
+<section id="pre-preguntas">
+  <h2><span class="num">04</span> Pre-preguntas</h2>
+  <p>
+    Al anotarse, cada participante puede escribir hasta <strong>3 preguntas</strong> y editarlas mientras espera.
+    El moderador las ve en la cola — sirven para filtrar, ordenar por interés y preparar al host.
+  </p>
+</section>
+
+<section id="preconexion">
+  <h2><span class="num">05</span> Preconexión automática</h2>
+  <p>
+    Los primeros 3 en cola reciben la señal de preconexión: su navegador se conecta a la sala
+    (cámara y micrófono listos) sin salir al aire todavía. Cuando el moderador avanza la cola,
+    las banderas de preconexión se recalculan automáticamente.
+  </p>
+</section>
+
+<section id="censurar">
+  <h2><span class="num">06</span> Censurar participante</h2>
+  <p>
+    Corta el audio y video del participante al aire de forma inmediata. El evento sigue —
+    solo se neutraliza a esa persona. Queda marcada como censurada en el historial.
+  </p>
+</section>
+
+<section id="chat">
+  <h2><span class="num">07</span> Chat</h2>
+  <p>Configurable por evento:</p>
+  <ul>
+    <li><strong>Libre</strong>: mensajes visibles al instante para todos.</li>
+    <li><strong>Moderado</strong>: los mensajes de la audiencia entran a una bandeja de aprobación; el host decide cuáles se publican. Los mensajes del host se publican directo.</li>
+    <li><strong>Apagado</strong>: sin chat.</li>
+  </ul>
+</section>
+
+<section id="espectadores">
+  <h2><span class="num">08</span> Página de espectadores</h2>
+  <p>
+    Cada evento tiene una página pública de visualización. La audiencia sigue la transmisión sin cuenta,
+    ve la cola de preguntas y puede dar <strong>likes</strong> — el contador se muestra en vivo.
+    Desde ahí también pueden pedir participar, pasando a la cola de pendientes.
+  </p>
+</section>
+
+<section id="grabacion">
+  <h2><span class="num">09</span> Grabación</h2>
+  <p>Control de grabación desde el panel del evento:</p>
+  <ul>
+    <li><strong>Iniciar / detener</strong>: graba la sala compuesta como archivo MP4 en el servidor.</li>
+    <li><strong>Estado</strong>: indicador de grabación en curso.</li>
+    <li><strong>Descargar</strong>: baja el MP4 cuando la grabación terminó.</li>
+  </ul>
+  <p>A diferencia de prodPod (que graba pistas separadas por participante), amaPod graba la <strong>vista compuesta</strong> del evento — pensada para archivo y clips, no para edición multipista.</p>
+</section>
+
+<section id="export-postpod">
+  <h2><span class="num">10</span> Exportar a postPod</h2>
+  <p>
+    Al finalizar un evento con grabación, amaPod crea (o actualiza) un proyecto en postPod con el MP4
+    del evento, listo para recortar los mejores momentos y publicarlos como clips.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#eventos">Eventos</a>
+  <a href="#plantillas">Plantillas</a>
+  <a href="#cola-moderacion">Cola de moderación</a>
+  <a href="#pre-preguntas">Pre-preguntas</a>
+  <a href="#preconexion">Preconexión</a>
+  <a href="#censurar">Censurar</a>
+  <a href="#chat">Chat</a>
+  <a href="#espectadores">Espectadores</a>
+  <a href="#grabacion">Grabación</a>
+  <a href="#export-postpod">Exportar a postPod</a>
+</nav>
+{% endblock %}

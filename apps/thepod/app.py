@@ -1,0 +1,344 @@
+"""
+ThePod — central landing/hub for the podpod suite.
+
+Single-purpose tiny Flask app. Lets you log in once with the shared SSO
+session, then shows 3 cards (prePod, prodPod, postPod) with one-click
+"Entrar" buttons.
+
+No business logic of its own — auth/users live in shared_users.
+"""
+
+import json
+from datetime import timedelta
+from pathlib import Path
+
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, session
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+from shared_config import load_shared_config
+from shared_users import policy_for, touch_last_login, verify_password
+
+
+def create_app():
+    app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+    cfg = load_shared_config()
+    app.config["SECRET_KEY"] = cfg["secret_key"]
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_NAME"] = "podpod_session"
+    if cfg.get("cookie_domain"):
+        app.config["SESSION_COOKIE_DOMAIN"] = cfg["cookie_domain"]
+    app.permanent_session_lifetime = timedelta(days=7)
+
+    # Idioma de la interfaz (es/en): cookie pod_lang compartida por el dominio, o el navegador.
+    from pod_lang import current_lang
+
+    @app.context_processor
+    def _lang():
+        st = Path(app.static_folder)
+        v = int(max((st / "i18n/en.json").stat().st_mtime, (st / "js/pod-i18n.js").stat().st_mtime))
+        return {"lang": current_lang(), "cookie_domain": app.config.get("SESSION_COOKIE_DOMAIN") or "", "i18n_v": v}
+
+    def tpl(name):
+        """La plantilla en el idioma actual: templates/en/<name> si existe y el idioma es inglés; si no, la española."""
+        return [f"en/{name}", name] if current_lang() == "en" else name
+
+    @app.get("/")
+    def index():
+        from perfil import avatar_url as _av
+        from shared_users import get_user
+        u = session.get("username")
+        row = get_user(u) if u else None
+        return render_template("landing.html",
+                               username=u,
+                               display_name=(row or {}).get("display_name") or u,
+                               avatar=_av(u) if u else None,
+                               avatar_color=(row or {}).get("avatar_color") or "#e8c47a",
+                               is_admin=bool(policy_for(session.get("username")).get("see_all")))
+
+    @app.post("/api/login")
+    def login():
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip().lower()
+        password = data.get("password") or ""
+        if "@" in username:   # también se puede entrar con el correo
+            from shared_users import list_user_rows
+            username = next((r["username"] for r in list_user_rows()
+                             if (r.get("email") or "").strip().lower() == username), username)
+        if not verify_password(username, password):
+            return jsonify({"error": "usuario o contraseña inválidos"}), 401
+        session.clear()
+        session["username"] = username
+        import uuid as _u
+        session["sid"] = _u.uuid4().hex
+        session.permanent = True
+        try:
+            touch_last_login(username)
+        except Exception:
+            pass
+        return jsonify({"username": username})
+
+    @app.post("/api/logout")
+    def logout():
+        session.clear()
+        return jsonify({"ok": True})
+
+    @app.get("/api/me")
+    def me():
+        u = session.get("username")
+        if not u:
+            return jsonify({"error": "no autenticado"}), 401
+        from plans import limits_for
+        from perfil import avatar_url as _av
+        from shared_users import get_user
+        row = get_user(u) or {}
+        return jsonify({
+            "username": u,
+            "display_name": row.get("display_name") or u,
+            "avatar_url": _av(u),
+            "is_admin": bool(policy_for(u).get("see_all")),
+            "plan": limits_for(u),
+        })
+
+    # ----- Documentation routes -----
+    # The docs live inside thePod (no separate site) so the SSO cookie keeps
+    # working and links between apps stay on a single domain. Each app has
+    # its own theme + section ordering; the same base template renders all.
+
+    DOCS_APPS = {
+        "prepod":  {"name": "prePod",  "icon": "🎙",
+                    "tag": "Pre-producción",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "atajos", "integraciones", "faq"]},
+        "prodpod": {"name": "prodPod", "icon": "🔴",
+                    "tag": "Estudio en vivo",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "atajos", "integraciones", "faq"]},
+        "postpod": {"name": "postPod", "icon": "🎬",
+                    "tag": "Edición y publicación",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "atajos", "integraciones", "faq"]},
+        "postpodapp": {"name": "thePod para Mac", "icon": "💻",
+                    "tag": "App para Mac",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "atajos", "integraciones", "faq"]},
+        "pubpod":  {"name": "pubPod",  "icon": "★",
+                    "tag": "Publicar",
+                    "sections": ["overview", "quickstart", "estrellas",
+                                 "redes", "programar", "faq"]},
+        "amapod":  {"name": "amaPod",  "icon": "❓",
+                    "tag": "Q&A en vivo",
+                    "sections": ["overview", "quickstart", "conceptos",
+                                 "funcionalidades", "integraciones", "faq"]},
+    }
+
+    SECTION_LABELS = {
+        "overview":         "Vista general",
+        "quickstart":       "Quickstart",
+        "conceptos":        "Conceptos",
+        "funcionalidades":  "Funcionalidades",
+        "atajos":           "Atajos",
+        "integraciones":    "Integraciones",
+        "estrellas":        "Las estrellas",
+        "redes":            "Qué pide cada red",
+        "programar":        "Programar",
+        "faq":              "FAQ",
+    }
+
+    def _app_urls():
+        cfg2 = load_shared_config()
+        return {
+            "prepod":  cfg2.get("prepod_url")  or "",
+            "prodpod": cfg2.get("prodpod_url") or "",
+            "postpod": cfg2.get("postpod_url") or "",
+            "postpodapp": "",
+            "pubpod": "",
+            "amapod":  cfg2.get("amapod_url")  or "",
+        }
+
+    @app.get("/docs")
+    @app.get("/docs/")
+    def docs_index():
+        return render_template("docs/index.html",
+                               apps=DOCS_APPS,
+                               app_urls=_app_urls(),
+                               username=session.get("username"))
+
+    @app.get("/docs/<app_key>")
+    @app.get("/docs/<app_key>/")
+    def docs_app_root(app_key):
+        if app_key not in DOCS_APPS:
+            return ("doc no encontrada", 404)
+        return docs_section(app_key, "overview")
+
+    @app.get("/docs/<app_key>/<section>")
+    def docs_section(app_key, section):
+        if app_key not in DOCS_APPS:
+            return ("doc no encontrada", 404)
+        cfg = DOCS_APPS[app_key]
+        if section not in cfg["sections"]:
+            return ("sección no encontrada", 404)
+        # Resolve prev / next within this app's section list for the footer
+        order = cfg["sections"]
+        idx = order.index(section)
+        prev_section = order[idx - 1] if idx > 0 else None
+        next_section = order[idx + 1] if idx + 1 < len(order) else None
+        return render_template(
+            tpl(f"docs/{app_key}/{section}.html"),
+            app_key=app_key,
+            app_cfg=cfg,
+            apps=DOCS_APPS,
+            section=section,
+            section_labels=SECTION_LABELS,
+            prev_section=prev_section,
+            next_section=next_section,
+            app_urls=_app_urls(),
+            username=session.get("username"),
+        )
+
+    from billing import PRICES, bp as billing_bp, _db as _billing_db
+    app.register_blueprint(billing_bp)
+
+    from perfil import bp as perfil_bp
+    app.register_blueprint(perfil_bp)
+
+    @app.get("/planes")
+    def planes():
+        u = session.get("username")
+        portal = None
+        if u:
+            with _billing_db() as c:
+                row = c.execute("SELECT portal_url FROM subscriptions WHERE username = ?", (u,)).fetchone()
+            portal = row["portal_url"] if row else None
+        from plans import plan_of
+        return render_template("planes.html", username=u, current=plan_of(u) if u else None,
+                               prices=PRICES, portal=portal, done=bool(request.args.get("listo")),
+                               app_key=None, app_cfg=None, section=None, section_labels=None,
+                               prev_section=None, next_section=None, app_urls={})
+
+    # ----- Una sola app: /pre, /prod, /ama y /post se reenvían a cada app (gateway.py) -----
+    import gateway
+    import push
+    gateway.install(app, cfg)
+    push.install(app, cfg)
+
+    # ----- PWA: manifiesto y service worker en la raíz (abarcan /pre, /prod, /ama, /post) -----
+    @app.get("/manifest.webmanifest")
+    def pwa_manifest():
+        r = send_file(Path(app.static_folder) / "pwa" / "manifest.webmanifest", mimetype="application/manifest+json")
+        r.headers["Cache-Control"] = "public, max-age=3600"
+        return r
+
+    @app.get("/sw.js")
+    def pwa_sw():
+        r = send_file(Path(app.static_folder) / "pwa" / "sw.js", mimetype="application/javascript")
+        r.headers["Cache-Control"] = "no-cache"
+        r.headers["Service-Worker-Allowed"] = "/"
+        return r
+
+    @app.get("/offline.html")
+    def pwa_offline():
+        return render_template("offline.html")
+
+    @app.get("/privacidad")
+    def privacidad():
+        return render_template(tpl("privacidad.html"), username=session.get("username"),
+                               app_key=None, app_cfg=None, section=None, section_labels=None,
+                               prev_section=None, next_section=None, app_urls={})
+
+    # Comprobación de dominio para TikTok (pubPod): el archivo que su portal pide ver en la raíz del sitio.
+    @app.get("/tiktoklpMHvlWrFRFcAi0P0OydreIGEFoQkj3B.txt")
+    def tiktok_site_verification():
+        return Response("tiktok-developers-site-verification=lpMHvlWrFRFcAi0P0OydreIGEFoQkj3B", mimetype="text/plain")
+
+    @app.get("/terminos")
+    def terminos():
+        return render_template(tpl("terminos.html"), username=session.get("username"),
+                               app_key=None, app_cfg=None, section=None, section_labels=None,
+                               prev_section=None, next_section=None, app_urls={})
+
+    # ----- Descargas (solo con sesión) -----
+    # El .dmg y su ficha viven fuera del repo: ~/.podpod/downloads/thePod.dmg y thePod.json
+    # (o "downloads_dir" en ~/.podpod/config.json). scripts/publish-thepod-mac.sh los deja ahí.
+
+    def _downloads_dir() -> Path:
+        cfg2 = load_shared_config()
+        return Path(cfg2.get("downloads_dir") or (Path.home() / ".podpod" / "downloads"))
+
+    def _mac_info():
+        d = _downloads_dir()
+        dmg, meta = d / "thePod.dmg", d / "thePod.json"
+        if not dmg.is_file():
+            return None
+        info = {}
+        try:
+            info = json.loads(meta.read_text())
+        except (OSError, ValueError):
+            pass
+        info.setdefault("size", dmg.stat().st_size)
+        return info
+
+    @app.get("/descargas")
+    def descargas():
+        return render_template("descargas.html",
+                               username=session.get("username"),
+                               mac_app=_mac_info())
+
+    @app.get("/api/descargas/thepod-mac")
+    @app.get("/api/descargas/postpod-mac")  # alias del nombre anterior
+    def descargas_mac_info():
+        if not session.get("username"):
+            return jsonify({"error": "no autenticado"}), 401
+        info = _mac_info()
+        if not info:
+            return jsonify({"error": "todavía no hay una versión publicada"}), 404
+        return jsonify(info)
+
+    @app.get("/descargas/postpod-mac")
+    def descargas_postpod_mac_old():
+        return redirect("/descargas/thepod-mac")
+
+    @app.get("/descargas/thepod-mac")
+    def descargas_mac():
+        if not session.get("username"):
+            return redirect("/descargas")
+        info = _mac_info()
+        if not info:
+            abort(404)
+        version = info.get("version") or "mac"
+        return send_file(str(_downloads_dir() / "thePod.dmg"), as_attachment=True,
+                         download_name=f"thePod-{version}.dmg",
+                         mimetype="application/x-apple-diskimage", conditional=True, max_age=0)
+
+    @app.get("/api/apps")
+    def apps_list():
+        cfg2 = load_shared_config()
+        return jsonify([
+            {"key": "prepod",  "name": "prePod",  "icon": "🎙",
+             "tag":  "Pre-producción",
+             "desc": "Planeas el episodio: identidad del podcast, episodios, "
+                     "guion, rundown, invitados y calendario.",
+             "url":  cfg2.get("prepod_url") or ""},
+            {"key": "prodpod", "name": "prodPod", "icon": "🔴",
+             "tag":  "Estudio en vivo",
+             "desc": "Grabas con tus invitados por WebRTC: video + audio multipista, "
+                     "soundboard, chat, RTMP a YouTube/Twitch.",
+             "url":  cfg2.get("prodpod_url") or ""},
+            {"key": "postpod", "name": "postPod", "icon": "🎬",
+             "tag":  "Edición y publicación",
+             "desc": "Editas no-destructivo: cortes, zoom, momentos, subtítulos "
+                     "(Whisper), formato vertical TikTok, exportas listo para subir.",
+             "url":  cfg2.get("postpod_url") or ""},
+            {"key": "amapod",  "name": "amaPod",  "icon": "❓",
+             "tag":  "Q&A en vivo",
+             "desc": "Abre una sesión de preguntas con tu audiencia: cola dinámica, "
+                     "video en vivo, chat, y grabación automática.",
+             "url":  cfg2.get("amapod_url") or ""},
+        ])
+
+    return app
+
+
+if __name__ == "__main__":
+    create_app().run(host="0.0.0.0", port=5003, debug=True)

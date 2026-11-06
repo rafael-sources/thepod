@@ -1,0 +1,165 @@
+{% extends "docs/_base.html" %}
+{% set theme = "postpod" %}
+{% block title %}thePod para Mac · Conceptos — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">CONCEPTOS</div>
+  <h1>Cómo piensa la app</h1>
+  <p class="lede">Pocas ideas, bien definidas. Si entiendes estas, entiendes todo lo que hace la app.</p>
+</header>
+
+<section id="proyecto">
+  <h2><span class="num">01</span> Proyecto</h2>
+  <p>
+    Cada episodio que traes es un proyecto con su propia carpeta dentro de <strong>Películas → postPod</strong>:
+    ahí viven los videos, los efectos de sonido, los sponsors, el branding y todo lo que exportas. Borrar un proyecto desde la app lo manda a la papelera.
+  </p>
+</section>
+
+<section id="pistas">
+  <h2><span class="num">02</span> Pistas y personas</h2>
+  <p>
+    Cada persona grabada es una <strong>pista</strong> con su video y su audio. Las pistas pueden empezar en momentos
+    distintos (alguien que entró tarde): la app respeta ese desfase para que todo quede sincronizado.
+    La app sabe <strong>quién habla</strong> midiendo el volumen de cada pista, y con eso cambia de cámara en los layouts automáticos.
+  </p>
+</section>
+
+<section id="cortes">
+  <h2><span class="num">03</span> Cortes no destructivos</h2>
+  <p>
+    Como en postPod web, nada se borra de verdad. Los silencios, las muletillas y las frases que quitas se guardan como
+    <strong>cortes</strong> sobre el tiempo original de la grabación. La vista previa y la exportación saltan esos tramos.
+    Puedes deshacerlos cuando quieras. Silenciar a una persona en un trozo (tose, un golpe) no es un corte: el video no se acorta,
+    solo baja su volumen ahí (ver <a href="#mezcla">Mezcla</a>).
+  </p>
+  <table>
+    <thead><tr><th>Tipo de corte</th><th>De dónde sale</th></tr></thead>
+    <tbody>
+      <tr><td>Silencio</td><td>Pausas largas donde nadie habla (se protege cualquier tramo con voz audible)</td></tr>
+      <tr><td>Muletilla</td><td>“eh”, “emm”, “mmm”… y, si lo activas, “este”, “o sea”, “pues”, “bueno”</td></tr>
+      <tr><td>Frase</td><td>Las que cortas a mano en Subtítulos</td></tr>
+      <tr><td>Importado</td><td>Los cortes que ya hiciste en el transcript de postPod web</td></tr>
+      <tr><td>Trozo</td><td>Lo que marcas arrastrando en el timeline y cortas «de todos»</td></tr>
+      <tr><td>Solo de un reel</td><td>Las tijeras en el texto de un reel: se quita de ese reel, no del episodio</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="transcripcion">
+  <h2><span class="num">04</span> Transcripción</h2>
+  <p>
+    La app transcribe cada pista por separado, en tu Mac y sin internet, apuntando la hora exacta de cada palabra.
+    Después une las pistas y descarta las palabras duplicadas que se cuelan de un micrófono a otro.
+    De esa transcripción salen los subtítulos, los cortes de muletillas y la detección de silencios.
+  </p>
+</section>
+
+<section id="momentos">
+  <h2><span class="num">05</span> Momentos y reels</h2>
+  <p>
+    Los <strong>momentos</strong> son los que marcas en postPod web (tecla <kbd>M</kbd>) o en vivo en prodPod.
+    La app no inventa reels con IA: cada momento se convierte en un reel, con la misma regla que usa la web
+    (la duración del momento, o hasta el siguiente momento). También puedes agregar un momento desde la app
+    (<strong>Marcar momento</strong>, o las teclas <kbd>M</kbd>, <kbd>I</kbd> y <kbd>O</kbd>).
+    Cada reel puede tener su propio diseño, subtítulos, música, b-roll y cintillos, aparte del episodio.
+    Lo que está fuera del tramo del reel no entra en él.
+  </p>
+</section>
+
+<section id="layouts">
+  <h2><span class="num">06</span> Formatos y layouts</h2>
+  <p>El <strong>formato</strong> es el tamaño del video; el <strong>layout</strong> es cómo se acomodan las cámaras dentro.</p>
+  <table>
+    <thead><tr><th>Layout</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr><td>Automático</td><td>Elige el mejor según el formato</td></tr>
+      <tr><td>Quien habla</td><td>Pantalla completa para quien está hablando</td></tr>
+      <tr><td>Lado a lado</td><td>Todos a la vez, uno al lado del otro</td></tr>
+      <tr><td>Cuadrícula</td><td>Todos en cuadrícula</td></tr>
+      <tr><td>Protagonista</td><td>Quien habla en grande, el resto al costado</td></tr>
+      <tr><td>Ventanita</td><td>Quien habla en grande, otro en una esquina</td></tr>
+      <tr><td>Arriba y abajo</td><td>Uno arriba y otro abajo (ideal vertical)</td></tr>
+      <tr><td>Estudio</td><td>Las cámaras en recuadros sobre el fondo de tu podcast</td></tr>
+    </tbody>
+  </table>
+  <p>Encima del diseño van, en este orden: el video (o el b-roll), los cintillos, las capas (textos, stickers, imágenes) y, arriba de todo, los subtítulos.</p>
+</section>
+
+<section id="capas">
+  <h2><span class="num">07</span> Capas y b-roll</h2>
+  <p>
+    Una <strong>capa</strong> es algo que se ve encima del video un rato: un texto, un sticker o una imagen. Tiene inicio, duración
+    y animación de entrada y salida, y se mueve arrastrándola sobre la vista previa.
+    El <strong>b-roll</strong> es un video o una foto que tapa la pantalla unos segundos (o va en una <em>ventanita</em>) mientras la voz sigue;
+    si suena, se mezcla; si va mudo, solo se ve. Si cortas el trozo donde empezaba una capa, sale en lo siguiente que quede.
+  </p>
+</section>
+
+<section id="cintillos">
+  <h2><span class="num">08</span> Cintillos</h2>
+  <p>
+    Los textos tipo noticiero que entran abajo: título, texto y etiqueta (AHORA, SEGMENTO, PATROCINA…), con el logo del podcast o del sponsor,
+    animación y un sonido corto. Tres estilos: <strong>Noticiero</strong>, <strong>Limpio</strong> y <strong>Sponsor</strong>.
+    Los que el director lanzó en vivo desde prodPod llegan ya puestos en su segundo, marcados «del director», y se editan igual.
+  </p>
+</section>
+
+<section id="mezcla">
+  <h2><span class="num">09</span> Mezcla y volumen dibujado</h2>
+  <p>
+    Cada persona tiene su forma de onda, un medidor, <strong>S</strong> (solo) y <strong>M</strong> (mudo), y una
+    <strong>línea amarilla</strong> de volumen que dibujas con puntos: entre puntos el volumen cambia de a poco.
+    Lo que dibujas se suma a lo automático (fades, silenciar a quien no habla, pitidos), y lo tuyo manda.
+    Al exportar, el volumen final se mide y se lleva a <strong>−16 LUFS</strong>, que es lo que piden Spotify y YouTube.
+    Si quieres terminar la mezcla en otro programa, <em>Pistas por separado</em> te da un WAV por persona y otro con música y efectos.
+  </p>
+</section>
+
+<section id="sensibles">
+  <h2><span class="num">10</span> Palabras sensibles</h2>
+  <p>
+    Groserías y temas que las redes bajan de alcance (muerte, drogas, sexo, armas…), encontrados en la transcripción.
+    Para cada una decides: <strong>pitido encima</strong> (tapa la palabra en todos los micrófonos, el audio original no se toca),
+    <strong>cambiar el subtítulo</strong> por el eufemismo que se usa en redes («desvivir», «sustancias»…), las dos cosas, o dejarla como está.
+    Las groserías vienen con pitido y subtítulo suavizado; los temas sensibles solo cambian el subtítulo.
+  </p>
+</section>
+
+<section id="teleprompter">
+  <h2><span class="num">11</span> Teleprompter</h2>
+  <p>
+    Una sección del guion de prePod marcada como teleprompter: dice <strong>quién la lee</strong> (de la lista de conductores e invitados),
+    <strong>cuándo aparece</strong> (minutos y segundos desde que arranca la grabación, o <em>después del anterior</em> con una separación),
+    la velocidad y cuánto ocupa. En la sala de prod se dispara sola: todos ven el aviso 3 s antes y el texto le sale solo a quien lo lee.
+    El director también puede lanzar uno a mano desde el cuarto de control.
+  </p>
+</section>
+
+<section id="plantillas">
+  <h2><span class="num">12</span> Plantillas de reel</h2>
+  <p>
+    El diseño de los reels (diseño de cámaras, marca, subtítulos, orden) se guarda con un nombre y se aplica con un clic en cualquier episodio.
+    No guarda el logo ni el fondo propios, porque son archivos de cada episodio.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">EN ESTA PÁGINA</div>
+<nav>
+  <a href="#proyecto">Proyecto</a>
+  <a href="#pistas">Pistas y personas</a>
+  <a href="#cortes">Cortes no destructivos</a>
+  <a href="#transcripcion">Transcripción</a>
+  <a href="#momentos">Momentos y reels</a>
+  <a href="#layouts">Formatos y layouts</a>
+  <a href="#capas">Capas y b-roll</a>
+  <a href="#cintillos">Cintillos</a>
+  <a href="#mezcla">Mezcla y volumen dibujado</a>
+  <a href="#sensibles">Palabras sensibles</a>
+  <a href="#teleprompter">Teleprompter</a>
+  <a href="#plantillas">Plantillas de reel</a>
+</nav>
+{% endblock %}

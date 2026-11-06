@@ -1,0 +1,73 @@
+{% extends "docs/_base.html" %}
+{% set theme = "prodpod" %}
+{% block title %}prodPod · Integrations — Docs · thePod{% endblock %}
+
+{% block content %}
+<header class="docs-header">
+  <div class="eyebrow">INTEGRATIONS</div>
+  <h1>How prodPod connects with the suite</h1>
+  <p class="lede">prodPod is the middle layer: it takes in context from prePod and pushes results to postPod.</p>
+</header>
+
+<section id="desde-prepod">
+  <h2><span class="num">01</span> From prePod</h2>
+  <p>When an episode is sent from prePod, prodPod automatically receives:</p>
+  <ul>
+    <li><strong>Guest roster</strong>: names, roles and emails, ready to generate invitation links.</li>
+    <li><strong>Soundboard</strong>: every sound set up in the podcast, with its name, shortcut and color.</li>
+    <li><strong>Planned markers</strong>: the rundown blocks become chapter markers you can activate while recording.</li>
+  </ul>
+  <p>Nothing to set up — everything arrives when the host clicks “Send to prodPod” from prePod.</p>
+</section>
+
+<section id="hacia-postpod">
+  <h2><span class="num">02</span> To postPod</h2>
+  <p>When a recording ends, you can send it to postPod. What gets sent:</p>
+  <ul>
+    <li><strong>Audio and video tracks</strong> from each participant (separate files for precise editing).</li>
+    <li><strong>Screen-share recordings</strong> (as additional tracks).</li>
+    <li><strong>Chapter markers</strong>: both the planned ones from the rundown and the ones created live during the recording.</li>
+    <li><strong>Soundboard timestamps</strong>: every sound trigger is logged with its exact time.</li>
+    <li><strong>Director events and assets</strong>: the overlays activated from the control room (banners, sponsors, countdowns, graphics) travel with their timestamps and files so you can play them back in the edit.</li>
+  </ul>
+  <p>In postPod, a project is created (or updated) with all these files as clips ready to add to the timeline.</p>
+</section>
+
+<section id="rtmp">
+  <h2><span class="num">03</span> RTMP streaming</h2>
+  <p>
+    Presets included for YouTube and Twitch. All you need to do is paste your stream key.
+    You can also use a custom RTMP URL for other platforms or your own servers.
+  </p>
+  <p>Streaming runs alongside the local recording — you don't sacrifice quality to broadcast live.</p>
+</section>
+
+<section id="amapod">
+  <h2><span class="num">04</span> Live questions with amaPod</h2>
+  <p>
+    If there's an amaPod event linked to the session, the studio shows an embedded <strong>amaPod — Q&amp;A</strong>
+    panel: the host sees the queue of approved questions and can put them on air without leaving prodPod.
+    Viewers take part from the event's public page.
+  </p>
+</section>
+
+<section id="estado-prepod">
+  <h2><span class="num">05</span> Production status in prePod</h2>
+  <p>
+    While you record, prePod shows the session status in real time in the episode detail:
+    “recording now” or “recording ready”. That way the planning team knows where production stands
+    without having to ask.
+  </p>
+</section>
+{% endblock %}
+
+{% block rail %}
+<div class="lbl">ON THIS PAGE</div>
+<nav>
+  <a href="#desde-prepod">From prePod</a>
+  <a href="#hacia-postpod">To postPod</a>
+  <a href="#rtmp">RTMP streaming</a>
+  <a href="#amapod">amaPod (Q&amp;A)</a>
+  <a href="#estado-prepod">Status in prePod</a>
+</nav>
+{% endblock %}
