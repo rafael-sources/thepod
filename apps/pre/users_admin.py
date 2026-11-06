@@ -4,6 +4,7 @@ Admin-only user management. Reads/writes the shared SQLite users DB at
 """
 
 import re
+from shared_users import hash_password
 
 from flask import Blueprint, jsonify, request
 
@@ -130,7 +131,7 @@ def update_user_endpoint(username):
             out_extra["generated_password"] = new_pw
         if len(new_pw) < 6:
             return jsonify({"error": "la contraseña debe tener al menos 6 caracteres"}), 400
-        fields["password_md5"] = md5(new_pw)
+        fields["password_md5"] = hash_password(new_pw)
 
     if "display_name" in body:
         fields["display_name"] = (body["display_name"] or username).strip().title()

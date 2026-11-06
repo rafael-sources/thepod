@@ -3,6 +3,7 @@ import os
 import re
 from datetime import timedelta
 from pathlib import Path
+from shared_users import default_owner
 
 from flask import Flask, Response, abort, render_template
 
@@ -161,7 +162,7 @@ def create_app():
             return None
         if not row:
             return None
-        owner = row["owner_username"] or "admin"
+        owner = row["owner_username"] or default_owner()
         extras = []
         if row["extra_hosts"]:
             try:

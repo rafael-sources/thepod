@@ -18,6 +18,7 @@ se pierden si el servicio se reinicia (el cliente debe reintentar).
 """
 
 from __future__ import annotations
+from shared_users import default_owner
 
 import json
 import os
@@ -143,7 +144,7 @@ def _podcast_access_error(slug: str):
         return None
     if not row:
         return None
-    owner = row["owner_username"] or "admin"
+    owner = row["owner_username"] or default_owner()
     extras = []
     if row["extra_hosts"]:
         try:

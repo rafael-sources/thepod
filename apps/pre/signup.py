@@ -22,6 +22,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from shared_users import hash_password
 
 from flask import Blueprint, jsonify, request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -116,7 +117,7 @@ def signup():
     with _conn() as c:
         c.execute("DELETE FROM pending WHERE created_at < ?", (time.time() - 2 * _MAX_AGE,))
         c.execute("INSERT INTO pending (id, email, display_name, password_md5, created_at) VALUES (?,?,?,?,?)",
-                  (sid, email, name, md5(password), time.time()))
+                  (sid, email, name, hash_password(password), time.time()))
     token = _serializer.dumps(sid)
 
     from email_helper import _public_base_url, send_signup_confirm_email, is_configured

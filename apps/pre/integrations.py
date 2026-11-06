@@ -12,6 +12,7 @@ Outgoing integrations from prePod to the rest of the suite (postPod / prodPod).
 import urllib.error
 import urllib.request
 import json as _json
+from shared_users import default_owner
 
 from flask import Blueprint, jsonify, request
 
@@ -211,7 +212,7 @@ def _serialize_episode_payload(slug: str, ep_id: int):
         # Owner + extra_hosts: travels with the payload so prodPod / postPod
         # know who is allowed to host this episode.
         owner_username = podcast["owner_username"] if "owner_username" in podcast.keys() else None
-        owner_username = owner_username or "admin"
+        owner_username = owner_username or default_owner()
         extra_hosts = []
         if "extra_hosts" in podcast.keys() and podcast["extra_hosts"]:
             try:

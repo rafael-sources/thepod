@@ -6,6 +6,7 @@ the same host (or parent cookie domain).
 
 import uuid
 from functools import wraps
+from shared_users import verify_password, hash_password
 
 from flask import Blueprint, jsonify, request, session
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -41,8 +42,7 @@ def login():
         from shared_users import list_user_rows
         username = next((r["username"] for r in list_user_rows()
                          if (r.get("email") or "").strip().lower() == username), username)
-    expected = USERS.get(username)
-    if not expected or md5(password) != expected:
+    if not verify_password(username, password):
         return jsonify({"error": "usuario o contraseña inválidos"}), 401
 
     session.clear()
@@ -149,7 +149,7 @@ def reset_password():
     if not user:
         return jsonify({"error": "usuario no encontrado"}), 404
 
-    update_user_fields(username, {"password_md5": md5(new_password)})
+    update_user_fields(username, {"password_md5": hash_password(new_password)})
     return jsonify({"ok": True, "message": "Contraseña actualizada. Ya puedes iniciar sesión."})
 
 

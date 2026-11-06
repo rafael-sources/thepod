@@ -4,6 +4,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from shared_users import default_owner
 
 from flask import Blueprint, jsonify, request, send_file
 from slugify import slugify
@@ -13,13 +14,12 @@ from config import DEFAULT_COLORS, PODCASTS_DIR, USER_POLICY, policy_for
 from db import get_db
 
 
-# Legacy podcasts (created before owner tracking) belong to "admin".
-LEGACY_OWNER = "admin"
+# Lo creado antes de que hubiera dueños es del primer administrador (shared_users.default_owner).
 
 
 def _row_owner(row) -> str:
     return (row["owner_username"] if "owner_username" in row.keys() and row["owner_username"]
-            else LEGACY_OWNER)
+            else default_owner())
 
 
 def _row_extra_hosts(row) -> list[str]:
@@ -181,7 +181,7 @@ def _user_podcast_count(username: str) -> int:
             db.close()
         except Exception:
             continue
-        if row and (row["owner_username"] or LEGACY_OWNER) == username:
+        if row and (row["owner_username"] or default_owner()) == username:
             n += 1
     return n
 
