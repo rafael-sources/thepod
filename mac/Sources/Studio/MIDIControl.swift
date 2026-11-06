@@ -17,7 +17,7 @@ final class MIDIControl: ObservableObject {
         var name: String {
             switch self {
             case .fader(let i): return String(localized: "Fader \(i + 1)"); case .mute(let i): return String(localized: "Mute \(i + 1)"); case .solo(let i): return String(localized: "Solo \(i + 1)")
-            case .play: return "Reproducir / pausa"; case .stop: return "Parar"; case .ab: return "A/B"
+            case .play: return String(localized: "Reproducir / pausa"); case .stop: return String(localized: "Parar"); case .ab: return "A/B"
             }
         }
     }

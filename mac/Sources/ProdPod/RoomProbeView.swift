@@ -67,7 +67,7 @@ struct RoomProbeView: View {
                 .buttonStyle(.bordered).controlSize(.large)
             } else {
                 Button { probe.join() } label: {
-                    Label(probe.phase == .connecting ? "Entrando…" : "Entrar a la sala", systemImage: "record.circle")
+                    Label(probe.phase == .connecting ? String(localized: "Entrando…") : String(localized: "Entrar a la sala"), systemImage: "record.circle")
                         .frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.large)
@@ -155,7 +155,7 @@ struct RoomProbeView: View {
             if !connected {
                 VStack(spacing: 10) {
                     Image(systemName: "video.badge.waveform").font(.system(size: 44)).foregroundStyle(Theme.secondary)
-                    Text(probe.phase == .connecting ? "Entrando a la sala…" : "Elige la sala y toca “Entrar a la sala”.")
+                    Text(probe.phase == .connecting ? String(localized: "Entrando a la sala…") : String(localized: "Elige la sala y toca “Entrar a la sala”."))
                         .foregroundStyle(Theme.secondary)
                     if case .failed(let why) = probe.phase { Text(why).font(.caption).foregroundStyle(.orange) }
                 }

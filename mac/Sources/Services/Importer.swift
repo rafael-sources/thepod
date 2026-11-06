@@ -90,7 +90,7 @@ enum Importer {
                 laneId += 1
             }
         }
-        progress("Listo", 1)
+        progress(String(localized: "Listo"), 1)
         try ProjectStore.save(project)
         finished = true
         return project
@@ -425,7 +425,7 @@ enum Importer {
             if key == "logo" { project.logoFile = rel } else { project.backgroundFile = rel }
         }
 
-        progress("Listo", 1)
+        progress(String(localized: "Listo"), 1)
         try ProjectStore.save(project)
         finished = true
         return project
@@ -561,7 +561,7 @@ enum Importer {
         }
         progress(String(localized: "Midiendo"), 0)
         let duration = try await FFmpeg.probeDuration(input)
-        let hasVideo = isVideoExt ? await FFmpeg.hasStream("Video", in: input) : false
+        let hasVideo = isVideoExt ? await FFmpeg.hasStream(String(localized: "Video"), in: input) : false
         let starts = await FFmpeg.streamStarts(input)
         // Recordings that lost their head keep absolute timestamps. Instead of padding with black,
         // we trim to the first frame and remember the offset so the lane starts later on the timeline.

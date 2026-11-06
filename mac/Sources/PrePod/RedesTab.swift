@@ -97,9 +97,9 @@ struct RedesTab: View {
 
     private func who(_ r: Row) -> String {
         let a = accounts[r.id]
-        if r.id == "feed" { return "Listo" }
+        if r.id == "feed" { return String(localized: "Listo") }
         if r.id == "instagram", let u = a?.username, !u.isEmpty { return "@\(u)" }
-        return a?.username ?? "Conectado"
+        return a?.username ?? String(localized: "Conectado")
     }
 
     private func load() async {

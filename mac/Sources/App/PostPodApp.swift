@@ -44,12 +44,12 @@ struct PostPodApp: App {
             }
         }
 
-        Window("Prueba de sala", id: "prueba-sala") {
+        Window(String(localized: "Prueba de sala"), id: "prueba-sala") {
             RoomProbeView()
         }
         .windowStyle(.hiddenTitleBar)
 
-        Window("Studio", id: "estudio") {
+        Window(String(localized: "Studio"), id: "estudio") {
             StudioRoot().environmentObject(app)
         }
         .defaultSize(width: 1280, height: 820)

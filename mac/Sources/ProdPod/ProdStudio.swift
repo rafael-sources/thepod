@@ -438,7 +438,7 @@ final class ProdStudio: NSObject, ObservableObject {
             if p.isSpeaking { lastSpoke[id] = now }
             let camPub = p.videoTracks.first { $0.source == .camera } ?? p.videoTracks.first { $0.source != .screenShareVideo }
             let micPub = p.audioTracks.first
-            list.append(RoomPerson(id: id, name: p.name ?? "Invitado", isLocal: false,
+            list.append(RoomPerson(id: id, name: p.name ?? String(localized: "Invitado"), isLocal: false,
                                    video: (camPub?.isMuted == false) ? camPub?.track as? VideoTrack : nil,
                                    speaking: p.isSpeaking,
                                    micOn: micPub.map { !$0.isMuted } ?? false,

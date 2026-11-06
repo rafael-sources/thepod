@@ -99,7 +99,7 @@ struct DirectorView: View {
     @State private var seenChat = 0
 
     private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), (String(localized: "Avisos"), "megaphone.fill"),
-                                            ("Sala", "person.2.fill"), ("Chat", "bubble.left.and.bubble.right.fill"),
+                                            (String(localized: "Sala"), "person.2.fill"), (String(localized: "Chat"), "bubble.left.and.bubble.right.fill"),
                                             (String(localized: "Sonidos"), "speaker.wave.2.fill"), (String(localized: "Prompter"), "text.viewfinder")]
 
     var body: some View {
@@ -199,7 +199,7 @@ struct DirectorView: View {
         return Button {
             dir.recording ? dir.stopRecording() : dir.startRecording()
         } label: {
-            Label(dir.recording ? "Detener" : "Grabar", systemImage: dir.recording ? "stop.fill" : "record.circle")
+            Label(dir.recording ? String(localized: "Detener") : String(localized: "Grabar"), systemImage: dir.recording ? "stop.fill" : "record.circle")
                 .font(.system(size: 14, weight: .bold))
                 .padding(.horizontal, 18).frame(height: 36)
                 .foregroundStyle(dir.recording || canStart ? Color.black : Theme.secondary)
@@ -208,9 +208,9 @@ struct DirectorView: View {
         }
         .buttonStyle(.plain).fixedSize()
         .disabled(!dir.recording && !canStart)
-        .help(dir.recording ? "Detiene la grabación de todos"
-              : dir.allHostsReady ? "Empieza la cuenta regresiva para todos"
-              : "Se habilita cuando todos los conductores en la sala marquen Preparado")
+        .help(dir.recording ? String(localized: "Detiene la grabación de todos")
+              : dir.allHostsReady ? String(localized: "Empieza la cuenta regresiva para todos")
+              : String(localized: "Se habilita cuando todos los conductores en la sala marquen Preparado"))
     }
 
     private var connectPrompt: some View {
@@ -406,7 +406,7 @@ struct DirectorView: View {
             VStack(alignment: .leading, spacing: 10) {
                 SectionTitle(text: String(localized: "Pistas grabadas"))
                 if dir.uploads.isEmpty {
-                    Text(dir.recording ? "Esperando que empiecen a subir…" : "Aparecen al grabar.").font(.callout).foregroundStyle(Theme.secondary)
+                    Text(dir.recording ? String(localized: "Esperando que empiecen a subir…") : String(localized: "Aparecen al grabar.")).font(.callout).foregroundStyle(Theme.secondary)
                 }
                 ForEach(dir.uploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, st in
                     let name = dir.feeds.first { $0.id == id }?.name ?? dir.participants.first { "participant_\($0.id)" == id }?.display_name ?? id
@@ -423,7 +423,7 @@ struct DirectorView: View {
                     .background(RoundedRectangle(cornerRadius: 9).fill(CR.field))
                 }
                 if !dir.recording && dir.allUploadsDone && role.isAdmin {
-                    CRButton(title: dir.exporting ? "Enviando…" : "Enviar a post", symbol: "paperplane.fill", color: Theme.good,
+                    CRButton(title: dir.exporting ? String(localized: "Enviando…") : String(localized: "Enviar a post"), symbol: "paperplane.fill", color: Theme.good,
                               enabled: !dir.exporting) { dir.exportToPost() }
                 }
                 if let r = dir.exportResult { Text(r).font(.caption).foregroundStyle(Theme.good) }
@@ -467,7 +467,7 @@ struct DirectorView: View {
 
     private var soundsPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "Soundboard", trailing: String(localized: "suena en la sala"))
+            SectionTitle(text: String(localized: "Soundboard"), trailing: String(localized: "suena en la sala"))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                 ForEach(dir.sounds) { pad in
                     let c = pad.color.map { Color(hex: $0) } ?? .gray
@@ -521,7 +521,7 @@ struct CintillosPanel: View {
     @State private var segSub = ""
     @State private var seconds: Double = 15
 
-    private let kinds: [(String, String, Color)] = [("Sponsor", "star.fill", CR.sponsor), ("Podcast", "mic.fill", CR.podcast),
+    private let kinds: [(String, String, Color)] = [("Sponsor", "star.fill", CR.sponsor), (String(localized: "Podcast"), "mic.fill", CR.podcast),
                                                     (String(localized: "Segmento"), "text.alignleft", CR.segment)]
     private var accent: Color { kinds[mode].2 }
 
@@ -586,7 +586,7 @@ struct CintillosPanel: View {
         switch mode {
         case 0:
             let s = sponsor
-            return Overlay(id: -1, kind: "sponsor", title: s?.name ?? "Sponsor", text: sponsorText, filePath: nil,
+            return Overlay(id: -1, kind: "sponsor", title: s?.name ?? String(localized: "Sponsor"), text: sponsorText, filePath: nil,
                            image: s.flatMap { dir.sponsorLogo($0) }, expires: nil)
         case 1:
             return Overlay(id: -2, kind: "banner", title: podTitle.isEmpty ? dir.podcastName : podTitle,
@@ -612,7 +612,7 @@ struct CintillosPanel: View {
             Text("Este podcast no tiene sponsors activos en prePod.").font(.callout).foregroundStyle(Theme.secondary)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Sponsor")
+                SectionTitle(text: String(localized: "Sponsor"))
                 VStack(spacing: 6) {
                     ForEach(dir.sponsors) { s in
                         let on = sponsor?.id == s.id
@@ -639,7 +639,7 @@ struct CintillosPanel: View {
             }
             .onAppear { if sponsorText.isEmpty { sponsorText = sponsor?.copy ?? "" } }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Texto")
+                SectionTitle(text: String(localized: "Texto"))
                 CRField(placeholder: String(localized: "Texto del cintillo"), text: $sponsorText, lines: 2...3)
             }
         }
@@ -647,8 +647,8 @@ struct CintillosPanel: View {
 
     @ViewBuilder private var podcastForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Título")
-            CRField(placeholder: dir.podcastName.isEmpty ? "Nombre del podcast" : dir.podcastName, text: $podTitle)
+            SectionTitle(text: String(localized: "Título"))
+            CRField(placeholder: dir.podcastName.isEmpty ? String(localized: "Nombre del podcast") : dir.podcastName, text: $podTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: String(localized: "Qué decir ahora"))
@@ -658,7 +658,7 @@ struct CintillosPanel: View {
 
     @ViewBuilder private var segmentForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: "Título del segmento")
+            SectionTitle(text: String(localized: "Título del segmento"))
             CRField(placeholder: String(localized: "Ej.: La pregunta de la semana"), text: $segTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
@@ -689,7 +689,7 @@ struct CuesPanel: View {
     static let look: [String: (String, String, Color)] = [
         String(localized: "CERRAR TEMA"): (String(localized: "Cerrar tema"), "flag.checkered", Color.orange),
         String(localized: "SIGUIENTE TEMA"): (String(localized: "Siguiente tema"), "forward.end.fill", CR.segment),
-        String(localized: "PAUSA"): ("Pausa", "pause.fill", Color.yellow),
+        String(localized: "PAUSA"): (String(localized: "Pausa"), "pause.fill", Color.yellow),
         String(localized: "MÁS RÁPIDO"): (String(localized: "Más rápido"), "hare.fill", Theme.good),
         String(localized: "MÁS LENTO"): (String(localized: "Más lento"), "tortoise.fill", Color.teal),
         String(localized: "LEER ANUNCIO"): (String(localized: "Leer anuncio"), "megaphone.fill", CR.sponsor),
@@ -747,7 +747,7 @@ struct CuesPanel: View {
                     .foregroundStyle(justSent ? Color.black : l.2)
                     .frame(width: 30, height: 30)
                     .background(RoundedRectangle(cornerRadius: 8).fill(justSent ? l.2 : l.2.opacity(0.16)))
-                Text(justSent ? "Enviado" : l.0).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.85)
+                Text(justSent ? String(localized: "Enviado") : l.0).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10).frame(height: 50)
@@ -789,7 +789,7 @@ struct TeleprompterPanel: View {
                                                     sponsorId = Int(v)
                                                     if let s = dir.sponsors.first(where: { "\($0.id)" == v }) {
                                                         title = String(localized: "Publicidad de \(s.name)")
-                                                        text = s.copy.isEmpty ? "Sponsor: \(s.name)" : s.copy
+                                                        text = s.copy.isEmpty ? String(localized: "Sponsor: \(s.name)") : s.copy
                                                     }
                                                 }))
                 }
@@ -802,17 +802,17 @@ struct TeleprompterPanel: View {
             }
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionTitle(text: "Velocidad")
+                    SectionTitle(text: String(localized: "Velocidad"))
                     HStack(spacing: 6) {
-                        ForEach([("slow", String(localized: "Lenta")), ("normal", "Normal"), ("fast", String(localized: "Rápida"))], id: \.0) { v, l in
+                        ForEach([("slow", String(localized: "Lenta")), ("normal", String(localized: "Normal")), ("fast", String(localized: "Rápida"))], id: \.0) { v, l in
                             Pill(text: l, selected: speed == v) { speed = v }
                         }
                     }
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionTitle(text: "Tamaño")
+                    SectionTitle(text: String(localized: "Tamaño"))
                     HStack(spacing: 6) {
-                        ForEach([("quarter", "¼ pantalla"), ("half", "½ pantalla"), ("full", String(localized: "Toda"))], id: \.0) { v, l in
+                        ForEach([("quarter", String(localized: "¼ pantalla")), ("half", String(localized: "½ pantalla")), ("full", String(localized: "Toda"))], id: \.0) { v, l in
                             Pill(text: l, selected: size == v) { size = v }
                         }
                     }
@@ -827,7 +827,7 @@ struct TeleprompterPanel: View {
                 }
             }
             HStack(spacing: 8) {
-                CRButton(title: sent ? "Enviado" : String(localized: "Lanzar teleprompter"), symbol: sent ? "checkmark" : "text.viewfinder",
+                CRButton(title: sent ? String(localized: "Enviado") : String(localized: "Lanzar teleprompter"), symbol: sent ? "checkmark" : "text.viewfinder",
                          enabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                     dir.sendTeleprompter(target: target, title: title, text: text, speed: speed, size: size, countdown: countdown)
                     sent = true
@@ -911,7 +911,7 @@ struct DirectorChatPanel: View {
                 }
             }
             HStack(spacing: 8) {
-                CRField(placeholder: "Escribe…", text: $text) { send() }
+                CRField(placeholder: String(localized: "Escribe…"), text: $text) { send() }
                 Button { send() } label: {
                     Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold))
                         .frame(width: 40, height: 40)

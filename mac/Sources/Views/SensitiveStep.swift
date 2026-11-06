@@ -22,7 +22,7 @@ struct SensitiveStep: View {
                     } else {
                         HStack(spacing: 10) {
                             Button { session.scanSensitive() } label: {
-                                Label(p.sensitiveScanned ? "Buscar de nuevo" : "Buscar palabras sensibles", systemImage: "magnifyingglass")
+                                Label(p.sensitiveScanned ? String(localized: "Buscar de nuevo") : String(localized: "Buscar palabras sensibles"), systemImage: "magnifyingglass")
                             }
                             .buttonStyle(.borderedProminent)
                             if p.sensitiveScanned {
@@ -133,11 +133,11 @@ private struct SensitiveRow: View {
                     Text(Timecode.string(m.s, tenths: false)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
                     Text(session.project.laneName(m.lane)).font(.caption).foregroundStyle(Theme.secondary)
                     Text(m.word).font(.headline).strikethrough(m.ignored)
-                    Text(m.category == .groseria ? "grosería" : "tema sensible")
+                    Text(m.category == .groseria ? String(localized: "grosería") : String(localized: "tema sensible"))
                         .font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Capsule().fill(m.category == .groseria ? Color.red.opacity(0.25) : Color.orange.opacity(0.25)))
                     Spacer()
-                    Button(m.ignored ? "Volver a tapar" : "Está bien así") { b.wrappedValue.ignored.toggle() }
+                    Button(m.ignored ? String(localized: "Volver a tapar") : String(localized: "Está bien así")) { b.wrappedValue.ignored.toggle() }
                         .controlSize(.small)
                 }
                 Text("“\(session.contextAround(m))”").font(.callout).foregroundStyle(Theme.secondary).lineLimit(2)

@@ -89,7 +89,7 @@ struct PublicationTab: View {
     @State private var syncing = false
     @State private var error: String?
 
-    private let platforms: [(String, String)] = [("youtube", "YouTube"), ("spotify", String(localized: "Spotify")),
+    private let platforms: [(String, String)] = [("youtube", String(localized: "YouTube")), ("spotify", String(localized: "Spotify")),
                                                  ("apple_podcasts", String(localized: "Apple Podcasts")), ("website", String(localized: "Página web"))]
 
     var body: some View {
@@ -124,7 +124,7 @@ struct PublicationTab: View {
                         HStack {
                             Label("Resumen de postPod", systemImage: "sparkles").font(.headline)
                             Spacer()
-                            Button { sync() } label: { Label(syncing ? "Actualizando…" : "Traer de postPod", systemImage: "arrow.triangle.2.circlepath") }
+                            Button { sync() } label: { Label(syncing ? String(localized: "Actualizando…") : String(localized: "Traer de postPod"), systemImage: "arrow.triangle.2.circlepath") }
                                 .disabled(syncing)
                         }
                         if let s = episode.aiSummary, !s.isEmpty {
@@ -451,8 +451,8 @@ struct LandingTab: View {
     @State private var saver = Debouncer()
 
     private let socials: [(String, String, WritableKeyPath<LandingConfig, String?>)] = [
-        ("YouTube", "social_youtube", \.socialYoutube), (String(localized: "Spotify"), "social_spotify", \.socialSpotify),
-        (String(localized: "Apple Podcasts"), "social_apple_podcasts", \.socialApplePodcasts), ("Instagram", "social_instagram", \.socialInstagram),
+        (String(localized: "YouTube"), "social_youtube", \.socialYoutube), (String(localized: "Spotify"), "social_spotify", \.socialSpotify),
+        (String(localized: "Apple Podcasts"), "social_apple_podcasts", \.socialApplePodcasts), (String(localized: "Instagram"), "social_instagram", \.socialInstagram),
         (String(localized: "TikTok"), "social_tiktok", \.socialTiktok), (String(localized: "X / Twitter"), "social_twitter", \.socialTwitter),
     ]
 

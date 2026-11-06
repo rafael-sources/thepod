@@ -74,7 +74,7 @@ private struct GeneralTab: View {
         VStack(alignment: .leading, spacing: 14) {
             ErrorLine(text: error)
             if let _ = cfg {
-                field("Nombre", text: binding(\.name, key: "name"))
+                field(String(localized: "Nombre"), text: binding(\.name, key: "name"))
                 field(String(localized: "Frase corta"), text: binding(\.tagline, key: "tagline"))
                 Text("Descripción").font(.headline)
                 Text("Sale en tu página y en Spotify / Apple Podcasts.").font(.caption).foregroundStyle(Theme.secondary)
@@ -96,7 +96,7 @@ private struct GeneralTab: View {
                         } catch { self.error = error.localizedDescription }
                         exporting = false
                     }
-                } label: { Label(exporting ? "Preparando…" : "Exportar podcast (.zip)", systemImage: "archivebox") }
+                } label: { Label(exporting ? String(localized: "Preparando…") : String(localized: "Exportar podcast (.zip)"), systemImage: "archivebox") }
                 .disabled(exporting)
             } else { ProgressView() }
         }
@@ -139,8 +139,8 @@ private struct BrandingTab: View {
         (String(localized: "Principal"), "color_primary", \.colorPrimary),
         (String(localized: "Secundario"), "color_secondary", \.colorSecondary),
         (String(localized: "Acento"), "color_accent", \.colorAccent),
-        ("Fondo", "color_bg", \.colorBg),
-        ("Texto", "color_text", \.colorText),
+        (String(localized: "Fondo"), "color_bg", \.colorBg),
+        (String(localized: "Texto"), "color_text", \.colorText),
     ]
 
     var body: some View {
@@ -149,9 +149,9 @@ private struct BrandingTab: View {
             if cfg != nil {
                 Text("Imágenes").font(.headline)
                 HStack(alignment: .top, spacing: 18) {
-                    imageSlot("Logo", kind: "logo", hint: String(localized: "Cuadrado, hasta 500 px"))
+                    imageSlot(String(localized: "Logo"), kind: "logo", hint: String(localized: "Cuadrado, hasta 500 px"))
                     imageSlot(String(localized: "Portada"), kind: "cover", hint: String(localized: "La del podcast en las plataformas"))
-                    imageSlot("Fondo", kind: "background", hint: String(localized: "Para videos y tu página"))
+                    imageSlot(String(localized: "Fondo"), kind: "background", hint: String(localized: "Para videos y tu página"))
                 }
                 Text("Colores").font(.headline)
                 HStack(spacing: 18) {
@@ -168,7 +168,7 @@ private struct BrandingTab: View {
                 Text("Tipografías").font(.headline)
                 HStack(spacing: 20) {
                     fontPicker(String(localized: "Títulos"), key: "font_heading", kp: \.fontHeading)
-                    fontPicker("Texto", key: "font_body", kp: \.fontBody)
+                    fontPicker(String(localized: "Texto"), key: "font_body", kp: \.fontBody)
                 }
                 preview
             } else { ProgressView() }
@@ -532,7 +532,7 @@ private struct DistributionTab: View {
                 }
                 if let v = info.validation, !(v.issues.isEmpty && v.warnings.isEmpty) {
                     Card {
-                        Text(v.valid ? "Casi listo" : "Falta para poder publicar").font(.headline)
+                        Text(v.valid ? String(localized: "Casi listo") : String(localized: "Falta para poder publicar")).font(.headline)
                         ForEach(v.issues, id: \.self) { Label($0, systemImage: "xmark.circle.fill").foregroundStyle(.orange) }
                         ForEach(v.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.secondary) }
                     }
@@ -654,7 +654,7 @@ private struct SponsorReportSheet: View {
         }
     }
     private func statusName(_ s: String?) -> String {
-        ["idea": String(localized: "Idea"), "planned": String(localized: "Planificado"), "scheduled": String(localized: "Agendado"), "recorded": "Grabado",
+        ["idea": String(localized: "Idea"), "planned": String(localized: "Planificado"), "scheduled": String(localized: "Agendado"), "recorded": String(localized: "Grabado"),
          "editing": String(localized: "En edición"), "published": String(localized: "Publicado"), "archived": String(localized: "Archivado")][s ?? ""] ?? (s ?? "")
     }
 }

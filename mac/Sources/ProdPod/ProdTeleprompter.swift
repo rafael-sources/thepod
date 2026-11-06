@@ -74,7 +74,7 @@ extension ProdStudio {
         tpNoticeTask?.cancel(); tpShowTask?.cancel()
         if secs > 0 {
             let who = target == "all" ? "" : (people.first { $0.id == target }?.name ?? tpPeople[target] ?? "").uppercased()
-            tpNotice = TPNotice(title: m["title"] as? String ?? "Teleprompter", who: who, remaining: secs)
+            tpNotice = TPNotice(title: m["title"] as? String ?? String(localized: "Teleprompter"), who: who, remaining: secs)
             let endsAt = Date().addingTimeInterval(Double(secs))
             tpNoticeTask = Task { [weak self] in
                 while !Task.isCancelled {
@@ -267,10 +267,10 @@ struct TeleprompterLayer: View {
     private func panel(_ a: TPActive, height: CGFloat) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Label(a.title.isEmpty ? "Teleprompter" : a.title, systemImage: "text.viewfinder")
+                Label(a.title.isEmpty ? String(localized: "Teleprompter") : a.title, systemImage: "text.viewfinder")
                     .font(.headline).foregroundStyle(.white)
                 Spacer()
-                Button(a.paused ? "Seguir" : "Pausa", systemImage: a.paused ? "play.fill" : "pause.fill") { studio.tpPause() }
+                Button(a.paused ? String(localized: "Seguir") : String(localized: "Pausa"), systemImage: a.paused ? "play.fill" : "pause.fill") { studio.tpPause() }
                 Button("Desde el inicio", systemImage: "arrow.counterclockwise") { studio.tpRestart() }
                 Button { studio.tpClose() } label: { Image(systemName: "xmark") }
             }

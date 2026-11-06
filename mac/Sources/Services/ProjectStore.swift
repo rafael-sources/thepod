@@ -4,7 +4,7 @@ import Foundation
 enum ProjectStore {
     static var libraryURL: URL {
         let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies")
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(String(localized: "Movies"))
         let url = movies.appendingPathComponent("postPod", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

@@ -14,13 +14,13 @@ struct CintillosStep: View {
                     Card {
                         Text("Agregar donde está el video").font(.headline)
                         HStack(spacing: 10) {
-                            styleButton("Noticiero", help: String(localized: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.")) {
+                            styleButton(String(localized: "Noticiero"), help: String(localized: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.")) {
                                 _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: String(localized: "AHORA"))
                             } preview: { newsPreview }
-                            styleButton("Limpio", help: String(localized: "Una línea de color, título grande y texto chico. Sin cajas.")) {
+                            styleButton(String(localized: "Limpio"), help: String(localized: "Una línea de color, título grande y texto chico. Sin cajas.")) {
                                 _ = session.addCintillo(style: "clean", kind: "comment")
                             } preview: { cleanPreview }
-                            styleButton("Sponsor", help: String(localized: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.")) {
+                            styleButton(String(localized: "Sponsor"), help: String(localized: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.")) {
                                 _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: String(localized: "PATROCINA"))
                             } preview: { sponsorPreview }
                         }
@@ -35,7 +35,7 @@ struct CintillosStep: View {
                     }
                     Card {
                         HStack {
-                            Text(session.project.cintillos.isEmpty ? "Todavía no hay cintillos" : "En este episodio").font(.headline)
+                            Text(session.project.cintillos.isEmpty ? String(localized: "Todavía no hay cintillos") : String(localized: "En este episodio")).font(.headline)
                             Spacer()
                             if !session.project.cintillos.isEmpty {
                                 Toggle("Mostrar", isOn: $session.project.showCintillos).toggleStyle(.switch).controlSize(.mini).font(.caption)
@@ -151,7 +151,7 @@ struct CintilloEditor: View {
         let lo = reel?.start ?? 0
         let hi = reel?.end ?? session.project.duration
         HStack {
-            Label((reel != nil ? String(localized: "Cintillo del reel · ") : String(localized: "Cintillo · ")) + (cin.style == "clean" ? "Limpio" : cin.style == "sponsor" ? "Sponsor" : "Noticiero"), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
+            Label((reel != nil ? String(localized: "Cintillo del reel · ") : String(localized: "Cintillo · ")) + (cin.style == "clean" ? String(localized: "Limpio") : cin.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Noticiero")), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
             if cin.fromDirector { Text("del director").font(.caption).foregroundStyle(Theme.secondary) }
             Spacer()
             if reel == nil {
@@ -169,7 +169,7 @@ struct CintilloEditor: View {
         }
         .font(.callout)
         HStack(spacing: 8) {
-            Text(cin.style == "sponsor" ? "Sponsor" : "Título").frame(width: 72, alignment: .leading)
+            Text(cin.style == "sponsor" ? String(localized: "Sponsor") : String(localized: "Título")).frame(width: 72, alignment: .leading)
             TextField("", text: c.title).textFieldStyle(.roundedBorder)
         }
         .font(.callout)
@@ -225,7 +225,7 @@ struct CintilloEditor: View {
                 }
                 Button("Elegir…") { session.chooseCintilloLogo(sel) }.controlSize(.small)
                 Button("Sin logo") { c.wrappedValue.logoFile = nil }.controlSize(.small)
-                Text(cin.logoFile == nil ? "Sin logo sale la inicial del título." : "").font(.caption2).foregroundStyle(Theme.secondary)
+                Text(cin.logoFile == nil ? String(localized: "Sin logo sale la inicial del título.") : "").font(.caption2).foregroundStyle(Theme.secondary)
             }
             .font(.callout)
         }

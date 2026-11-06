@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// básicos. Edita un `ColorGrade?` donde se le indique: un clip, una cámara o toda la pista.
 struct ColorPanel: View {
     @Binding var grade: ColorGrade?
-    var title: String = "Color"
+    var title: String = String(localized: "Color")
     @State private var tick = 0
 
     private var g: ColorGrade { grade ?? ColorGrade() }
@@ -42,7 +42,7 @@ struct ColorPanel: View {
                     }
                     Divider()
                     Button("Importar .cube…") { importCube() }
-                } label: { Text(g.look ?? g.lut ?? "Ninguno").font(.caption) }
+                } label: { Text(g.look ?? g.lut ?? String(localized: "Ninguno")).font(.caption) }
                 .menuStyle(.borderlessButton).fixedSize().id(tick)
             }
             if g.lut != nil {

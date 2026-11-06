@@ -76,7 +76,7 @@ struct ProjectView: View {
                 .padding(.bottom, 18)
 
             ForEach(Step.Group.allCases, id: \.self) { group in
-                Text(group.rawValue)
+                Text(group.name)
                     .font(.system(size: 10.5, weight: .semibold)).tracking(1.2)
                     .foregroundStyle(Theme.secondary)
                     .padding(.top, group == .prepare ? 0 : 12).padding(.bottom, 2).padding(.horizontal, 8)
@@ -161,7 +161,7 @@ struct ProjectView: View {
         let p = session.project
         let items: [(Bool, String, Bool)] = [   // (hecho, texto, opcional)
             (p.fix.lastRun != nil, String(localized: "Sonido limpio"), false),
-            (p.isTranscribed, "Subtítulos", true),
+            (p.isTranscribed, String(localized: "Subtítulos"), true),
             (p.backgroundFile != nil && p.logoFile != nil, String(localized: "Fondo y logo del podcast"), true),
             (p.coverTime != nil, String(localized: "Portada elegida"), true),
         ]
@@ -234,7 +234,7 @@ struct PreviewPane: View {
                     marked = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { marked = false }
                 } label: {
-                    Label(marked ? "Momento marcado · lo ves en Reels" : "Marcar momento", systemImage: marked ? "checkmark" : "bookmark.fill")
+                    Label(marked ? String(localized: "Momento marcado · lo ves en Reels") : String(localized: "Marcar momento"), systemImage: marked ? "checkmark" : "bookmark.fill")
                 }
                 .help("Marca este punto para hacer un reel, como la tecla M en postPod web")
                 .disabled(session.built == nil)
@@ -308,7 +308,7 @@ struct TrackInspector: View {
             Button { value.wrappedValue = value.wrappedValue == 0 ? 1 : 0 } label: {
                 Image(systemName: value.wrappedValue == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
             }
-            .buttonStyle(.borderless).help(value.wrappedValue == 0 ? "Activar" : "Silenciar")
+            .buttonStyle(.borderless).help(value.wrappedValue == 0 ? String(localized: "Activar") : String(localized: "Silenciar"))
             Slider(value: value, in: 0...max)
             Text("\(Int(value.wrappedValue * 100)) %").monospacedDigit().frame(width: 44, alignment: .trailing)
         }
@@ -421,7 +421,7 @@ struct TrackInspector: View {
     private func soundBody(_ b: Binding<AudioLaneClip>, sel: ProjectSession.TrackSel) -> some View {
         let clip = b.wrappedValue
         let reel: Reel? = { if case .reelSound(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }()
-        let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido"
+        let name = session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Sonido")
         let lo = reel?.start ?? 0
         let hi = reel?.end ?? session.project.duration
         let len = clip.length
@@ -438,7 +438,7 @@ struct TrackInspector: View {
             }
             .font(.callout)
         }
-        Toggle(reel != nil ? "Repetir en bucle hasta el final del reel" : "Repetir en bucle hasta el final del episodio", isOn: b.loop)
+        Toggle(reel != nil ? String(localized: "Repetir en bucle hasta el final del reel") : String(localized: "Repetir en bucle hasta el final del episodio"), isOn: b.loop)
             .font(.callout)
         fadeRow(label: String(localized: "Fade entrada"), value: b.fadeIn)
         fadeRow(label: String(localized: "Fade salida"), value: b.fadeOut)

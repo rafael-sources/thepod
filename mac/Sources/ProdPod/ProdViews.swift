@@ -144,9 +144,9 @@ private struct SessionCard: View {
     var body: some View {
         let (label, color): (String, Color) = {
             switch session.status {
-            case "recording": return ("Grabando", .prodPod)
+            case "recording": return (String(localized: "Grabando"), .prodPod)
             case "finished": return (String(localized: "Terminada"), Theme.good)
-            case "live": return ("En vivo", .prodPod)
+            case "live": return (String(localized: "En vivo"), .prodPod)
             default: return (String(localized: "Lista para grabar"), .orange)
             }
         }()
@@ -166,7 +166,7 @@ private struct SessionCard: View {
                 Spacer()
                 // Solo administradores: el envío a postPod ya es automático al terminar las subidas
                 if session.status == "finished" && role.isAdmin {
-                    Button { export() } label: { Label(sending ? "Enviando…" : "Enviar a post", systemImage: "paperplane.fill") }
+                    Button { export() } label: { Label(sending ? String(localized: "Enviando…") : String(localized: "Enviar a post"), systemImage: "paperplane.fill") }
                         .disabled(sending)
                         .help("Manda las pistas de esta grabación a postPod")
                 }
@@ -349,7 +349,7 @@ struct StudioView: View {
                         micCheckBox
                         HStack(spacing: 6) {
                             Image(systemName: studio.headphones ? "headphones" : "speaker.wave.2.fill")
-                            Text(studio.headphones ? "Usas audífonos: perfecto." : "Parece que usas parlantes. Con audífonos se graba mejor.")
+                            Text(studio.headphones ? String(localized: "Usas audífonos: perfecto.") : String(localized: "Parece que usas parlantes. Con audífonos se graba mejor."))
                         }
                         .font(.caption).foregroundStyle(studio.headphones ? Theme.good : .orange)
                     }
@@ -380,7 +380,7 @@ struct StudioView: View {
                     }
                     peopleCard(title: String(localized: "Quién está invitado"))
                     Button { studio.join() } label: {
-                        Label(studio.phase == .joining ? "Entrando…" : "Entrar a la sala", systemImage: "record.circle")
+                        Label(studio.phase == .joining ? String(localized: "Entrando…") : String(localized: "Entrar a la sala"), systemImage: "record.circle")
                             .font(.title3.bold()).frame(maxWidth: .infinity).padding(.vertical, 8)
                     }
                     .buttonStyle(.borderedProminent).controlSize(.large)
@@ -421,10 +421,10 @@ struct StudioView: View {
                         Label("Tu micrófono ya está bien nivelado.", systemImage: "checkmark.circle.fill")
                             .font(.caption).foregroundStyle(Theme.good)
                     } else {
-                        Text(db > 0 ? "Tu voz llega baja: te sugerimos subirla \(db) dB." : "Tu voz llega muy fuerte: te sugerimos bajarla \(-db) dB.")
+                        Text(db > 0 ? String(localized: "Tu voz llega baja: te sugerimos subirla \(db) dB.") : String(localized: "Tu voz llega muy fuerte: te sugerimos bajarla \(-db) dB."))
                             .font(.caption)
                         HStack {
-                            Button(studio.micGainDb == db ? "Aplicado" : "Aplicar") { studio.applyMicGain() }
+                            Button(studio.micGainDb == db ? String(localized: "Aplicado") : String(localized: "Aplicar")) { studio.applyMicGain() }
                                 .buttonStyle(.borderedProminent).controlSize(.small)
                                 .disabled(studio.micGainDb == db)
                             Button("Repetir") { studio.runMicCheck() }.controlSize(.small)
@@ -503,22 +503,22 @@ struct StudioView: View {
                     recordControls
                     Spacer().frame(width: 10)
                     RoundButton(on: studio.micOn, onSymbol: "mic.fill", offSymbol: "mic.slash.fill", big: true) { studio.toggleMic() }
-                        .help(studio.micOn ? "Silenciar micrófono" : "Activar micrófono")
+                        .help(studio.micOn ? String(localized: "Silenciar micrófono") : String(localized: "Activar micrófono"))
                     Button { studio.gateOn.toggle() } label: {
                         VStack(spacing: 2) {
                             Image(systemName: studio.gateOn ? "waveform.badge.minus" : "waveform")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text(studio.gateOn ? "Auto-silencio" : "Sin auto-sil.").font(.system(size: 9, weight: .medium))
+                            Text(studio.gateOn ? "Auto-silencio" : String(localized: "Sin auto-sil.")).font(.system(size: 9, weight: .medium))
                         }
                         .frame(width: 64, height: 52)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 1, opacity: studio.gateOn ? 0.16 : 0.06)))
                         .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
-                    .help(studio.gateOn ? "Cuando no hablas, la sala no oye tus ruidos (teclas, perro). Tu grabación no se toca. Toca para apagar."
-                                        : "Apagado: la sala te oye siempre. Toca para encender.")
+                    .help(studio.gateOn ? String(localized: "Cuando no hablas, la sala no oye tus ruidos (teclas, perro). Tu grabación no se toca. Toca para apagar.")
+                                        : String(localized: "Apagado: la sala te oye siempre. Toca para encender."))
                     RoundButton(on: studio.camOn, onSymbol: "video.fill", offSymbol: "video.slash.fill", big: true) { studio.toggleCam() }
-                        .help(studio.camOn ? "Apagar cámara" : "Encender cámara")
+                        .help(studio.camOn ? String(localized: "Apagar cámara") : String(localized: "Encender cámara"))
                     Menu {
                         if studio.screenOn {
                             Button("Dejar de compartir") { studio.stopScreen() }
@@ -535,7 +535,7 @@ struct StudioView: View {
                     .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                     .help("Compartir pantalla")
                     RoundButton(on: !studio.myHand, onSymbol: "hand.raised", offSymbol: "hand.raised.fill", big: true) { studio.toggleHand() }
-                        .help(studio.myHand ? "Bajar la mano" : "Levantar la mano")
+                        .help(studio.myHand ? String(localized: "Bajar la mano") : String(localized: "Levantar la mano"))
                     Button { close() } label: {
                         Label("Salir", systemImage: "phone.down.fill").font(.headline).padding(.horizontal, 10).padding(.vertical, 6)
                     }
@@ -601,19 +601,19 @@ struct StudioView: View {
             }
         } else if !studio.sessionEnded || studio.practice {
             Button { studio.toggleReady() } label: {
-                Label(studio.ownReady ? "Preparado" : "Prepararme", systemImage: studio.ownReady ? "checkmark.circle.fill" : "circle")
+                Label(studio.ownReady ? String(localized: "Preparado") : String(localized: "Prepararme"), systemImage: studio.ownReady ? "checkmark.circle.fill" : "circle")
                     .font(.headline).padding(.horizontal, 8).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent).tint(studio.ownReady ? Theme.good : .gray).controlSize(.large)
             .disabled(studio.countdown != nil)
-            .help(studio.directorPresent ? "El director empieza la grabación cuando todos los conductores estén preparados"
-                                         : "Cuando todos estén preparados empieza la cuenta regresiva")
+            .help(studio.directorPresent ? String(localized: "El director empieza la grabación cuando todos los conductores estén preparados")
+                                         : String(localized: "Cuando todos estén preparados empieza la cuenta regresiva"))
         }
     }
 
     @ViewBuilder private var countdownOverlay: some View {
         if let c = studio.countdown {
-            Text(c > 0 ? "\(c)" : "¡Grabando!")
+            Text(c > 0 ? "\(c)" : String(localized: "¡Grabando!"))
                 .font(.system(size: c > 0 ? 120 : 56, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(40)
@@ -668,7 +668,7 @@ struct StudioView: View {
         Card {
             Label("Grabación", systemImage: "record.circle").font(.headline)
             Text("Tu pista: \(studio.recQuality.title)").font(.caption).foregroundStyle(Theme.secondary)
-            Text(studio.headphones ? "Con audífonos: se graba tu micrófono directo." : "Con parlantes: se graba tu voz sin eco.")
+            Text(studio.headphones ? String(localized: "Con audífonos: se graba tu micrófono directo.") : String(localized: "Con parlantes: se graba tu voz sin eco."))
                 .font(.caption).foregroundStyle(studio.headphones ? Theme.good : .orange)
             if let u = studio.myUpload {
                 let mb = Double(u.bytes) / 1_048_576
@@ -693,7 +693,7 @@ struct StudioView: View {
             }
             if studio.canExport && role.isAdmin {
                 Button { studio.exportToPost() } label: {
-                    Label(studio.exporting ? "Enviando…" : "Enviar a post ahora", systemImage: "paperplane.fill").frame(maxWidth: .infinity)
+                    Label(studio.exporting ? String(localized: "Enviando…") : String(localized: "Enviar a post ahora"), systemImage: "paperplane.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).disabled(studio.exporting)
             } else if studio.sessionEnded && studio.directorPresent {
@@ -770,7 +770,7 @@ struct StudioView: View {
                             .id(m.id)
                         }
                         if msgs.isEmpty {
-                            Text(chatHosts ? "Solo lo ven los conductores y el director." : "Todos en la sala lo ven.")
+                            Text(chatHosts ? String(localized: "Solo lo ven los conductores y el director.") : String(localized: "Todos en la sala lo ven."))
                                 .font(.caption).foregroundStyle(Theme.secondary)
                         }
                     }

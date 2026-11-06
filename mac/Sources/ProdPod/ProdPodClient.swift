@@ -43,7 +43,7 @@ actor ProdPodClient {
         var invite_url: String?
         var recording_quality: String?
         var roleTitle: String {
-            ["host": "Conductor", "co-host": "Conductor", "guest": "Invitado", "director": String(localized: "Director")][role] ?? role
+            ["host": String(localized: "Conductor"), "co-host": String(localized: "Conductor"), "guest": String(localized: "Invitado"), "director": String(localized: "Director")][role] ?? role
         }
     }
 
@@ -222,7 +222,7 @@ actor ProdPodClient {
         try JSONDecoder().decode([Person].self, from: await send("GET", "/api/sessions/\(id)/participants"))
     }
 
-    func invite(_ id: Int, name: String = "Invitado") async throws -> Invite {
+    func invite(_ id: Int, name: String = String(localized: "Invitado")) async throws -> Invite {
         try JSONDecoder().decode(Invite.self, from: await send("POST", "/api/sessions/\(id)/invite", json: ["display_name": name]))
     }
 }

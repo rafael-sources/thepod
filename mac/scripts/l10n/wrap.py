@@ -21,9 +21,11 @@ def wrappable(s, before):
     if re.search(r'(applyingFilter|CIFilter\(name|send\(|method:|fontName|NSFont\(name|Font\.custom)\s*[:(]?\s*$', before): return False
     if re.search(r'\.(caf|mp4|mp3|wav|m4a|png|jpg|json|txt|srt|vtt|pdf|cube|mov)\b', s): return False
     if '/' in plain and ' ' not in plain: return False
-    k = key_of(s)
-    if k in keys or k.replace('%@', '%lld') in keys: return False
     b = before.rstrip()
+    # Donde SwiftUI ya toma el literal como clave localizable, no hace falta envolver
+    if re.search(r'(?<![\w.])(Text|Button|Label|Toggle|Section|Picker|TextField|SecureField|Menu|NavigationLink|Link|Stepper|DatePicker|ProgressView|GroupBox|DisclosureGroup|LabeledContent|ContentUnavailableView|Tab|Alert|LocalizedStringKey|CommandMenu|CommandGroup)\(\s*$', b): return False
+    if re.search(r'\.(help|navigationTitle|alert|confirmationDialog|badge|accessibilityLabel|accessibilityHint|tabItem|keyboardShortcut)\(\s*$', b): return False
+    if re.search(r'(?<![\w.])(Text|Button|Label|Toggle|Section|Picker|Menu|TextField)\([^()]*,\s*$', b): return False   # segundo argumento LocalizedStringKey (p. ej. TextField("x", text:))
     if b.endswith('String(localized:') or b.endswith('localized:'): return False
     if skip_ctx.search(b[-48:]): return False
     if re.search(r'\b(case|switch)\b[^{:]*$', b) and not re.search(r'\b(return|=|\+|\?|\(|,)\s*$', b): return False

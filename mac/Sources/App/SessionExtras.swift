@@ -125,7 +125,7 @@ extension ProjectSession {
         default: break
         }
         switch chars {
-        case "m": _ = markMoment(); flashNote("Momento marcado · lo ves en Reels"); return true
+        case "m": _ = markMoment(); flashNote(String(localized: "Momento marcado · lo ves en Reels")); return true
         case "i": markIn(); return true
         case "o": markOut(); return true
         case "k": togglePlay(); return true

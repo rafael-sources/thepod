@@ -68,7 +68,7 @@ struct PublishReelSheet: View {
                     Button("Listo") { dismiss() }.keyboardShortcut(.defaultAction)
                 } else {
                     Button("Cancelar") { if working { session.cancelJob() }; dismiss() }
-                    Button(later ? "Programar" : "Publicar") { send() }
+                    Button(later ? String(localized: "Programar") : String(localized: "Publicar")) { send() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
                         .disabled(chosen.isEmpty || session.isBusy || slug == nil)
@@ -154,20 +154,20 @@ struct PublishReelSheet: View {
 
     private var progress: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(session.job?.detail.isEmpty == false ? session.job!.detail : (session.job?.title ?? "Preparando…"))
+            Text(session.job?.detail.isEmpty == false ? session.job!.detail : (session.job?.title ?? String(localized: "Preparando…")))
             if let f = session.job?.fraction { ProgressView(value: f) } else { ProgressView().controlSize(.small) }
         }
     }
 
     private func result(_ posts: [PrePodClient.PubPost]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(later ? "Quedó programado" : "Enviado", systemImage: "checkmark.seal.fill")
+            Label(later ? String(localized: "Quedó programado") : String(localized: "Enviado"), systemImage: "checkmark.seal.fill")
                 .foregroundStyle(Theme.good).font(.headline)
             ForEach(posts) { p in
                 HStack {
                     Text(nets.first { $0.id == p.platform }?.name ?? p.platform).bold()
-                    Text(later ? "para el \(when.formatted(date: .abbreviated, time: .shortened))"
-                         : p.platform == "tiktok" ? "llegará a tu bandeja de TikTok en unos minutos" : "en cola, sale en uno o dos minutos")
+                    Text(later ? String(localized: "para el \(when.formatted(date: .abbreviated, time: .shortened))")
+                         : p.platform == "tiktok" ? String(localized: "llegará a tu bandeja de TikTok en unos minutos") : String(localized: "en cola, sale en uno o dos minutos"))
                         .foregroundStyle(Theme.secondary)
                 }
             }

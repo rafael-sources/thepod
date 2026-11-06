@@ -112,7 +112,7 @@ struct VideoInspector: View {
                         staticValue: Binding(get: { session.project.overlays[i].x }, set: { session.project.overlays[i].x = $0 }))
             KeyParamRow(session: session, index: i, param: LayerAnimation.y, label: String(localized: "Posición Y"), range: -0.5...1.5, format: { String(format: "%.2f", $0) },
                         staticValue: Binding(get: { session.project.overlays[i].y }, set: { session.project.overlays[i].y = $0 }))
-            KeyParamRow(session: session, index: i, param: LayerAnimation.scale, label: "Tamaño", range: 0.2...4, format: { String(format: "%.0f %%", $0 * 100) },
+            KeyParamRow(session: session, index: i, param: LayerAnimation.scale, label: String(localized: "Tamaño"), range: 0.2...4, format: { String(format: "%.0f %%", $0 * 100) },
                         staticValue: Binding(get: { session.project.overlays[i].scale }, set: { session.project.overlays[i].scale = $0 }))
             KeyParamRow(session: session, index: i, param: LayerAnimation.rotation, label: String(localized: "Giro"), range: -180...180, format: { String(format: "%.0f°", $0) }, staticValue: nil, fixed: 0)
             KeyParamRow(session: session, index: i, param: LayerAnimation.opacity, label: String(localized: "Opacidad"), range: 0...1, format: { String(format: "%.0f %%", $0 * 100) }, staticValue: nil, fixed: 1)
@@ -148,7 +148,7 @@ struct VideoInspector: View {
         let mine = TitlePresets.all()
         return HStack {
             Menu {
-                Button(slug != nil ? "Guardar en el podcast como plantilla…" : "Guardar en esta Mac como plantilla…") { askTemplateName = true }
+                Button(slug != nil ? String(localized: "Guardar en el podcast como plantilla…") : String(localized: "Guardar en esta Mac como plantilla…")) { askTemplateName = true }
                 if !ofPodcast.isEmpty {
                     Divider(); Text("Del podcast")
                     ForEach(ofPodcast) { t in Button(t.name) { t.apply(to: &session.project.overlays[i]) } }
@@ -177,8 +177,8 @@ struct VideoInspector: View {
             }
             Button("Cancelar", role: .cancel) { templateName = "" }
         } message: { Text(slug != nil
-                          ? "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en el podcast (no el texto ni el momento): sirve en cualquier episodio y en cualquier Mac con tu cuenta."
-                          : "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)") }
+                          ? String(localized: "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en el podcast (no el texto ni el momento): sirve en cualquier episodio y en cualquier Mac con tu cuenta.")
+                          : String(localized: "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)")) }
     }
 
     /// Entrada o salida de una capa: tipo y duración.
@@ -429,7 +429,7 @@ struct KeyParamRow: View {
                 Image(systemName: hasKeyHere ? "diamond.fill" : "diamond").font(.caption).foregroundStyle(animated ? Theme.accent : Theme.secondary)
             }
             .buttonStyle(.plain).frame(width: 18)
-            .help(hasKeyHere ? "Quitar el keyframe de este segundo" : "Poner un keyframe aquí con el valor actual")
+            .help(hasKeyHere ? String(localized: "Quitar el keyframe de este segundo") : String(localized: "Poner un keyframe aquí con el valor actual"))
             Text(label).font(.caption).frame(width: 72, alignment: .leading)
             Slider(value: Binding(get: { current }, set: { v in
                 if animated {
@@ -481,7 +481,7 @@ struct VideoTracks: View {
                     if case .overlay(let id) = session.selectedTrack, let i = session.project.overlays.firstIndex(where: { $0.id == id }),
                        let a = session.project.overlays[i].animation, !a.isEmpty {
                         ForEach(LayerAnimation.params.filter { a.has($0) }, id: \.self) { p in
-                            track("  ◆ \(VideoTracks.paramName(p))", color: Theme.accent, height: 44, sub: "\(a.tracks[p]?.count ?? 0) puntos") { w in
+                            track("  ◆ \(VideoTracks.paramName(p))", color: Theme.accent, height: 44, sub: String(localized: "\(a.tracks[p]?.count ?? 0) puntos")) { w in
                                 KeyframeStrip(session: session, overlayIndex: i, param: p, width: w, beats: beatSnap ? beats : [])
                             }
                         }
@@ -514,7 +514,7 @@ struct VideoTracks: View {
 
     static func paramName(_ p: String) -> String {
         switch p {
-        case LayerAnimation.x: return "Posición X"; case LayerAnimation.y: return "Posición Y"; case LayerAnimation.scale: return "Tamaño"
+        case LayerAnimation.x: return String(localized: "Posición X"); case LayerAnimation.y: return String(localized: "Posición Y"); case LayerAnimation.scale: return String(localized: "Tamaño")
         case LayerAnimation.rotation: return String(localized: "Giro"); case LayerAnimation.opacity: return String(localized: "Opacidad"); default: return p
         }
     }
@@ -524,7 +524,7 @@ struct VideoTracks: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            Button("+ Texto") { _ = session.addOverlay(kind: .text, text: "Título") }
+            Button("+ Texto") { _ = session.addOverlay(kind: .text, text: String(localized: "Título")) }
             Button("+ Sticker") { _ = session.addOverlay(kind: .sticker, text: "✦") }
             Button("+ Imagen…") { session.chooseOverlayImage() }
             Button("+ B-roll…") { session.chooseBRoll() }
@@ -663,7 +663,7 @@ struct VideoTracks: View {
                     .allowsHitTesting(false)
             }
             ForEach(session.project.studioVideo.cuts) { c in
-                let name = c.lane.map { session.project.laneName($0) } ?? (c.template?.title ?? "Todas")
+                let name = c.lane.map { session.project.laneName($0) } ?? (c.template?.title ?? String(localized: "Todas"))
                 clip(name + (c.template != nil && c.lane != nil ? " · \(c.template!.title)" : ""), start: c.start, dur: c.end - c.start, color: Theme.accent,
                      selected: selectedCut == c.id, w: w, dashed: true,
                      onSelect: { selectedCut = c.id; session.selectedTrack = nil },
@@ -856,7 +856,7 @@ struct MaskPanel: View {
             if session.project.lanes[laneIndex].mask != nil {
                 keyRow(String(localized: "Centro X"), LayerAnimation.x, value: m.x, range: 0...1) { v in set { $0.x = v } }
                 keyRow(String(localized: "Centro Y"), LayerAnimation.y, value: m.y, range: 0...1) { v in set { $0.y = v } }
-                keyRow("Tamaño", LayerAnimation.scale, value: 1, range: 0.3...2.5, fixed: true) { _ in }
+                keyRow(String(localized: "Tamaño"), LayerAnimation.scale, value: 1, range: 0.3...2.5, fixed: true) { _ in }
                 row(String(localized: "Ancho"), value: Binding(get: { m.w }, set: { v in set { $0.w = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 row(String(localized: "Alto"), value: Binding(get: { m.h }, set: { v in set { $0.h = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 row(String(localized: "Suavizado"), value: Binding(get: { m.feather }, set: { v in set { $0.feather = v } }), range: 0...120, fmt: { String(format: "%.0f px", $0) })
@@ -883,7 +883,7 @@ struct MaskPanel: View {
                 if hasKey, let k = (a.tracks[param] ?? []).first(where: { abs($0.t - t) < 0.04 }) { a.remove(param, id: k.id) } else { a.write(param, t: t, v: current) }
                 set { $0.animation = a.isEmpty ? nil : a }
             } label: { Image(systemName: hasKey ? "diamond.fill" : animated ? "diamond" : "diamond").foregroundStyle(hasKey || animated ? Theme.accent : Theme.secondary).font(.caption) }
-            .buttonStyle(.plain).help(hasKey ? "Quitar el keyframe de aquí" : "Poner un keyframe aquí")
+            .buttonStyle(.plain).help(hasKey ? String(localized: "Quitar el keyframe de aquí") : String(localized: "Poner un keyframe aquí"))
             Text(label).font(.caption).frame(width: 70, alignment: .leading)
             Slider(value: Binding(get: { current }, set: { v in
                 if animated || fixed { var a = anim; a.write(param, t: t, v: v); set { $0.animation = a } } else { staticSet(v) }

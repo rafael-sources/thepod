@@ -56,7 +56,7 @@ final class RoomProbe: NSObject, ObservableObject {
         Task {
             do {
                 sessions = try await ProdPodClient.shared.sessions()
-                if sessionId == nil { sessionId = sessions.first(where: { $0.title.hasPrefix("Prueba de sala") })?.id }
+                if sessionId == nil { sessionId = sessions.first(where: { $0.title.hasPrefix(String(localized: "Prueba de sala")) })?.id }
             } catch { self.error = error.localizedDescription }
         }
     }

@@ -249,7 +249,7 @@ extension ProdStudio {
             let sid = session.id
             Task { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(sid)/backup/start") }
         }
-        flash(practice ? String(localized: "Ensayo: se graba solo en tu Mac") : "Grabando")
+        flash(practice ? String(localized: "Ensayo: se graba solo en tu Mac") : String(localized: "Grabando"))
     }
 
     /// Botón Detener (solo quien creó la sala, como en la web).

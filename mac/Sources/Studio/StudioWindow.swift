@@ -82,7 +82,7 @@ struct MIDIMenu: View {
             Button("Mapa nanoKONTROL2 (por defecto)") { midi.resetToNanoKontrol() }
             Button("Borrar el mapa") { midi.clear() }
         } label: {
-            Label(midi.learning.map { "Mueve un control para «\($0.name)»" } ?? "MIDI", systemImage: midi.connected ? "pianokeys" : "pianokeys.inverse")
+            Label(midi.learning.map { String(localized: "Mueve un control para «\($0.name)»") } ?? String(localized: "MIDI"), systemImage: midi.connected ? "pianokeys" : "pianokeys.inverse")
                 .foregroundStyle(midi.learning != nil ? .orange : (midi.connected ? Theme.accent : Theme.secondary))
         }
         .menuStyle(.borderlessButton).fixedSize()
@@ -100,8 +100,8 @@ struct StudioTransport: View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Studio · \(session.project.name)").font(.headline)
-                Text(tab == .audio ? "Lo que suena aquí es lo que se exporta. Los pasos simples siguen igual."
-                     : "Lo que se ve aquí es lo que se exporta. Aspecto, Textos y Reels siguen igual.")
+                Text(tab == .audio ? String(localized: "Lo que suena aquí es lo que se exporta. Los pasos simples siguen igual.")
+                     : String(localized: "Lo que se ve aquí es lo que se exporta. Aspecto, Textos y Reels siguen igual."))
                     .font(.caption).foregroundStyle(Theme.secondary)
             }
             Picker("", selection: $tab) {
@@ -121,7 +121,7 @@ struct StudioTransport: View {
             }
             Spacer()
             Toggle(isOn: $chains.bypassAll) {
-                Label(chains.bypassAll ? "Sin procesar" : "A/B", systemImage: chains.bypassAll ? "waveform.slash" : "waveform")
+                Label(chains.bypassAll ? String(localized: "Sin procesar") : "A/B", systemImage: chains.bypassAll ? "waveform.slash" : "waveform")
             }
             .toggleStyle(.button).keyboardShortcut("b", modifiers: [.command, .shift])
             .tint(chains.bypassAll ? .orange : Theme.accent)
@@ -215,7 +215,7 @@ struct MasterBadge: View {
                 } else {
                     Text("— LUFS").font(.callout.monospacedDigit()).foregroundStyle(Theme.secondary)
                 }
-                Text(session.project.normalizeLoudness ? "→ −16 audio · −14 video al exportar" : "sin ajuste al exportar")
+                Text(session.project.normalizeLoudness ? String(localized: "→ −16 audio · −14 video al exportar") : String(localized: "sin ajuste al exportar"))
                     .font(.caption2).foregroundStyle(session.project.normalizeLoudness ? Theme.secondary : .orange)
             }
             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -295,7 +295,7 @@ struct ChannelStrip: View {
                 }
                 .padding(.horizontal, 6).frame(height: 22)
                 .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
-                .help(lane.noiseProfile == nil ? "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla" : "Resta espectral con la huella del segundo más quieto")
+                .help(lane.noiseProfile == nil ? String(localized: "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla") : String(localized: "Resta espectral con la huella del segundo más quieto"))
                 insertRow(String(localized: "EQ paramétrico"), on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : String(localized: "\(chain.bands.filter(\.enabled).count) bandas")) { openInsert(.eq) }
                 insertRow(String(localized: "Compresor"), on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
                 insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
@@ -319,7 +319,7 @@ struct ChannelStrip: View {
                         .buttonStyle(.plain)
                         .help("\(pl.vendor) · abrir la ventana del plugin")
                         .contextMenu {
-                            Button(pl.enabled ? "Apagar" : "Encender") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }) { c.plugins[i].enabled.toggle() } } }
+                            Button(pl.enabled ? String(localized: "Apagar") : String(localized: "Encender")) { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }) { c.plugins[i].enabled.toggle() } } }
                             let idx = chain.plugins.firstIndex(where: { $0.id == pl.id }) ?? 0
                             Button("Subir") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }), i > 0 { c.plugins.swapAt(i, i - 1) } } }.disabled(idx == 0)
                             Button("Bajar") { edit { c in if let i = c.plugins.firstIndex(where: { $0.id == pl.id }), i < c.plugins.count - 1 { c.plugins.swapAt(i, i + 1) } } }.disabled(idx >= chain.plugins.count - 1)
@@ -371,7 +371,7 @@ struct ChannelStrip: View {
             }
             HStack(spacing: 6) {
                 Menu {
-                    Button(podcastSlug != nil ? "Guardar en el podcast como preset…" : "Guardar en esta Mac como preset…") { askPresetName = true }
+                    Button(podcastSlug != nil ? String(localized: "Guardar en el podcast como preset…") : String(localized: "Guardar en esta Mac como preset…")) { askPresetName = true }
                     let ofPodcast = podcastSlug.map { ChainPresets.all(podcast: $0) } ?? []
                     let mine = ChainPresets.all()
                     if !ofPodcast.isEmpty {
@@ -412,8 +412,8 @@ struct ChannelStrip: View {
                 }
                 Button("Cancelar", role: .cancel) { presetName = "" }
             } message: { Text(podcastSlug != nil
-                              ? "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en el podcast: sirve para cualquier voz y episodio, en cualquier Mac con tu cuenta."
-                              : "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)") }
+                              ? String(localized: "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en el podcast: sirve para cualquier voz y episodio, en cualquier Mac con tu cuenta.")
+                              : String(localized: "Guarda el ecualizador, el compresor, el de-esser y la puerta de \(session.project.laneName(lane.id)) en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)")) }
         }
         .padding(10)
         .frame(width: 190)

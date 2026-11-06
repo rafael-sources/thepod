@@ -245,7 +245,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { error = String(localized: "Escribe el texto del teleprompter"); return }
         let eid = String(localized: "d\(Int(Date().timeIntervalSince1970 * 1000))")
-        let ttl = title.isEmpty ? "Teleprompter" : title
+        let ttl = title.isEmpty ? String(localized: "Teleprompter") : title
         send(["type": "teleprompter", "action": "show", "event_id": eid, "target": target,
               "title": ttl, "text": t, "speed": speed, "size": size, "countdown": max(0, countdown)])
         tpLastId = eid

@@ -37,7 +37,7 @@ struct CoverStep: View {
                             Button {
                                 session.findCoverCandidates()
                             } label: {
-                                Label(candidates.isEmpty ? "Buscar las mejores capturas" : "Buscar de nuevo", systemImage: "face.smiling")
+                                Label(candidates.isEmpty ? String(localized: "Buscar las mejores capturas") : String(localized: "Buscar de nuevo"), systemImage: "face.smiling")
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(session.isBusy || !hasVideo)
@@ -113,10 +113,10 @@ struct CoverStep: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Segundo \(EditEngine.clock(session.coverTimeline))").font(.callout.bold()).monospacedDigit()
                             if let c = chosen {
-                                Text(c.allSmiling ? "Todas las personas sonríen" : (c.faces == 0 ? "Elegida a mano" : "No todas sonríen"))
+                                Text(c.allSmiling ? String(localized: "Todas las personas sonríen") : (c.faces == 0 ? String(localized: "Elegida a mano") : String(localized: "No todas sonríen")))
                                     .font(.caption).foregroundStyle(c.allSmiling ? Theme.good : Theme.secondary)
                             } else if session.project.coverTime == nil {
-                                Text(session.project.reels.isEmpty ? "A un cuarto del episodio, como siempre." : "Un segundo después del primer reel, como siempre.")
+                                Text(session.project.reels.isEmpty ? String(localized: "A un cuarto del episodio, como siempre.") : String(localized: "Un segundo después del primer reel, como siempre."))
                                     .font(.caption).foregroundStyle(Theme.secondary)
                             }
                             Text("Sale con el diseño, el logo y el fondo del episodio, en 16:9. Es la imagen que pub manda a Instagram con el episodio completo.")
@@ -194,7 +194,7 @@ struct CoverCandidateCard: View {
                     .foregroundStyle(selected ? Theme.accent : .primary)
                 Spacer()
                 if candidate.faces > 0 {
-                    Text(candidate.allSmiling ? "sonríen" : "\(candidate.faces) \(candidate.faces == 1 ? "cara" : "caras")")
+                    Text(candidate.allSmiling ? String(localized: "sonríen") : "\(candidate.faces) \(candidate.faces == 1 ? "cara" : "caras")")
                         .font(.caption2).foregroundStyle(Theme.secondary)
                 } else {
                     Text("a mano").font(.caption2).foregroundStyle(Theme.secondary)
@@ -205,6 +205,6 @@ struct CoverCandidateCard: View {
         .task(id: candidate.file) {
             image = NSImage(contentsOf: ProjectStore.cacheFolder(for: project.id).appendingPathComponent(candidate.file))
         }
-        .help(selected ? "Es la portada. Doble clic para ir a ese segundo." : "Clic: usar de portada. Doble clic: ir a ese segundo.")
+        .help(selected ? String(localized: "Es la portada. Doble clic para ir a ese segundo.") : String(localized: "Clic: usar de portada. Doble clic: ir a ese segundo."))
     }
 }

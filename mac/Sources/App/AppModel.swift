@@ -57,7 +57,7 @@ final class AppModel: ObservableObject {
 
     func importItems(_ urls: [URL]) {
         guard importJob == nil, !urls.isEmpty else { return }
-        importJob = JobState(title: String(localized: "Importando tu grabación"), detail: "Preparando…", fraction: 0)
+        importJob = JobState(title: String(localized: "Importando tu grabación"), detail: String(localized: "Preparando…"), fraction: 0)
         importTask = Task {
             do {
                 // Sin la app en el plan (Gratis o Web): cada grabación nueva que se importa cuenta como un episodio
@@ -152,7 +152,7 @@ final class AppModel: ObservableObject {
                 }
                 zip = file
                 try Task.checkCancellation()
-                importJob = JobState(title: String(localized: "Importando tu grabación"), detail: "Preparando…", fraction: 0)
+                importJob = JobState(title: String(localized: "Importando tu grabación"), detail: String(localized: "Preparando…"), fraction: 0)
                 var project = try await runImport([file])
                 project.postpodSlug = web.slug
                 importJob = JobState(title: String(localized: "Importando tu grabación"), detail: String(localized: "Buscando el fondo y el logo del podcast en prePod…"), fraction: 1)
@@ -183,19 +183,19 @@ enum Step: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .overview: return "Grabación"
-        case .fix: return "Limpiar sonido"
-        case .captions: return "Subtítulos"
-        case .sensitive: return "Palabras sensibles"
+        case .overview: return String(localized: "Grabación")
+        case .fix: return String(localized: "Limpiar sonido")
+        case .captions: return String(localized: "Subtítulos")
+        case .sensitive: return String(localized: "Palabras sensibles")
         case .look: return String(localized: "Aspecto")
         case .layers: return String(localized: "Textos y stickers")
         case .cintillos: return String(localized: "Cintillos")
         case .sounds: return String(localized: "Música y efectos")
-        case .brands: return "Patrocinios y marcas"
+        case .brands: return String(localized: "Patrocinios y marcas")
         case .reels: return String(localized: "Reels")
         case .cover: return String(localized: "Portada")
         case .export: return String(localized: "Exportar video")
-        case .publish: return "Publicar"
+        case .publish: return String(localized: "Publicar")
         }
     }
     var symbol: String {
@@ -216,7 +216,12 @@ enum Step: String, CaseIterable, Identifiable {
         }
     }
     /// Bloques de la barra lateral: Preparar y Armar son de ida y vuelta; Entregar va en orden.
-    enum Group: String, CaseIterable { case prepare = "PREPARAR", build = "ARMAR", deliver = "ENTREGAR" }
+    enum Group: String, CaseIterable {
+        case prepare, build, deliver
+        var name: String {
+            switch self { case .prepare: return String(localized: "PREPARAR"); case .build: return String(localized: "ARMAR"); case .deliver: return String(localized: "ENTREGAR") }
+        }
+    }
     var group: Group {
         switch self {
         case .overview, .fix, .captions, .sensitive: return .prepare
@@ -1264,7 +1269,7 @@ final class ProjectSession: ObservableObject {
         let id = ((reel?.cintillos ?? project.cintillos).map(\.id).max() ?? 0) + 1
         var t = min(playheadTimeline, max(0, project.duration - 1))
         if let reel { t = min(max(reel.start, t), max(reel.start, reel.end - 2)) }
-        var c = DirectorCintillo(id: id, kind: kind, title: title.isEmpty ? (style == "sponsor" ? String(localized: "Nombre del sponsor") : "Título") : title,
+        var c = DirectorCintillo(id: id, kind: kind, title: title.isEmpty ? (style == "sponsor" ? String(localized: "Nombre del sponsor") : String(localized: "Título")) : title,
                                  text: text.isEmpty ? (style == "sponsor" ? String(localized: "Una frase corta sobre el sponsor") : String(localized: "Un texto corto debajo del título")) : text,
                                  start: t, duration: 7, logoFile: logoFile, style: style, tag: tag)
         if style == "clean" { c.tag = "" }

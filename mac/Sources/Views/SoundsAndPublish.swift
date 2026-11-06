@@ -43,11 +43,11 @@ struct SoundsStep: View {
                                 HStack {
                                     Button(EditEngine.clock(clip.tlStart)) { session.seek(timeline: max(0, clip.tlStart - 2)); session.player.play() }
                                         .buttonStyle(.link).monospacedDigit()
-                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? "Sonido").lineLimit(1)
+                                    Text(session.project.mediaItem(clip.mediaId).map { (($0.originalName as NSString).deletingPathExtension) } ?? String(localized: "Sonido")).lineLimit(1)
                                     Spacer()
                                     if clip.volume == 0 { Image(systemName: "speaker.slash.fill").foregroundStyle(Theme.secondary) }
                                     Text("\(Int(clip.volume * 100)) %").font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
-                                    Button(sel ? "Editando…" : "Editar") { session.selectedTrack = sel ? nil : .sound(clip.id) }
+                                    Button(sel ? String(localized: "Editando…") : String(localized: "Editar")) { session.selectedTrack = sel ? nil : .sound(clip.id) }
                                         .controlSize(.small)
                                         .help("Volumen, fades y posición en el panel bajo el video")
                                 }
@@ -153,7 +153,7 @@ struct PublishStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                StepHeader(title: "Publicar", subtitle: String(localized: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube."), step: .publish)
+                StepHeader(title: String(localized: "Publicar"), subtitle: String(localized: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube."), step: .publish)
                 if !PrePodClient.isConfigured {
                     Card {
                         Label("Conecta la app con prePod", systemImage: "person.badge.key").font(.headline)
@@ -305,7 +305,7 @@ struct PublishStep: View {
     }
 
     private func platformName(_ p: String) -> String {
-        ["spotify": String(localized: "Spotify"), "apple": String(localized: "Apple Podcasts"), "youtube": "YouTube"][p] ?? p.capitalized
+        ["spotify": String(localized: "Spotify"), "apple": String(localized: "Apple Podcasts"), "youtube": String(localized: "YouTube")][p] ?? p.capitalized
     }
     private func statusName(_ s: String) -> String {
         ["connected": "conectado", "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s
@@ -371,7 +371,7 @@ struct PrePodSettingsSection: View {
                     Label(plan, systemImage: Plan.includesApp ? "checkmark.seal" : "gift")
                         .font(.caption).foregroundStyle(Plan.includesApp ? Theme.good : Theme.accent)
                     Spacer()
-                    Button(Plan.includesApp && !Plan.isFree ? "Ver planes" : "Mejorar plan") { Links.open("/planes") }
+                    Button(Plan.includesApp && !Plan.isFree ? String(localized: "Ver planes") : String(localized: "Mejorar plan")) { Links.open("/planes") }
                         .controlSize(.small)
                 }
             }
@@ -475,7 +475,7 @@ struct VoiceSheet: View {
             HStack(spacing: 10) {
                 Text("Velocidad").frame(width: 60, alignment: .leading)
                 Slider(value: $rate, in: 0.35...0.65)
-                Text(rate < 0.45 ? "lenta" : rate > 0.55 ? "rápida" : "normal").frame(width: 50)
+                Text(rate < 0.45 ? "lenta" : rate > 0.55 ? String(localized: "rápida") : "normal").frame(width: 50)
             }
             .font(.callout)
             Text("Las voces mejoradas y premium (suenan mucho mejor) se bajan en Ajustes del Sistema → Accesibilidad → Contenido hablado → Voces del sistema.")

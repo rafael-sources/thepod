@@ -189,10 +189,10 @@ struct FixStep: View {
                             }
                             .pickerStyle(.segmented).font(.caption).frame(maxWidth: 320)
                             Text(session.project.fix.noiseLevel == 3
-                                 ? "Saca todo el ruido; la voz puede sonar un poco menos natural."
+                                 ? String(localized: "Saca todo el ruido; la voz puede sonar un poco menos natural.")
                                  : session.project.fix.noiseLevel == 1
-                                 ? "Deja un poco del ambiente para que la voz suene más natural; algo del ruido queda de fondo."
-                                 : "El punto medio: el ruido casi desaparece y la voz sigue sonando natural.")
+                                 ? String(localized: "Deja un poco del ambiente para que la voz suene más natural; algo del ruido queda de fondo.")
+                                 : String(localized: "El punto medio: el ruido casi desaparece y la voz sigue sonando natural."))
                                 .font(.caption).foregroundStyle(Theme.secondary)
                             if !VoiceIsolation.isAvailable {
                                 Text("Esta Mac no trae el aislador de voz de Apple: se usará otra limpieza, que saca menos ruido.").font(.caption).foregroundStyle(.orange)
@@ -405,7 +405,7 @@ struct SuggestionsCard: View {
                     }
                 }
                 if pending.count > 8 {
-                    Button(showAll ? "Ver menos" : "Ver las \(pending.count)") { showAll.toggle() }.buttonStyle(.link).font(.caption)
+                    Button(showAll ? String(localized: "Ver menos") : String(localized: "Ver las \(pending.count)")) { showAll.toggle() }.buttonStyle(.link).font(.caption)
                 }
             }
             HStack {
@@ -429,7 +429,7 @@ struct CaptionsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 16) {
-                StepHeader(title: "Subtítulos", subtitle: String(localized: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla."), step: .captions)
+                StepHeader(title: String(localized: "Subtítulos"), subtitle: String(localized: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla."), step: .captions)
                     HStack(spacing: 8) {
                         Button { session.saveSubtitles(asText: false) } label: { Label("Guardar subtítulos (.srt)", systemImage: "square.and.arrow.down") }
                         Button { session.saveSubtitles(asText: true) } label: { Label("Guardar transcripción (.txt)", systemImage: "doc.text") }
@@ -488,7 +488,7 @@ struct CaptionsStep: View {
             }
             HStack(spacing: 8) {
                 Button { session.syncSubtitles() } label: {
-                    Label(session.project.wordsSynced ? "Ajustar de nuevo" : "Ajustar al audio", systemImage: "waveform.badge.magnifyingglass")
+                    Label(session.project.wordsSynced ? String(localized: "Ajustar de nuevo") : String(localized: "Ajustar al audio"), systemImage: "waveform.badge.magnifyingglass")
                 }
                 .buttonStyle(.borderedProminent)
                 .help("Corre cada frase a donde suena la voz. No cambia el texto.")
@@ -544,10 +544,10 @@ struct CaptionStyleEditor: View {
                         style = s
                     } label: {
                         VStack(spacing: 6) {
-                            Text(preset.style.uppercase ? "HOLA" : "Hola")
+                            Text(preset.style.uppercase ? String(localized: "HOLA") : String(localized: "Hola"))
                                 .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
                                 .foregroundStyle(Color(hex: preset.style.textColor))
-                                + Text(preset.style.uppercase ? " MUNDO" : " mundo")
+                                + Text(preset.style.uppercase ? String(localized: " MUNDO") : String(localized: " mundo"))
                                 .font(.custom(preset.style.fontName, size: compact ? 17 : 22))
                                 .foregroundStyle(Color(hex: preset.style.highlightColor))
                             Text(preset.title).font(.caption)
@@ -561,9 +561,9 @@ struct CaptionStyleEditor: View {
             }
         }
         HStack(spacing: 14) {
-            ColorPicker("Texto", selection: colorBinding(\.textColor))
-            ColorPicker("Resaltado", selection: colorBinding(\.highlightColor))
-            ColorPicker("Borde", selection: colorBinding(\.outlineColor))
+            ColorPicker(String(localized: "Texto"), selection: colorBinding(\.textColor))
+            ColorPicker(String(localized: "Resaltado"), selection: colorBinding(\.highlightColor))
+            ColorPicker(String(localized: "Borde"), selection: colorBinding(\.outlineColor))
             Toggle("MAYÚSCULAS", isOn: $style.uppercase)
         }
         .font(.caption)
@@ -634,7 +634,7 @@ struct PhraseRow: View {
                     Image(systemName: phrase.isCut ? "arrow.uturn.backward" : "scissors")
                 }
                 .buttonStyle(.borderless)
-                .help(phrase.isCut ? "Volver a poner esta frase" : (reel != nil ? "Quitar esta frase solo de este reel" : "Quitar esta frase del video"))
+                .help(phrase.isCut ? String(localized: "Volver a poner esta frase") : (reel != nil ? String(localized: "Quitar esta frase solo de este reel") : String(localized: "Quitar esta frase del video")))
             }
         }
         .padding(8)
@@ -691,8 +691,8 @@ struct ReelsStep: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .look: return "Diseño"
-            case .text: return "Subtítulos"
+            case .look: return String(localized: "Diseño")
+            case .text: return String(localized: "Subtítulos")
             case .sound: return String(localized: "Música")
             case .broll: return "B-roll"
             case .cintillos: return String(localized: "Cintillos")
@@ -884,7 +884,7 @@ struct ReelCaptionsCard: View {
         let l = look.wrappedValue
         Card {
             HStack {
-                Text(own ? "Subtítulos de este reel" : "Subtítulos de todos los reels").font(.headline)
+                Text(own ? String(localized: "Subtítulos de este reel") : String(localized: "Subtítulos de todos los reels")).font(.headline)
                 Spacer()
                 if reel != nil {
                     Toggle("Este reel tiene el suyo", isOn: Binding(get: { own }, set: { on in
@@ -894,8 +894,8 @@ struct ReelCaptionsCard: View {
                     .toggleStyle(.switch).controlSize(.mini).font(.caption)
                 }
             }
-            Text(own ? "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con lo de todos."
-                     : "Aparte del episodio: el estilo de los subtítulos del video completo se cambia en Preparar → Subtítulos.")
+            Text(own ? String(localized: "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con lo de todos.")
+                     : String(localized: "Aparte del episodio: el estilo de los subtítulos del video completo se cambia en Preparar → Subtítulos."))
                 .font(.caption).foregroundStyle(Theme.secondary)
             if !p.isTranscribed {
                 Text("Este episodio no tiene transcripción. Hazla en Preparar → Subtítulos para que los reels lleven subtítulos.")
@@ -947,7 +947,7 @@ struct ReelLookCard: View {
         let chosen: LayoutTemplate = (onePerson && l.layout == .auto) ? .solo : l.layout
         Card {
             HStack {
-                Text(own ? "Diseño de este reel" : "Diseño de todos los reels").font(.headline)
+                Text(own ? String(localized: "Diseño de este reel") : String(localized: "Diseño de todos los reels")).font(.headline)
                 Spacer()
                 ReelTemplateMenu(look: look)
                 if reel != nil {
@@ -958,15 +958,15 @@ struct ReelLookCard: View {
                     .toggleStyle(.switch).controlSize(.mini).font(.caption)
                 }
             }
-            Text(own ? "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con el diseño de todos."
-                     : "Aparte del episodio: lo que cambies aquí no toca el video completo.")
+            Text(own ? String(localized: "Solo cambia \"\(reel?.title ?? "")\". Los demás reels siguen con el diseño de todos.")
+                     : String(localized: "Aparte del episodio: lo que cambies aquí no toca el video completo."))
                 .font(.caption).foregroundStyle(Theme.secondary)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92))], spacing: 6) {
                 ForEach(choices) { t in
                     Button { look.wrappedValue.layout = t } label: {
                         VStack(spacing: 3) {
                             Image(systemName: t.symbol).font(.title3)
-                            Text(t == .auto ? "Quien habla" : t.title).font(.caption2)
+                            Text(t == .auto ? String(localized: "Quien habla") : t.title).font(.caption2)
                         }
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .background(RoundedRectangle(cornerRadius: 8).fill(chosen == t ? Theme.panelStrong : .clear))
@@ -1011,7 +1011,7 @@ struct ReelLookCard: View {
                     }
                     .controlSize(.small)
                 }
-                Text(l.laneOrder == nil ? "Usa el orden del episodio. Marca «Propio» para cambiarlo solo en los reels." : "1 = arriba (o izquierda). En Ventanita y Protagonista, el primero va en grande.")
+                Text(l.laneOrder == nil ? String(localized: "Usa el orden del episodio. Marca «Propio» para cambiarlo solo en los reels.") : String(localized: "1 = arriba (o izquierda). En Ventanita y Protagonista, el primero va en grande."))
                     .font(.caption2).foregroundStyle(Theme.secondary)
             }
             Divider()
@@ -1086,11 +1086,11 @@ struct ReelLookCard: View {
             .frame(width: 40, height: 30)
             VStack(alignment: .leading, spacing: 1) {
                 Text(label).font(.caption)
-                Text(file != nil ? "Propio de los reels" : (fallback != nil ? "Se usa el del podcast" : "No hay; elige uno"))
+                Text(file != nil ? String(localized: "Propio de los reels") : (fallback != nil ? String(localized: "Se usa el del podcast") : String(localized: "No hay; elige uno")))
                     .font(.caption2).foregroundStyle(Theme.secondary)
             }
             Spacer()
-            Button(file == nil ? "Elegir…" : "Cambiar…") { session.chooseReelImage(kind: kind, reelId: own ? reel?.id : nil) }
+            Button(file == nil ? String(localized: "Elegir…") : String(localized: "Cambiar…")) { session.chooseReelImage(kind: kind, reelId: own ? reel?.id : nil) }
                 .controlSize(.mini)
             if file != nil {
                 Button { session.setReelImage(kind: kind, reelId: own ? reel?.id : nil, file: nil) } label: { Image(systemName: "xmark.circle") }
@@ -1117,7 +1117,7 @@ struct ReelCard: View {
                 TextField("Título", text: $reel.title).textFieldStyle(.plain).font(.headline)
                 if !reel.reason.isEmpty { Text(reel.reason).font(.caption).foregroundStyle(Theme.secondary) }
                 HStack(spacing: 6) {
-                    timeStepper(value: $reel.start, label: "Empieza")
+                    timeStepper(value: $reel.start, label: String(localized: "Empieza"))
                     Text("→").foregroundStyle(Theme.secondary)
                     timeStepper(value: $reel.end, label: String(localized: "Termina"))
                     Text("· \(EditEngine.clock(reel.length))").font(.caption).foregroundStyle(reel.length > 90 ? .orange : Theme.secondary)
@@ -1272,7 +1272,7 @@ struct LookStep: View {
                     let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
                     let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
                     Card {
-                        Text(onePerson ? "Cómo te ves" : "Cómo se ven las personas").font(.headline)
+                        Text(onePerson ? String(localized: "Cómo te ves") : String(localized: "Cómo se ven las personas")).font(.headline)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 110))], spacing: 8) {
                             ForEach(choices) { l in
                                 Button {
@@ -1356,7 +1356,7 @@ struct LookStep: View {
                     Card {
                         Text("Color").font(.headline)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
-                            ForEach([("none", "Original"), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", "B/N"), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
+                            ForEach([("none", String(localized: "Original")), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", "B/N"), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
                                 Button { session.project.colorLook = look.0 } label: {
                                     Text(look.1).font(.caption)
                                         .frame(maxWidth: .infinity, minHeight: 32)
@@ -1393,8 +1393,8 @@ struct LookStep: View {
                         }
                         Toggle("Nombres de las personas", isOn: $session.project.showNames)
                         HStack(spacing: 8) {
-                            Button(session.project.backgroundFile == nil ? "Elegir imagen de fondo…" : "Cambiar fondo…") { session.chooseBranding(kind: "background") }
-                            Button(session.project.logoFile == nil ? "Elegir logo…" : "Cambiar logo…") { session.chooseBranding(kind: "logo") }
+                            Button(session.project.backgroundFile == nil ? String(localized: "Elegir imagen de fondo…") : String(localized: "Cambiar fondo…")) { session.chooseBranding(kind: "background") }
+                            Button(session.project.logoFile == nil ? String(localized: "Elegir logo…") : String(localized: "Cambiar logo…")) { session.chooseBranding(kind: "logo") }
                             if session.project.backgroundFile == nil || session.project.logoFile == nil {
                                 Button("Buscar en prePod") { session.fetchBranding() }
                             }
@@ -1439,7 +1439,7 @@ struct LookStep: View {
                 HStack {
                     Text(title).font(.callout.bold())
                     Spacer()
-                    Button(bumper == nil ? "Elegir imagen…" : "Cambiar imagen…") { session.chooseBumperImage(isIntro: isIntro) }.controlSize(.small)
+                    Button(bumper == nil ? String(localized: "Elegir imagen…") : String(localized: "Cambiar imagen…")) { session.chooseBumperImage(isIntro: isIntro) }.controlSize(.small)
                     if bumper != nil {
                         Button(role: .destructive) { session.setBumper(isIntro: isIntro, nil) } label: { Image(systemName: "trash") }.controlSize(.small).help("Quitar")
                     }
@@ -1502,10 +1502,10 @@ struct LookStep: View {
                         if let f = vb.imageFile, let img = NSImage(contentsOf: ProjectStore.url(f, in: session.project.id)) {
                             Image(nsImage: img).resizable().aspectRatio(contentMode: .fill).frame(width: 48, height: 28).clipShape(RoundedRectangle(cornerRadius: 4))
                         }
-                        Button(vb.imageFile == nil ? "Elegir imagen…" : "Cambiar…") { session.chooseVirtualBackgroundImage(laneId: lane.id) }.controlSize(.small)
+                        Button(vb.imageFile == nil ? String(localized: "Elegir imagen…") : String(localized: "Cambiar…")) { session.chooseVirtualBackgroundImage(laneId: lane.id) }.controlSize(.small)
                         if vb.imageFile == nil { Text("Sin imagen se usa el color").font(.caption2).foregroundStyle(Theme.secondary) }
                     case .podcast:
-                        Text(session.project.backgroundFile == nil ? "Este proyecto no tiene fondo del podcast; se verá el color." : "El mismo fondo del podcast, detrás de la persona.")
+                        Text(session.project.backgroundFile == nil ? String(localized: "Este proyecto no tiene fondo del podcast; se verá el color.") : String(localized: "El mismo fondo del podcast, detrás de la persona."))
                             .font(.caption2).foregroundStyle(Theme.secondary)
                     }
                 }
@@ -1590,8 +1590,8 @@ struct ExportStep: View {
                             }
                             .pickerStyle(.segmented)
                             Text(youtube4K
-                                 ? "4K (3840×2160). Aunque hayas grabado en 1080p, YouTube lo muestra más nítido. El archivo pesa unas 4 veces más y tarda más en exportar y subir."
-                                 : "1080p: lo normal para YouTube. Elige 4K si grabaste en 4K o quieres la mejor nitidez en YouTube.")
+                                 ? String(localized: "4K (3840×2160). Aunque hayas grabado en 1080p, YouTube lo muestra más nítido. El archivo pesa unas 4 veces más y tarda más en exportar y subir.")
+                                 : String(localized: "1080p: lo normal para YouTube. Elige 4K si grabaste en 4K o quieres la mejor nitidez en YouTube."))
                                 .font(.caption).foregroundStyle(Theme.secondary)
                         }
                     }
@@ -1641,7 +1641,7 @@ struct ExportStep: View {
                     }
                     HStack {
                         Button { if session.isBusy { session.enqueue(.stems) } else { session.exportStems() } } label: {
-                            Label(session.isBusy ? "Poner en cola: pistas (WAV)" : "Pistas por separado (WAV)", systemImage: "square.stack.3d.down.right")
+                            Label(session.isBusy ? String(localized: "Poner en cola: pistas (WAV)") : String(localized: "Pistas por separado (WAV)"), systemImage: "square.stack.3d.down.right")
                         }.controlSize(.small)
                         Text("Una por persona (con sus cortes, volumen y pitidos) y la música aparte, para terminar en Logic, Audition o Reaper.")
                             .font(.caption2).foregroundStyle(Theme.secondary)
@@ -1754,8 +1754,8 @@ struct ReelTextCard: View {
                 .controlSize(.small)
                 .disabled(session.isBusy)
                 Text(reel.words != nil
-                     ? "Doble clic para corregir una palabra (solo en este reel). Las tijeras quitan la frase solo de este reel."
-                     : "Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel.")
+                     ? String(localized: "Doble clic para corregir una palabra (solo en este reel). Las tijeras quitan la frase solo de este reel.")
+                     : String(localized: "Doble clic para corregir una palabra (vale para el episodio y el reel). Las tijeras quitan la frase solo de este reel."))
                     .font(.caption).foregroundStyle(Theme.secondary)
                 ForEach(session.phrases(reel: reel)) { ph in
                     PhraseRow(session: session, phrase: ph, editing: $editing, draft: $draft, reel: reel)
@@ -1777,8 +1777,8 @@ struct ReelTextCard: View {
             Button("Cancelar", role: .cancel) {}
         } message: {
             Text(reel.words != nil
-                 ? "Se escribe otra vez el texto de este reel y se pierden las correcciones que le hiciste. El episodio no cambia."
-                 : "Este reel tendrá su propio texto, escrito de nuevo y ajustado a la voz. El episodio no cambia.")
+                 ? String(localized: "Se escribe otra vez el texto de este reel y se pierden las correcciones que le hiciste. El episodio no cambia.")
+                 : String(localized: "Este reel tendrá su propio texto, escrito de nuevo y ajustado a la voz. El episodio no cambia."))
         }
     }
 }
@@ -1803,7 +1803,7 @@ struct ReelSoundCard: View {
             Text("Sonido de este reel").font(.headline)
             HStack(spacing: 8) {
                 Image(systemName: cleaned ? "checkmark.circle.fill" : "circle").foregroundStyle(cleaned ? Theme.good : Theme.secondary)
-                Text(cleaned ? "Sonido de estudio aplicado (vale para el episodio y todos los reels)." : "El sonido todavía no está limpio.")
+                Text(cleaned ? String(localized: "Sonido de estudio aplicado (vale para el episodio y todos los reels).") : String(localized: "El sonido todavía no está limpio."))
                     .font(.caption)
                 Spacer()
                 if !cleaned {
@@ -1888,8 +1888,8 @@ struct ReelCintilloCard: View {
             }
             .controlSize(.small)
             if reel.cintillos.isEmpty {
-                Text(inherited > 0 ? "El reel ya muestra \(inherited) del episodio que caen en su tramo. Los que agregues aquí salen solo en este reel."
-                                   : "Los que agregues aquí salen solo en este reel, donde está el video.")
+                Text(inherited > 0 ? String(localized: "El reel ya muestra \(inherited) del episodio que caen en su tramo. Los que agregues aquí salen solo en este reel.")
+                                   : String(localized: "Los que agregues aquí salen solo en este reel, donde está el video."))
                     .font(.caption).foregroundStyle(Theme.secondary)
             }
             ForEach(reel.cintillos.sorted { $0.start < $1.start }) { c in
@@ -2061,12 +2061,12 @@ struct VoicesMatchRow: View {
                             Text(String(format: "%@%.1f dB", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption.monospacedDigit().bold())
                                 .foregroundStyle(abs(lane.matchGain) < 0.05 ? Theme.secondary : Theme.accent).frame(width: 64, alignment: .trailing)
                         } else {
-                            Text(measuring ? "midiendo…" : "sin medir").font(.caption).foregroundStyle(Theme.secondary)
+                            Text(measuring ? String(localized: "midiendo…") : String(localized: "sin medir")).font(.caption).foregroundStyle(Theme.secondary)
                         }
                     }
                 }
                 HStack {
-                    Button(measuring ? "Midiendo…" : "Medir de nuevo") { measure() }.controlSize(.small).disabled(measuring)
+                    Button(measuring ? String(localized: "Midiendo…") : String(localized: "Medir de nuevo")) { measure() }.controlSize(.small).disabled(measuring)
                     Text("Vuelve a medir si cambias «Sonido de estudio» o las grabaciones.").font(.caption2).foregroundStyle(Theme.secondary)
                 }
             }
@@ -2124,13 +2124,13 @@ struct NoiseProfileRow: View {
                             if let at = lane.noiseProfileAt {
                                 Text("huella en \(EditEngine.clock(at))").font(.caption2).foregroundStyle(Theme.secondary)
                             } else {
-                                Text(working ? "buscando la huella…" : "sin huella: no hay un segundo quieto").font(.caption2).foregroundStyle(working ? Theme.secondary : .orange)
+                                Text(working ? String(localized: "buscando la huella…") : String(localized: "sin huella: no hay un segundo quieto")).font(.caption2).foregroundStyle(working ? Theme.secondary : .orange)
                             }
                         }
                     }
                 }
                 HStack {
-                    Button(working ? "Buscando…" : "Tomar la huella de nuevo") { capture() }.controlSize(.small).disabled(working)
+                    Button(working ? String(localized: "Buscando…") : String(localized: "Tomar la huella de nuevo")) { capture() }.controlSize(.small).disabled(working)
                     Text("Reproduce y compara con A/B en Studio; si la voz suena «acuosa», baja a Suave.").font(.caption2).foregroundStyle(Theme.secondary)
                 }
             }

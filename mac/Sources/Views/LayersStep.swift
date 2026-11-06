@@ -15,9 +15,9 @@ struct LayersStep: View {
                     Card {
                         Text("Agregar").font(.headline)
                         HStack(spacing: 10) {
-                            addButton("Texto", "textformat") { _ = session.addOverlay(kind: .text, text: String(localized: "Escribe aquí")) }
-                            addButton("Imagen", "photo") { session.chooseOverlayImage() }
-                            addButton("Sticker", "face.smiling") { _ = session.addOverlay(kind: .sticker, text: "🔥") }
+                            addButton(String(localized: "Texto"), "textformat") { _ = session.addOverlay(kind: .text, text: String(localized: "Escribe aquí")) }
+                            addButton(String(localized: "Imagen"), "photo") { session.chooseOverlayImage() }
+                            addButton(String(localized: "Sticker"), "face.smiling") { _ = session.addOverlay(kind: .sticker, text: "🔥") }
                         }
                         Button {
                             let id = session.addOverlay(kind: .text, text: session.project.name)
@@ -30,7 +30,7 @@ struct LayersStep: View {
                         .controlSize(.small)
                     }
                     Card {
-                        Text(session.project.overlays.isEmpty ? "Todavía no hay capas" : "En este episodio").font(.headline)
+                        Text(session.project.overlays.isEmpty ? String(localized: "Todavía no hay capas") : String(localized: "En este episodio")).font(.headline)
                         if session.project.overlays.isEmpty {
                             Text("Cada capa aparece unos segundos y se va sola. Al tocarla se edita debajo del video: texto, estilo, color, posición, tamaño y cuánto dura.")
                                 .font(.caption).foregroundStyle(Theme.secondary)
@@ -140,7 +140,7 @@ struct OverlayEditor: View {
     private var editor: some View {
         let ov = o.wrappedValue
         HStack {
-            Label(ov.kind == .text ? "Texto" : ov.kind == .image ? "Imagen" : "Sticker",
+            Label(ov.kind == .text ? String(localized: "Texto") : ov.kind == .image ? String(localized: "Imagen") : String(localized: "Sticker"),
                   systemImage: ov.kind == .text ? "textformat" : ov.kind == .image ? "photo" : "face.smiling").font(.headline)
             Spacer()
             Button { session.duplicateOverlay(ov.id) } label: { Image(systemName: "plus.square.on.square") }
@@ -154,7 +154,7 @@ struct OverlayEditor: View {
                 Label("Ajustado en Studio: la posición, el tamaño, el giro y la opacidad siguen keyframes.", systemImage: "sparkles")
                     .font(.caption).foregroundStyle(Theme.accent)
                 Spacer()
-                OpenStudioButton(label: "Abrir", tab: .video).controlSize(.small)
+                OpenStudioButton(label: String(localized: "Abrir"), tab: .video).controlSize(.small)
                 Button("Volver al simple") { o.wrappedValue.animation = nil }.controlSize(.small)
                     .help("Quita los keyframes; la capa vuelve a la posición y el tamaño de aquí")
             }
@@ -173,7 +173,7 @@ struct OverlayEditor: View {
             }
             .font(.callout)
             HStack(spacing: 8) {
-                Text(ov.style == .label ? "Fondo" : "Color").frame(width: 72, alignment: .leading)
+                Text(ov.style == .label ? String(localized: "Fondo") : String(localized: "Color")).frame(width: 72, alignment: .leading)
                 ForEach(Self.colors, id: \.self) { c in
                     Button { o.wrappedValue.color = c } label: {
                         Circle().fill(Color(hex: c)).frame(width: 18, height: 18)

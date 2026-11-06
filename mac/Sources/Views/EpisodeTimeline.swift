@@ -40,7 +40,7 @@ struct EpisodeTimeline: View {
                 .buttonStyle(.plain)
                 if !collapsed {
                     legend
-                    Text(p.normalizeLoudness ? "Volumen final: −16 LUFS el audio · −14 el video" : "Volumen final: sin ajuste")
+                    Text(p.normalizeLoudness ? String(localized: "Volumen final: −16 LUFS el audio · −14 el video") : String(localized: "Volumen final: sin ajuste"))
                         .font(.caption2).foregroundStyle(p.normalizeLoudness ? Theme.secondary : .orange)
                         .help("Lo que piden Spotify y YouTube. Se mide y se corrige al exportar; se apaga en Exportar.")
                     Spacer()
@@ -111,7 +111,7 @@ struct EpisodeTimeline: View {
                         Text("Efectos").font(.caption2).foregroundStyle(Theme.secondary)
                             .frame(width: labelWidth - 8, height: fxH, alignment: .leading)
                         if !p.overlays.isEmpty || !p.brolls.isEmpty {
-                            Text(p.brolls.isEmpty ? "Textos" : "Textos · b-roll").font(.caption2).foregroundStyle(Theme.secondary)
+                            Text(p.brolls.isEmpty ? String(localized: "Textos") : String(localized: "Textos · b-roll")).font(.caption2).foregroundStyle(Theme.secondary)
                                 .frame(width: labelWidth - 8, height: ovH, alignment: .leading)
                         }
                     }
@@ -209,9 +209,9 @@ struct EpisodeTimeline: View {
         HStack(spacing: 12) {
             legendItem(Color.red.opacity(0.55), String(localized: "Se corta"))
             legendItem(Theme.accent, String(localized: "Reel"))
-            legendItem(Color.purple.opacity(0.8), "Sponsor")
+            legendItem(Color.purple.opacity(0.8), String(localized: "Sponsor"))
             legendItem(Color.white.opacity(0.8), String(localized: "Efecto"))
-            legendItem(Color.yellow.opacity(0.75), "Texto")
+            legendItem(Color.yellow.opacity(0.75), String(localized: "Texto"))
             HStack(spacing: 4) { Rectangle().fill(Theme.accent).frame(width: 10, height: 1.5); Text("Volumen") }.fixedSize()
         }
         .font(.caption2)

@@ -370,7 +370,7 @@ enum AudioAnalysis {
         else { return nil }
         // En el resumen final: "I:         -16.3 LUFS"
         guard let r = out.range(of: #"I:\s+(-?[0-9.]+) LUFS"#, options: [.regularExpression, .backwards]) else { return nil }
-        let num = out[r].replacingOccurrences(of: "I:", with: "").replacingOccurrences(of: "LUFS", with: "").trimmingCharacters(in: .whitespaces)
+        let num = out[r].replacingOccurrences(of: "I:", with: "").replacingOccurrences(of: String(localized: "LUFS"), with: "").trimmingCharacters(in: .whitespaces)
         return Double(num)
     }
 

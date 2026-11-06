@@ -10,7 +10,7 @@ enum EpisodeStatus: String, CaseIterable, Identifiable, Codable {
         case .idea: return String(localized: "Idea")
         case .planning: return String(localized: "Planificando")
         case .scripted: return String(localized: "Con guion")
-        case .recorded: return "Grabado"
+        case .recorded: return String(localized: "Grabado")
         case .published: return String(localized: "Publicado")
         case .archived: return String(localized: "Archivado")
         }
@@ -87,10 +87,10 @@ enum BlockKind: String, CaseIterable, Identifiable {
         case .intro: return String(localized: "Intro")
         case .segment: return String(localized: "Segmento")
         case .interview: return String(localized: "Entrevista")
-        case .sponsor: return "Sponsor"
-        case .break: return "Pausa"
+        case .sponsor: return String(localized: "Sponsor")
+        case .break: return String(localized: "Pausa")
         case .outro: return String(localized: "Cierre")
-        case .custom: return "Otro"
+        case .custom: return String(localized: "Otro")
         }
     }
 }
@@ -116,8 +116,8 @@ struct PreGuest: Decodable, Identifiable, Hashable {
     var socialInstagram: String?
     var socialTwitter: String?
 
-    var roleTitle: String { ["host": "Conductor", "co-host": "Co-conductor", "guest": "Invitado"][role] ?? role }
-    var rsvpTitle: String { ["pending": "Sin responder", "yes": "Confirmado", "no": "No viene", "maybe": "Tal vez"][rsvpStatus] ?? rsvpStatus }
+    var roleTitle: String { ["host": String(localized: "Conductor"), "co-host": "Co-conductor", "guest": String(localized: "Invitado")][role] ?? role }
+    var rsvpTitle: String { ["pending": String(localized: "Sin responder"), "yes": String(localized: "Confirmado"), "no": String(localized: "No viene"), "maybe": String(localized: "Tal vez")][rsvpStatus] ?? rsvpStatus }
 }
 
 extension PrePodClient {

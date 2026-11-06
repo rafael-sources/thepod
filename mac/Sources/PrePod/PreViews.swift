@@ -532,7 +532,7 @@ struct EpisodeCardView: View {
         .animation(.easeOut(duration: 0.12), value: hover)
         .onHover { hover = $0 }
         .contentShape(Rectangle())
-        .help(episode.isLate ? "La fecha de grabación ya pasó" : "Abrir")
+        .help(episode.isLate ? String(localized: "La fecha de grabación ya pasó") : String(localized: "Abrir"))
     }
 }
 
@@ -570,8 +570,8 @@ struct NextUpCard: View {
             Spacer()
             HStack(spacing: 10) {
                 check(String(localized: "Guion"), sections.map { $0 == 0 ? String(localized: "vacío") : plural($0, String(localized: "sección"), "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
-                check("Rundown", blocks.map { $0 == 0 ? String(localized: "vacío") : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
-                check("Invitados", guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
+                check(String(localized: "Rundown"), blocks.map { $0 == 0 ? String(localized: "vacío") : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
+                check(String(localized: "Invitados"), guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
             }
             Button { model.open = episode } label: {
                 Label("Abrir", systemImage: "arrow.right").labelStyle(.titleAndIcon)
@@ -637,8 +637,8 @@ struct PreEpisodeView: View {
     private struct Page { let title: String; let symbol: String; let help: String }
     private let pages = [
         Page(title: String(localized: "Guion"), symbol: "text.page", help: String(localized: "Lo que se va a decir, por partes. Escribe libre: se guarda solo.")),
-        Page(title: "Rundown", symbol: "list.bullet.rectangle", help: String(localized: "El orden del episodio, bloque por bloque, con sus minutos.")),
-        Page(title: "Invitados", symbol: "person.2", help: String(localized: "Quién participa. Invítalos y mándales el correo de preparación.")),
+        Page(title: String(localized: "Rundown"), symbol: "list.bullet.rectangle", help: String(localized: "El orden del episodio, bloque por bloque, con sus minutos.")),
+        Page(title: String(localized: "Invitados"), symbol: "person.2", help: String(localized: "Quién participa. Invítalos y mándales el correo de preparación.")),
         Page(title: String(localized: "Ideas"), symbol: "lightbulb", help: String(localized: "Temas y preguntas propuestos por el equipo. Vota las mejores.")),
         Page(title: String(localized: "Publicación"), symbol: "paperplane", help: String(localized: "Descripción, notas y links que salen al publicar.")),
     ]
@@ -754,7 +754,7 @@ struct PreEpisodeView: View {
                 }
                 Spacer()
                 Button { goRecord() } label: {
-                    Label(sending ? "Preparando la sala…" : "Ir a grabar", systemImage: "record.circle")
+                    Label(sending ? String(localized: "Preparando la sala…") : String(localized: "Ir a grabar"), systemImage: "record.circle")
                 }
                 .buttonStyle(.borderedProminent).tint(.prodPod).controlSize(.large)
                 .disabled(sending)
@@ -798,7 +798,7 @@ struct PreEpisodeView: View {
         }
         if let gg {
             let ok = gg.filter { $0.rsvpStatus == "yes" }.count
-            c[2] = gg.isEmpty ? "Nadie todavía" : String(localized: "\(ok) de \(gg.count) confirmados")
+            c[2] = gg.isEmpty ? String(localized: "Nadie todavía") : String(localized: "\(ok) de \(gg.count) confirmados")
             if !gg.isEmpty && ok == gg.count { d.insert(2) }
         }
         if !(episode.description ?? "").isEmpty { d.insert(4) }
@@ -1239,7 +1239,7 @@ struct GuestsTab: View {
             HStack {
                 if !guests.isEmpty {
                     let ok = guests.filter { $0.rsvpStatus == "yes" }.count
-                    Chip(text: "\(ok) de \(guests.count) confirmados", symbol: "checkmark.circle.fill",
+                    Chip(text: String(localized: "\(ok) de \(guests.count) confirmados"), symbol: "checkmark.circle.fill",
                          color: ok == guests.count ? Theme.good : .orange)
                 }
                 if let note { Text(note).foregroundStyle(Theme.secondary).font(.caption) }

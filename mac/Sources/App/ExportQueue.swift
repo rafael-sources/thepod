@@ -13,7 +13,7 @@ struct ExportJob: Identifiable, Equatable {
             switch self {
             case .format(let f): return f.title
             case .reels: return String(localized: "Reels")
-            case .stems: return "Pistas por separado (WAV)"
+            case .stems: return String(localized: "Pistas por separado (WAV)")
             }
         }
         var symbol: String {

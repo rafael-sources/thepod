@@ -183,7 +183,7 @@ private struct AmaEventCard: View {
     var body: some View {
         let (label, color): (String, Color) = {
             switch event.status {
-            case "active": return ("En vivo", .amaPod)
+            case "active": return (String(localized: "En vivo"), .amaPod)
             case "finished": return (String(localized: "Terminado"), Theme.secondary)
             default: return (String(localized: "Por empezar"), .orange)
             }
@@ -211,7 +211,7 @@ private struct AmaEventCard: View {
                 Spacer()
                 if event.status != "finished" {
                     Button(action: open) {
-                        Label(event.status == "active" ? "Entrar" : "Preparar", systemImage: "arrow.right")
+                        Label(event.status == "active" ? String(localized: "Entrar") : String(localized: "Preparar"), systemImage: "arrow.right")
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -270,29 +270,29 @@ struct NewAmaEventSheet: View {
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
-                AmaTitle(text: "Título")
+                AmaTitle(text: String(localized: "Título"))
                 AmaField(placeholder: String(localized: "Ej.: Pregúntanos lo que quieras — Lee La Letra Chica"), text: $title)
             }
             VStack(alignment: .leading, spacing: 8) {
-                AmaTitle(text: "Descripción", trailing: "opcional")
+                AmaTitle(text: String(localized: "Descripción"), trailing: "opcional")
                 AmaField(placeholder: String(localized: "De qué va, qué tipo de preguntas buscas"), text: $desc, lines: 2...4)
             }
             VStack(alignment: .leading, spacing: 8) {
-                AmaTitle(text: "Chat")
+                AmaTitle(text: String(localized: "Chat"))
                 Picker("", selection: $mode) {
                     Text("Libre").tag("free"); Text("Moderado").tag("moderated"); Text("Apagado").tag("off")
                 }
                 .pickerStyle(.segmented).labelsHidden()
                 Text(mode == "moderated"
-                     ? "Los mensajes del público esperan tu aprobación. Ojo: hoy amaPod todavía no muestra la lista de mensajes por aprobar, así que no se verían."
-                     : mode == "off" ? "No habrá chat en este evento." : "Todo lo que escriban aparece al instante.")
+                     ? String(localized: "Los mensajes del público esperan tu aprobación. Ojo: hoy amaPod todavía no muestra la lista de mensajes por aprobar, así que no se verían.")
+                     : mode == "off" ? String(localized: "No habrá chat en este evento.") : String(localized: "Todo lo que escriban aparece al instante."))
                     .font(.caption).foregroundStyle(mode == "moderated" ? .orange : Theme.secondary)
             }
             if let error { Text(error).font(.callout).foregroundStyle(.red) }
             HStack {
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button { create() } label: { Text(busy ? "Creando…" : "Crear evento") }
+                Button { create() } label: { Text(busy ? String(localized: "Creando…") : String(localized: "Crear evento")) }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -438,8 +438,8 @@ struct AmaStudioView: View {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 48)).foregroundStyle(Color.amaPod)
             Text("Evento terminado").font(.title.bold())
             Text(studio.event.recording_file?.isEmpty == false
-                 ? "La grabación va camino a postPod. En post, “En postPod web” → Traer a la Mac."
-                 : "No quedó grabación de este evento.")
+                 ? String(localized: "La grabación va camino a postPod. En post, “En postPod web” → Traer a la Mac.")
+                 : String(localized: "No quedó grabación de este evento."))
                 .foregroundStyle(Theme.secondary)
             Button("Volver a tus eventos") { app.ama = nil }.buttonStyle(.borderedProminent)
         }
@@ -490,12 +490,12 @@ struct AmaStudioView: View {
             Button { studio.toggleRecording() } label: {
                 HStack(spacing: 7) {
                     Circle().fill(studio.recording ? Color.prodPod : Color(white: 1, opacity: 0.3)).frame(width: 9, height: 9)
-                    Text(studio.recording ? "Grabando" : "Sin grabar").font(.callout.weight(.semibold))
+                    Text(studio.recording ? String(localized: "Grabando") : String(localized: "Sin grabar")).font(.callout.weight(.semibold))
                 }
                 .padding(.horizontal, 12).frame(height: 32)
                 .background(Capsule().fill(studio.recording ? Color.prodPod.opacity(0.18) : AS.field))
             }
-            .buttonStyle(.plain).fixedSize().help(studio.recording ? "Detener la grabación del servidor" : "Grabar en el servidor")
+            .buttonStyle(.plain).fixedSize().help(studio.recording ? String(localized: "Detener la grabación del servidor") : String(localized: "Grabar en el servidor"))
             circle(studio.micOn ? "mic.fill" : "mic.slash.fill", on: studio.micOn) { studio.toggleMic() }
             circle(studio.camOn ? "video.fill" : "video.slash.fill", on: studio.camOn) { studio.toggleCam() }
             Button { confirmFinish = true } label: {
@@ -535,7 +535,7 @@ struct AmaStudioView: View {
                     } else {
                         VStack(spacing: 10) {
                             Avatar(name: p.display_name, size: 84)
-                            Text(studio.onAirTile == nil ? "Esperando que \(p.display_name) se conecte…" : "\(p.display_name) todavía no prende la cámara")
+                            Text(studio.onAirTile == nil ? String(localized: "Esperando que \(p.display_name) se conecte…") : String(localized: "\(p.display_name) todavía no prende la cámara"))
                                 .foregroundStyle(Theme.secondary)
                         }
                     }
@@ -543,8 +543,8 @@ struct AmaStudioView: View {
                     VStack(spacing: 10) {
                         Image(systemName: "person.crop.circle.badge.questionmark").font(.system(size: 46)).foregroundStyle(Theme.secondary)
                         Text("Nadie al aire").font(.headline)
-                        Text(studio.waiting.isEmpty ? "Cuando aceptes solicitudes, toca “Siguiente” para dar la palabra."
-                                                    : "Toca “Siguiente” para darle la palabra a \(studio.waiting[0].display_name).")
+                        Text(studio.waiting.isEmpty ? String(localized: "Cuando aceptes solicitudes, toca “Siguiente” para dar la palabra.")
+                                                    : String(localized: "Toca “Siguiente” para darle la palabra a \(studio.waiting[0].display_name)."))
                             .foregroundStyle(Theme.secondary)
                     }
                 }
@@ -630,7 +630,7 @@ struct AmaStudioView: View {
     private var side: some View {
         let tabs: [(String, String, Int)] = [("Solicitudes", "hand.raised.fill", studio.requests.count),
                                              (String(localized: "Cola"), "list.number", studio.waiting.count),
-                                             ("Chat", "bubble.left.and.bubble.right.fill", 0),
+                                             (String(localized: "Chat"), "bubble.left.and.bubble.right.fill", 0),
                                              (String(localized: "Compartir"), "link", 0)]
         return VStack(spacing: 0) {
             HStack(spacing: 2) {
@@ -735,7 +735,7 @@ struct AmaStudioView: View {
                     .frame(width: 24, height: 24).background(Circle().fill(Color.amaPod.opacity(0.18))).foregroundStyle(Color.amaPod)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(p.display_name).font(.callout.weight(.semibold)).lineLimit(1)
-                    Text(connected ? "Conectado, listo para salir" : p.preconnected ? "Preparándose…" : "Esperando su turno")
+                    Text(connected ? String(localized: "Conectado, listo para salir") : p.preconnected ? String(localized: "Preparándose…") : String(localized: "Esperando su turno"))
                         .font(.caption).foregroundStyle(connected ? Theme.good : Theme.secondary)
                 }
                 Spacer()
@@ -761,9 +761,9 @@ struct AmaStudioView: View {
             AmaTitle(text: String(localized: "Chat del evento"), trailing: chatModeName(studio.event.chat_mode))
             if studio.event.chat_mode == "moderated" {
                 Text(studio.pendingCount > 0
-                     ? (studio.pendingCount == 1 ? "1 mensaje espera tu aprobación. El público no lo ve hasta que lo apruebes."
-                        : "\(studio.pendingCount) mensajes esperan tu aprobación. El público no los ve hasta que los apruebes.")
-                     : "Chat moderado: lo que escribe el público lo ves tú primero y sale cuando lo apruebas.")
+                     ? (studio.pendingCount == 1 ? String(localized: "1 mensaje espera tu aprobación. El público no lo ve hasta que lo apruebes.")
+                        : String(localized: "\(studio.pendingCount) mensajes esperan tu aprobación. El público no los ve hasta que los apruebes."))
+                     : String(localized: "Chat moderado: lo que escribe el público lo ves tú primero y sale cuando lo apruebas."))
                     .font(.caption).foregroundStyle(studio.pendingCount > 0 ? .orange : Theme.secondary)
             }
             ScrollViewReader { proxy in

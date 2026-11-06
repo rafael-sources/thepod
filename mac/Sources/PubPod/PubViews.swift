@@ -406,13 +406,13 @@ struct PubHomeView: View {
                 Circle().fill(Color(white: 0.17)).frame(width: 36, height: 36)
                     .overlay(Text(String((acc?.username ?? s.name).prefix(1)).uppercased()).font(.system(size: 14, weight: .heavy)))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(online(s) ? (s.account == "instagram" ? "@\(acc?.username ?? "")" : (acc?.username ?? "Conectado")) : String(localized: "Sin conectar"))
+                    Text(online(s) ? (s.account == "instagram" ? "@\(acc?.username ?? "")" : (acc?.username ?? String(localized: "Conectado"))) : String(localized: "Sin conectar"))
                         .font(.system(size: 15, weight: .bold))
                     Text(accountNote(s)).font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
                 if ownAccount {
-                    Button(online(s) ? "Cambiar" : "Conectar") { app.section = .pre }.controlSize(.small)
+                    Button(online(s) ? String(localized: "Cambiar") : String(localized: "Conectar")) { app.section = .pre }.controlSize(.small)
                 } else if !online(s) {
                     Button("Configurar") { app.section = .pre }.controlSize(.small)
                 }
@@ -427,7 +427,7 @@ struct PubHomeView: View {
                         .font(.system(size: 14)).scrollContentBackground(.hidden).padding(8).frame(height: 64)
                         .background(RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.07, green: 0.07, blue: 0.09)))
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(white: 0.2)))
-                    Text(s.platform == "feed" ? "Se agrega a las notas de cada episodio." : "Hashtags o firma que van en cada publicación de \(s.name).")
+                    Text(s.platform == "feed" ? String(localized: "Se agrega a las notas de cada episodio.") : String(localized: "Hashtags o firma que van en cada publicación de \(s.name)."))
                         .font(.caption).foregroundStyle(Theme.secondary)
                 }
             }
@@ -448,7 +448,7 @@ struct PubHomeView: View {
             }
             HStack {
                 Spacer()
-                Button(isOn(s) ? "Quitar de esta publicación" : "Incluir en esta publicación") { toggle(s); withAnimation { panel = nil } }
+                Button(isOn(s) ? String(localized: "Quitar de esta publicación") : String(localized: "Incluir en esta publicación")) { toggle(s); withAnimation { panel = nil } }
                     .buttonStyle(.borderedProminent).disabled(!(online(s) && eligible(s)) || phase != .choose)
                     .foregroundStyle(.black)
             }
@@ -587,7 +587,7 @@ struct PubHomeView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 ForEach(ts) { s in
-                    let label = s.platform == "feed" ? "Spotify y Apple Podcasts" : s.name
+                    let label = s.platform == "feed" ? String(localized: "Spotify y Apple Podcasts") : s.name
                     let sel = current?.platform == s.platform
                     Button { tab = s.platform } label: {
                         HStack(spacing: 6) {
@@ -640,7 +640,7 @@ struct PubHomeView: View {
     private func hint(_ s: PubStar) -> String {
         switch s.platform {
         case "feed": return String(localized: "Notas del episodio (Spotify y Apple Podcasts leen las mismas)")
-        case "youtube": return isEpisode ? "Descripción" : String(localized: "Texto del Short")
+        case "youtube": return isEpisode ? String(localized: "Descripción") : String(localized: "Texto del Short")
         case "instagram_image": return String(localized: "Texto de la portada")
         case "tiktok": return String(localized: "Texto para pegar en TikTok (el video llega a tu bandeja)")
         default: return String(localized: "Texto, con tus hashtags")
@@ -654,7 +654,7 @@ struct PubHomeView: View {
             Button("Publicar otra cosa") { reset() }
                 .buttonStyle(.bordered).controlSize(.large)
         case .sending:
-            Button(later ? "Programando…" : "Publicando…") {}
+            Button(later ? String(localized: "Programando…") : String(localized: "Publicando…")) {}
                 .buttonStyle(.bordered).controlSize(.large).disabled(true)
         case .choose:
             Button(action: { send(ts) }) {
@@ -791,7 +791,7 @@ struct PubPostsList: View {
 
     private func statusText(_ p: PrePodClient.PubPost) -> String {
         if p.status == "scheduled", let d = date(p), d <= Date() { return String(localized: "En cola") }
-        return ["scheduled": String(localized: "Programado"), "publishing": "Publicando…", "published": String(localized: "Publicado"),
+        return ["scheduled": String(localized: "Programado"), "publishing": String(localized: "Publicando…"), "published": String(localized: "Publicado"),
                 "private": String(localized: "Subido en privado"), "inbox": String(localized: "En tu bandeja de TikTok"),
                 "error": String(localized: "No se publicó"), "cancelled": String(localized: "Cancelado")][p.status] ?? p.status
     }
