@@ -25,7 +25,7 @@
     <div class="brand">
       <a href="/"><img class="brand-disc" src="{{ url_for('static', filename='icons/thepod-compact.svg') }}" alt=""><span class="mark">the<em>Pod</em></span></a>
       <span class="crumb">
-        <b>DOCS</b>{% if app_cfg %} · {{ app_cfg.name }}{% if section and section_labels %} · {{ section_labels.get(section, section) }}{% endif %}{% endif %}
+        <b>DOCS</b>{% if app_cfg %} · <span>{{ app_cfg.name }}</span>{% if section and section_labels %} · <span>{{ section_labels.get(section, section) }}</span>{% endif %}{% endif %}
       </span>
     </div>
 
