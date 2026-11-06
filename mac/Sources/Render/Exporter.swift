@@ -69,10 +69,10 @@ enum Exporter {
                                                                total: built.duration), total: built.duration) : nil
             defer { if let chap { try? FileManager.default.removeItem(at: chap) } }
             // La transcripción completa dentro del MP3 (etiqueta de letra ID3, la muestran VLC, Apple Music y otros)
-            let lyrics: [String] = (window == nil && project.isTranscribed) ? ["-metadata", String(localized: "lyrics=") + transcriptText(project: project)] : []
+            let lyrics: [String] = (window == nil && project.isTranscribed) ? ["-metadata", "lyrics=" + transcriptText(project: project)] : []
             try await FFmpeg.run(["-i", m4a.path] + (chap.map { ["-i", $0.path, "-map", "0:a", "-map_chapters", "1"] } ?? [])
                                  + af + ["-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
-                                  "-metadata", String(localized: "title=\(episodeTitle(project))"), "-metadata", String(localized: "artist=\(project.podcastName ?? "")")] + lyrics + [mp3.path],
+                                  "-metadata", "title=\(episodeTitle(project))", "-metadata", "artist=\(project.podcastName ?? "")"] + lyrics + [mp3.path],
                                  duration: built.duration) { progress(0.8 + 0.2 * $0) }
             try? FileManager.default.removeItem(at: m4a)
             if window == nil {
@@ -123,7 +123,7 @@ enum Exporter {
                 if let srtTmp { args += ["-i", srtTmp.path]; subIdx = idx; idx += 1 }
                 args += ["-map", "0", "-map_metadata", "0"]
                 if chapIdx >= 0 { args += ["-map_chapters", "\(chapIdx)"] }
-                if subIdx >= 0 { args += ["-map", "\(subIdx)", "-c:s", "mov_text", "-metadata:s:s:0", String(localized: "language=\(project.language == "en" ? "eng" : "spa")")] }
+                if subIdx >= 0 { args += ["-map", "\(subIdx)", "-c:s", "mov_text", "-metadata:s:s:0", "language=\(project.language == "en" ? "eng" : "spa")"] }
                 args += ["-c:v", "copy", "-c:a", "copy", "-movflags", "+faststart", with.path]
                 do {
                     try await FFmpeg.run(args)
@@ -273,7 +273,7 @@ extension Exporter {
         }
         var out = ""
         for (i, l) in lines.enumerated() {
-            out += String(localized: "\(i + 1)\n\(ts(l.start + shift)) --> \(ts(max(l.start + 0.5, l.end) + shift))\n\(l.text)\n\n")
+            out += "\(i + 1)\n\(ts(l.start + shift)) --> \(ts(max(l.start + 0.5, l.end) + shift))\n\(l.text)\n\n"
         }
         return out
     }
@@ -289,10 +289,10 @@ extension Exporter {
         }
         let words = p.captionWords.sorted { $0.s < $1.s }
         func lane(at o: Double) -> Int? { let t = EditEngine.toTimeline(o, keep: keep); return words.last(where: { $0.s <= t + 0.05 })?.lane }
-        var out = String(localized: "WEBVTT\n\n")
+        var out = "WEBVTT\n\n"
         for (i, l) in lines.enumerated() {
             let who = lane(at: l.start).map { p.laneName($0) }?.replacingOccurrences(of: ">", with: "") ?? ""
-            out += String(localized: "\(i + 1)\n\(ts(l.start + shift)) --> \(ts(max(l.start + 0.5, l.end) + shift))\n\(who.isEmpty ? "" : "<v \(who)>")\(l.text)\n\n")
+            out += "\(i + 1)\n\(ts(l.start + shift)) --> \(ts(max(l.start + 0.5, l.end) + shift))\n\(who.isEmpty ? "" : "<v \(who)>")\(l.text)\n\n"
         }
         return out
     }

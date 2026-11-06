@@ -116,7 +116,7 @@ struct PreGuest: Decodable, Identifiable, Hashable {
     var socialInstagram: String?
     var socialTwitter: String?
 
-    var roleTitle: String { ["host": String(localized: "Conductor"), "co-host": "Co-conductor", "guest": String(localized: "Invitado")][role] ?? role }
+    var roleTitle: String { ["host": String(localized: "Conductor"), "co-host": String(localized: "Co-conductor"), "guest": String(localized: "Invitado")][role] ?? role }
     var rsvpTitle: String { ["pending": String(localized: "Sin responder"), "yes": String(localized: "Confirmado"), "no": String(localized: "No viene"), "maybe": String(localized: "Tal vez")][rsvpStatus] ?? rsvpStatus }
 }
 

@@ -244,7 +244,7 @@ final class DirectorStudio: NSObject, ObservableObject {
     func sendTeleprompter(target: String, title: String, text: String, speed: String, size: String, countdown: Int) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { error = String(localized: "Escribe el texto del teleprompter"); return }
-        let eid = String(localized: "d\(Int(Date().timeIntervalSince1970 * 1000))")
+        let eid = "d\(Int(Date().timeIntervalSince1970 * 1000))"
         let ttl = title.isEmpty ? String(localized: "Teleprompter") : title
         send(["type": "teleprompter", "action": "show", "event_id": eid, "target": target,
               "title": ttl, "text": t, "speed": speed, "size": size, "countdown": max(0, countdown)])

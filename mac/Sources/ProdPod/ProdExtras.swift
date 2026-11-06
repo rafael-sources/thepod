@@ -10,7 +10,7 @@ extension ProdStudio {
     func shareScreen(recordOnly: Bool) {
         guard !screenOn else { return }
         if remoteScreen != nil && !recordOnly {
-            error = String(localized: "\(remoteScreen?.name ?? "Otra persona") ya está compartiendo pantalla. Solo una a la vez.")
+            error = String(localized: "\(remoteScreen?.name ?? String(localized: "Otra persona")) ya está compartiendo pantalla. Solo una a la vez.")
             return
         }
         Task {

@@ -245,7 +245,7 @@ struct VideoInspector: View {
             }.font(.caption)
             Toggle("Llenar la pantalla (recorta)", isOn: $session.project.brolls[i].fill).font(.caption)
             if b.isVideo {
-                HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? "mudo" : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
+                HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? String(localized: "mudo") : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
                 SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: b.speedEnd == nil
                          ? String(localized: "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono.")
                          : String(localized: "Velocidad al empezar el clip; abajo, al terminar. Entre las dos, una rampa suave."))

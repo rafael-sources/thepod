@@ -227,7 +227,7 @@ final class RoomProbe: NSObject, ObservableObject {
 
     private func note(_ s: String) {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"
-        notes.append(String(localized: "\(f.string(from: Date()))  \(s)"))
+        notes.append("\(f.string(from: Date()))  \(s)")
     }
 
     private func writeLog() {
@@ -256,10 +256,10 @@ final class RoomProbe: NSObject, ObservableObject {
 
 extension RoomProbe: RoomDelegate {
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor in self.note(String(localized: "Entró \(participant.name ?? "alguien")")); self.refreshRemotes() }
+        Task { @MainActor in self.note(String(localized: "Entró \(participant.name ?? String(localized: "alguien"))")); self.refreshRemotes() }
     }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor in self.note(String(localized: "Salió \(participant.name ?? "alguien")")); self.refreshRemotes() }
+        Task { @MainActor in self.note(String(localized: "Salió \(participant.name ?? String(localized: "alguien"))")); self.refreshRemotes() }
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor in self.refreshRemotes() }

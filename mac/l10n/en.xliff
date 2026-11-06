@@ -208,11 +208,6 @@ Sponsored by:
         <target>%.1f dBTP</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="%@  %@" xml:space="preserve">
-        <source>%@  %@</source>
-        <target>%@  %@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="%@ %@ %@" xml:space="preserve">
         <source>%@ %@ %@</source>
         <target>%@ %@ %@</target>
@@ -411,32 +406,6 @@ Sponsored by:
       <trans-unit id="%lld" xml:space="preserve">
         <source>%lld</source>
         <target>%lld</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="%lld&#10;%@ --&gt; %@&#10;%@&#10;&#10;" xml:space="preserve">
-        <source>%lld
-%@ --&gt; %@
-%@
-
-</source>
-        <target>%lld
-%@ --&gt; %@
-%@
-
-</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="%lld&#10;%@ --&gt; %@&#10;%@%@&#10;&#10;" xml:space="preserve">
-        <source>%lld
-%@ --&gt; %@
-%@%@
-
-</source>
-        <target>%lld
-%@ --&gt; %@
-%@%@
-
-</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="%lld %%" xml:space="preserve">
@@ -657,11 +626,6 @@ Sponsored by:
       <trans-unit id=", elegida" xml:space="preserve">
         <source>, elegida</source>
         <target>, chosen</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id=",agate=threshold=0.006:ratio=3:attack=10:release=250:range=%@" xml:space="preserve">
-        <source>,agate=threshold=0.006:ratio=3:attack=10:release=250:range=%@</source>
-        <target>,agate=threshold=0.006:ratio=3:attack=10:release=250:range=%@</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="/ %@" xml:space="preserve">
@@ -3146,11 +3110,6 @@ Sponsored by:
         <target>Duration:</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Duration: " xml:space="preserve">
-        <source>Duration: </source>
-        <target>Duration: </target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="EN LA SALA" xml:space="preserve">
         <source>EN LA SALA</source>
         <target>IN THE ROOM</target>
@@ -3962,11 +3921,6 @@ Transcript:
       <trans-unit id="Error" xml:space="preserve">
         <source>Error</source>
         <target>Error</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Error opening input" xml:space="preserve">
-        <source>Error opening input</source>
-        <target>Error opening input</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Es cómo te ven los demás. Si tu internet es lento, baja la calidad." xml:space="preserve">
@@ -6116,11 +6070,6 @@ Transcript:
       <trans-unit id="Moverlo; con el imán al ritmo, se engancha a los beats" xml:space="preserve">
         <source>Moverlo; con el imán al ritmo, se engancha a los beats</source>
         <target>Move it; with snap to beat, it snaps to the beats</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Movies" xml:space="preserve">
-        <source>Movies</source>
-        <target>Movies</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Mudo" xml:space="preserve">
@@ -8694,11 +8643,6 @@ Transcript:
         <target>Sticker</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Stream #" xml:space="preserve">
-        <source>Stream #</source>
-        <target>Stream #</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Studio" xml:space="preserve">
         <source>Studio</source>
         <target>Studio</target>
@@ -9981,15 +9925,6 @@ Transcript:
         <target>Puts back the moments you deleted (not charged again)</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="WEBVTT&#10;&#10;" xml:space="preserve">
-        <source>WEBVTT
-
-</source>
-        <target>WEBVTT
-
-</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="X / Twitter" xml:space="preserve">
         <source>X / Twitter</source>
         <target>X / Twitter</target>
@@ -10055,11 +9990,6 @@ Transcript:
         <target>Soft zoom</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="[composite_podcast_hstack]" xml:space="preserve">
-        <source>[composite_podcast_hstack]</source>
-        <target>[composite_podcast_hstack]</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="a los %@" xml:space="preserve">
         <source>a los %@</source>
         <target>at %@</target>
@@ -10070,19 +10000,9 @@ Transcript:
         <target>by hand</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4" xml:space="preserve">
-        <source>acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4</source>
-        <target>acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="al cambiar: %@ %@" xml:space="preserve">
         <source>al cambiar: %@ %@</source>
         <target>on change: %@ %@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="alimiter=limit=0.95:level=0" xml:space="preserve">
-        <source>alimiter=limit=0.95:level=0</source>
-        <target>alimiter=limit=0.95:level=0</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="amaPod" xml:space="preserve">
@@ -10100,11 +10020,6 @@ Transcript:
         <target>amaPod replied %lld</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="anullsrc=r=48000:cl=stereo" xml:space="preserve">
-        <source>anullsrc=r=48000:cl=stereo</source>
-        <target>anullsrc=r=48000:cl=stereo</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="apagada" xml:space="preserve">
         <source>apagada</source>
         <note>No comment provided by engineer.</note>
@@ -10118,44 +10033,9 @@ Transcript:
         <target>appears at</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="aresample=48000,highpass=f=80,arnndn=m='%@':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11" xml:space="preserve">
-        <source>aresample=48000,highpass=f=80,arnndn=m='%@':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11</source>
-        <target>aresample=48000,highpass=f=80,arnndn=m='%@':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="aresample=async=1:first_pts=0" xml:space="preserve">
-        <source>aresample=async=1:first_pts=0</source>
-        <target>aresample=async=1:first_pts=0</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="arnndn=m='%@':mix=%@" xml:space="preserve">
-        <source>arnndn=m='%@':mix=%@</source>
-        <target>arnndn=m='%@':mix=%@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="arrastra para ordenar" xml:space="preserve">
         <source>arrastra para ordenar</source>
         <target>drag to reorder</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="artist=%@" xml:space="preserve">
-        <source>artist=%@</source>
-        <target>artist=%@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="asetpts=PTS-STARTPTS,adelay=delays=%lld:all=1,aresample=async=1" xml:space="preserve">
-        <source>asetpts=PTS-STARTPTS,adelay=delays=%lld:all=1,aresample=async=1</source>
-        <target>asetpts=PTS-STARTPTS,adelay=delays=%lld:all=1,aresample=async=1</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="asetpts=PTS-STARTPTS,aresample=async=1" xml:space="preserve">
-        <source>asetpts=PTS-STARTPTS,aresample=async=1</source>
-        <target>asetpts=PTS-STARTPTS,aresample=async=1</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="audífono" xml:space="preserve">
-        <source>audífono</source>
-        <target>headphone</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="bloque" xml:space="preserve">
@@ -10206,16 +10086,6 @@ Transcript:
         <target>how what's shown is decided</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="d%lld" xml:space="preserve">
-        <source>d%lld</source>
-        <target>d%lld</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="deesser=i=0.5:m=0.5:f=0.5" xml:space="preserve">
-        <source>deesser=i=0.5:m=0.5:f=0.5</source>
-        <target>deesser=i=0.5:m=0.5:f=0.5</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="del director" xml:space="preserve">
         <source>del director</source>
         <target>from the director</target>
@@ -10229,16 +10099,6 @@ Transcript:
       <trans-unit id="dura" xml:space="preserve">
         <source>dura</source>
         <target>lasts</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="ebur128=framelog=quiet" xml:space="preserve">
-        <source>ebur128=framelog=quiet</source>
-        <target>ebur128=framelog=quiet</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="ebur128=peak=true:framelog=quiet" xml:space="preserve">
-        <source>ebur128=peak=true:framelog=quiet</source>
-        <target>ebur128=peak=true:framelog=quiet</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="el audio" xml:space="preserve">
@@ -10281,11 +10141,6 @@ Transcript:
         <target>in its original place</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="equalizer=f=250:t=q:w=1:g=-3" xml:space="preserve">
-        <source>equalizer=f=250:t=q:w=1:g=-3</source>
-        <target>equalizer=f=250:t=q:w=1:g=-3</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="está" xml:space="preserve">
         <source>está</source>
         <note>No comment provided by engineer.</note>
@@ -10302,11 +10157,6 @@ Transcript:
       <trans-unit id="faltan %lld MB" xml:space="preserve">
         <source>faltan %lld MB</source>
         <target>%lld MB left</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="format=yuv420p" xml:space="preserve">
-        <source>format=yuv420p</source>
-        <target>format=yuv420p</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="frecuencia" xml:space="preserve">
@@ -10375,11 +10225,6 @@ Transcript:
         <target>the cover</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="language=%@" xml:space="preserve">
-        <source>language=%@</source>
-        <target>language=%@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="lenta" xml:space="preserve">
         <source>lenta</source>
         <target>slow</target>
@@ -10403,11 +10248,6 @@ Transcript:
       <trans-unit id="los conductores lo ven como aviso" xml:space="preserve">
         <source>los conductores lo ven como aviso</source>
         <target>the hosts see it as a notice</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="lyrics=" xml:space="preserve">
-        <source>lyrics=</source>
-        <target>lyrics=</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="mac:%@" xml:space="preserve">
@@ -10458,11 +10298,6 @@ Transcript:
         <target>muted</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="multipart/form-data; boundary=%@" xml:space="preserve">
-        <source>multipart/form-data; boundary=%@</source>
-        <target>multipart/form-data; boundary=%@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="muy pronto" xml:space="preserve">
         <source>muy pronto</source>
         <target>coming soon</target>
@@ -10473,19 +10308,9 @@ Transcript:
         <target>nobody yet</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="nohup /bin/sh -c &quot;$0&quot; &gt;/dev/null 2&gt;&amp;1 &amp;" xml:space="preserve">
-        <source>nohup /bin/sh -c "$0" &gt;/dev/null 2&gt;&amp;1 &amp;</source>
-        <target>nohup /bin/sh -c "$0" &gt;/dev/null 2&gt;&amp;1 &amp;</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="normal" xml:space="preserve">
         <source>normal</source>
         <target>normal</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="o sea" xml:space="preserve">
-        <source>o sea</source>
-        <target>o sea</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="ocupa" xml:space="preserve">
@@ -10576,11 +10401,6 @@ Transcript:
       <trans-unit id="postPod respondió %lld" xml:space="preserve">
         <source>postPod respondió %lld</source>
         <target>postPod replied %lld</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="postPod·thePod·aitism" xml:space="preserve">
-        <source>postPod·thePod·aitism</source>
-        <target>postPod·thePod·aitism</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="prePod lo está subiendo a tu canal…" xml:space="preserve">
@@ -10703,16 +10523,6 @@ Transcript:
         <target>separation</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="setpts=PTS-STARTPTS,format=yuv420p" xml:space="preserve">
-        <source>setpts=PTS-STARTPTS,format=yuv420p</source>
-        <target>setpts=PTS-STARTPTS,format=yuv420p</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="setpts=PTS-STARTPTS,tpad=start_duration=%@:color=black,format=yuv420p" xml:space="preserve">
-        <source>setpts=PTS-STARTPTS,tpad=start_duration=%@:color=black,format=yuv420p</source>
-        <target>setpts=PTS-STARTPTS,tpad=start_duration=%@:color=black,format=yuv420p</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="sigue a quien habla" xml:space="preserve">
         <source>sigue a quien habla</source>
         <target>follows the speaker</target>
@@ -10741,11 +10551,6 @@ Transcript:
       <trans-unit id="sin transcribir" xml:space="preserve">
         <source>sin transcribir</source>
         <target>not transcribed</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="sine=frequency=1000:sample_rate=48000" xml:space="preserve">
-        <source>sine=frequency=1000:sample_rate=48000</source>
-        <target>sine=frequency=1000:sample_rate=48000</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="sonido" xml:space="preserve">
@@ -10838,16 +10643,6 @@ Transcript:
         <target>thePod · postPod for Mac</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="time=" xml:space="preserve">
-        <source>time=</source>
-        <target>time=</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="title=%@" xml:space="preserve">
-        <source>title=%@</source>
-        <target>title=%@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="toda" xml:space="preserve">
         <source>toda</source>
         <target>all</target>
@@ -10876,11 +10671,6 @@ Transcript:
       <trans-unit id="ventanita izq." xml:space="preserve">
         <source>ventanita izq.</source>
         <target>small window left</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="volume=-6dB" xml:space="preserve">
-        <source>volume=-6dB</source>
-        <target>volume=-6dB</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="zoom suave" xml:space="preserve">
@@ -11063,6 +10853,166 @@ Transcript:
       </trans-unit>
       <trans-unit id="✓ Listo" xml:space="preserve">
         <source>✓ Listo</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="opcional" xml:space="preserve">
+        <source>opcional</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Solicitudes" xml:space="preserve">
+        <source>Solicitudes</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="lun" xml:space="preserve">
+        <source>lun</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="mar" xml:space="preserve">
+        <source>mar</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="mié" xml:space="preserve">
+        <source>mié</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="jue" xml:space="preserve">
+        <source>jue</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="vie" xml:space="preserve">
+        <source>vie</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="sáb" xml:space="preserve">
+        <source>sáb</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="dom" xml:space="preserve">
+        <source>dom</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="preparado" xml:space="preserve">
+        <source>preparado</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="fuera" xml:space="preserve">
+        <source>fuera</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="%lld MB enviados" xml:space="preserve">
+        <source>%lld MB enviados</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="alguien" xml:space="preserve">
+        <source>alguien</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="lo que se está haciendo" xml:space="preserve">
+        <source>lo que se está haciendo</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="cumple" xml:space="preserve">
+        <source>cumple</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="desconocido" xml:space="preserve">
+        <source>desconocido</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="conectado" xml:space="preserve">
+        <source>conectado</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="B/N" xml:space="preserve">
+        <source>B/N</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="pantalla" xml:space="preserve">
+        <source>pantalla</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Ajustar" xml:space="preserve">
+        <source>Ajustar</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Revisar" xml:space="preserve">
+        <source>Revisar</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="1 pendiente" xml:space="preserve">
+        <source>1 pendiente</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="%lld pendientes" xml:space="preserve">
+        <source>%lld pendientes</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Aquí ves las grabaciones que llegaron: una pista por persona. Ponle nombre a cada una (sale en el video) y revisa que estén todas. Si falta alguien, impórtala con ⌘O. Si una persona se oye desfasada, en su panel puedes correrla unos décimas con «Desfase»." xml:space="preserve">
+        <source>Aquí ves las grabaciones que llegaron: una pista por persona. Ponle nombre a cada una (sale en el video) y revisa que estén todas. Si falta alguien, impórtala con ⌘O. Si una persona se oye desfasada, en su panel puedes correrla unos décimas con «Desfase».</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="«Arreglar todo» hace tres cosas: sonido de estudio (quita ruido y empareja el volumen), quita los silencios largos y las muletillas («eeeh»). Nada se borra de verdad: cada corte queda en la lista y se puede apagar. En el timeline: arrastra un trozo para cortarlo de todos, o solo callar o bajar a una persona ahí (si tose, si gritó). Doble clic sobre una persona pone un punto en su línea de volumen: arrástralo arriba o abajo." xml:space="preserve">
+        <source>«Arreglar todo» hace tres cosas: sonido de estudio (quita ruido y empareja el volumen), quita los silencios largos y las muletillas («eeeh»). Nada se borra de verdad: cada corte queda en la lista y se puede apagar. En el timeline: arrastra un trozo para cortarlo de todos, o solo callar o bajar a una persona ahí (si tose, si gritó). Doble clic sobre una persona pone un punto en su línea de volumen: arrástralo arriba o abajo.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="La transcripción se hace en tu Mac, sin internet. Doble clic en una palabra para corregirla; las tijeras quitan una frase del video. Elige un estilo y arrástralos sobre el video para ponerlos donde quieras. «Guardar .srt» te da el archivo para YouTube." xml:space="preserve">
+        <source>La transcripción se hace en tu Mac, sin internet. Doble clic en una palabra para corregirla; las tijeras quitan una frase del video. Elige un estilo y arrástralos sobre el video para ponerlos donde quieras. «Guardar .srt» te da el archivo para YouTube.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Busca en la transcripción groserías y palabras que las redes bajan de alcance (muerte, suicidio, drogas, sexo, armas…). Para cada una eliges: pitido encima (no se oye) y/o cambiar el subtítulo por la palabra que se usa en redes para decir lo mismo (desvivirse, intimidad, sustancias…). También puedes agregar tus propias palabras. El audio original no se toca: el pitido y el cambio van en la vista previa y en el export." xml:space="preserve">
+        <source>Busca en la transcripción groserías y palabras que las redes bajan de alcance (muerte, suicidio, drogas, sexo, armas…). Para cada una eliges: pitido encima (no se oye) y/o cambiar el subtítulo por la palabra que se usa en redes para decir lo mismo (desvivirse, intimidad, sustancias…). También puedes agregar tus propias palabras. El audio original no se toca: el pitido y el cambio van en la vista previa y en el export.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Cómo se ve el video: el diseño (quién sale dónde), el orden de las personas, espejo, fondo virtual por persona, color, la marca del podcast (fondo, logo, nombres) y la intro y el cierre. Lo que eliges aquí vale para YouTube, reels y cuadrado; cada formato se acomoda solo." xml:space="preserve">
+        <source>Cómo se ve el video: el diseño (quién sale dónde), el orden de las personas, espejo, fondo virtual por persona, color, la marca del podcast (fondo, logo, nombres) y la intro y el cierre. Lo que eliges aquí vale para YouTube, reels y cuadrado; cada formato se acomoda solo.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Capas encima del video un rato: textos (título, caja, etiqueta), imágenes PNG/JPG, stickers (emojis) y b-roll (un video o foto que tapa la pantalla o va en una ventanita, máximo 10 s). Se mueven con el ratón sobre la vista previa y se ubican en el tiempo con el campo h:mm:ss o el botón «Aquí»." xml:space="preserve">
+        <source>Capas encima del video un rato: textos (título, caja, etiqueta), imágenes PNG/JPG, stickers (emojis) y b-roll (un video o foto que tapa la pantalla o va en una ventanita, máximo 10 s). Se mueven con el ratón sobre la vista previa y se ubican en el tiempo con el campo h:mm:ss o el botón «Aquí».</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Los textos tipo noticiero que entran abajo. Tres estilos: Noticiero, Limpio y Sponsor. Los que puso el director en vivo llegan solos y se pueden editar; aquí agregas los que faltaron. Tienen animación de entrada y salida y un sonido bajo opcional." xml:space="preserve">
+        <source>Los textos tipo noticiero que entran abajo. Tres estilos: Noticiero, Limpio y Sponsor. Los que puso el director en vivo llegan solos y se pueden editar; aquí agregas los que faltaron. Tienen animación de entrada y salida y un sonido bajo opcional.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Música y efectos del soundboard, y voz artificial. «Al inicio» y «Al final» respetan el intro y el cierre. La música puede bajar sola cuando alguien habla y repetirse en bucle. Cada pista tiene volumen, fades y se mueve con el campo h:mm:ss." xml:space="preserve">
+        <source>Música y efectos del soundboard, y voz artificial. «Al inicio» y «Al final» respetan el intro y el cierre. La música puede bajar sola cuando alguien habla y repetirse en bucle. Cada pista tiene volumen, fades y se mueve con el campo h:mm:ss.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Los sponsors del guion de prePod salen en el minuto donde iban, con su logo. Los cintillos del director quedan donde los puso en vivo. Aquí los apagas o cambias el momento; para crear cintillos nuevos usa la sección Cintillos." xml:space="preserve">
+        <source>Los sponsors del guion de prePod salen en el minuto donde iban, con su logo. Los cintillos del director quedan donde los puso en vivo. Aquí los apagas o cambias el momento; para crear cintillos nuevos usa la sección Cintillos.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Cada momento marcado (en postPod, con «Marcar momento» o con las teclas I y O) es un video vertical. Cada reel se edita por pestañas: Diseño, Subtítulos (cómo se ven y el texto), Música, B-roll y Cintillos; todo aparte del episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta solo ese reel." xml:space="preserve">
+        <source>Cada momento marcado (en postPod, con «Marcar momento» o con las teclas I y O) es un video vertical. Cada reel se edita por pestañas: Diseño, Subtítulos (cómo se ven y el texto), Música, B-roll y Cintillos; todo aparte del episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta solo ese reel.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="La imagen que representa al episodio: la portada que va a Instagram y la miniatura para YouTube. «Buscar las mejores capturas» recorre el video y propone los segundos donde todas las personas salen sonriendo, con los ojos abiertos y nítidas; eliges una en el carrusel. También puedes capturar el segundo donde esté parado el episodio." xml:space="preserve">
+        <source>La imagen que representa al episodio: la portada que va a Instagram y la miniatura para YouTube. «Buscar las mejores capturas» recorre el video y propone los segundos donde todas las personas salen sonriendo, con los ojos abiertos y nítidas; eliges una en el carrusel. También puedes capturar el segundo donde esté parado el episodio.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Elige para dónde va (YouTube 16:9, reels 9:16, cuadrado, solo audio). H.264 es el que abre en todos lados; HEVC pesa la mitad. El volumen se ajusta a −16 LUFS (lo que piden Spotify y YouTube). Los archivos quedan en la carpeta de exportados." xml:space="preserve">
+        <source>Elige para dónde va (YouTube 16:9, reels 9:16, cuadrado, solo audio). H.264 es el que abre en todos lados; HEVC pesa la mitad. El volumen se ajusta a −16 LUFS (lo que piden Spotify y YouTube). Los archivos quedan en la carpeta de exportados.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Publica con lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts y tu canal de YouTube. Si algo falla, el aviso te dice qué falta configurar en prePod." xml:space="preserve">
+        <source>Publica con lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts y tu canal de YouTube. Si algo falla, el aviso te dice qué falta configurar en prePod.</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Atajos en el editor (cuando no estás escribiendo en un campo):&#10;Espacio o K · reproducir / pausar&#10;← → · un segundo atrás / adelante (con ⇧, cinco)&#10;J / L · cinco segundos atrás / adelante&#10;M · marcar momento (crea un reel de 60 s desde aquí)&#10;Doble clic sobre una persona en el timeline · punto de volumen · arrástralo · Suprimir lo quita&#10;Arrastra un trozo sobre una persona · «Silenciar solo a…» / «−6 dB a…» / «Cortar de todos»&#10;I · marcar inicio de un reel · O · marcar fin y crearlo (viendo un reel, O ajusta su fin)&#10;⌘Z · deshacer · ⇧⌘Z · rehacer" xml:space="preserve">
+        <source>Atajos en el editor (cuando no estás escribiendo en un campo):
+Espacio o K · reproducir / pausar
+← → · un segundo atrás / adelante (con ⇧, cinco)
+J / L · cinco segundos atrás / adelante
+M · marcar momento (crea un reel de 60 s desde aquí)
+Doble clic sobre una persona en el timeline · punto de volumen · arrástralo · Suprimir lo quita
+Arrastra un trozo sobre una persona · «Silenciar solo a…» / «−6 dB a…» / «Cortar de todos»
+I · marcar inicio de un reel · O · marcar fin y crearlo (viendo un reel, O ajusta su fin)
+⌘Z · deshacer · ⇧⌘Z · rehacer</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Auto-silencio" xml:space="preserve">
+        <source>Auto-silencio</source>
         <note>No comment provided by engineer.</note>
       </trans-unit>
     </body>

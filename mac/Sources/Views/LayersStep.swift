@@ -326,7 +326,7 @@ struct BRollEditor: View {
             HStack(spacing: 8) {
                 Text("Su sonido").frame(width: 72, alignment: .leading)
                 Slider(value: b.volume, in: 0...1)
-                Text(clip.volume == 0 ? "mudo" : "\(Int(clip.volume * 100)) %").monospacedDigit().frame(width: 48, alignment: .trailing)
+                Text(clip.volume == 0 ? String(localized: "mudo") : "\(Int(clip.volume * 100)) %").monospacedDigit().frame(width: 48, alignment: .trailing)
             }
             .font(.callout)
         }

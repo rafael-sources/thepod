@@ -1356,7 +1356,7 @@ struct LookStep: View {
                     Card {
                         Text("Color").font(.headline)
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 84))], spacing: 8) {
-                            ForEach([("none", String(localized: "Original")), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", "B/N"), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
+                            ForEach([("none", String(localized: "Original")), ("warm", String(localized: "Cálido")), ("cool", String(localized: "Frío")), ("cine", String(localized: "Cine")), ("bw", String(localized: "B/N")), ("vivid", String(localized: "Vivo"))], id: \.0) { look in
                                 Button { session.project.colorLook = look.0 } label: {
                                     Text(look.1).font(.caption)
                                         .frame(maxWidth: .infinity, minHeight: 32)
@@ -1855,7 +1855,7 @@ struct ReelBRollCard: View {
                         Image(systemName: b.isVideo ? "film" : "photo").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
                         Text(b.title).lineLimit(1)
                         Spacer()
-                        Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? String(localized: "ventanita izq.") : String(localized: "ventanita der.")) + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                        Text((b.placement == "full" ? String(localized: "pantalla") : b.placement == "pipLeft" ? String(localized: "ventanita izq.") : String(localized: "ventanita der.")) + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
                             .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
                     }
                     .padding(8)
@@ -1932,23 +1932,23 @@ struct ExportReviewCard: View {
         var out: [Item] = []
         if p.fix.lastRun == nil {
             out.append(Item(id: "fix", text: String(localized: "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)"), optional: false,
-                            actions: [("Limpiar", { session.step = .fix })]))
+                            actions: [(String(localized: "Limpiar sonido"), { session.step = .fix })]))
         }
         if !p.isTranscribed {
             out.append(Item(id: "words", text: String(localized: "No hay transcripción: el video sale sin subtítulos"), optional: true,
                             actions: [(String(localized: "Ir a subtítulos"), { session.step = .captions })]))
         } else if !p.wordsSynced {
             out.append(Item(id: "sync", text: String(localized: "Los subtítulos no están ajustados a la voz: pueden salir antes de que se escuche"), optional: false,
-                            actions: [("Ajustar", { session.syncSubtitles() })]))
+                            actions: [(String(localized: "Ajustar"), { session.syncSubtitles() })]))
         }
         let pending = session.pendingSuggestions.count
         if pending > 0 {
             out.append(Item(id: "sugg", text: String(localized: "\(pending) \(pending == 1 ? String(localized: "sugerencia") : String(localized: "sugerencias")) sin revisar (muletillas dudosas o frases repetidas)"), optional: false,
-                            actions: [("Ver", { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
+                            actions: [(String(localized: "Ver"), { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
         }
         if p.isTranscribed, !p.sensitiveScanned {
             out.append(Item(id: "sens", text: String(localized: "No se buscaron palabras sensibles (groserías, marcas, datos personales)"), optional: true,
-                            actions: [("Revisar", { session.step = .sensitive })]))
+                            actions: [(String(localized: "Revisar"), { session.step = .sensitive })]))
         }
         let unseen = p.reels.filter { $0.selected && $0.seen != true }.count
         if unseen > 0 {
@@ -2262,7 +2262,7 @@ struct ExportQueueCard: View {
             HStack {
                 Text("Cola de exportación").font(.headline)
                 if session.queuePending > 0 {
-                    Text(String(localized: "\(session.queuePending) pendiente\(session.queuePending == 1 ? "" : "s")")).font(.caption).foregroundStyle(Theme.secondary)
+                    Text(session.queuePending == 1 ? String(localized: "1 pendiente") : String(localized: "\(session.queuePending) pendientes")).font(.caption).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
                 if session.exportQueue.contains(where: { $0.status.isFinished }) {

@@ -98,7 +98,7 @@ enum Importer {
 
     // MARK: - postPod bundle
 
-    static let compositeMarker = String(localized: "[composite_podcast_hstack]")
+    static let compositeMarker = "[composite_podcast_hstack]"
 
     static func importBundle(root: URL, progress: @escaping Progress) async throws -> Project {
         let fm = FileManager.default
@@ -572,9 +572,9 @@ enum Importer {
         var args = ["-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", input.path]
         if hasVideo {
             let vStart = max(0, vS - startOffset)
-            var vf = startOffset > 0 ? String(localized: "setpts=PTS-STARTPTS,format=yuv420p") : String(localized: "format=yuv420p")
+            var vf = startOffset > 0 ? "setpts=PTS-STARTPTS,format=yuv420p" : "format=yuv420p"
             if vStart > 0.1 {
-                vf = String(localized: "setpts=PTS-STARTPTS,tpad=start_duration=\(String(format: "%.3f", vStart)):color=black,format=yuv420p")
+                vf = "setpts=PTS-STARTPTS,tpad=start_duration=\(String(format: "%.3f", vStart)):color=black,format=yuv420p"
             }
             args += ["-map", "0:v:0", "-map", "0:a:0?", "-vf", vf,
                      "-c:v", "h264_videotoolbox", "-b:v", "8M", "-maxrate", "12M", "-bufsize", "16M",
@@ -584,8 +584,8 @@ enum Importer {
         }
         let aStart = max(0, aS - startOffset)
         let af = aStart > 0.1
-            ? String(localized: "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1")
-            : (startOffset > 0 ? String(localized: "asetpts=PTS-STARTPTS,aresample=async=1") : String(localized: "aresample=async=1:first_pts=0"))
+            ? "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1"
+            : (startOffset > 0 ? "asetpts=PTS-STARTPTS,aresample=async=1" : "aresample=async=1:first_pts=0")
         args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", "+faststart", dest.path]
         try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress(String(localized: "Convirtiendo"), f) }
         var media = try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
@@ -616,7 +616,7 @@ enum Importer {
 
     static func canOpen(_ url: URL) async -> Bool {
         let log = await FFmpeg.inspect(url)
-        return log.contains(String(localized: "Stream #")) && !log.contains(String(localized: "Error opening input"))
+        return log.contains("Stream #") && !log.contains("Error opening input")
     }
 
     static func unzip(_ zip: URL, to dest: URL) async throws {

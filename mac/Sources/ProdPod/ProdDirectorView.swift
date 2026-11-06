@@ -98,7 +98,7 @@ struct DirectorView: View {
     @AppStorage("directorPestana") private var tab = 0
     @State private var seenChat = 0
 
-    private let tabs: [(String, String)] = [("Cintillos", "rectangle.bottomthird.inset.filled"), (String(localized: "Avisos"), "megaphone.fill"),
+    private let tabs: [(String, String)] = [(String(localized: "Cintillos"), "rectangle.bottomthird.inset.filled"), (String(localized: "Avisos"), "megaphone.fill"),
                                             (String(localized: "Sala"), "person.2.fill"), (String(localized: "Chat"), "bubble.left.and.bubble.right.fill"),
                                             (String(localized: "Sonidos"), "speaker.wave.2.fill"), (String(localized: "Prompter"), "text.viewfinder")]
 
@@ -443,7 +443,7 @@ struct DirectorView: View {
                 }
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.display_name).font(.callout.weight(.semibold)).lineLimit(1)
-                Text([p.roleTitle, inRoom ? (ready ? "preparado" : String(localized: "en la sala")) : "fuera",
+                Text([p.roleTitle, inRoom ? (ready ? String(localized: "preparado") : String(localized: "en la sala")) : String(localized: "fuera"),
                       p.recording_quality.map { String(localized: "graba en \($0)") }].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(ready ? Theme.good : Theme.secondary).lineLimit(1)
             }
@@ -521,7 +521,7 @@ struct CintillosPanel: View {
     @State private var segSub = ""
     @State private var seconds: Double = 15
 
-    private let kinds: [(String, String, Color)] = [("Sponsor", "star.fill", CR.sponsor), (String(localized: "Podcast"), "mic.fill", CR.podcast),
+    private let kinds: [(String, String, Color)] = [(String(localized: "Sponsor"), "star.fill", CR.sponsor), (String(localized: "Podcast"), "mic.fill", CR.podcast),
                                                     (String(localized: "Segmento"), "text.alignleft", CR.segment)]
     private var accent: Color { kinds[mode].2 }
 
@@ -662,7 +662,7 @@ struct CintillosPanel: View {
             CRField(placeholder: String(localized: "Ej.: La pregunta de la semana"), text: $segTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
-            SectionTitle(text: String(localized: "Subtítulo"), trailing: "opcional")
+            SectionTitle(text: String(localized: "Subtítulo"), trailing: String(localized: "opcional"))
             CRField(placeholder: String(localized: "Una línea que lo explique"), text: $segSub)
         }
         Text("El segmento se queda en pantalla 12 segundos.").font(.caption).foregroundStyle(Theme.secondary)

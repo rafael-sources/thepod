@@ -28,7 +28,7 @@ enum LoudnessReport {
 
     /// Mide el archivo con ffmpeg (ebur128 con pico real). Nil si no hay ffmpeg o no se pudo leer.
     static func measure(_ url: URL) async -> Measure? {
-        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", String(localized: "ebur128=peak=true:framelog=quiet"), "-f", "null", "-"], allowFailure: true) else { return nil }
+        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-"], allowFailure: true) else { return nil }
         return parse(out, duration: (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 0)
     }
 
@@ -92,7 +92,7 @@ enum LoudnessReport {
             ctx.fillEllipse(in: CGRect(x: 58, y: y + 3, width: 8, height: 8))
             text(t.name, size: 11, at: y, x: 74)
             let diff = m.integrated - t.lufs
-            let why = ok ? "cumple" : (abs(diff) > t.tolerance ? String(format: String(localized: "%@%.1f dB respecto a %.0f LUFS"), diff > 0 ? "+" : "", diff, t.lufs) : String(format: String(localized: "pico real %.1f dBTP (máximo %.0f)"), m.truePeak, t.maxPeak))
+            let why = ok ? String(localized: "cumple") : (abs(diff) > t.tolerance ? String(format: String(localized: "%@%.1f dB respecto a %.0f LUFS"), diff > 0 ? "+" : "", diff, t.lufs) : String(format: String(localized: "pico real %.1f dBTP (máximo %.0f)"), m.truePeak, t.maxPeak))
             text(why, size: 11, color: ok ? NSColor(white: 0.35, alpha: 1) : NSColor(red: 0.6, green: 0.2, blue: 0.15, alpha: 1), at: y, x: 300)
             y -= 20
         }

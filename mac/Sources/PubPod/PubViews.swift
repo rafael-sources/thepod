@@ -293,7 +293,7 @@ struct PubHomeView: View {
     private func select(_ p: Project) {
         if phase == .sending { return }
         if let s = app.session, s.project.id != p.id, s.isBusy {
-            error = String(localized: "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")».")
+            error = String(localized: "Espera a que termine «\(s.job?.title ?? String(localized: "lo que se está haciendo"))».")
             return
         }
         projectId = p.id
@@ -695,7 +695,7 @@ struct PubHomeView: View {
         case .episode, .reel:
             if app.session?.project.id != p.id { app.open(p) }
             guard let s = app.session else { return }
-            if s.isBusy { error = String(localized: "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")»."); return }
+            if s.isBusy { error = String(localized: "Espera a que termine «\(s.job?.title ?? String(localized: "lo que se está haciendo"))»."); return }
             phase = .sending
             if case .reel(let id) = choice {
                 guard var reel = s.project.reels.first(where: { $0.id == id }) else { phase = .choose; return }
@@ -765,7 +765,7 @@ struct PubPostsList: View {
             .frame(width: 20, height: 20).padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 Text(p.title).font(.system(size: 14, weight: .bold)).lineLimit(2)
-                Text("\(p.platform == "feed" ? "Spotify y Apple Podcasts" : (star?.name ?? p.platform)) · \(when(p))")
+                Text("\(p.platform == "feed" ? String(localized: "Spotify y Apple Podcasts") : (star?.name ?? p.platform)) · \(when(p))")
                     .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 HStack(spacing: 10) {
                     Text(statusText(p)).font(.system(size: 12, weight: .semibold)).foregroundStyle(statusColor(p))

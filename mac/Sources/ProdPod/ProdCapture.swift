@@ -281,6 +281,6 @@ enum AVDevices {
         addr.mScope = kAudioObjectPropertyScopeGlobal
         _ = withUnsafeMutablePointer(to: &name) { AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, $0) }
         let n = (name as String).lowercased()
-        return ["headphone", "headset", "auricular", String(localized: "audífono"), "audifono", "airpods", "buds", "beats"].contains { n.contains($0) }
+        return ["headphone", "headset", "auricular", "audífono", "audifono", "airpods", "buds", "beats"].contains { n.contains($0) }
     }
 }

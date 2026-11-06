@@ -210,7 +210,8 @@ struct PreCalendarView: View {
             .buttonStyle(.bordered)
             let days = gridDays
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
-                ForEach(["lun", "mar", "mié", "jue", "vie", "sáb", "dom"], id: \.self) {
+                ForEach([String(localized: "lun"), String(localized: "mar"), String(localized: "mié"), String(localized: "jue"),
+                         String(localized: "vie"), String(localized: "sáb"), String(localized: "dom")], id: \.self) {
                     Text($0).font(.caption.bold()).foregroundStyle(Theme.secondary)
                 }
                 ForEach(days, id: \.self) { d in

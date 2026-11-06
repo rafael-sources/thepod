@@ -274,7 +274,7 @@ struct NewAmaEventSheet: View {
                 AmaField(placeholder: String(localized: "Ej.: Pregúntanos lo que quieras — Lee La Letra Chica"), text: $title)
             }
             VStack(alignment: .leading, spacing: 8) {
-                AmaTitle(text: String(localized: "Descripción"), trailing: "opcional")
+                AmaTitle(text: String(localized: "Descripción"), trailing: String(localized: "opcional"))
                 AmaField(placeholder: String(localized: "De qué va, qué tipo de preguntas buscas"), text: $desc, lines: 2...4)
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -628,7 +628,7 @@ struct AmaStudioView: View {
     // MARK: Panel lateral
 
     private var side: some View {
-        let tabs: [(String, String, Int)] = [("Solicitudes", "hand.raised.fill", studio.requests.count),
+        let tabs: [(String, String, Int)] = [(String(localized: "Solicitudes"), "hand.raised.fill", studio.requests.count),
                                              (String(localized: "Cola"), "list.number", studio.waiting.count),
                                              (String(localized: "Chat"), "bubble.left.and.bubble.right.fill", 0),
                                              (String(localized: "Compartir"), "link", 0)]

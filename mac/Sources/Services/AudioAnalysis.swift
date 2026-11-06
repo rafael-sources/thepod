@@ -321,7 +321,7 @@ enum AudioAnalysis {
         } else if let m = FFmpeg.rnnoiseModel {
             let path = m.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: "'", with: "\\'")
             try await FFmpeg.run(["-i", ProjectStore.url(media.file, in: slug).path, "-vn", "-ac", "1", "-ar", "48000",
-                                  "-af", String(localized: "arnndn=m='\(path)':mix=\(String(format: "%.2f", wet))"), "-c:a", "pcm_f32le", clean.path],
+                                  "-af", "arnndn=m='\(path)':mix=\(String(format: "%.2f", wet))", "-c:a", "pcm_f32le", clean.path],
                                  duration: media.duration) { progress($0 * 0.8) }
         } else {
             cleanedInput = ProjectStore.url(media.file, in: slug)
@@ -333,7 +333,7 @@ enum AudioAnalysis {
         }
         // Entre palabras, lo poco que deja el aislador (una tecla suelta) se baja: más en Máximo, nada en Natural
         if level >= 2 {
-            af += String(localized: ",agate=threshold=0.006:ratio=3:attack=10:release=250:range=\(level >= 3 ? "0.06" : "0.18")")
+            af += ",agate=threshold=0.006:ratio=3:attack=10:release=250:range=\(level >= 3 ? "0.06" : "0.18")"
         }
         af += ",alimiter=limit=0.89:level=0"
         try await FFmpeg.run(["-i", cleanedInput.path, "-vn", "-af", af, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
@@ -366,7 +366,7 @@ enum AudioAnalysis {
 
     /// Volumen integrado (LUFS) de un archivo, medido con ffmpeg (EBU R128).
     static func loudness(_ url: URL) async -> Double? {
-        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", String(localized: "ebur128=framelog=quiet"), "-f", "null", "-"], allowFailure: true)
+        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=framelog=quiet", "-f", "null", "-"], allowFailure: true)
         else { return nil }
         // En el resumen final: "I:         -16.3 LUFS"
         guard let r = out.range(of: #"I:\s+(-?[0-9.]+) LUFS"#, options: [.regularExpression, .backwards]) else { return nil }

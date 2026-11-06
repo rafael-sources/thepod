@@ -16,7 +16,7 @@ actor PrePodClient {
         let episode_number: Int?
         let title: String?
         let status: String?
-        var label: String { "\(episode_number.map { "Ep \($0) · " } ?? "")\(title ?? "Sin título")" }
+        var label: String { "\(episode_number.map { "Ep \($0) · " } ?? "")\(title ?? String(localized: "Sin título"))" }
     }
     struct Platform: Decodable, Hashable { let platform: String; let status: String; let external_url: String? }
     struct Link: Decodable, Hashable { let platform: String; let url: String }
@@ -110,7 +110,7 @@ actor PrePodClient {
         add("Content-Type: application/octet-stream\r\n\r\n")
         body.append(try Data(contentsOf: file))
         add("\r\n--\(boundary)--\r\n")
-        return try await send(method, path, body: body, contentType: String(localized: "multipart/form-data; boundary=\(boundary)"))
+        return try await send(method, path, body: body, contentType: "multipart/form-data; boundary=\(boundary)")
     }
 
     func login() async throws {

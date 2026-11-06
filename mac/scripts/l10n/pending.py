@@ -2,28 +2,44 @@
 """Literales en español del código que NO están en l10n/en.xliff (lo que el compilador no ve como localizable).
 Uso: python3 scripts/l10n/pending.py [--by-context] [--files]"""
 import re, sys, xml.etree.ElementTree as ET, collections, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).parent)); from swiftlit import literals
+sys.path.insert(0, str(pathlib.Path(__file__).parent)); from swiftlit import literals, key_regex, multiline_spans, split_interp
 root = pathlib.Path(__file__).resolve().parents[2]
 ns = {'x': 'urn:oasis:names:tc:xliff:document:1.2'}
 keys = {u.find('x:source', ns).text for u in ET.parse(root/'l10n/en.xliff').getroot().findall('.//x:trans-unit', ns)}
+keys_by_len = collections.defaultdict(list)
+for k in keys: keys_by_len[len(k or '')].append(k or '')
+def in_xliff(s):
+    rx = key_regex(s)
+    return any(rx.match(k) for ks in keys_by_len.values() for k in ks)
 lit = re.compile(r'"((?:[^"\\]|\\.)*)"')
 spanish = re.compile(r'[a-záéíóúñ]{3,}', re.I)
 def key_of(s):
     s = re.sub(r'\\\((?:[^()]|\([^()]*\))*\)', '%@', s)   # \(x) → %@ (aprox.)
     return s.replace('\\"', '"')
+def technical(s, plain):
+    """Filtros de ffmpeg, SQL, cabeceras, SRT/VTT, rutas e ids: no son texto de interfaz."""
+    if re.search(r'^[\w,\[\]+]*=', plain) and ' ' not in plain.strip(): return True
+    if re.match(r'(SELECT |PRAGMA |INSERT |UPDATE |CREATE |DELETE |;FFMETADATA|\[CHAPTER\]|Content-Type|Stream #|Duration: |Error opening input|time=|lyrics=|title=|artist=|language=|multipart/|nohup |sleep |WEBVTT|\[composite_|postPod·thePod|\+faststart|\+genpts|,alimiter|,volume=|highpass=|rtmps?://|mailto:|x-apple\.|bytes=|note:)', s): return True
+    if '-->' in s or re.fullmatch(r'%[.\d]*f [A-Za-z]+', s): return True
+    if len(''.join(split_interp(s)).strip()) <= 1: return True
+    if re.fullmatch(r'[\w\-./%]*/[\w\-./%]*', plain) or re.fullmatch(r'[\w\-.]*\.(mp4|png|json|log|app|dmg|part)', plain): return True   # rutas
+    return False
 skip_prefix = ('http', '/', '-', '#', 'com.', 'space.', 'cache/', 'media/', 'broll/', 'exports', 'estudio.', 'proxy', 'application/')
 pending = []
 for f in sorted((root/'Sources').rglob('*.swift')):
-    if 'StudioTests' in f.name or 'SelfTest' in f.name: continue
-    for ln, line in enumerate(f.read_text().splitlines(), 1):
+    if 'StudioTests' in f.name or 'SelfTest' in f.name or f.name == 'SensitiveWords.swift': continue   # diccionario del idioma de la transcripción
+    src = f.read_text(); ml = multiline_spans(src)   # lo de dentro de """ """ (scripts, prompts) no es código
+    for ln, line in enumerate(src.splitlines(), 1):
+        if ln in ml: continue
         st = line.strip()
         if st.startswith('//') or st.startswith('///'): continue
         for a, z, s in literals(line):
             plain = re.sub(r'\\\((?:[^()]|\([^()]*\))*\)', '', s)
             if not spanish.search(plain) or s.startswith(skip_prefix) or len(plain.strip()) < 4: continue
             if re.fullmatch(r'[\w\-.]+', plain): continue          # identificadores, claves, nombres de archivo
-            k = key_of(s)
-            if k in keys or k.replace('%@', '%lld') in keys or re.sub(r'%(lld|@|\.\df|d)', '%', k) in {re.sub(r'%(lld|@|\.\df|d)', '%', x) for x in keys}: continue
+            if technical(s, plain): continue
+            if re.search(r'(NSLog|print|dateFormat\s*=)\s*\(?\s*$', line[:a].rstrip()): continue   # registro de depuración y formatos de fecha
+            if in_xliff(s): continue
             before = line[:a].rstrip()[-28:]
             ctx = re.findall(r'(\w+|\.\w+)\s*\($', before) or re.findall(r'(\w+)\s*[=:+]\s*$', before) or ['?']
             pending.append((str(f.relative_to(root)), ln, ctx[-1], s))

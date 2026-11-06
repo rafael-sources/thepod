@@ -508,7 +508,7 @@ struct StudioView: View {
                         VStack(spacing: 2) {
                             Image(systemName: studio.gateOn ? "waveform.badge.minus" : "waveform")
                                 .font(.system(size: 18, weight: .semibold))
-                            Text(studio.gateOn ? "Auto-silencio" : String(localized: "Sin auto-sil.")).font(.system(size: 9, weight: .medium))
+                            Text(studio.gateOn ? String(localized: "Auto-silencio") : String(localized: "Sin auto-sil.")).font(.system(size: 9, weight: .medium))
                         }
                         .frame(width: 64, height: 52)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 1, opacity: studio.gateOn ? 0.16 : 0.06)))
@@ -688,7 +688,7 @@ struct StudioView: View {
             }
             ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
                 let name = studio.people.first(where: { $0.id == id })?.name ?? String(localized: "Otra persona")
-                Text(String(localized: "\(name): \(u.state == "done" ? String(localized: "✓ Listo") : (u.state == "error" ? String(localized: "problema al subir, reintentando") : String(localized: "subiendo… ") + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))"))
+                Text(String(localized: "\(name): \(u.state == "done" ? String(localized: "✓ Listo") : (u.state == "error" ? String(localized: "problema al subir, reintentando") : String(localized: "subiendo… ") + (Self.pendingText(u) ?? String(localized: "\(u.bytes / 1_048_576) MB enviados"))))"))
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
             if studio.canExport && role.isAdmin {

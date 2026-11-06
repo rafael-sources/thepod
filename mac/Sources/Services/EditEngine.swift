@@ -149,7 +149,7 @@ enum EditEngine {
 
     static let soundFillers: Set<String> = ["eh", "ehh", "ehhh", "ehm", "em", "emm", "mm", "mmm", "mmmm", "hmm", "hm",
                                             "um", "umm", "uh", "uhm", "ah", "ahh", "aah", "eeh", "eee", "ee", "mmh"]
-    static let wordFillers: Set<String> = ["este", String(localized: "o sea"), "osea", "pues", "bueno", "digamos", "tipo", "o_sea"]
+    static let wordFillers: Set<String> = ["este", "o sea", "osea", "pues", "bueno", "digamos", "tipo", "o_sea"]
 
     static func normalize(_ w: String) -> String {
         w.lowercased()
@@ -220,7 +220,7 @@ enum EditEngine {
                     if n == "o", nn == "sea", let nx = next {
                         key = "o sea"; end = nx.e; skipNext = true
                         after = k + 2 < idx.count ? all[idx[k + 2]] : nil
-                        rawLast = nx.w; shown = String(localized: "o sea")
+                        rawLast = nx.w; shown = "o sea"
                     }
                     let an = after.map { normalize($0.w) } ?? ""
                     let gapAfter = after.map { $0.s - end } ?? 9

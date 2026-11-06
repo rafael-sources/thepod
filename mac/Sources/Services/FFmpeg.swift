@@ -45,7 +45,7 @@ enum FFmpeg {
     static var strongSpeechChain: String? {
         guard let m = rnnoiseModel else { return nil }
         let path = m.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: "'", with: "\\'")
-        return String(localized: "aresample=48000,highpass=f=80,arnndn=m='\(path)':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11")
+        return "aresample=48000,highpass=f=80,arnndn=m='\(path)':mix=0.9,equalizer=f=4000:t=q:w=1:g=2,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11"
     }
 
     /// Runs ffmpeg. `duration` (seconds of input) enables progress 0...1.
@@ -109,7 +109,7 @@ enum FFmpeg {
 
     static func hasStream(_ kind: String, in url: URL) async -> Bool {
         let log = await inspect(url)
-        return log.contains(String(localized: "Stream #")) && log.contains(": \(kind):")
+        return log.contains("Stream #") && log.contains(": \(kind):")
     }
 
     /// First timestamp of the video and audio streams. prodPod files that lost their first
@@ -145,7 +145,7 @@ enum FFmpeg {
     static func lastTime(in text: String) -> Double? {
         var result: Double?
         var searchRange = text.startIndex..<text.endIndex
-        while let r = text.range(of: String(localized: "time="), range: searchRange) {
+        while let r = text.range(of: "time=", range: searchRange) {
             let after = text[r.upperBound...]
             let token = after.prefix { !$0.isWhitespace }
             if let secs = parseClock(String(token)) { result = secs }
@@ -155,7 +155,7 @@ enum FFmpeg {
     }
 
     static func headerDuration(in text: String) -> Double? {
-        guard let r = text.range(of: String(localized: "Duration: ")) else { return nil }
+        guard let r = text.range(of: "Duration: ") else { return nil }
         let token = text[r.upperBound...].prefix { $0 != "," }
         return parseClock(String(token))
     }

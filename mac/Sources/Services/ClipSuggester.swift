@@ -28,10 +28,10 @@ enum ClipSuggester {
 
     Devuelve ÚNICAMENTE este JSON:
     {
-      "summary": String(localized: "<resumen del episodio en 2 frases>"),
+      "summary": "<resumen del episodio en 2 frases>",
       "clips": [
-        {"start": "MM:SS", "end": "MM:SS", "title": String(localized: "<título corto y llamativo, máx 8 palabras>"),
-         "reason": String(localized: "<por qué funciona en redes, 1 frase>")}
+        {"start": "MM:SS", "end": "MM:SS", "title": "<título corto y llamativo, máx 8 palabras>",
+         "reason": "<por qué funciona en redes, 1 frase>"}
       ]
     }
     Entre 3 y 8 clips, ordenados del mejor al peor. Sin texto fuera del JSON.
@@ -179,7 +179,7 @@ enum Keychain {
         return base.appendingPathComponent("cuenta.dat")
     }
 
-    private static let mask = Array(String(localized: "postPod·thePod·aitism").utf8)
+    private static let mask = Array("postPod·thePod·aitism".utf8)
     private static func scramble(_ d: Data) -> Data {
         Data(d.enumerated().map { $0.element ^ mask[$0.offset % mask.count] })
     }

@@ -308,7 +308,7 @@ struct PublishStep: View {
         ["spotify": String(localized: "Spotify"), "apple": String(localized: "Apple Podcasts"), "youtube": String(localized: "YouTube")][p] ?? p.capitalized
     }
     private func statusName(_ s: String) -> String {
-        ["connected": "conectado", "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s
+        ["connected": String(localized: "conectado"), "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s
     }
 
     private func loadPodcasts() {
@@ -475,7 +475,7 @@ struct VoiceSheet: View {
             HStack(spacing: 10) {
                 Text("Velocidad").frame(width: 60, alignment: .leading)
                 Slider(value: $rate, in: 0.35...0.65)
-                Text(rate < 0.45 ? "lenta" : rate > 0.55 ? String(localized: "rápida") : "normal").frame(width: 50)
+                Text(rate < 0.45 ? String(localized: "lenta") : rate > 0.55 ? String(localized: "rápida") : String(localized: "normal")).frame(width: 50)
             }
             .font(.callout)
             Text("Las voces mejoradas y premium (suenan mucho mejor) se bajan en Ajustes del Sistema → Accesibilidad → Contenido hablado → Voces del sistema.")

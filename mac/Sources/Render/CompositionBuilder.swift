@@ -638,8 +638,8 @@ enum CompositionBuilder {
         if FileManager.default.fileExists(atPath: url.path) { return AVURLAsset(url: url) }
         guard FFmpeg.isAvailable else { return nil }
         do {
-            _ = try await FFmpeg.run(["-f", "lavfi", "-i", String(localized: "sine=frequency=1000:sample_rate=48000"), "-t", "10",
-                                      "-af", String(localized: "volume=-6dB"), "-c:a", "aac", "-b:a", "64k", url.path])
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=48000", "-t", "10",
+                                      "-af", "volume=-6dB", "-c:a", "aac", "-b:a", "64k", url.path])
         } catch { return nil }
         return FileManager.default.fileExists(atPath: url.path) ? AVURLAsset(url: url) : nil
     }
@@ -652,7 +652,7 @@ enum CompositionBuilder {
         guard FFmpeg.isAvailable else { return nil }
         try? FileManager.default.removeItem(at: url)
         do {
-            _ = try await FFmpeg.run(["-f", "lavfi", "-i", String(localized: "anullsrc=r=48000:cl=stereo"), "-t", String(Int(need)), "-c:a", "aac", "-b:a", "32k", url.path])
+            _ = try await FFmpeg.run(["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", String(Int(need)), "-c:a", "aac", "-b:a", "32k", url.path])
         } catch { return nil }
         return FileManager.default.fileExists(atPath: url.path) ? AVURLAsset(url: url) : nil
     }

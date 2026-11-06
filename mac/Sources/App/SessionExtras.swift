@@ -245,90 +245,90 @@ enum Help {
     static func text(for step: Step) -> String {
         switch step {
         case .overview:
-            return """
+            return String(localized: """
             Aquí ves las grabaciones que llegaron: una pista por persona. Ponle nombre a cada una (sale en el video) \
             y revisa que estén todas. Si falta alguien, impórtala con ⌘O. Si una persona se oye desfasada, en su panel \
             puedes correrla unos décimas con «Desfase».
-            """
+            """)
         case .fix:
-            return """
+            return String(localized: """
             «Arreglar todo» hace tres cosas: sonido de estudio (quita ruido y empareja el volumen), quita los silencios \
             largos y las muletillas («eeeh»). Nada se borra de verdad: cada corte queda en la lista y se puede apagar. \
             En el timeline: arrastra un trozo para cortarlo de todos, o solo callar o bajar a una persona ahí (si tose, \
             si gritó). Doble clic sobre una persona pone un punto en su línea de volumen: arrástralo arriba o abajo.
-            """
+            """)
         case .captions:
-            return """
+            return String(localized: """
             La transcripción se hace en tu Mac, sin internet. Doble clic en una palabra para corregirla; las tijeras \
             quitan una frase del video. Elige un estilo y arrástralos sobre el video para ponerlos donde quieras. \
             «Guardar .srt» te da el archivo para YouTube.
-            """
+            """)
         case .sensitive:
-            return """
+            return String(localized: """
             Busca en la transcripción groserías y palabras que las redes bajan de alcance (muerte, suicidio, drogas, \
             sexo, armas…). Para cada una eliges: pitido encima (no se oye) y/o cambiar el subtítulo por la palabra que se \
             usa en redes para decir lo mismo (desvivirse, intimidad, sustancias…). También puedes agregar tus propias \
             palabras. El audio original no se toca: el pitido y el cambio van en la vista previa y en el export.
-            """
+            """)
         case .look:
-            return """
+            return String(localized: """
             Cómo se ve el video: el diseño (quién sale dónde), el orden de las personas, espejo, fondo virtual por \
             persona, color, la marca del podcast (fondo, logo, nombres) y la intro y el cierre. Lo que eliges aquí \
             vale para YouTube, reels y cuadrado; cada formato se acomoda solo.
-            """
+            """)
         case .layers:
-            return """
+            return String(localized: """
             Capas encima del video un rato: textos (título, caja, etiqueta), imágenes PNG/JPG, stickers (emojis) y \
             b-roll (un video o foto que tapa la pantalla o va en una ventanita, máximo 10 s). Se mueven con el ratón \
             sobre la vista previa y se ubican en el tiempo con el campo h:mm:ss o el botón «Aquí».
-            """
+            """)
         case .cintillos:
-            return """
+            return String(localized: """
             Los textos tipo noticiero que entran abajo. Tres estilos: Noticiero, Limpio y Sponsor. Los que puso el \
             director en vivo llegan solos y se pueden editar; aquí agregas los que faltaron. Tienen animación de \
             entrada y salida y un sonido bajo opcional.
-            """
+            """)
         case .sounds:
-            return """
+            return String(localized: """
             Música y efectos del soundboard, y voz artificial. «Al inicio» y «Al final» respetan el intro y el \
             cierre. La música puede bajar sola cuando alguien habla y repetirse en bucle. Cada pista tiene volumen, \
             fades y se mueve con el campo h:mm:ss.
-            """
+            """)
         case .brands:
-            return """
+            return String(localized: """
             Los sponsors del guion de prePod salen en el minuto donde iban, con su logo. Los cintillos del director \
             quedan donde los puso en vivo. Aquí los apagas o cambias el momento; para crear cintillos nuevos usa la \
             sección Cintillos.
-            """
+            """)
         case .reels:
-            return """
+            return String(localized: """
             Cada momento marcado (en postPod, con «Marcar momento» o con las teclas I y O) es un video vertical. \
             Cada reel se edita por pestañas: Diseño, Subtítulos (cómo se ven y el texto), Música, B-roll y Cintillos; todo aparte \
             del episodio. Con «Plantillas» guardas un diseño y lo reusas en otros episodios. El botón de bajar exporta \
             solo ese reel.
-            """
+            """)
         case .cover:
-            return """
+            return String(localized: """
             La imagen que representa al episodio: la portada que va a Instagram y la miniatura para YouTube. \
             «Buscar las mejores capturas» recorre el video y propone los segundos donde todas las personas salen \
             sonriendo, con los ojos abiertos y nítidas; eliges una en el carrusel. También puedes capturar el segundo \
             donde esté parado el episodio.
-            """
+            """)
         case .export:
-            return """
+            return String(localized: """
             Elige para dónde va (YouTube 16:9, reels 9:16, cuadrado, solo audio). H.264 es el que abre en todos lados; \
             HEVC pesa la mitad. El volumen se ajusta a −16 LUFS (lo que piden Spotify y YouTube). Los archivos \
             quedan en la carpeta de exportados.
-            """
+            """)
         case .publish:
-            return """
+            return String(localized: """
             Publica con lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts y tu canal de \
             YouTube. Si algo falla, el aviso te dice qué falta configurar en prePod.
-            """
+            """)
         }
     }
 
-    static let shortcuts = """
+    static var shortcuts: String { String(localized: """
     Atajos en el editor (cuando no estás escribiendo en un campo):
     Espacio o K · reproducir / pausar
     ← → · un segundo atrás / adelante (con ⇧, cinco)
@@ -338,7 +338,7 @@ enum Help {
     Arrastra un trozo sobre una persona · «Silenciar solo a…» / «−6 dB a…» / «Cortar de todos»
     I · marcar inicio de un reel · O · marcar fin y crearlo (viendo un reel, O ajusta su fin)
     ⌘Z · deshacer · ⇧⌘Z · rehacer
-    """
+    """) }
 }
 
 /// Botón «?» que abre una explicación corta de la sección.
