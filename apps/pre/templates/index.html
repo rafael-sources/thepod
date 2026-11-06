@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -17,8 +17,9 @@
 </head>
 <body>
   <div id="app"></div>
-  <script>window.POD_BASE = {{ request.script_root|tojson }};</script>
+  <script>window.POD_BASE = {{ request.script_root|tojson }}; window.POD_COOKIE_DOMAIN = {{ cookie_domain|tojson }};</script>
   <script src="{{ url_for('static', filename='js/pod-base.js') }}?v={{ cache_bust }}"></script>
+  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}?v={{ cache_bust }}"></script>
   <script src="{{ url_for('static', filename='js/vendor/vue.global.js') }}"></script>
   <script src="{{ url_for('static', filename='js/vendor/sweetalert2.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/vendor/podswal.js') }}"></script>

@@ -232,15 +232,20 @@ def create_app():
     import time as _time
     _boot_ts = str(int(_time.time()))
 
+    from pod_lang import current_lang
+
+    def _index():
+        return render_template("index.html", cache_bust=_boot_ts, lang=current_lang(), cookie_domain=SESSION_COOKIE_DOMAIN or "")
+
     @app.get("/")
     def index():
-        return render_template("index.html", cache_bust=_boot_ts)
+        return _index()
 
     @app.get("/<path:path>")
     def spa(path):
         if path.startswith(("api/", "media/", "static/")):
             abort(404)
-        return render_template("index.html", cache_bust=_boot_ts)
+        return _index()
 
     return app
 
