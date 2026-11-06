@@ -1,8 +1,8 @@
 import AppKit
 import CoreImage
 
-/// Carga de imágenes del proyecto. Los logos que vienen de prePod a veces son SVG con extensión .png:
-/// NSImage los abre por contenido, y aquí se pasan a mapa de bits para Core Image / Core Graphics.
+/// Project image loading. Logos coming from prePod are sometimes SVG with a .png extension:
+/// NSImage opens them by content, and here they're converted to bitmaps for Core Image / Core Graphics.
 enum ImageFile {
     static func nsImage(_ url: URL) -> NSImage? {
         if let img = NSImage(contentsOf: url), img.isValid, img.size.width > 0 { return img }
@@ -11,7 +11,7 @@ enum ImageFile {
         return nil
     }
 
-    /// CGImage de hasta 1024 px por lado (los SVG se dibujan a ese tamaño).
+    /// CGImage of up to 1024 px per side (SVGs are drawn at that size).
     static func cgImage(_ img: NSImage, maxSide: CGFloat = 1024) -> CGImage? {
         if let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil), cg.width > 1, cg.height > 1,
            img.representations.contains(where: { $0 is NSBitmapImageRep }) {

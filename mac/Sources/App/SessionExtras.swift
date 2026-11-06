@@ -1,10 +1,10 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Deshacer / rehacer (0.13)
+// MARK: - Undo / redo (0.13)
 
-/// Cada cambio del proyecto se puede deshacer con ⌘Z y rehacer con ⇧⌘Z. Los cambios seguidos
-/// (arrastrar un control, escribir) se juntan en un solo paso.
+/// Every project change can be undone with ⌘Z and redone with ⇧⌘Z. Consecutive changes
+/// (dragging a control, typing) are merged into a single step.
 final class ProjectHistory {
     private(set) var undo: [Project] = []
     private(set) var redo: [Project] = []
@@ -16,7 +16,7 @@ final class ProjectHistory {
         guard !isRestoring else { return }
         let now = Date()
         if now.timeIntervalSince(lastPush) < 0.6, !undo.isEmpty {
-            // Mismo gesto: se queda el estado de antes del primer cambio
+            // Same gesture: keep the state from before the first change
             lastPush = now
             return
         }
@@ -70,7 +70,7 @@ extension ProjectSession {
         }
     }
 
-    // MARK: Atajos de teclado
+    // MARK: Keyboard shortcuts
 
     func togglePlay() {
         if player.rate > 0 { player.pause() } else { player.play() }
@@ -82,7 +82,7 @@ extension ProjectSession {
         seek(timeline: t, play: wasPlaying)
     }
 
-    /// I: marca el inicio de un reel en el reloj. O: marca el fin y crea el reel (o ajusta el reel que se está viendo).
+    /// I: marks a reel's start at the clock. O: marks the end and creates the reel (or adjusts the reel being viewed).
     func markIn() {
         inPoint = playheadTimeline
         flashNote(String(localized: "Inicio marcado en \(Timecode.string(inPoint ?? 0)) · pulsa O al final"))
@@ -91,7 +91,7 @@ extension ProjectSession {
     func markOut() {
         let t = playheadTimeline
         if let r = previewReel, let i = project.reels.firstIndex(where: { $0.id == r.id }), inPoint == nil {
-            // Viendo un reel sin inicio nuevo: O ajusta el final de ese reel
+            // Viewing a reel with no new start: O adjusts that reel's end
             if t > project.reels[i].start + 1 {
                 project.reels[i].end = t
                 previewReel = project.reels[i]
@@ -109,7 +109,7 @@ extension ProjectSession {
         flashNote(String(localized: "Reel \(Timecode.string(start, tenths: false)) → \(Timecode.string(end, tenths: false)) · lo ves en Reels"))
     }
 
-    /// Qué hacer con una tecla cuando no se está escribiendo en un campo. Devuelve true si la usó.
+    /// What to do with a key when not typing in a field. Returns true if it used it.
     func handleKey(_ e: NSEvent) -> Bool {
         let flags = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let chars = e.charactersIgnoringModifiers?.lowercased() ?? ""
@@ -118,8 +118,8 @@ extension ProjectSession {
             return false
         }
         switch e.keyCode {
-        case 51, 117: return deleteSelectedVolumePoint()                     // Suprimir: quita el punto de volumen elegido
-        case 49: togglePlay(); return true                                   // espacio
+        case 51, 117: return deleteSelectedVolumePoint()                     // Delete: removes the selected volume point
+        case 49: togglePlay(); return true                                   // space
         case 123: nudge(flags.contains(.shift) ? -5 : -1); return true       // ←
         case 124: nudge(flags.contains(.shift) ? 5 : 1); return true         // →
         default: break
@@ -136,7 +136,7 @@ extension ProjectSession {
     }
 }
 
-/// Instala el monitor de teclado mientras el editor está en pantalla. No roba teclas de los campos de texto.
+/// Installs the keyboard monitor while the editor is on screen. Doesn't steal keys from text fields.
 struct KeyShortcuts: ViewModifier {
     @ObservedObject var session: ProjectSession
     @State private var monitor: Any?
@@ -145,7 +145,7 @@ struct KeyShortcuts: ViewModifier {
             .onAppear {
                 guard monitor == nil else { return }
                 monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
-                    // Si se está escribiendo (campo de texto, editor), no tocar
+                    // If typing (text field, editor), don't touch
                     if let r = e.window?.firstResponder, r is NSTextView || r is NSTextField { return e }
                     if e.window?.firstResponder is NSText { return e }
                     return session.handleKey(e) ? nil : e
@@ -155,10 +155,10 @@ struct KeyShortcuts: ViewModifier {
     }
 }
 
-// MARK: - Plantillas de reel
+// MARK: - Reel templates
 
-/// Un diseño de reel guardado para usarlo en otros episodios (layout, opciones, marca, subtítulos, orden).
-/// El logo y el fondo propios no se guardan: son archivos de cada episodio.
+/// A reel design saved for use in other episodes (layout, options, branding, subtitles, order).
+/// The reel's own logo and background aren't saved: they're per-episode files.
 struct ReelTemplate: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
@@ -175,7 +175,7 @@ struct ReelTemplate: Codable, Identifiable, Equatable {
     static func save(_ list: [ReelTemplate]) {
         try? JSONEncoder().encode(list).write(to: file, options: .atomic)
     }
-    /// Lo que se aplica: todo menos los archivos del episodio.
+    /// What gets applied: everything except the episode's files.
     func applied(over current: ReelLook) -> ReelLook {
         var l = look
         l.logoFile = current.logoFile
@@ -184,7 +184,7 @@ struct ReelTemplate: Codable, Identifiable, Equatable {
     }
 }
 
-/// Menú «Plantillas» para un diseño de reel: guardar el actual, aplicar una guardada, borrar.
+/// «Plantillas» menu for a reel design: save the current one, apply a saved one, delete.
 struct ReelTemplateMenu: View {
     @Binding var look: ReelLook
     @State private var templates = ReelTemplate.load()
@@ -239,7 +239,7 @@ struct ReelTemplateMenu: View {
     }
 }
 
-// MARK: - Ayuda por sección
+// MARK: - Per-section help
 
 enum Help {
     static func text(for step: Step) -> String {
@@ -341,7 +341,7 @@ enum Help {
     """) }
 }
 
-/// Botón «?» que abre una explicación corta de la sección.
+/// «?» button that opens a short explanation of the section.
 struct HelpButton: View {
     let step: Step
     @State private var open = false
@@ -362,7 +362,7 @@ struct HelpButton: View {
 }
 
 
-// MARK: - Mezcla (0.14): solo, mudo y nivel
+// MARK: - Mix (0.14): solo, mute and level
 
 extension ProjectSession {
     func toggleSolo(_ laneId: Int) {
@@ -375,14 +375,14 @@ extension ProjectSession {
         project.lanes[i].muted.toggle()
     }
 
-    /// Nivel 0…1 de una persona en este instante: el dB del análisis en el reloj, con el volumen de la pista.
-    /// Es lo analizado, no una medición de la salida; sirve para ver quién suena y cuánto.
+    /// A person's 0…1 level at this instant: the analysis dB at the clock, with the track volume.
+    /// It's what was analyzed, not a measurement of the output; it shows who's sounding and how much.
     func laneLevel(_ laneId: Int) -> Double {
-        // Reproduciendo: lo que realmente suena de esa persona (con todo lo que le hace la mezcla)
+        // Playing: what actually sounds from that person (with everything the mix does to it)
         if player.rate > 0, let db = built?.levelDB(lane: laneId, at: player.currentTime().seconds) {
             return min(1, max(0, (db + 60) / 60))
         }
-        // En pausa: una estimación con el análisis del sonido y el volumen de la pista
+        // Paused: an estimate from the sound analysis and the track volume
         guard let energy, let lane = project.lanes.first(where: { $0.id == laneId }), project.laneAudible(lane) else { return 0 }
         let t = playheadTimeline
         var db = Double(energy.db(lane: laneId, at: t))
@@ -392,7 +392,7 @@ extension ProjectSession {
 }
 
 
-// MARK: - Palabras sensibles
+// MARK: - Sensitive words
 
 extension ProjectSession {
     func scanSensitive() {
@@ -414,21 +414,21 @@ extension ProjectSession {
         }
     }
 
-    /// Frase corta alrededor de una palabra, para ver el contexto.
+    /// Short phrase around a word, to see the context.
     func contextAround(_ m: SensitiveMark) -> String {
         let ws = project.words.filter { $0.lane == m.lane && $0.s >= m.s - 3 && $0.s <= m.e + 3 }.sorted { $0.s < $1.s }
         return ws.map { $0.w }.joined(separator: " ")
     }
 }
 
-// MARK: - Volumen dibujado (0.16)
+// MARK: - Drawn volume (0.16)
 
 extension ProjectSession {
     func addVolumePoint(laneId: Int, t: Double, db: Double) -> UUID? {
         guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return nil }
         let tt = min(max(0, t), project.duration)
         let d = min(VolumePoint.maxDB, max(VolumePoint.minDB, db))
-        // Si la línea estaba plana, el primer punto va acompañado de dos extremos para que el resto siga igual
+        // If the line was flat, the first point comes with two endpoints so the rest stays the same
         if project.lanes[i].volumePoints.isEmpty {
             project.lanes[i].volumePoints = [VolumePoint(t: 0, db: 0), VolumePoint(t: project.duration, db: 0)]
         }
@@ -458,7 +458,7 @@ extension ProjectSession {
         selectedVolumePoint = nil
     }
 
-    /// Un tramo de UNA persona: silenciar solo ahí (−60 dB) o bajar X dB. Son cuatro puntos en la línea.
+    /// A span of ONE person: mute only there (−60 dB) or lower by X dB. It's four points on the line.
     func shapeVolume(laneId: Int, from a: Double, to b: Double, db: Double) {
         guard let i = project.lanes.firstIndex(where: { $0.id == laneId }), b - a > 0.05 else { return }
         let lane = project.lanes[i]
@@ -466,7 +466,7 @@ extension ProjectSession {
         if project.lanes[i].volumePoints.isEmpty {
             project.lanes[i].volumePoints = [VolumePoint(t: 0, db: 0), VolumePoint(t: project.duration, db: 0)]
         }
-        // Quitar los puntos que caen dentro y poner los cuatro nuevos
+        // Remove the points that fall inside and add the four new ones
         project.lanes[i].volumePoints.removeAll { $0.t > a - 0.06 && $0.t < b + 0.06 }
         project.lanes[i].volumePoints += [VolumePoint(t: max(0, a - 0.05), db: before), VolumePoint(t: a, db: db),
                                            VolumePoint(t: b, db: db), VolumePoint(t: min(project.duration, b + 0.05), db: after)]

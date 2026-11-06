@@ -2,35 +2,35 @@ import AVFoundation
 import MediaToolbox
 import QuartzCore
 
-/// Engancha la cadena de voz de una persona a su pista dentro de la mezcla (`AVAudioMix`), antes del
-/// volumen de la mezcla (como un insert pre-fader). El mismo tap sirve en la vista previa (AVPlayer) y
-/// en el export (AVAssetExportSession): por eso lo que se oye es lo que sale.
+/// Hooks a person's voice chain into their track inside the mix (`AVAudioMix`), before the
+/// mix volume (like a pre-fader insert). The same tap serves the preview (AVPlayer) and
+/// the export (AVAssetExportSession): that's why what you hear is what comes out.
 ///
-/// También mide el nivel de lo que pasa, para el medidor del timeline (`recent`), como hacía `LevelTap`.
+/// Also measures the level of what passes, for the timeline meter (`recent`), as `LevelTap` did.
 final class ChainTap: @unchecked Sendable, LoudnessSource {
     let chain: VoiceChain
     let laneId: Int
     let loudness = LoudnessAccumulator()
-    /// El tap creado con makeProcessor (para reconocerlo en la mezcla).
+    /// The tap created with makeProcessor (to recognize it in the mix).
     var processor: MTAudioProcessingTap?
     func recentPower() -> (power: Double, mediaTime: Double, stamp: CFTimeInterval)? { loudness.recent() }
     private var sampleTime: Double = 0
     private var maxFrames: UInt32 = 4096
 
-    // Medidor
+    // Meter
     private var lock = os_unfair_lock()
     private var level: Float = -120
     private var stamp: CFTimeInterval = 0
 
-    /// Cómo pasar del segundo del video (lo que ve el tap) al segundo del episodio (la automatización).
+    /// How to go from the video second (what the tap sees) to the episode second (the automation).
     private let keep: [EditEngine.Span]
     private let introDuration: Double
 
-    /// Panorama (−1…1), aplicado después de la cadena con potencia constante; solo hace algo con dos canales.
+    /// Pan (−1…1), applied after the chain with constant power; only does something with two channels.
     var pan: Double = 0
-    /// Reducción de ruido por huella, antes de la cadena (nil = apagada).
+    /// Noise-print reduction, before the chain (nil = off).
     var noise: NoiseReducer?
-    /// Quitar clics, antes de la cadena (nil = apagado).
+    /// De-click, before the chain (nil = off).
     var declick: DeClicker?
 
     init(laneId: Int, settings: ChainSettings, keep: [EditEngine.Span] = [], introDuration: Double = 0) {
@@ -41,14 +41,14 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
         VoiceChainRegistry.shared.register(chain, lane: laneId)
     }
 
-    /// Segundo del episodio para un segundo del video final (nil si no hay mapa).
+    /// Episode second for a second of the final video (nil if there's no map).
     private func timelineTime(output: Double) -> Double? {
         guard !keep.isEmpty else { return nil }
         return EditEngine.toTimeline(max(0, output - introDuration), keep: keep)
     }
     private var sampleRate: Double = 48_000
 
-    /// Nivel reciente en dB, o nil si hace más de `maxAge` s que no pasa audio.
+    /// Recent level in dB, or nil if no audio has passed for more than `maxAge` s.
     func recent(maxAge: Double = 0.3) -> Float? {
         os_unfair_lock_lock(&lock); defer { os_unfair_lock_unlock(&lock) }
         return CACurrentMediaTime() - stamp <= maxAge ? level : nil
@@ -74,7 +74,7 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
         os_unfair_lock_unlock(&lock)
     }
 
-    // El Audio Unit de entrada pide audio: le copiamos el bloque que ya pedimos a la pista en `process`
+    // The input Audio Unit asks for audio: we copy it the block we already pulled from the track in `process`
     private var sourceList: UnsafeMutablePointer<AudioBufferList>?
     private var sourceFrames: CMItemCount = 0
     private static let pull: AURenderCallback = { refCon, _, _, _, frames, ioData in
@@ -96,7 +96,7 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
         return noErr
     }
 
-    /// El procesador para `AVMutableAudioMixInputParameters.audioTapProcessor`.
+    /// The processor for `AVMutableAudioMixInputParameters.audioTapProcessor`.
     func makeProcessor() -> MTAudioProcessingTap? {
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -121,26 +121,26 @@ final class ChainTap: @unchecked Sendable, LoudnessSource {
             },
             process: { tap, frames, _, bufferList, framesOut, flagsOut in
                 let me = Unmanaged<ChainTap>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
-                // 1) El audio de la pista y en qué segundo del video va
+                // 1) The track's audio and at which video second it goes
                 var range = CMTimeRange.zero
                 guard MTAudioProcessingTapGetSourceAudio(tap, frames, bufferList, flagsOut, &range, framesOut) == noErr else { return }
                 let tl = range.start.isValid ? me.timelineTime(output: range.start.seconds) : nil
-                // 1b) Reducción de ruido por huella, sobre la fuente, antes de la cadena
+                // 1b) Noise-print reduction, on the source, before the chain
                 if !VoiceChainRegistry.shared.bypassAll {
                     me.declick?.process(bufferList, frames: Int(framesOut.pointee))
                     me.noise?.process(bufferList, frames: Int(framesOut.pointee))
                 }
-                // 2) Por la cadena (el AU de entrada copia de este mismo bloque)
+                // 2) Through the chain (the input AU copies from this same block)
                 me.sourceList = bufferList
                 me.sourceFrames = framesOut.pointee
                 let st = me.chain.render(into: bufferList, frames: UInt32(frames), sampleTime: me.sampleTime, timelineTime: tl)
                 me.sourceList = nil
                 if st != noErr {
-                    // Si la cadena falla, el audio ya está tal cual en el buffer: nunca se deja la pista muda
+                    // If the chain fails, the audio is already as-is in the buffer: the track is never left muted
                     _ = st
                 }
                 me.sampleTime += Double(frames)
-                // Panorama de conversación: ganancias L/R de potencia constante sobre el buffer ya procesado
+                // Conversation panning: constant-power L/R gains on the already processed buffer
                 if abs(me.pan) > 0.001 {
                     let list = UnsafeMutableAudioBufferListPointer(bufferList)
                     let theta = (me.pan + 1) / 2 * Double.pi / 2

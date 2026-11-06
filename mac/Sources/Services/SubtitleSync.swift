@@ -1,32 +1,32 @@
 import Foundation
 
-/// Pone las palabras de la transcripción donde realmente suenan.
+/// Places the transcript words where they actually sound.
 ///
-/// POR QUÉ
-/// Los tiempos que da Whisper por palabra salen corridos: en los proyectos medidos, la palabra figuraba
-/// entre 0,1 y 0,45 s (a veces 0,8 s) ANTES de que se oyera la voz. Los subtítulos aparecían antes de que
-/// la persona hablara, y al cortar silencios se notaba más (la frase queda pegada al corte).
+/// WHY
+/// Whisper's per-word timings come out shifted: in the measured projects, the word appeared
+/// between 0.1 and 0.45 s (sometimes 0.8 s) BEFORE the voice was heard. Subtitles appeared before
+/// the person spoke, and cutting silences made it more noticeable (the phrase ends up stuck to the cut).
 ///
-/// CÓMO
-/// Por cada persona se compara "dónde hay palabras" con "dónde suena su micrófono" (volumen cada 10 ms).
-/// 1. Por tramos de 60 s se busca el corrimiento general (±0,6 s) que mejor hace coincidir las dos cosas.
-/// 2. Cada frase (palabras sin pausa de más de 0,35 s) se afina alrededor de ese corrimiento (±0,6 s).
-/// Una frase nunca pasa a la anterior de la misma persona, así el orden se mantiene.
-/// Todas las funciones devuelven las palabras en el MISMO orden que se recibieron (para poder seguir
-/// cada palabra antes/después, por ejemplo para las palabras sensibles).
+/// HOW
+/// For each person "where there are words" is compared with "where their microphone sounds" (volume every 10 ms).
+/// 1. In 60 s spans the overall shift (±0.6 s) that best matches the two is searched.
+/// 2. Each phrase (words without a pause longer than 0.35 s) is refined around that shift (±0.6 s).
+/// A phrase never passes the same person's previous one, so the order is preserved.
+/// All functions return the words in the SAME order they were received (so each word can be
+/// tracked before/after, for example for sensitive words).
 enum SubtitleSync {
     static let hop = 0.01                   // 10 ms
-    static let maxShift = 0.6               // corrimiento máximo que se busca, en segundos
-    static let chunk = 60.0                 // tramo para el corrimiento general
-    static let phraseGap = 0.35             // pausa que separa frases
+    static let maxShift = 0.6               // maximum shift searched, in seconds
+    static let chunk = 60.0                 // span for the overall shift
+    static let phraseGap = 0.35             // pause that separates phrases
 
     struct Result {
         var words: [Word]
-        var moved: Int                      // palabras que se corrieron más de 30 ms
-        var typicalShift: Double            // corrimiento típico (mediana), en segundos
+        var moved: Int                      // words shifted by more than 30 ms
+        var typicalShift: Double            // typical shift (median), in seconds
     }
 
-    /// Ajusta las palabras al audio. Con `range` (tiempo del episodio) solo toca las palabras que empiezan ahí.
+    /// Aligns the words to the audio. With `range` (episode time) it only touches words starting there.
     static func align(_ words: [Word], project: Project, range: (start: Double, end: Double)? = nil,
                       progress: @escaping (Double) -> Void = { _ in }) async throws -> Result {
         var out = words
@@ -34,7 +34,7 @@ enum SubtitleSync {
         let lanes = Array(Set(words.map(\.lane))).sorted()
         for (li, laneId) in lanes.enumerated() {
             guard let lane = project.lanes.first(where: { $0.id == laneId }) else { continue }
-            // Índices de las palabras de esta persona, en orden de tiempo
+            // Indices of this person's words, in time order
             let idx = words.indices.filter { i in
                 let w = words[i]
                 guard w.lane == laneId else { return false }
@@ -52,7 +52,7 @@ enum SubtitleSync {
                 let inChunk = idx.filter { words[$0].s >= c0 && words[$0].s < c1 }
                 defer { c0 = c1 }
                 guard !inChunk.isEmpty else { continue }
-                // Volumen del micrófono de la persona desde un poco antes hasta un poco después del tramo
+                // Volume of the person's microphone from a bit before to a bit after the span
                 let e0 = words[inChunk.first!].s - maxShift - 0.4
                 let e1 = words[inChunk.map { $0 }.max { words[$0].e < words[$1].e }!].e + maxShift + 0.4
                 let env = try await envelope(project: project, lane: lane, from: e0, to: e1)
@@ -85,16 +85,16 @@ enum SubtitleSync {
                     }
                     return bestShift
                 }
-                // 1. Corrimiento general del tramo (solo si hay habla suficiente para que sea confiable)
+                // 1. Overall shift of the span (only if there's enough speech for it to be reliable)
                 let speech = inChunk.reduce(0.0) { $0 + max(0, words[$1].e - words[$1].s) }
                 if speech >= 3 { prior = best(inChunk, around: 0, span: maxShift) }
-                // 2. Frase por frase
+                // 2. Phrase by phrase
                 var phrase: [Int] = []
                 func flush() {
                     guard let f = phrase.first, let l = phrase.last else { return }
                     var shift = prior
                     if words[l].e - words[f].s >= 0.6 { shift = best(phrase, around: prior, span: maxShift) }
-                    shift = max(shift, prevEnd + 0.02 - words[f].s)       // no pisar la frase anterior
+                    shift = max(shift, prevEnd + 0.02 - words[f].s)       // don't overlap the previous phrase
                     for i in phrase {
                         out[i].s = max(0, words[i].s + shift)
                         out[i].e = max(out[i].s + 0.05, words[i].e + shift)
@@ -108,9 +108,9 @@ enum SubtitleSync {
                     phrase.append(i)
                 }
                 flush()
-                // 3. Palabras estiradas sobre una pausa ("creo" de 2,5 s): Whisper le pega el silencio a la palabra.
-                //    Al cortar ese silencio la palabra desaparecía del subtítulo o salía antes de tiempo. Se deja
-                //    solo el pedazo donde suena la voz.
+                // 3. Words stretched over a pause ("creo" of 2.5 s): Whisper attaches the silence to the word.
+                //    When that silence was cut the word disappeared from the subtitle or showed early. Only
+                //    the piece where the voice sounds is kept.
                 let floor = percentile(env, 0.2)
                 for i in inChunk {
                     let dur = out[i].e - out[i].s
@@ -137,7 +137,7 @@ enum SubtitleSync {
         return sorted[min(sorted.count - 1, Int(Double(sorted.count) * q))]
     }
 
-    /// El tramo de voz más largo (por encima de `threshold` dB) dentro de [from, to]; los huecos de menos de 0,15 s no lo cortan.
+    /// The longest voice span (above `threshold` dB) within [from, to]; gaps under 0.15 s don't break it.
     private static func loudest(_ env: [Float], origin: Double, from: Double, to: Double, threshold: Float) -> (start: Double, end: Double)? {
         let a = max(0, bin(from, origin: origin)), b = min(env.count, bin(to, origin: origin))
         guard b - a > 2 else { return nil }
@@ -151,7 +151,7 @@ enum SubtitleSync {
                 if let st = segStart, (best == nil || (k - st) > (best!.1 - best!.0)) { best = (st, k + 1) }
             }
         }
-        guard let best, best.1 - best.0 >= 8 else { return nil }      // al menos 80 ms de voz
+        guard let best, best.1 - best.0 >= 8 else { return nil }      // at least 80 ms of voice
         return (origin + Double(best.0) * hop, origin + Double(best.1) * hop)
     }
 
@@ -162,8 +162,8 @@ enum SubtitleSync {
         return d.map { sd > 0 ? ($0 - m) / sd : 0 }
     }
 
-    /// Volumen (dB cada 10 ms) del micrófono de una persona entre dos tiempos del episodio. Índice 0 = `from`.
-    /// Donde no hay grabación queda en −60.
+    /// Volume (dB every 10 ms) of a person's microphone between two episode times. Index 0 = `from`.
+    /// Where there's no recording it stays at −60.
     static func envelope(project: Project, lane: Lane, from: Double, to: Double) async throws -> [Float] {
         let n = max(0, Int(((to - from) / hop).rounded(.up)))
         var out = [Float](repeating: -60, count: n)
@@ -179,8 +179,8 @@ enum SubtitleSync {
         return out
     }
 
-    /// Escucha de nuevo un tramo del episodio (cada persona por separado) y devuelve sus palabras en tiempo
-    /// del episodio, SIN ajustar. Se escucha 1 s de más a cada lado para no perder la primera y la última palabra.
+    /// Re-listens to a span of the episode (each person separately) and returns their words in episode
+    /// time, NOT aligned. 1 s extra is listened to on each side so as not to lose the first and last word.
     static func listen(project: Project, from start: Double, to end: Double,
                        report: @escaping @Sendable (String, Double?) -> Void) async throws -> [Word] {
         let a = max(0, start - 1), b = min(project.duration, end + 1)
@@ -213,7 +213,7 @@ enum SubtitleSync {
         return Transcripts.merge(words)
     }
 
-    /// Lleva las palabras sensibles a los tiempos nuevos de sus palabras (las marcas se buscan por persona y tiempo).
+    /// Moves sensitive words to the new timings of their words (marks are matched by person and time).
     static func remapSensitive(_ marks: [SensitiveMark], old: [Word], new: [Word]) -> [SensitiveMark] {
         guard !marks.isEmpty, old.count == new.count else { return marks }
         var moved: [String: Word] = [:]

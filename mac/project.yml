@@ -21,7 +21,7 @@ targets:
     platform: macOS
     sources:
       - path: Sources
-      # ffmpeg/ffprobe propios (scripts/build-ffmpeg.sh) → Contents/MacOS, firmados al copiar
+      # our own ffmpeg/ffprobe (scripts/build-ffmpeg.sh) → Contents/MacOS, signed on copy
       - path: Vendor/ffmpeg
         optional: true
         buildPhase:

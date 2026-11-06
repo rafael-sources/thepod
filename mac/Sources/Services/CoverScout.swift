@@ -4,13 +4,13 @@ import CoreImage
 import Vision
 import AppKit
 
-/// Busca los mejores cuadros para la portada: momentos del episodio donde todas las personas
-/// con cámara están sonriendo, con los ojos abiertos y la imagen nítida. Mira cada pista por
-/// separado (cada persona viene en su propio video) y combina por segundo del episodio.
+/// Finds the best frames for the cover: episode moments where everyone
+/// on camera is smiling, with eyes open and a sharp image. Looks at each lane
+/// separately (each person comes in their own video) and combines per episode second.
 ///
-/// Cómo puntúa cada cara: sonrisa (CIDetector), ojos abiertos (CIDetector) y calidad de la cara
-/// (Vision: nitidez, luz, pose). Un segundo vale lo que vale su peor persona: si una no sonríe,
-/// ese segundo no gana.
+/// How each face is scored: smile (CIDetector), open eyes (CIDetector) and face quality
+/// (Vision: sharpness, light, pose). A second is worth what its worst person is worth: if one isn't smiling,
+/// that second doesn't win.
 enum CoverScout {
     struct Sample {
         var time: Double
@@ -25,7 +25,7 @@ enum CoverScout {
         let lane: Lane
     }
 
-    /// Cuántas candidatas se devuelven y qué separación mínima tienen entre sí.
+    /// How many candidates are returned and the minimum separation between them.
     static let maxCandidates = 12
     static let minGap = 8.0
 
@@ -33,7 +33,7 @@ enum CoverScout {
         ofType: CIDetectorTypeFace, context: CIContext(options: [.useSoftwareRenderer: false]),
         options: [CIDetectorAccuracy: CIDetectorAccuracyLow, CIDetectorTracking: false])
 
-    /// Recorre el episodio cada `step` segundos (saltando lo cortado) y devuelve los mejores segundos.
+    /// Walks the episode every `step` seconds (skipping what's cut) and returns the best seconds.
     static func scan(project: Project, step: Double = 2.0,
                      progress: @escaping (Double, String) -> Void) async throws -> [Sample] {
         let sources: [LaneSource] = project.lanesOnScreen.compactMap { lane in
@@ -51,7 +51,7 @@ enum CoverScout {
         }
         guard !times.isEmpty else { return [] }
 
-        // Por pista: puntuación de la cara en cada segundo pedido
+        // Per lane: face score at each requested second
         var perLane: [[Double: FaceScore]] = []
         for (i, src) in sources.enumerated() {
             try Task.checkCancellation()
@@ -62,7 +62,7 @@ enum CoverScout {
             perLane.append(scores)
         }
 
-        // Combinar: un segundo vale lo de su peor persona
+        // Combine: a second is worth its worst person
         var samples: [Sample] = []
         for t in times {
             var worst = 1.0, faces = 0, allSmiling = true, any = false
@@ -78,7 +78,7 @@ enum CoverScout {
             samples.append(Sample(time: t, score: worst, allSmiling: allSmiling, faces: faces))
         }
 
-        // Las mejores, separadas entre sí: primero las que sonríen todos, después por puntuación
+        // The best ones, separated from each other: first those where everyone smiles, then by score
         let ranked = samples.sorted { a, b in
             if a.allSmiling != b.allSmiling { return a.allSmiling }
             return a.score > b.score
@@ -96,10 +96,10 @@ enum CoverScout {
         var smiling: Bool
         var eyesOpen: Bool
         var quality: Double     // 0…1 (Vision)
-        var total: Double       // combinado 0…1
+        var total: Double       // combined 0…1
     }
 
-    /// Decodifica los cuadros de una pista (chicos, rápido) y puntúa la cara de cada uno.
+    /// Decodes a lane's frames (small, fast) and scores the face in each.
     private static func scoreLane(_ src: LaneSource, times: [Double],
                                   progress: @escaping (Double) -> Void) async throws -> [Double: FaceScore] {
         let asset = AVURLAsset(url: src.url)
@@ -109,7 +109,7 @@ enum CoverScout {
         gen.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
         gen.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
 
-        // Segundo del episodio → segundo del archivo de esta persona
+        // Episode second → second in this person's file
         var map: [(src: Double, tl: Double)] = []
         for t in times {
             for p in src.lane.placed where t >= p.tlStart && t < p.tlEnd {
@@ -130,7 +130,7 @@ enum CoverScout {
         return out
     }
 
-    /// Puntúa un cuadro de una persona.
+    /// Scores a frame of a person.
     static func score(_ cg: CGImage) -> FaceScore {
         let ci = CIImage(cgImage: cg)
         let feats = (detector?.features(in: ci, options: [CIDetectorSmile: true, CIDetectorEyeBlink: true]) ?? [])
@@ -140,7 +140,7 @@ enum CoverScout {
         }
         let smiling = face.hasSmile
         let eyesOpen = !(face.leftEyeClosed || face.rightEyeClosed)
-        // Calidad de la cara según Vision (nitidez, luz, pose), 0…1
+        // Face quality according to Vision (sharpness, light, pose), 0…1
         var quality = 0.5
         let req = VNDetectFaceCaptureQualityRequest()
         let handler = VNImageRequestHandler(cgImage: cg, options: [:])
@@ -148,7 +148,7 @@ enum CoverScout {
            let q = best.faceCaptureQuality {
             quality = Double(q)
         }
-        // Tamaño de la cara en el cuadro: muy chica no sirve de portada
+        // Face size in the frame: very small is no good for a cover
         let sizeFrac = Double(face.bounds.width / CGFloat(cg.width))
         let sizeScore = min(1, sizeFrac / 0.22)
         var total = 0.15 + 0.45 * quality + 0.25 * sizeScore
@@ -157,7 +157,7 @@ enum CoverScout {
         return FaceScore(faces: feats.count, smiling: smiling, eyesOpen: eyesOpen, quality: quality, total: min(1, total))
     }
 
-    /// Dibuja la portada tal como se ve (diseño, logo, fondo) en ese segundo del episodio. JPEG 16:9.
+    /// Draws the cover as it looks (layout, logo, background) at that episode second. 16:9 JPEG.
     static func render(project: Project, at tl: Double, energy: EnergyMap?, maxSize: CGFloat = 1920) async throws -> CGImage {
         let built = try await CompositionBuilder.build(project: project, format: .landscape, window: nil, energy: energy)
         let gen = AVAssetImageGenerator(asset: built.asset)
@@ -170,7 +170,7 @@ enum CoverScout {
         return img
     }
 
-    /// Dibuja varias candidatas con una sola composición (más rápido que una por una).
+    /// Draws several candidates with a single composition (faster than one by one).
     static func renderAll(project: Project, times: [Double], energy: EnergyMap?, maxSize: CGFloat,
                           progress: @escaping (Double) -> Void) async throws -> [Double: CGImage] {
         let built = try await CompositionBuilder.build(project: project, format: .landscape, window: nil, energy: energy)

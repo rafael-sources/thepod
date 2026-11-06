@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// prePod → Configurar podcast → Redes: SOLO conectar las cuentas del podcast.
-/// Cada cuenta enciende sus estrellas en pubPod (se muestran al lado). Publicar se hace en pubPod.
+/// prePod → Configurar podcast → Redes: ONLY connect the podcast's accounts.
+/// Each account lights up its stars in pubPod (shown alongside). Publishing is done in pubPod.
 struct RedesTab: View {
     let slug: String
     @EnvironmentObject var app: AppModel
@@ -109,7 +109,7 @@ struct RedesTab: View {
         loaded = true
     }
 
-    /// Abre la página de la red en el navegador y espera a que la conexión aparezca (hasta 5 minutos).
+    /// Opens the network's page in the browser and waits for the connection to appear (up to 5 minutes).
     private func connect(_ net: String) {
         error = nil
         connecting = net

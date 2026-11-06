@@ -1,7 +1,7 @@
 import SwiftUI
 import AVFoundation
 
-// MARK: - Textos y stickers (capas encima del video)
+// MARK: - Texts and stickers (layers on top of the video)
 
 struct LayersStep: View {
     @ObservedObject var session: ProjectSession
@@ -117,11 +117,11 @@ struct LayersStep: View {
     }
 }
 
-/// Panel bajo el video para la capa elegida.
+/// Panel below the video for the selected layer.
 struct OverlayEditor: View {
     @ObservedObject var session: ProjectSession
     let id: Int
-    /// Se busca por id en cada dibujo: si la capa ya se borró, no se dibuja nada (antes se caía con el índice viejo).
+    /// Looked up by id on every draw: if the layer was already deleted, nothing is drawn (it used to crash with the stale index).
     private var index: Int { session.project.overlays.firstIndex { $0.id == id } ?? -1 }
 
     static let colors = ["#FFFFFF", "#FFD60A", "#FF453A", "#4CC9F0", "#32D74B", "#BF5AF2", "#000000"]
@@ -255,15 +255,15 @@ struct OverlayEditor: View {
     }
 }
 
-/// Panel bajo el video para el b-roll elegido.
+/// Panel below the video for the selected b-roll.
 struct BRollEditor: View {
     @ObservedObject var session: ProjectSession
     let id: Int
-    let reelId: UUID?           // nil = b-roll del episodio; si no, de ese reel
+    let reelId: UUID?           // nil = episode b-roll; otherwise, that reel's
 
     private var reel: Reel? { reelId.flatMap { rid in session.project.reels.first { $0.id == rid } } }
     private var current: BRollClip? { (reel?.brolls ?? session.project.brolls).first { $0.id == id } }
-    /// Se busca por id en cada dibujo: si ya se borró, no se dibuja nada (antes se caía con el índice viejo).
+    /// Looked up by id on every draw: if already deleted, nothing is drawn (it used to crash with the stale index).
     private var b: Binding<BRollClip> {
         Binding(get: { current ?? BRollClip(id: id, file: "", isVideo: false, start: 0) },
                 set: { v in
@@ -342,8 +342,8 @@ struct BRollEditor: View {
     }
 }
 
-/// Recuadro de la capa elegida sobre la vista previa: se arrastra para moverla y desde la esquina para el tamaño.
-/// El video se vuelve a dibujar al soltar (no en cada movimiento, para que no se trabe).
+/// Box of the selected layer over the preview: drag to move it and from the corner to resize.
+/// The video is redrawn on release (not on every move, so it doesn't stutter).
 struct OverlayHandles: View {
     @ObservedObject var session: ProjectSession
     @State private var drag: CGSize = .zero
@@ -355,7 +355,7 @@ struct OverlayHandles: View {
                let scene = session.built?.scene,
                let rawBox = scene.overlayBox(id, at: session.player.currentTime().seconds),
                let i = session.project.overlays.firstIndex(where: { $0.id == id }) {
-                // Con keyframes, el centro sale del proyecto (la vista previa puede ir un paso atrás)
+                // With keyframes, the center comes from the project (the preview may lag one step)
                 let box: CGRect = {
                     guard let a = session.project.overlays[i].animation, !a.isEmpty else { return rawBox }
                     let t = session.playheadTimeline
@@ -376,7 +376,7 @@ struct OverlayHandles: View {
                                 let nx = box.midX + g.translation.width / max(1, video.width)
                                 let ny = box.midY + g.translation.height / max(1, video.height)
                                 if var a = session.project.overlays[i].animation, a.has(LayerAnimation.x) || a.has(LayerAnimation.y) {
-                                    // Con keyframes de posición, mover sobre el video escribe un keyframe en este segundo
+                                    // With position keyframes, moving over the video writes a keyframe at this second
                                     let t = session.playheadTimeline
                                     a.write(LayerAnimation.x, t: t, v: Double(nx)); a.write(LayerAnimation.y, t: t, v: Double(ny))
                                     session.project.overlays[i].animation = a
@@ -422,8 +422,8 @@ struct OverlayHandles: View {
 }
 
 
-/// Recuadro de los subtítulos sobre la vista previa: se arrastra para ponerlos donde se quiera.
-/// Solo aparece cuando hay un blanco (Subtítulos del episodio, o Reels) y los subtítulos están activos.
+/// Subtitle box over the preview: drag it to place them wherever you want.
+/// Only appears when there's a target (episode Subtitles, or Reels) and subtitles are on.
 struct CaptionHandles: View {
     @ObservedObject var session: ProjectSession
     @State private var drag: CGSize = .zero

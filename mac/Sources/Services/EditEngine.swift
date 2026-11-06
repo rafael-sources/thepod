@@ -157,27 +157,27 @@ enum EditEngine {
             .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
     }
 
-    /// Antes de estas palabras, «bueno»/«tipo» son palabra de verdad («es bueno», «un tipo»), no muletilla.
+    /// Before these words, «bueno»/«tipo» are real words («es bueno», «un tipo»), not fillers.
     static let buenoNotFillerAfter: Set<String> = ["es", "muy", "tan", "lo", "mas", "que", "esta", "estuvo", "estaba", "era",
                                                    "fue", "sea", "un", "algo", "super", "re", "menos", "seria", "sera",
                                                    "ser", "estar", "bien", "nada", "tambien", "igual", "tiene", "tenia", "parece"]
     static let tipoNotFillerAfter: Set<String> = ["un", "el", "ese", "este", "esa", "que", "otro", "mismo", "cada", "ningun",
                                                   "algun", "del", "al", "de", "cualquier", "mi", "tu", "su", "buen", "gran"]
 
-    /// Muletillas, con cuidado de no cortar palabras válidas.
+    /// Filler words, taking care not to cut valid words.
     ///
-    /// - Sonidos («eh», «mmm»…): se cortan siempre.
-    /// - «este», «o sea», «tipo»: se cortan cuando están solos entre pausas, repetidos («este este») o
-    ///   pegados a un sonido («este… eh»). Si no, quedan como sugerencia apagada.
-    /// - «bueno», «pues», «digamos»: casi siempre son válidos al empezar una frase; nunca se cortan solos,
-    ///   quedan como sugerencia apagada para que la persona decida.
-    /// - Si por el contexto son palabra de verdad («es bueno», «este tema», «tipo de», «un tipo») no se marcan.
-    /// Se mira a la misma persona (las palabras del otro no cuentan como pausa ni como contexto), y no se
-    /// toca nada que se pise con la voz de otra persona.
+    /// - Sounds («eh», «mmm»…): always cut.
+    /// - «este», «o sea», «tipo»: cut when alone between pauses, repeated («este este») or
+    ///   attached to a sound («este… eh»). Otherwise they stay as a switched-off suggestion.
+    /// - «bueno», «pues», «digamos»: almost always valid at the start of a sentence; never cut on their own,
+    ///   they stay as a switched-off suggestion for the person to decide.
+    /// - If the context makes them real words («es bueno», «este tema», «tipo de», «un tipo») they aren't marked.
+    /// The same person is looked at (the other's words don't count as a pause or as context), and nothing
+    /// overlapping another person's voice is touched.
     static func fillerCuts(words: [Word], includeWordFillers: Bool) -> [Cut] {
         let all = words.sorted { $0.s < $1.s }
         var cuts: [Cut] = []
-        var byLane: [Int: [Int]] = [:]                  // índices en `all`, por persona
+        var byLane: [Int: [Int]] = [:]                  // indices into `all`, per person
         for (i, w) in all.enumerated() { byLane[w.lane, default: []].append(i) }
 
         func othersOverlap(_ a: Double, _ b: Double, lane: Int) -> Bool {
@@ -229,7 +229,7 @@ enum EditEngine {
                     let prevIsSound = soundFillers.contains(pn)
                     switch key {
                     case "este":
-                        // «este tema», «en este caso»: demostrativo pegado a la palabra que sigue
+                        // «este tema», «en este caso»: demonstrative attached to the following word
                         if !trailingPunct(rawLast), gapAfter < 0.15, !nextIsSound, an != "este" { break }
                         if an == "este" || pn == "este" || nextIsSound || prevIsSound || isolated { sure = true } else { doubtful = true }
                     case "tipo":
@@ -261,8 +261,8 @@ enum EditEngine {
         return cuts.sorted { $0.start < $1.start }
     }
 
-    /// Arranques en falso y frases repetidas («es que, es que el…», «de la de la»): sugiere cortar el primer
-    /// intento (desde que empieza hasta que empieza el segundo). Siempre apagado: decide la persona.
+    /// False starts and repeated phrases («es que, es que el…», «de la de la»): suggests cutting the first
+    /// attempt (from its start until the second begins). Always off: the person decides.
     static func repeatCuts(words: [Word]) -> [Cut] {
         let all = words.sorted { $0.s < $1.s }
         var cuts: [Cut] = []
@@ -278,11 +278,11 @@ enum EditEngine {
                     let a = Array(toks[i..<(i + n)])
                     if a.contains(where: { $0.isEmpty || soundFillers.contains($0) }) { continue }
                     if n == 1, neverAlone.contains(a[0]) { continue }
-                    let maxGap = n >= 3 ? 2 : 1                 // palabras en el medio permitidas (con 1-2 palabras: solo una muletilla)
+                    let maxGap = n >= 3 ? 2 : 1                 // words allowed in between (with 1-2 words: only a filler)
                     for gap in 0...maxGap {
                         let j = i + n + gap
                         guard j + n <= lw.count else { break }
-                        // lo que hay en el medio tiene que ser muletilla o sonido («es que, eh, es que»)
+                        // what's in between must be a filler or a sound («es que, eh, es que»)
                         let middle = toks[(i + n)..<j]
                         if gap > 0, !middle.allSatisfy({ soundFillers.contains($0) || wordFillers.contains($0) }) && n < 3 { continue }
                         if Array(toks[j..<(j + n)]) == a {
@@ -307,9 +307,9 @@ enum EditEngine {
         return cuts.sorted { $0.start < $1.start }
     }
 
-    /// Sonidos sin palabras («eeeh» o «mmm» que la transcripción no escribió): tramos de 0,3 a 1,2 s en los que
-    /// el micrófono de una persona suena fuerte (y más que los demás) pero nadie dice ninguna palabra.
-    /// Pueden ser también risas o toses: por eso solo se sugieren, apagados.
+    /// Wordless sounds («eeeh» or «mmm» the transcript didn't write): 0.3 to 1.2 s spans where
+    /// a person's microphone is loud (and louder than the others) but nobody says any word.
+    /// They may also be laughs or coughs: that's why they're only suggested, switched off.
     static func soundOnlyCuts(words: [Word], energy: EnergyMap) -> [Cut] {
         let hop = EnergyMap.hop
         let all = words.sorted { $0.s < $1.s }
@@ -318,13 +318,13 @@ enum EditEngine {
         for (lane, env) in energy.lanes {
             let lw = all.filter { $0.lane == lane }
             guard lw.count > 20 else { continue }
-            // nivel típico de su voz: mediana de la energía donde habla
+            // typical level of their voice: median energy where they speak
             var speech: [Float] = []
             for w in lw { let a = Int(w.s / hop), b = Int(w.e / hop); if a < b, b <= env.count { speech += env[a..<b] } }
             guard speech.count > 50 else { continue }
             let voice = speech.sorted()[speech.count / 2]
             let threshold = voice - 9
-            // huecos sin palabras de nadie, de al menos 0,6 s
+            // gaps without anyone's words, of at least 0.6 s
             var holes: [(Double, Double)] = []
             var lastEnd = 0.0
             for w in all {
@@ -351,8 +351,8 @@ enum EditEngine {
         return cuts.sorted { $0.start < $1.start }
     }
 
-    /// Al volver a calcular los cortes automáticos, conserva lo que la persona ya decidió (prendido o apagado)
-    /// en los que caen en el mismo lugar.
+    /// When recomputing the automatic cuts, keeps what the person already decided (on or off)
+    /// for those landing in the same place.
     static func carryDecisions(from old: [Cut], into new: [Cut]) -> [Cut] {
         let decided = old.filter { $0.reviewed == true }
         guard !decided.isEmpty else { return new }
@@ -406,16 +406,16 @@ enum EditEngine {
         return lines
     }
 
-    // MARK: Corregir texto
+    // MARK: Correct text
 
-    /// Palabras nuevas para una frase corregida a mano. Las que siguen iguales conservan su tiempo exacto;
-    /// las nuevas o cambiadas se reparten (según su largo) en el hueco que dejan las que se fueron.
+    /// New words for a phrase corrected by hand. Unchanged ones keep their exact timing;
+    /// new or changed ones are spread (by length) over the gap left by the removed ones.
     static func retime(old: [Word], tokens: [String], lane: Int) -> [Word] {
         guard !old.isEmpty else { return [] }
         if tokens.count == old.count { return zip(old, tokens).map { var w = $0; w.w = $1; return w } }
         func plain(_ t: String) -> String { t.lowercased().filter { $0.isLetter || $0.isNumber } }
         let a = old.map { plain($0.w) }, b = tokens.map(plain)
-        // Subsecuencia común más larga: qué palabras viejas siguen en el texto nuevo
+        // Longest common subsequence: which old words remain in the new text
         var dp = [[Int]](repeating: [Int](repeating: 0, count: b.count + 1), count: a.count + 1)
         for i in stride(from: a.count - 1, through: 0, by: -1) {
             for j in stride(from: b.count - 1, through: 0, by: -1) {
@@ -429,7 +429,7 @@ enum EditEngine {
             else if dp[i + 1][j] >= dp[i][j + 1] { i += 1 } else { j += 1 }
         }
         var out: [Word] = []
-        /// Reparte `toks` entre `from` y `to` según el largo de cada palabra.
+        /// Spreads `toks` between `from` and `to` according to each word's length.
         func spread(_ toks: ArraySlice<String>, from: Double, to: Double) {
             guard !toks.isEmpty else { return }
             let end = max(to, from + 0.12 * Double(toks.count))
@@ -444,7 +444,7 @@ enum EditEngine {
         }
         var oi = 0, tj = 0
         for (pi, pj) in pairs + [(old.count, tokens.count)] {
-            // Hueco: palabras viejas oi..<pi se reemplazan por los tokens tj..<pj
+            // Gap: old words oi..<pi are replaced by tokens tj..<pj
             let from = oi < pi ? old[oi].s : (oi > 0 ? old[oi - 1].e : old[0].s)
             let to = oi < pi ? old[pi - 1].e : (pi < old.count ? old[pi].s : from)
             spread(tokens[tj..<pj], from: from, to: to)

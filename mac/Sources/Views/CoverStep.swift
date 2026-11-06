@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Entregar → Portada: la imagen del episodio. Un carrusel con las capturas donde todas las personas
-/// salen sonriendo y nítidas; se elige una, o se captura a mano el segundo donde está parado el episodio.
+/// Deliver → Cover: the episode image. A carousel of captures where everyone
+/// is smiling and sharp; pick one, or capture by hand the second where the episode is paused.
 struct CoverStep: View {
     @ObservedObject var session: ProjectSession
     @State private var preview: NSImage?
@@ -150,7 +150,7 @@ struct CoverStep: View {
     }
 }
 
-/// Una tarjeta del carrusel: la captura, el segundo y si sonríen todos.
+/// A carousel card: the capture, the second and whether everyone smiles.
 struct CoverCandidateCard: View {
     let project: Project
     let candidate: CoverCandidate

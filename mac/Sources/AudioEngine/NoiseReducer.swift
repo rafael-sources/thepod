@@ -1,18 +1,18 @@
 import Accelerate
 import AVFoundation
 
-/// Reducción de ruido por huella (sin IA): resta espectral con compuerta por banda. Se toma la «huella» del ruido
-/// —el espectro medio de un segundo en que la persona no habla— y, en cada bloque, las bandas que no superan
-/// claramente esa huella se atenúan. Ruido constante (aire, ventilador, zumbido) baja; la voz queda.
+/// Noise-print reduction (no AI): spectral subtraction with a per-band gate. The noise «print» is taken
+/// —the mean spectrum of a second where the person isn't speaking— and, in each block, bands that don't clearly
+/// exceed that print are attenuated. Constant noise (air, fan, hum) drops; the voice stays.
 ///
-/// STFT de 1024 muestras con salto de 256 y ventana raíz de Hann a la entrada y a la salida (reconstrucción
-/// exacta). Retardo: 1024 muestras (21 ms a 48 kHz), el mismo para todo el episodio.
+/// 1024-sample STFT with a 256 hop and root-Hann window on input and output (exact
+/// reconstruction). Latency: 1024 samples (21 ms at 48 kHz), the same for the whole episode.
 final class NoiseReducer {
     static let n = 1024
     static let hop = 256
     static let bins = n / 2 + 1
 
-    /// La huella: magnitud media por banda (0…bins) de un trozo sin voz.
+    /// The print: mean magnitude per band (0…bins) of a voiceless chunk.
     static func profile(samples: UnsafePointer<Float>, count: Int) -> [Float]? {
         guard count >= n else { return nil }
         let fft = FFT()
@@ -30,7 +30,7 @@ final class NoiseReducer {
         return acc.map { $0 / Float(frames) }
     }
 
-    /// Huella de un archivo entre `start` y `start + seconds` (mezclado a mono).
+    /// Print of a file between `start` and `start + seconds` (mixed to mono).
     static func profile(url: URL, start: Double, seconds: Double = 1) -> [Float]? {
         guard let f = try? AVAudioFile(forReading: url) else { return nil }
         let fmt = f.processingFormat, sr = fmt.sampleRate, ch = Int(fmt.channelCount)
@@ -43,12 +43,12 @@ final class NoiseReducer {
         return mono.withUnsafeBufferPointer { profile(samples: $0.baseAddress!, count: $0.count) }
     }
 
-    // MARK: Proceso en tiempo real
+    // MARK: Real-time processing
 
     final class FFT {
         let setup: FFTSetup
         let window: [Float]
-        /// Cuánto suma la ventana (entrada × salida) solapada cada `hop`: con Hann y salto n/4 da 1,5.
+        /// How much the window (input × output) sums overlapped every `hop`: with Hann and hop n/4 it's 1.5.
         let olaGain: Float
         private var real = [Float](repeating: 0, count: n / 2)
         private var imag = [Float](repeating: 0, count: n / 2)
@@ -56,7 +56,7 @@ final class NoiseReducer {
             setup = vDSP_create_fftsetup(vDSP_Length(log2(Double(n))), FFTRadix(kFFTRadix2))!
             var w = [Float](repeating: 0, count: n)
             vDSP_hann_window(&w, vDSP_Length(n), Int32(vDSP_HANN_DENORM))
-            window = w.map { sqrt($0) }       // raíz de Hann a la entrada y a la salida
+            window = w.map { sqrt($0) }       // root Hann on input and output
             var g: Float = 0
             var i = 0
             while i < n { g += w[i]; i += hop }
@@ -64,18 +64,18 @@ final class NoiseReducer {
         }
         deinit { vDSP_destroy_fftsetup(setup) }
 
-        /// Magnitudes de un bloque ya ventaneado.
+        /// Magnitudes of an already windowed block.
         func magnitudes(_ frame: [Float]) -> [Float] {
             var out = [Float](repeating: 0, count: bins)
             forward(frame) { re, im in
                 for k in 0..<(n / 2) { out[k] = sqrt(re[k] * re[k] + im[k] * im[k]) }
-                out[n / 2] = abs(im[0])      // Nyquist viene empaquetado en imag[0]
+                out[n / 2] = abs(im[0])      // Nyquist comes packed in imag[0]
                 out[0] = abs(re[0])
             }
             return out
         }
 
-        /// FFT real empaquetada; `body` recibe re/im (n/2) con DC en re[0] y Nyquist en im[0].
+        /// Packed real FFT; `body` receives re/im (n/2) with DC in re[0] and Nyquist in im[0].
         func forward(_ frame: [Float], _ body: (UnsafeMutablePointer<Float>, UnsafeMutablePointer<Float>) -> Void) {
             real.withUnsafeMutableBufferPointer { rp in
                 imag.withUnsafeMutableBufferPointer { ip in
@@ -91,7 +91,7 @@ final class NoiseReducer {
             }
         }
 
-        /// Inversa de lo que quedó en re/im tras `forward` (ya modificado), al bloque de salida (n muestras).
+        /// Inverse of what's left in re/im after `forward` (already modified), into the output block (n samples).
         func inverse(into out: inout [Float]) {
             real.withUnsafeMutableBufferPointer { rp in
                 imag.withUnsafeMutableBufferPointer { ip in
@@ -102,7 +102,7 @@ final class NoiseReducer {
                             vDSP_ztoc(&split, 1, cp, 2, vDSP_Length(n / 2))
                         }
                     }
-                    // vDSP escala por 2n en ida y vuelta con zrip; y la suma de ventanas
+                    // vDSP scales by 2n round-trip with zrip; plus the window sum
                     var scale = Float(1) / (Float(2 * n) * olaGain)
                     vDSP_vsmul(out, 1, &scale, &out, 1, vDSP_Length(n))
                 }
@@ -110,15 +110,15 @@ final class NoiseReducer {
         }
     }
 
-    /// Un canal: entrada acumulada, salida por solape-suma.
+    /// One channel: accumulated input, overlap-add output.
     private final class Channel {
-        var inBuf = [Float](repeating: 0, count: n)      // últimas n muestras (anillo)
-        var inPos = 0                                    // dónde va la próxima muestra en el anillo
-        var outBuf = [Float](repeating: 0, count: n)     // solape-suma pendiente
-        var pendingIn = 0                                // muestras nuevas desde el último bloque
-        var ready: [Float] = []                          // salida lista para entregar
+        var inBuf = [Float](repeating: 0, count: n)      // last n samples (ring)
+        var inPos = 0                                    // where the next sample goes in the ring
+        var outBuf = [Float](repeating: 0, count: n)     // pending overlap-add
+        var pendingIn = 0                                // new samples since the last block
+        var ready: [Float] = []                          // output ready to deliver
         var readyIdx = 0
-        var gain = [Float](repeating: 1, count: bins)    // ganancias suavizadas por banda
+        var gain = [Float](repeating: 1, count: bins)    // smoothed gains per band
         var primed = false
     }
 
@@ -126,16 +126,16 @@ final class NoiseReducer {
     private var channels: [Channel] = []
     private var frame = [Float](repeating: 0, count: n)
     private var block = [Float](repeating: 0, count: n)
-    /// Huella y cuánto reducir (0…1 → de 6 a 18 dB de atenuación tope y umbral de 1,5× a 3× la huella).
+    /// Print and how much to reduce (0…1 → from 6 to 18 dB max attenuation and threshold from 1.5× to 3× the print).
     var profile: [Float]?
     var amount: Float = 0.6
 
     func prepare(channels count: Int) { channels = (0..<max(1, count)).map { _ in Channel() } }
-    /// Retardo total: la cola de salida se ceba con un salto (para que nunca falte muestra) y el bloque tarda
-    /// n − hop en completarse: n muestras (21 ms a 48 kHz).
+    /// Total latency: the output queue is primed with one hop (so a sample is never missing) and the block takes
+    /// n − hop to complete: n samples (21 ms at 48 kHz).
     var latency: Int { Self.n }
 
-    /// Procesa en sitio `frames` muestras de cada canal del buffer (salida retardada `latency` muestras).
+    /// Processes in place `frames` samples of each buffer channel (output delayed `latency` samples).
     func process(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         guard let prof = profile, !channels.isEmpty else { return }
         let floorGain = powf(10, -(6 + 12 * amount) / 20)
@@ -148,11 +148,11 @@ final class NoiseReducer {
             let c = channels[ci]
             if !c.primed { c.ready = [Float](repeating: 0, count: Self.hop); c.primed = true }
             for i in 0..<cnt {
-                // entra una muestra en el anillo
+                // a sample enters the ring
                 c.inBuf[c.inPos] = p[i]; c.inPos = (c.inPos + 1) % Self.n; c.pendingIn += 1
                 if c.pendingIn >= Self.hop {
                     c.pendingIn = 0
-                    // bloque ventaneado (en orden, desde la muestra más vieja) → espectro → ganancias → inversa → solape-suma
+                    // windowed block (in order, from the oldest sample) → spectrum → gains → inverse → overlap-add
                     for k in 0..<Self.n { frame[k] = c.inBuf[(c.inPos + k) % Self.n] * fft.window[k] }
                     fft.forward(frame) { re, im in
                         for k in 0..<(Self.n / 2) {
@@ -160,19 +160,19 @@ final class NoiseReducer {
                             let noise = prof[k] * over
                             var g: Float = mag > noise ? 1 - noise / max(mag, 1e-9) : 0
                             g = max(floorGain, g)
-                            // suavizado: baja rápido, sube rápido también pero sin saltos entre bloques
+                            // smoothing: drops fast, rises fast too but without jumps between blocks
                             c.gain[k] = 0.5 * c.gain[k] + 0.5 * g
                             if k == 0 { re[0] *= c.gain[0]; im[0] *= c.gain[Self.n / 2] } else { re[k] *= c.gain[k]; im[k] *= c.gain[k] }
                         }
                     }
                     fft.inverse(into: &block)
                     for k in 0..<Self.n { c.outBuf[k] += block[k] * fft.window[k] }
-                    // las primeras hop muestras ya están completas
+                    // the first hop samples are already complete
                     c.ready.append(contentsOf: c.outBuf[0..<Self.hop])
                     c.outBuf.removeFirst(Self.hop); c.outBuf.append(contentsOf: [Float](repeating: 0, count: Self.hop))
                 }
             }
-            // entregar: lo que haya listo (retardado); si falta, ceros
+            // deliver: whatever is ready (delayed); if short, zeros
             for i in 0..<cnt {
                 if c.readyIdx < c.ready.count { p[i] = c.ready[c.readyIdx]; c.readyIdx += 1 } else { p[i] = 0 }
             }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Genera Resources/en.lproj/Localizable.strings (y InfoPlist.strings: permisos de cámara/micrófono, nombre) a partir de
-l10n/en.xliff (claves) y l10n/en.json (traducciones).
-Comprueba que los % coincidan y avisa de claves sin traducir. --check solo informa."""
+"""Generates Resources/en.lproj/Localizable.strings (and InfoPlist.strings: camera/microphone permissions, name) from
+l10n/en.xliff (keys) and l10n/en.json (translations).
+Checks that the % specifiers match and warns about untranslated keys. --check only reports."""
 import re, sys, json, pathlib, xml.etree.ElementTree as ET
 root = pathlib.Path(__file__).resolve().parents[2]
 ns = {'x': 'urn:oasis:names:tc:xliff:document:1.2'}
@@ -30,11 +30,11 @@ for u in plist_units:
     v = tr.get(s)
     if v is None: missing.append(s); continue
     plist.append(f'"{esc(k)}" = "{esc(v)}";')
-print(f'{len(keys)} claves · {len(keys) - len(missing) - len(bad)} traducidas · {len(missing)} sin traducir · {len(bad)} con % que no coinciden · {len(same)} iguales al español', file=sys.stderr)
-for k, v in bad[:20]: print('  % distintos:', repr(k)[:80], '→', repr(v)[:80], file=sys.stderr)
+print(f'{len(keys)} keys · {len(keys) - len(missing) - len(bad)} translated · {len(missing)} untranslated · {len(bad)} with mismatched % · {len(same)} same as Spanish', file=sys.stderr)
+for k, v in bad[:20]: print('  % mismatch:', repr(k)[:80], '→', repr(v)[:80], file=sys.stderr)
 if '--check' in sys.argv:
-    for k in missing[:30]: print('  falta:', repr(k)[:100], file=sys.stderr)
-    for k in same[:30]: print('  igual:', repr(k)[:100], file=sys.stderr)
+    for k in missing[:30]: print('  missing:', repr(k)[:100], file=sys.stderr)
+    for k in same[:30]: print('  same:', repr(k)[:100], file=sys.stderr)
     sys.exit(1 if (missing or bad) else 0)
 (root/'Sources/Resources/en.lproj/Localizable.strings').write_text('\n'.join(out) + '\n')
 (root/'Sources/Resources/en.lproj/InfoPlist.strings').write_text('\n'.join(plist) + '\n')

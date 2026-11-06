@@ -3,7 +3,7 @@ import AVFoundation
 import AppKit
 import LiveKit
 
-/// Calidad de lo que se manda a la sala (igual que prodPod web: Baja 360p, Media 480p, Alta 720p).
+/// Quality of what's sent to the room (same as prodPod web: Low 360p, Medium 480p, High 720p).
 enum RoomQuality: String, CaseIterable, Identifiable {
     case low, med, high
     var id: String { rawValue }
@@ -31,7 +31,7 @@ enum RoomQuality: String, CaseIterable, Identifiable {
     }
 }
 
-/// Una persona en la sala, como la ve la Mac.
+/// A person in the room, as the Mac sees them.
 struct RoomPerson: Identifiable {
     let id: String
     let name: String
@@ -43,7 +43,7 @@ struct RoomPerson: Identifiable {
     let lastSpokeAt: Date
 }
 
-/// Estado de la sala de grabación en la Mac: pantalla previa, conexión, personas y controles.
+/// Recording room state on the Mac: pre-join screen, connection, people and controls.
 @MainActor
 final class ProdStudio: NSObject, ObservableObject {
     enum Phase: Equatable { case prejoin, joining, inRoom, failed(String) }
@@ -62,11 +62,11 @@ final class ProdStudio: NSObject, ObservableObject {
             if micId != oldValue { cancelMicCheck(); micCheck = nil; micGainDb = Self.savedGain(micId) }
         }
     }
-    /// Prueba de micrófono (10 s): mide tu voz y sugiere cuánto subirla o bajarla para la sala.
-    /// El ajuste se guarda por micrófono y solo cambia lo que oye la sala; la grabación queda intacta.
+    /// Microphone test (10 s): measures your voice and suggests how much to raise or lower it for the room.
+    /// The adjustment is saved per microphone and only changes what the room hears; the recording stays intact.
     struct MicCheck: Equatable { var peak: Float; var avg: Float; var suggested: Int? }
     @Published var micCheck: MicCheck?
-    @Published var micCheckLeft: Int?          // segundos que faltan; nil = no está corriendo
+    @Published var micCheckLeft: Int?          // seconds left; nil = not running
     @Published var micGainDb = 0 {
         didSet { LiveGate.shared.makeupDb = Float(micGainDb) }
     }
@@ -84,7 +84,7 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var people: [RoomPerson] = []
     @Published var participants: [ProdPodClient.Person] = []
     @Published var micOn = true
-    /// Auto-silencio en vivo (lo que oye la sala); la grabación no se toca.
+    /// Live auto-mute (what the room hears); the recording isn't touched.
     @Published var gateOn = UserDefaults.standard.object(forKey: "prodpod.gate") as? Bool ?? true {
         didSet { UserDefaults.standard.set(gateOn, forKey: "prodpod.gate"); LiveGate.shared.on = gateOn }
     }
@@ -94,18 +94,18 @@ final class ProdStudio: NSObject, ObservableObject {
     @Published var note: String?
     @Published var permissionDenied = false
 
-    // Grabación (etapa 2)
-    @Published var preflight: String?                 // "Midiendo tu conexión…" / resultado
+    // Recording (stage 2)
+    @Published var preflight: String?                 // "Midiendo tu conexión…" / result
     @Published var uploadMbps: Double?
-    var planWarned = false              // plan Gratis: ya se avisó que queda un minuto
-    var planStopped = false             // plan Gratis: ya se cortó al llegar al máximo
+    var planWarned = false              // Free plan: already warned that one minute is left
+    var planStopped = false             // Free plan: already cut on reaching the max
     @Published var recMax = RecordingQuality(height: 1080, bitrate: 8_000_000)
     @Published var recQuality = RecordingQuality(height: 1080, bitrate: 8_000_000)
     @Published var ownReady = false
     @Published var readyMap: [String: Bool] = [:]
     @Published var countdown: Int?
     @Published var endCountdown: Int?           // «La grabación terminó · Apagamos cámara y micrófono en 3, 2, 1»
-    var uploadSamples: [(at: Date, sent: Int64)] = []   // para estimar cuánto falta (últimos ~30 s)
+    var uploadSamples: [(at: Date, sent: Int64)] = []   // to estimate how much is left (last ~30 s)
     @Published var recording = false
     @Published var practice = false
     @Published var sessionEnded = false
@@ -124,8 +124,8 @@ final class ProdStudio: NSObject, ObservableObject {
 
     struct UploadState: Equatable {
         var state: String; var bytes: Int64; var total: Int64 = 0; var message: String?
-        var pending: Int64? = nil       // bytes que faltan por subir (lo manda cada persona en upload_status)
-        var eta: Int? = nil             // segundos estimados para terminar
+        var pending: Int64? = nil       // bytes left to upload (each person sends it in upload_status)
+        var eta: Int? = nil             // estimated seconds to finish
     }
     struct Pad: Identifiable, Equatable {
         let id: Int; let name: String; let filename: String; let key: String?; let color: String?; let url: String
@@ -145,11 +145,11 @@ final class ProdStudio: NSObject, ObservableObject {
     var triggerLog: [[String: Any]] = []
     var firedSponsors: Set<Int> = []
     var tpScript: [TPSection] = []
-    var tpFired: [Int: Double] = [:]         // sección -> segundo de la grabación en que salió
-    var tpDone: Set<Int> = []                // secciones que quien lee ya terminó
-    var tpReported: Set<String> = []         // los que yo avisé que terminé
-    var tpPeople: [String: String] = [:]      // identity -> nombre
-    var tpUsernames: [String: String] = [:]   // identity -> usuario
+    var tpFired: [Int: Double] = [:]         // section -> recording second when it appeared
+    var tpDone: Set<Int> = []                // sections the reader already finished
+    var tpReported: Set<String> = []         // the ones I announced I finished
+    var tpPeople: [String: String] = [:]      // identity -> name
+    var tpUsernames: [String: String] = [:]   // identity -> username
     var tpNoticeTask: Task<Void, Never>?
     var tpShowTask: Task<Void, Never>?
     var tpHideTask: Task<Void, Never>?
@@ -157,7 +157,7 @@ final class ProdStudio: NSObject, ObservableObject {
     var keyMonitor: Any?
     var ifbOn = false
 
-    // Etapa 3: pantalla, chat, manos, transmisión
+    // Stage 3: screen, chat, hands, streaming
     let screen = ScreenShare()
     let screenRecorder = FragmentRecorder()
     var screenFile: URL?
@@ -184,9 +184,9 @@ final class ProdStudio: NSObject, ObservableObject {
     private var joinedAt = Date()
     private var joined = false
 
-    /// La sala abierta ahora (para salir bien al cerrar la app).
+    /// The room open now (to leave cleanly when quitting the app).
     static weak var current: ProdStudio?
-    /// Transmitir en vivo queda escondido hasta la última etapa del plan.
+    /// Live streaming stays hidden until the last stage of the plan.
     static let liveEnabled = false
 
     init(session: ProdPodClient.Session) {
@@ -195,7 +195,7 @@ final class ProdStudio: NSObject, ObservableObject {
         Self.current = self
     }
 
-    // MARK: Pantalla previa
+    // MARK: Pre-join screen
 
     func prepare() {
         micGainDb = Self.savedGain(micId)
@@ -238,7 +238,7 @@ final class ProdStudio: NSObject, ObservableObject {
         participants = (try? await ProdPodClient.shared.participants(session.id)) ?? participants
     }
 
-    // MARK: Entrar
+    // MARK: Join
 
     func join() {
         guard phase != .joining else { return }
@@ -268,7 +268,7 @@ final class ProdStudio: NSObject, ObservableObject {
                 videoTrack = track
                 if !camOn { try? await track.mute() }
 
-                // La puerta va en el procesado de LiveKit; la grabación recibe la copia cruda a través de ella.
+                // The gate goes in LiveKit's processing; the recording gets the raw copy through it.
                 LiveGate.shared.on = gateOn
                 LiveGate.shared.tap = voiceFeed
                 AudioManager.shared.capturePostProcessingDelegate = LiveGate.shared
@@ -291,7 +291,7 @@ final class ProdStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Controles
+    // MARK: Controls
 
     func toggleMic() {
         micOn.toggle()
@@ -346,7 +346,7 @@ final class ProdStudio: NSObject, ObservableObject {
         Task { try? await Task.sleep(nanoseconds: 2_500_000_000); if note == s { note = nil } }
     }
 
-    // MARK: Prueba de micrófono
+    // MARK: Microphone test
 
     static func savedGain(_ micId: String) -> Int {
         UserDefaults.standard.integer(forKey: "prodpod.micGainDb." + (micId.isEmpty ? "default" : micId))
@@ -389,8 +389,8 @@ final class ProdStudio: NSObject, ObservableObject {
         micCheck = Self.evaluate(power: micCheckPower, peak: micCheckPeak)
     }
 
-    /// Promedio de energía a dBFS y sugerencia hacia −18 dBFS, igual que la web:
-    /// entre −12 y +18 dB; si casi no hubo señal (< −55) no se sugiere nada.
+    /// Mean energy in dBFS and a suggestion towards −18 dBFS, same as the web:
+    /// between −12 and +18 dB; if there was hardly any signal (< −55) nothing is suggested.
     nonisolated static func evaluate(power: [Float], peak: Float) -> MicCheck {
         let mean = power.isEmpty ? 0 : power.reduce(0, +) / Float(power.count)
         let avg = mean > 0 ? max(-90, 10 * log10f(mean)) : -90
@@ -399,7 +399,7 @@ final class ProdStudio: NSObject, ObservableObject {
         return MicCheck(peak: (pk * 10).rounded() / 10, avg: (avg * 10).rounded() / 10, suggested: suggested)
     }
 
-    // MARK: Personas
+    // MARK: People
 
     private func startTicker() {
         timer?.invalidate()
@@ -414,7 +414,7 @@ final class ProdStudio: NSObject, ObservableObject {
         micLevel = pipe.micLevel ?? -160
         tickMicCheck()
         tickRecording()
-        if ticks % 100 == 0, liveStream != nil {          // en vivo: cada 10 s, que siga saliendo
+        if ticks % 100 == 0, liveStream != nil {          // live: every 10 s, check it's still going out
             Task { await refreshLive() }
         }
         if ticks % 10 == 0 {
@@ -457,7 +457,7 @@ final class ProdStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Quien habla (o habló último) va grande en la vista "quien habla". Si nadie habló, el primero que no seas tú.
+    /// The speaker (or last speaker) goes large in the "quien habla" view. If nobody spoke, the first one that isn't you.
     var featured: RoomPerson? {
         let others = people.filter { !$0.isLocal }
         if let s = people.filter({ $0.lastSpokeAt > .distantPast }).max(by: { $0.lastSpokeAt < $1.lastSpokeAt }) { return s }
@@ -496,7 +496,7 @@ extension ProdStudio: RoomDelegate {
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         let isDirector = participant.identity?.stringValue.hasPrefix("director_") ?? false
-        if isDirector, let a = publication.track as? RemoteAudioTrack { a.volume = 0 }   // solo se oye cuando habla al oído
+        if isDirector, let a = publication.track as? RemoteAudioTrack { a.volume = 0 }   // only heard when talking in the ear
         Task { @MainActor in
             if isDirector { self.applyIFB() }
             self.refresh()

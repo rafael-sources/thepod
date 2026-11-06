@@ -2,7 +2,7 @@ import SwiftUI
 
 private let api = PrePodClient.shared
 
-// MARK: - Ideas del episodio
+// MARK: - Episode ideas
 
 struct IdeasTab: View {
     let slug: String
@@ -78,7 +78,7 @@ struct IdeasTab: View {
     private func remove(_ i: EpisodeIdea) { run { try await api.deleteIdea(slug, i.id) } }
 }
 
-// MARK: - Publicación del episodio: descripción, links y notas
+// MARK: - Episode publishing: description, links and notes
 
 struct PublicationTab: View {
     @ObservedObject var model: PreModel
@@ -190,7 +190,7 @@ struct PublicationTab: View {
     }
 }
 
-// MARK: - Calendario
+// MARK: - Calendar
 
 struct PreCalendarView: View {
     @ObservedObject var model: PreModel
@@ -276,7 +276,7 @@ struct PreCalendarView: View {
         let f = DateFormatter(); f.locale = AppLanguage.locale; f.dateFormat = "LLLL yyyy"
         return f.string(from: month).capitalized
     }
-    /// Pone la fecha de grabación; si ya tenía hora, la conserva.
+    /// Sets the recording date; if it already had a time, keeps it.
     private func schedule(_ id: Int, on d: Date) {
         guard let e = model.episodes.first(where: { $0.id == id }) else { return }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
@@ -304,7 +304,7 @@ struct PreCalendarView: View {
     }
 }
 
-// MARK: - Plantillas (en Configurar podcast)
+// MARK: - Templates (in Configurar podcast)
 
 struct TemplatesTab: View {
     let slug: String
@@ -440,7 +440,7 @@ extension Array {
     subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil }
 }
 
-// MARK: - Página del podcast (landing) y equipo
+// MARK: - Podcast page (landing) and team
 
 struct LandingTab: View {
     let slug: String

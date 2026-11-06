@@ -1,8 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Panel de color de Studio · Video: un look (de serie o un .cube de esta Mac) con su intensidad y los ajustes
-/// básicos. Edita un `ColorGrade?` donde se le indique: un clip, una cámara o toda la pista.
+/// Studio · Video color panel: a look (built-in or a .cube from this Mac) with its intensity and the basic
+/// adjustments. Edits a `ColorGrade?` wherever told: a clip, a camera or the whole track.
 struct ColorPanel: View {
     @Binding var grade: ColorGrade?
     var title: String = String(localized: "Color")

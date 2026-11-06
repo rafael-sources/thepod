@@ -1,7 +1,7 @@
 import SwiftUI
 import LiveKit
 
-// MARK: - Estilo del cuarto de control
+// MARK: - Control room style
 
 private enum CR {
     static let bg = Color(red: 0.055, green: 0.055, blue: 0.07)
@@ -13,7 +13,7 @@ private enum CR {
     static let segment = Color(red: 0.40, green: 0.62, blue: 1.0)
 }
 
-/// Título de sección pequeño, en mayúsculas.
+/// Small uppercase section title.
 private struct SectionTitle: View {
     let text: String
     var trailing: String? = nil
@@ -26,7 +26,7 @@ private struct SectionTitle: View {
     }
 }
 
-/// Opción tipo píldora (para elegir destino, duración, etc.).
+/// Pill-style option (to choose destination, duration, etc.).
 private struct Pill: View {
     let text: String
     var symbol: String? = nil
@@ -50,7 +50,7 @@ private struct Pill: View {
     }
 }
 
-/// Botón grande y sólido del cuarto de control.
+/// Large solid control room button.
 private struct CRButton: View {
     let title: String
     let symbol: String
@@ -71,7 +71,7 @@ private struct CRButton: View {
     }
 }
 
-/// Campo de texto con el estilo del cuarto de control.
+/// Text field with the control room style.
 private struct CRField: View {
     let placeholder: String
     @Binding var text: String
@@ -88,7 +88,7 @@ private struct CRField: View {
     }
 }
 
-// MARK: - Cuarto de control
+// MARK: - Control room
 
 struct DirectorView: View {
     @ObservedObject private var role = AccountRole.shared
@@ -135,7 +135,7 @@ struct DirectorView: View {
 
     private func close() { Task { await dir.leave(); app.director = nil } }
 
-    // MARK: Barra superior
+    // MARK: Top bar
 
     private var readyCount: (Int, Int) {
         let hosts = dir.hostsInRoom
@@ -224,7 +224,7 @@ struct DirectorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: Cámaras
+    // MARK: Cameras
 
     private struct Tile: Identifiable {
         let id: String; let name: String; let video: VideoTrack?; let speaking: Bool; let micOn: Bool; let ready: Bool; let isScreen: Bool
@@ -282,7 +282,7 @@ struct DirectorView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(t.speaking ? Theme.good : CR.line, lineWidth: t.speaking ? 3 : 1))
     }
 
-    // MARK: Al aire
+    // MARK: On air
 
     private var onAirBar: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -321,7 +321,7 @@ struct DirectorView: View {
         .animation(.spring(duration: 0.35), value: dir.overlays)
     }
 
-    // MARK: Hablar al oído
+    // MARK: Talk in the ear
 
     private var ifbBar: some View {
         HStack(spacing: 10) {
@@ -349,7 +349,7 @@ struct DirectorView: View {
         .disabled(!dir.connected && !preview)
     }
 
-    // MARK: Panel lateral
+    // MARK: Side panel
 
     private var sidePanel: some View {
         VStack(spacing: 0) {
@@ -393,7 +393,7 @@ struct DirectorView: View {
         }
     }
 
-    // MARK: Sala: personas y pistas
+    // MARK: Room: people and tracks
 
     private var roomPanel: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -485,7 +485,7 @@ struct DirectorView: View {
     }
 }
 
-/// Botón que funciona mientras se mantiene presionado.
+/// Button that works while held down.
 struct HoldButton: View {
     let title: String
     let active: Bool
@@ -508,7 +508,7 @@ struct HoldButton: View {
     }
 }
 
-// MARK: - Cintillos
+// MARK: - Lower thirds
 
 struct CintillosPanel: View {
     @ObservedObject var dir: DirectorStudio
@@ -568,7 +568,7 @@ struct CintillosPanel: View {
         .onChange(of: dir.podcastName) { _, v in if podTitle.isEmpty { podTitle = v } }
     }
 
-    /// Vista previa sobre un fondo tipo pantalla, a escala.
+    /// Preview on a screen-like background, to scale.
     private var previewBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: String(localized: "Vista previa"))
@@ -677,7 +677,7 @@ struct CintillosPanel: View {
     }
 }
 
-// MARK: - Avisos
+// MARK: - Notices
 
 struct CuesPanel: View {
     @ObservedObject var dir: DirectorStudio
@@ -848,7 +848,7 @@ struct TeleprompterPanel: View {
     }
 }
 
-/// Píldoras que bajan de línea si no caben.
+/// Pills that wrap to the next line if they don't fit.
 private struct FlowPills: View {
     let items: [(String, String)]
     @Binding var selected: String
@@ -884,7 +884,7 @@ private struct FlowLayout: Layout {
     }
 }
 
-// MARK: - Chat de dirección
+// MARK: - Direction chat
 
 struct DirectorChatPanel: View {
     @ObservedObject var dir: DirectorStudio

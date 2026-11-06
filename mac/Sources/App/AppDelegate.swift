@@ -1,7 +1,7 @@
 import AppKit
 import AVFoundation
 
-/// Al cerrar thePod suena la firma de thePod al revés (y la ventana se desvanece mientras suena).
+/// When thePod closes, thePod's signature plays backwards (and the window fades out while it plays).
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var player: AVAudioPlayer?
 
@@ -10,13 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "sonidoAlCerrar") }
     }
 
-    /// Cerrar la ventana con la X cierra thePod (y suena igual que con ⌘Q).
+    /// Closing the window with the X quits thePod (and sounds the same as ⌘Q).
     private var leavingRoom = false
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !SelfTest.isRequested }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Si estás en una sala de prod: salir bien (termina la grabación y avisa a prodPod)
+        // If you're in a prod room: leave cleanly (stops the recording and notifies prodPod)
         if let studio = ProdStudio.current, studio.phase == .inRoom, !leavingRoom {
             if studio.recording {
                 let a = NSAlert()

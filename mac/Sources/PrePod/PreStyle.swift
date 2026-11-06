@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Piezas visuales de la sección pre: colores por estado y por tipo de bloque, avatares, chips y fechas amables.
+// Visual pieces of the pre section: colors by status and block type, avatars, chips and friendly dates.
 
 extension EpisodeStatus {
     var color: Color {
@@ -13,7 +13,7 @@ extension EpisodeStatus {
         case .archived: return Color(white: 0.55)
         }
     }
-    /// Lo que significa la columna, en una línea.
+    /// What the column means, in one line.
     var hint: String {
         switch self {
         case .idea: return String(localized: "Por pensar")
@@ -70,7 +70,7 @@ enum RSVP {
     }
 }
 
-/// Círculo con iniciales y un color estable por nombre.
+/// Circle with initials and a stable color per name.
 struct Avatar: View {
     let name: String
     var size: CGFloat = 32
@@ -91,7 +91,7 @@ struct Avatar: View {
     }
 }
 
-/// Etiqueta redondeada de color.
+/// Rounded colored tag.
 struct Chip: View {
     let text: String
     var symbol: String?
@@ -108,7 +108,7 @@ struct Chip: View {
     }
 }
 
-/// Explicación breve de una pantalla: título grande y una línea de ayuda.
+/// Brief explanation of a screen: large title and a help line.
 struct PreHeader: View {
     let symbol: String
     let title: String
@@ -129,7 +129,7 @@ struct PreHeader: View {
     }
 }
 
-/// Estado vacío con una acción clara.
+/// Empty state with a clear action.
 struct EmptyHint: View {
     let symbol: String
     let title: String
@@ -147,7 +147,7 @@ struct EmptyHint: View {
 }
 
 extension PreEpisode {
-    /// Fecha de grabación como Date (acepta "2026-10-02" o "2026-10-02T19:00").
+    /// Recording date as a Date (accepts "2026-10-02" or "2026-10-02T19:00").
     var scheduled: Date? {
         guard let raw = scheduledAt ?? scheduledDate, raw.count >= 10 else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
@@ -173,7 +173,7 @@ extension PreEpisode {
         }
     }
 
-    /// Ya pasó la fecha y todavía no se grabó.
+    /// The date has passed and it hasn't been recorded yet.
     var isLate: Bool {
         guard let d = scheduled else { return false }
         let st = statusValue
@@ -183,10 +183,10 @@ extension PreEpisode {
 }
 
 extension Color {
-    /// Color del podcast (si lo tiene en su branding) o el azul de prePod.
+    /// The podcast's color (if its branding has one) or prePod blue.
     static func podcast(_ hex: String?) -> Color {
         guard let hex, !hex.isEmpty, let ns = TextRenderer.color(hex)?.usingColorSpace(.sRGB) else { return .prePod }
-        // Un color muy oscuro o muy claro no se lee sobre el fondo negro: se usa el azul de prePod
+        // A very dark or very light color can't be read on the black background: prePod blue is used
         let lum = 0.2126 * ns.redComponent + 0.7152 * ns.greenComponent + 0.0722 * ns.blueComponent
         return (0.28...0.85).contains(lum) ? Color(nsColor: ns) : .prePod
     }

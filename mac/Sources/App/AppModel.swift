@@ -13,29 +13,29 @@ enum AppSection: String { case pre, prod, post, pub, ama }
 
 @MainActor
 final class AppModel: ObservableObject {
-    /// Sección de thePod que se está usando (pre · post); se recuerda entre aperturas.
+    /// thePod section in use (pre · post); remembered between launches.
     @Published var section: AppSection = AppSection(rawValue: UserDefaults.standard.string(forKey: "seccion") ?? "") ?? .post {
         didSet { UserDefaults.standard.set(section.rawValue, forKey: "seccion") }
     }
-    /// Sala de prodPod que se pidió abrir desde pre ("Ir a grabar").
+    /// prodPod room requested from pre ("Ir a grabar").
     @Published var prodRequest: Int?
-    /// La sala abierta en prod (sigue conectada aunque cambies a pre o post).
+    /// The room open in prod (stays connected even if you switch to pre or post).
     @Published var studio: ProdStudio?
-    /// Cuarto de control abierto (director).
+    /// Control room open (director).
     @Published var director: DirectorStudio?
-    /// Evento de amaPod abierto (preguntas del público).
+    /// amaPod event open (audience questions).
     @Published var ama: AmaStudio?
     @Published var projects: [Project] = []
     @Published var session: ProjectSession?
     @Published var importJob: JobState?
     @Published var errorMessage: String?
-    /// true cuando terminó la entrada de thePod (o está apagada): recién ahí se consulta la cuenta.
+    /// true once thePod's intro has finished (or is off): only then is the account checked.
     @Published var introDone = SelfTest.isRequested || !UserDefaults.standard.bool(forKey: "introAlAbrir", default: true)
     private var importTask: Task<Void, Never>?
 
     init() {
         reload()
-        if !SelfTest.isRequested { Task { await ChunkUploader.shared.resumeAll() } }   // subidas de prod que quedaron a medias
+        if !SelfTest.isRequested { Task { await ChunkUploader.shared.resumeAll() } }   // prod uploads left half done
     }
 
     func reload() { projects = ProjectStore.listProjects() }
@@ -60,7 +60,7 @@ final class AppModel: ObservableObject {
         importJob = JobState(title: String(localized: "Importando tu grabación"), detail: String(localized: "Preparando…"), fraction: 0)
         importTask = Task {
             do {
-                // Sin la app en el plan (Gratis o Web): cada grabación nueva que se importa cuenta como un episodio
+                // Without the app in the plan (Free or Web): every new recording imported counts as an episode
                 if PrePodClient.isConfigured, !Plan.includesApp {
                     if let denied = await PrePodClient.shared.claimEpisode(String(localized: "mac:\(UUID().uuidString)")) {
                         importJob = nil
@@ -215,7 +215,7 @@ enum Step: String, CaseIterable, Identifiable {
         case .publish: return "paperplane"
         }
     }
-    /// Bloques de la barra lateral: Preparar y Armar son de ida y vuelta; Entregar va en orden.
+    /// Sidebar blocks: Prepare and Build are back-and-forth; Deliver goes in order.
     enum Group: String, CaseIterable {
         case prepare, build, deliver
         var name: String {
@@ -238,8 +238,8 @@ final class ProjectSession: ObservableObject {
         didSet {
             guard project != oldValue else { return }
             history.record(before: oldValue)
-            // Solo cambió el ecualizador / voz pareja / siseo de alguien: se aplica al vuelo en la cadena de voz
-            // (vista previa y export en marcha), sin rearmar la vista previa ni cortar el audio.
+            // Only someone's equalizer / even voice / sibilance changed: applied on the fly in the voice chain
+            // (preview and running export), without rebuilding the preview or cutting the audio.
             if Self.onlyVoiceChainChanged(oldValue, project), !Self.pluginListChanged(oldValue, project) {
                 for l in project.lanes {
                     let before = oldValue.lanes.first(where: { $0.id == l.id })
@@ -254,7 +254,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Cambió qué plugins hay (o su orden) en alguna persona: hay que rearmar la cadena.
+    /// The set of plugins (or their order) changed for someone: the chain must be rebuilt.
     private static func pluginListChanged(_ a: Project, _ b: Project) -> Bool {
         guard a.lanes.count == b.lanes.count else { return true }
         for (x, y) in zip(a.lanes, b.lanes) where x.effectiveChain.plugins.map(\.id) != y.effectiveChain.plugins.map(\.id) { return true }
@@ -268,12 +268,12 @@ final class ProjectSession: ObservableObject {
         return c == a
     }
     let history = ProjectHistory()
-    @Published var note: String?          // aviso corto (atajos, deshacer)
+    @Published var note: String?          // short notice (shortcuts, undo)
     private var offsetWork: Task<Void, Never>?
     var noteId = UUID()
-    var inPoint: Double?                  // tecla I: inicio de un reel pendiente
-    @Published var selectedVolumePoint: (lane: Int, id: UUID)?   // punto elegido de la línea de volumen (Suprimir lo quita)
-    /// Pista elegida en el timeline (o en la lista de sonidos): se edita en el panel bajo el video.
+    var inPoint: Double?                  // I key: start of a pending reel
+    @Published var selectedVolumePoint: (lane: Int, id: UUID)?   // selected point on the volume line (Delete removes it)
+    /// Track selected in the timeline (or in the sounds list): edited in the panel below the video.
     enum TrackSel: Equatable { case lane(Int), sound(Int), overlay(Int), broll(Int), reelBRoll(UUID, Int), cintillo(Int), reelSound(UUID, Int), reelCintillo(UUID, Int) }
     @Published var selectedTrack: TrackSel?
     @Published var step: Step = .overview
@@ -282,20 +282,20 @@ final class ProjectSession: ObservableObject {
     @Published var previewFormat: ExportFormat = .landscape
     @Published var previewWindow: EditEngine.Span?
     @Published var previewLayout: LayoutTemplate?
-    @Published var previewLook: ReelLook?          // viendo un reel: su diseño y marca encima del episodio
-    @Published var previewReel: Reel?              // viendo un reel: sus cortes propios
+    @Published var previewLook: ReelLook?          // viewing a reel: its design and branding on top of the episode
+    @Published var previewReel: Reel?              // viewing a reel: its own cuts
 
-    /// Título de gancho de un reel (nil = sin título).
+    /// A reel's hook title (nil = no title).
     func setReelHook(_ reelId: UUID, _ text: String?) {
         guard let r = project.reels.firstIndex(where: { $0.id == reelId }) else { return }
         project.reels[r].hook = text
         if previewReel?.id == reelId { previewReel = project.reels[r] }
     }
-    /// A quién le cambia la posición de los subtítulos al arrastrarlos sobre el video (nil = no se pueden arrastrar).
+    /// Whose subtitle position changes when dragging them over the video (nil = can't be dragged).
     enum CaptionTarget: Equatable { case episode, allReels, reel(UUID) }
     @Published var captionDragTarget: CaptionTarget?
 
-    /// El estilo de subtítulos que se está viendo (según el blanco del arrastre).
+    /// The subtitle style being viewed (depending on the drag target).
     func captionStyle(for target: CaptionTarget) -> CaptionStyle {
         switch target {
         case .episode: return project.captionStyle
@@ -324,7 +324,7 @@ final class ProjectSession: ObservableObject {
     @Published var lastExports: [URL] = []
     @Published var fixSummary: String?
     @Published var reelsNote: String?
-    @Published var captionsNote: String?            // resultado de ajustar o volver a escuchar los subtítulos
+    @Published var captionsNote: String?            // result of aligning or re-listening to the subtitles
     @Published private(set) var built: BuiltComposition?
 
     let player = AVPlayer()
@@ -332,13 +332,13 @@ final class ProjectSession: ObservableObject {
     var energy: EnergyMap?
     private var jobTask: Task<Void, Never>?
     private var queueJobTask: Task<[URL], Error>?
-    /// Cola de exportación (feature 15): se procesa en segundo plano, de a uno.
+    /// Export queue (feature 15): processed in the background, one at a time.
     @Published var exportQueue: [ExportJob] = []
-    /// Proxys (copias livianas para la vista previa): qué se está preparando, o nil
+    /// Proxies (lightweight copies for the preview): what's being prepared, or nil
     @Published var proxyStatus: String?
     private var proxyTask: Task<Void, Never>?
     var exportQueueTask: Task<Void, Never>?
-    /// Solo para pruebas: reemplaza la exportación real por una función que simula cada trabajo.
+    /// Tests only: replaces the real export with a function that simulates each job.
     var exportQueueRunner: ((ExportJob.Kind) async throws -> [URL])?
     private var previewTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
@@ -353,10 +353,10 @@ final class ProjectSession: ObservableObject {
         vigilarPausa()
         schedulePreview(immediate: true)
         prepareProxies()
-        // Proyectos traídos antes de que la app bajara el fondo de prePod: completarlos una sola vez.
+        // Projects brought in before the app downloaded prePod's background: fill them in once.
         if project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty { fetchBranding() }
-        // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
-        // calcularlo al abrir si hay más de una persona.
+        // Without audio analysis the preview doesn't know who's speaking (the first person would always be large):
+        // compute it on open if there's more than one person.
         if energy == nil, !project.lanes.isEmpty {
             run(project.lanes.count > 1 ? String(localized: "Analizando quién habla") : String(localized: "Analizando el sonido")) { [self] in
                 try await ensureEnergy()
@@ -365,7 +365,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Busca en prePod el fondo y el logo del podcast (si el proyecto no los tiene).
+    /// Fetches the podcast's background and logo from prePod (if the project doesn't have them).
     func fetchBranding() {
         brandingStatus = String(localized: "Buscando en prePod el fondo, el logo, los sponsors y el guion…")
         Task { [weak self] in
@@ -388,7 +388,7 @@ final class ProjectSession: ObservableObject {
     }
     @Published var brandingStatus: String?
 
-    /// El usuario elige a mano la imagen de fondo (o el logo).
+    /// The user picks the background image (or the logo) by hand.
     func chooseBranding(kind: String) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
@@ -416,10 +416,10 @@ final class ProjectSession: ObservableObject {
         previewTask = Task {
             if !immediate { try? await Task.sleep(nanoseconds: 450_000_000) }
             guard !Task.isCancelled else { return }
-            // Mientras suena, la vista previa NO se cambia por trabajos de fondo (terminar de analizar quién habla,
-            // mejorar el audio, el ecualizador, guardar). Cambiarla a media reproducción reemplaza el audio en marcha
-            // y en Macs más lentos se oía bajar la voz un momento, en sitios distintos cada vez. Si la persona acaba
-            // de tocar algo (un volumen, un corte) sí se aplica ya; lo demás espera a la pausa.
+            // While playing, the preview is NOT replaced by background jobs (finishing speaker analysis,
+            // enhancing audio, the equalizer, saving). Swapping it mid-playback replaces the running audio
+            // and on slower Macs the voice could be heard dipping for a moment, in different places each time. If the person just
+            // touched something (a volume, a cut) it's applied right away; the rest waits for the pause.
             if player.rate > 0, !Self.tocoHaceUnMomento {
                 previewPendiente = true
                 return
@@ -429,11 +429,11 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Hay una vista previa nueva esperando a que se pause la reproducción.
+    /// There's a new preview waiting for playback to pause.
     private var previewPendiente = false
     private var observadorPausa: NSKeyValueObservation?
 
-    /// Al pausar, se aplica la vista previa que quedó esperando.
+    /// On pause, the preview that was waiting is applied.
     private func vigilarPausa() {
         observadorPausa = player.observe(\.timeControlStatus) { [weak self] player, _ in
             Task { @MainActor in
@@ -443,7 +443,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// La última vez que la persona usó el teclado o el ratón dentro de la app.
+    /// The last time the person used the keyboard or mouse inside the app.
     nonisolated(unsafe) private static var ultimoToque: CFTimeInterval = 0
     nonisolated(unsafe) private static var monitorToques: Any?
     private static var tocoHaceUnMomento: Bool { CACurrentMediaTime() - ultimoToque < 1.5 }
@@ -459,7 +459,7 @@ final class ProjectSession: ObservableObject {
     func setPreview(format: ExportFormat, window: EditEngine.Span? = nil, layout: LayoutTemplate? = nil, look: ReelLook? = nil, reel: Reel? = nil) {
         var reel = reel
         if reel != nil {
-            reel?.seen = true       // mirado (revisión antes de exportar); igual en la copia para no reconstruir dos veces
+            reel?.seen = true       // reviewed (check before exporting); same in the copy so it isn't rebuilt twice
             if let i = project.reels.firstIndex(where: { $0.id == reel?.id }), project.reels[i].seen != true {
                 project.reels[i].seen = true
             }
@@ -498,19 +498,19 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Sugerencias que la persona todavía no miró (muletillas dudosas, frases repetidas, sonidos sin palabras).
+    /// Suggestions the person hasn't looked at yet (doubtful filler words, repeated phrases, wordless sounds).
     var pendingSuggestions: [Cut] {
         project.cuts.filter { $0.suggested == true && $0.reviewed != true }.sorted { $0.start < $1.start }
     }
 
-    /// Decide una sugerencia: quitarla (se corta) o dejarla (queda como está).
+    /// Decides a suggestion: remove it (it's cut) or keep it (stays as is).
     func decide(_ id: UUID, remove: Bool) {
         guard let i = project.cuts.firstIndex(where: { $0.id == id }) else { return }
         project.cuts[i].enabled = remove
         project.cuts[i].reviewed = true
     }
 
-    /// Todas las sugerencias pendientes de una vez.
+    /// All pending suggestions at once.
     func decideAllPending(remove: Bool) {
         var p = project
         for i in p.cuts.indices where p.cuts[i].suggested == true && p.cuts[i].reviewed != true {
@@ -520,7 +520,7 @@ final class ProjectSession: ObservableObject {
         project = p
     }
 
-    /// Corta a mano un trozo marcado en la línea de tiempo (tiempo del episodio). Se puede deshacer en la lista de cortes.
+    /// Manually cuts a span marked on the timeline (episode time). Can be undone in the cuts list.
     func cutRange(_ start: Double, _ end: Double) {
         let a = max(0, min(start, end)), b = min(project.duration, max(start, end))
         guard b - a > 0.05 else { return }
@@ -547,7 +547,7 @@ final class ProjectSession: ObservableObject {
                 let b = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 return a > b
             }
-        // Solo avisar si cambió: si se publica en cada redibujo, las vistas que lo leen se redibujan en bucle y la app se cuelga.
+        // Only notify if it changed: if it's published on every redraw, the views reading it redraw in a loop and the app hangs.
         if fresh != lastExports { lastExports = fresh }
     }
 
@@ -571,7 +571,7 @@ final class ProjectSession: ObservableObject {
 
     func cancelJob() { jobTask?.cancel(); queueJobTask?.cancel() }
 
-    /// La cola usa la misma barra de trabajo: mientras exporta, nada más arranca.
+    /// The queue uses the same job bar: while exporting, nothing else starts.
     func startQueueJob(title: String, task: Task<[URL], Error>) {
         job = JobState(title: title, detail: queueDetail, fraction: 0)
         queueJobTask = task
@@ -597,7 +597,7 @@ final class ProjectSession: ObservableObject {
             let settings = project.fix
             if settings.enhanceAudio { try await enhanceAudio() }
             try await transcribeMissing()
-            // Los silencios se calculan con los tiempos de las palabras: primero que estén donde suena la voz
+            // Silences are computed from word timings: first make sure they're where the voice sounds
             if !project.wordsSynced, !project.words.isEmpty { _ = try await syncWords() }
             if energy == nil || settings.removeSilences { try await ensureEnergy() }
 
@@ -622,7 +622,7 @@ final class ProjectSession: ObservableObject {
                 + (pending > 0 ? String(localized: " Te dejamos \(pending) \(pending == 1 ? String(localized: "sugerencia") : String(localized: "sugerencias")) para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques.") : "")
     }
 
-    /// Silencios y muletillas que quita "Arreglar", con los ajustes del proyecto (no los agrega).
+    /// Silences and filler words that "Arreglar" (Fix) removes, with the project settings (doesn't add them).
     private func autoCuts(_ p: Project) -> (silences: [Cut], fillers: [Cut]) {
         let settings = p.fix
         var silences: [Cut] = []
@@ -641,7 +641,7 @@ final class ProjectSession: ObservableObject {
             fillers = EditEngine.fillerCuts(words: p.words, includeWordFillers: settings.removeWordFillers)
             fillers += EditEngine.repeatCuts(words: p.words)
             if let energy {
-                // sonidos sin palabras que no se pisen con lo que ya se marcó
+                // wordless sounds that don't overlap what was already marked
                 let marked = fillers
                 fillers += EditEngine.soundOnlyCuts(words: p.words, energy: energy)
                     .filter { c in !marked.contains { $0.start < c.end && $0.end > c.start } }
@@ -651,7 +651,7 @@ final class ProjectSession: ObservableObject {
         return (silences, fillers)
     }
 
-    /// Cortes que pone «Arreglar» (se recalculan); los manuales e importados no se tocan.
+    /// Cuts placed by «Arreglar» (Fix) (they're recomputed); manual and imported ones are left alone.
     static func isAutoCut(_ c: Cut) -> Bool { c.kind == .silence || c.kind == .filler || c.kind == .repeated }
 
     func undoFix() {
@@ -674,7 +674,7 @@ final class ProjectSession: ObservableObject {
             }
         }
         let level = project.fix.noiseLevel
-        // Si se cambió cuánto limpia, el archivo esperado es otro: se vuelve a procesar
+        // If the cleanup amount changed, the expected file is a different one: process again
         let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile != AudioAnalysis.enhancedRel(mediaId: $0.id, level: level) }
         for (i, m) in items.enumerated() {
             let who = project.lanes.first { $0.clips.contains { $0.mediaId == m.id } }.map { project.laneName($0.id) } ?? m.originalName
@@ -730,12 +730,12 @@ final class ProjectSession: ObservableObject {
         run(String(localized: "Buscando los mejores momentos")) { [self] in try await performSuggest() }
     }
 
-    // MARK: Notas y momentos con IA (una vez por episodio)
+    // MARK: AI notes and moments (once per episode)
 
     @Published var askAIConsent = false
     @Published var aiNote: String?
 
-    /// Botón «Buscar momentos con IA». La primera vez pide permiso para mandar la transcripción.
+    /// «Buscar momentos con IA» button. The first time it asks permission to send the transcript.
     func findMomentsWithAI(confirmed: Bool = false) {
         if !confirmed && !UserDefaults.standard.bool(forKey: "aiConsentTranscript") {
             askAIConsent = true
@@ -750,14 +750,14 @@ final class ProjectSession: ObservableObject {
         report(String(localized: "Buscando los mejores momentos con IA"), String(localized: "La IA está leyendo el episodio: tarda uno o dos minutos"), nil)
         let result = try await PostPodWebClient.shared.aiMoments(ref: String(localized: "mac:\(project.id)"), text: EditEngine.transcriptForAI(project))
         var p = project
-        // Notas: resumen y puntos destacados (van a la descripción al publicar)
+        // Notes: summary and highlights (go into the description when publishing)
         if let notes = result["notes"] as? [String: Any] {
             var text = (notes["summary"] as? String) ?? ""
             let highlights = (notes["highlights"] as? [String]) ?? []
             if !highlights.isEmpty { text += "\n\n" + highlights.map { "• " + $0 }.joined(separator: "\n") }
             if !text.isEmpty { p.aiSummary = text }
         }
-        // Momentos: un reel por cada uno (sin repetir los que ya están)
+        // Moments: one reel for each (without repeating existing ones)
         var added = 0
         for c in (result["clips"] as? [[String: Any]]) ?? [] {
             guard let s = (c["start"] as? String).flatMap(ClipSuggester.parseClock),
@@ -795,7 +795,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Pistas por separado (WAV): una por persona y la música aparte.
+    /// Separate tracks (WAV): one per person and the music apart.
     func exportStems() {
         run(String(localized: "Exportando pistas")) { [self] in
             try await ensureEnergy()
@@ -825,9 +825,9 @@ final class ProjectSession: ObservableObject {
             return url
     }
 
-    // MARK: Revisión compartida
+    // MARK: Shared review
 
-    /// Exporta el MP3 completo, lo sube a postPod web y guarda el enlace para compartir.
+    /// Exports the full MP3, uploads it to postPod web and saves the share link.
     func sendForReview() {
         guard let slug = project.postpodSlug else { note = String(localized: "Este episodio no vino de postPod web: no hay dónde subirlo."); return }
         run(String(localized: "Enviando a revisión")) { [self] in
@@ -874,7 +874,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Exporta un solo reel (botón de su tarjeta) y lo muestra en el Finder.
+    /// Exports a single reel (button on its card) and shows it in the Finder.
     func exportReel(_ reel: Reel) {
         run(String(localized: "Exportando reel")) { [self] in
             let urls = try await performExportReels(only: reel)
@@ -905,9 +905,9 @@ final class ProjectSession: ObservableObject {
             return urls
     }
 
-    // MARK: Subtítulos a archivo
+    // MARK: Subtitles to file
 
-    /// Guarda los subtítulos (.srt) o la transcripción (.txt) donde el usuario elija.
+    /// Saves the subtitles (.srt) or the transcript (.txt) where the user chooses.
     func saveSubtitles(asText: Bool) {
         guard project.isTranscribed else { return }
         let panel = NSSavePanel()
@@ -920,7 +920,7 @@ final class ProjectSession: ObservableObject {
         catch { errorMessage = error.localizedDescription }
     }
 
-    // MARK: Intro y cierre
+    // MARK: Intro and outro
 
     func setBumper(isIntro: Bool, _ b: Bumper?) {
         if isIntro { project.intro = b } else { project.outro = b }
@@ -957,10 +957,10 @@ final class ProjectSession: ObservableObject {
         setBumper(isIntro: isIntro, b)
     }
 
-    // MARK: Ecualizador por persona
+    // MARK: Per-person equalizer
 
-    /// (Hasta 0.30) procesaba el audio con ffmpeg; ahora la cadena de voz va en tiempo real y no hay nada que aplicar.
-    /// Se conserva para proyectos que todavía tengan archivos `eq_*.m4a`: ya no se usan.
+    /// (Up to 0.30) processed the audio with ffmpeg; now the voice chain runs in real time and there's nothing to apply.
+    /// Kept for projects that still have `eq_*.m4a` files: they're no longer used.
     func applyEQ(laneId: Int) {
         guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return }
         let eq = lane.eq
@@ -982,14 +982,14 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// ¿El ecualizador de esta persona ya está aplicado tal como está configurado? Con la cadena en
-    /// tiempo real, siempre: se oye al instante.
+    /// Is this person's equalizer already applied as configured? With the real-time
+    /// chain, always: it's heard instantly.
     func eqApplied(laneId: Int) -> Bool { true }
 
-    // MARK: Proxys
+    // MARK: Proxies
 
-    /// Prepara en segundo plano, con prioridad baja, los proxys de las grabaciones grandes que no lo tengan; al
-    /// terminar cada uno, la vista previa se rearma con él. No bloquea nada y no toca el export.
+    /// Prepares in the background, at low priority, proxies for large recordings that don't have one; when
+    /// each finishes, the preview is rebuilt with it. Doesn't block anything and doesn't touch the export.
     func prepareProxies() {
         guard ProxyStore.enabled, proxyTask == nil else { return }
         let p = project
@@ -1011,17 +1011,17 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Encender o apagar los proxys (preferencia de la app) y rearmar la vista previa.
+    /// Turns proxies on or off (app preference) and rebuilds the preview.
     func setProxies(_ on: Bool) {
         ProxyStore.enabled = on
         if on { prepareProxies() } else { proxyTask?.cancel(); proxyTask = nil; proxyStatus = nil }
         schedulePreview(immediate: true)
     }
 
-    // MARK: Igualar color de las cámaras
+    // MARK: Match camera colors
 
-    /// Igualar cámaras: con `reference`, esa cámara manda y las demás reciben una ganancia por canal (balance) y una
-    /// exposición (brillo) en su color de Studio; sin referencia (botón del paso simple), la primera en pantalla.
+    /// Match cameras: with `reference`, that camera leads and the others get a per-channel gain (balance) and an
+    /// exposure (brightness) in their Studio color; without a reference (simple-step button), the first one on screen.
     func matchCameraColors(reference: Int? = nil) {
         run(String(localized: "Igualando el color de las cámaras")) { [self] in
             let ctx = CIContext()
@@ -1063,9 +1063,9 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    // MARK: Orden en pantalla
+    // MARK: On-screen order
 
-    /// Pone a una persona en la posición `pos` (1 = primera). El resto corre.
+    /// Puts a person at position `pos` (1 = first). The rest shift.
     func setLanePosition(_ laneId: Int, _ pos: Int) {
         var order = project.lanesOnScreen.map(\.id)
         guard let i = order.firstIndex(of: laneId) else { return }
@@ -1074,7 +1074,7 @@ final class ProjectSession: ObservableObject {
         project.laneOrder = order
     }
 
-    /// Orden en pantalla propio de un reel (o de todos los reels).
+    /// A reel's own on-screen order (or of all reels).
     func setReelLanePosition(_ laneId: Int, _ pos: Int, reelId: UUID?) {
         func moved(_ base: [Int]) -> [Int] {
             var order = base
@@ -1093,11 +1093,11 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    // MARK: Sincronizar personas
+    // MARK: Sync people
 
-    /// Mueve el inicio de la grabación de una persona (desfase). Negativo = suena antes (se salta el
-    /// principio de su grabación); positivo = suena después. Arrastra con ella sus palabras transcritas,
-    /// actualiza la vista previa al instante y vuelve a calcular quién habla cuando se deja de tocar.
+    /// Moves the start of a person's recording (offset). Negative = sounds earlier (skips the
+    /// beginning of their recording); positive = sounds later. Drags their transcribed words along,
+    /// updates the preview instantly and recomputes who's speaking once you stop touching it.
     func setLaneOffset(_ laneId: Int, _ newOffset: Double) {
         guard let i = project.lanes.firstIndex(where: { $0.id == laneId }) else { return }
         let target = (max(project.lanes[i].minOffset, newOffset) * 100).rounded() / 100
@@ -1113,7 +1113,7 @@ final class ProjectSession: ObservableObject {
         let name = project.laneName(laneId)
         flashNote("\(name): \(Self.offsetText(target))")
         schedulePreview(immediate: true)
-        // Quién habla (y los silencios) se recalculan una sola vez, cuando se deja de tocar el desfase
+        // Who's speaking (and silences) are recomputed only once, when you stop touching the offset
         offsetWork?.cancel()
         offsetWork = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 900_000_000)
@@ -1140,15 +1140,15 @@ final class ProjectSession: ObservableObject {
         return o < 0 ? String(localized: "suena \(v) s antes") : String(localized: "suena \(v) s después")
     }
 
-    // MARK: Música y efectos
+    // MARK: Music and effects
 
-    /// Mueve un sonido/música de la línea de audio a otro punto del episodio.
+    /// Moves a sound/music clip on the audio line to another point in the episode.
     func moveSound(_ clipId: Int, to timeline: Double) {
         guard let i = project.audioLane.firstIndex(where: { $0.id == clipId }) else { return }
         project.audioLane[i].tlStart = min(max(0, timeline), max(0, project.duration - 0.5))
     }
 
-    /// El usuario elige archivos de música/efectos; se copian al proyecto y quedan en la biblioteca (y si se pide, puestos).
+    /// The user picks music/effect files; they're copied into the project and stay in the library (and placed, if asked).
     func importSounds(placeAt: Double? = nil, reelId: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
@@ -1182,12 +1182,12 @@ final class ProjectSession: ObservableObject {
         }
         let len = p.mediaItem(mediaId)?.duration ?? 1
         if let reelId, let r = p.reels.firstIndex(where: { $0.id == reelId }) {
-            // Música propia del reel: empieza donde empieza el reel (o donde está el video, si está dentro del reel)
+            // The reel's own music: starts where the reel starts (or where the video is, if inside the reel)
             let reel = p.reels[r]
             let id = (reel.music.map(\.id).max() ?? 0) + 1
             let at = (timeline >= reel.start && timeline < reel.end) ? timeline : reel.start
             var clip = AudioLaneClip(id: id, mediaId: mediaId, tlStart: at, srcIn: 0, srcOut: len, volume: 0.8)
-            clip.loop = len < reel.length   // más corta que el reel: se repite hasta el final
+            clip.loop = len < reel.length   // shorter than the reel: loops until the end
             p.reels[r].music.append(clip)
             project = p
             if previewReel?.id == reelId { previewReel = project.reels[r] }
@@ -1200,7 +1200,7 @@ final class ProjectSession: ObservableObject {
         selectedTrack = .sound(id)
     }
 
-    /// Acceso a un sonido por dónde vive (episodio o reel), para el panel bajo el video.
+    /// Access to a sound by where it lives (episode or reel), for the panel below the video.
     func soundBinding(_ sel: TrackSel) -> Binding<AudioLaneClip>? {
         switch sel {
         case .sound(let id):
@@ -1233,11 +1233,11 @@ final class ProjectSession: ObservableObject {
         selectedTrack = nil
     }
 
-    // MARK: Voz artificial
+    // MARK: Synthetic voice
 
     @Published var voiceSheet = false
 
-    /// Genera el texto con una voz de la Mac y lo pone donde está el video (o donde se pida).
+    /// Generates the text with a Mac voice and places it where the video is (or where asked).
     func addVoice(text: String, voice: Speech.Voice?, rate: Float, at timeline: Double? = nil) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
@@ -1260,9 +1260,9 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    // MARK: Cintillos
+    // MARK: Lower thirds
 
-    /// Crea un cintillo donde está el video (estilo news | clean | sponsor) y lo deja elegido.
+    /// Creates a lower third where the video is (style news | clean | sponsor) and selects it.
     @discardableResult
     func addCintillo(style: String, kind: String = "banner", title: String = "", text: String = "", logoFile: String? = nil, tag: String? = nil, reelId: UUID? = nil) -> Int {
         let reel = reelId.flatMap { rid in project.reels.first { $0.id == rid } }
@@ -1286,12 +1286,12 @@ final class ProjectSession: ObservableObject {
         return id
     }
 
-    /// Cintillo de sponsor a partir de un sponsor de prePod (logo y frase ya puestos).
+    /// Sponsor lower third from a prePod sponsor (logo and tagline already set).
     func addSponsorCintillo(_ sp: Sponsor, reelId: UUID? = nil) {
         _ = addCintillo(style: "sponsor", kind: "sponsor", title: sp.name, text: sp.copy ?? "", logoFile: sp.logoFile, tag: String(localized: "PATROCINA"), reelId: reelId)
     }
 
-    /// Acceso a un cintillo por dónde vive (episodio o reel), para el panel bajo el video.
+    /// Access to a lower third by where it lives (episode or reel), for the panel below the video.
     func cintilloBinding(_ sel: TrackSel) -> Binding<DirectorCintillo>? {
         switch sel {
         case .cintillo(let id):
@@ -1368,7 +1368,7 @@ final class ProjectSession: ObservableObject {
 
     // MARK: B-roll
 
-    /// Elige un video o una imagen y lo pone como b-roll donde está el video (del episodio, o solo de un reel).
+    /// Picks a video or image and places it as b-roll where the video is (episode's, or only a reel's).
     func chooseBRoll(reelId: UUID? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video, .png, .jpeg, .heic, .webP, .gif]
@@ -1386,7 +1386,7 @@ final class ProjectSession: ObservableObject {
         let reel = reelId.flatMap { id in project.reels.first { $0.id == id } }
         let pool = reel?.brolls ?? project.brolls
         let id = (pool.map(\.id).max() ?? 0) + 1
-        // Tope: 10 s, y dentro de un reel nunca más largo que el reel (menos 1 s)
+        // Cap: 10 s, and inside a reel never longer than the reel (minus 1 s)
         let cap = reel.map { max(1, min(BRollClip.maxSeconds, $0.length - 1)) } ?? BRollClip.maxSeconds
         var start = min(playheadTimeline, max(0, project.duration - 1))
         if let reel { start = min(max(reel.start, start), max(reel.start, reel.end - 1)) }
@@ -1422,9 +1422,9 @@ final class ProjectSession: ObservableObject {
         selectedTrack = nil
     }
 
-    // MARK: Capas (textos, imágenes, stickers)
+    // MARK: Layers (texts, images, stickers)
 
-    /// Agrega una capa donde está el video ahora y la deja elegida para editarla bajo el video.
+    /// Adds a layer where the video is now and selects it for editing below the video.
     @discardableResult
     func addOverlay(kind: VideoLayer.Kind, text: String = "", imageFile: String? = nil) -> Int {
         let id = (project.overlays.map(\.id).max() ?? 0) + 1
@@ -1440,7 +1440,7 @@ final class ProjectSession: ObservableObject {
         return id
     }
 
-    /// Elige una imagen (PNG con transparencia, JPG, HEIC, GIF) y la agrega como capa.
+    /// Picks an image (PNG with transparency, JPG, HEIC, GIF) and adds it as a layer.
     func chooseOverlayImage() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif, .tiff]
@@ -1458,7 +1458,7 @@ final class ProjectSession: ObservableObject {
         addOverlay(kind: .image, imageFile: rel)
     }
 
-    /// Logo o fondo solo para los reels (de todos, o del reel elegido).
+    /// Logo or background for reels only (all of them, or the selected reel).
     func chooseReelImage(kind: String, reelId: UUID?) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
@@ -1485,7 +1485,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Imagen para el fondo virtual de una persona.
+    /// Image for a person's virtual background.
     func chooseVirtualBackgroundImage(laneId: Int) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
@@ -1519,7 +1519,7 @@ final class ProjectSession: ObservableObject {
     }
 
     /// Current playhead in TIMELINE time.
-    /// Marca un momento donde está el video (como la tecla M en postPod web) y crea su reel.
+    /// Marks a moment where the video is (like the M key in postPod web) and creates its reel.
     @discardableResult
     func markMoment() -> Reel {
         let t = playheadTimeline
@@ -1542,7 +1542,7 @@ final class ProjectSession: ObservableObject {
     @Published var publishStatus: PrePodClient.PublishStatus?
     @Published var publishNote: String?
 
-    /// Solo lee la lista ya cargada (se llama desde el dibujo de las vistas: no debe cambiar estado).
+    /// Only reads the already-loaded list (called while drawing views: must not change state).
     func latestExport(suffix: String, ext: String) -> URL? {
         lastExports.first { $0.pathExtension == ext && $0.lastPathComponent.contains("_\(suffix)_") }
     }
@@ -1600,12 +1600,12 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    // MARK: pubPod: reels a redes
+    // MARK: pubPod: reels to social networks
 
     @Published var reelPosts: [PrePodClient.PubPost]?
 
-    /// pubPod: el episodio completo a sus destinos (ahora o programado). Cada destino lleva su archivo:
-    /// youtube = video 16:9, feed = el audio (Spotify y Apple Podcasts), instagram_image = la portada.
+    /// pubPod: the full episode to its destinations (now or scheduled). Each destination carries its file:
+    /// youtube = 16:9 video, feed = the audio (Spotify and Apple Podcasts), instagram_image = the cover.
     func publishEpisode(title: String, targets: [(platform: String, caption: String)], at: Date?) {
         guard let slug = project.episode.prepodSlug else { return }
         let episodeId = project.episode.prepodEpisodeId
@@ -1638,12 +1638,12 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Segundo del episodio que sale en la portada: el elegido en Portada o, si no, el primer reel o un cuarto del episodio.
+    /// Second of the episode used for the cover: the one chosen in Cover or, if none, the first reel or a quarter into the episode.
     var coverTimeline: Double {
         project.coverTime ?? project.reels.first.map { $0.start + 1 } ?? project.duration * 0.25
     }
 
-    /// Portada del episodio (Instagram, miniatura): un cuadro del episodio tal como se ve (diseño, logo, fondo). JPEG 16:9.
+    /// Episode cover (Instagram, thumbnail): a frame of the episode as it looks (design, logo, background). 16:9 JPEG.
     func exportCover() async throws -> URL {
         let img = try await CoverScout.render(project: project, at: coverTimeline, energy: energy)
         guard let data = CoverScout.jpeg(img, quality: 0.9) else {
@@ -1654,7 +1654,7 @@ final class ProjectSession: ObservableObject {
         return url
     }
 
-    /// Busca los segundos donde todas las personas salen sonriendo y nítidas, y deja una imagen de cada uno.
+    /// Finds the seconds where everyone is smiling and sharp, and keeps an image of each.
     func findCoverCandidates() {
         run(String(localized: "Buscando capturas")) { [self] in
             report(String(localized: "Buscando capturas"), String(localized: "Mirando las caras…"), 0)
@@ -1689,7 +1689,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Una captura del segundo donde está parado el episodio, para elegirla a mano.
+    /// A capture of the second where the episode is paused, to pick by hand.
     func addCoverCandidateAtPlayhead() {
         let t = playheadTimeline
         run(String(localized: "Capturando")) { [self] in
@@ -1706,7 +1706,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Guarda la portada elegida como JPEG en la carpeta de exportados y la muestra en el Finder.
+    /// Saves the chosen cover as JPEG in the exports folder and shows it in the Finder.
     func saveCover() {
         run(String(localized: "Guardando la portada")) { [self] in
             let url = try await exportCover()
@@ -1714,7 +1714,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Exporta el reel tal como está ahora, lo sube a prePod y crea una publicación por red.
+    /// Exports the reel as it is now, uploads it to prePod and creates one post per network.
     func publishReel(_ reel: Reel, targets: [(platform: String, caption: String)], at: Date?) {
         guard let slug = project.episode.prepodSlug else { return }
         let episodeId = project.episode.prepodEpisodeId
@@ -1742,10 +1742,10 @@ final class ProjectSession: ObservableObject {
         var lane: Int
         var text: String
         var isCut: Bool
-        var reelId: UUID?               // la frase es del texto propio de ese reel (no del episodio)
+        var reelId: UUID?               // the phrase belongs to that reel's own text (not the episode's)
     }
 
-    /// Frases del transcrito. Con `reel`: solo las que caen en ese reel, y "cortada" cuenta también sus cortes propios.
+    /// Transcript phrases. With `reel`: only those within that reel, and "cut" also counts its own cuts.
     func phrases(reel: Reel? = nil) -> [Phrase] {
         let ownId = reel?.words != nil ? reel?.id : nil
         let words = reel?.words ?? project.words
@@ -1775,14 +1775,14 @@ final class ProjectSession: ObservableObject {
         return out
     }
 
-    /// Quitar o devolver una frase solo en un reel (sus cortes propios; el episodio no cambia).
+    /// Removes or restores a phrase in a reel only (its own cuts; the episode doesn't change).
     func togglePhraseCut(_ phrase: Phrase, reel: Reel) {
         guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
         let cuts = project.reels[i].cuts
         if cuts.contains(where: { $0.enabled && $0.start <= phrase.start + 0.1 && $0.end >= phrase.end - 0.1 }) {
             project.reels[i].cuts.removeAll { $0.start <= phrase.start + 0.1 && $0.end >= phrase.end - 0.1 }
         } else if phrase.isCut {
-            togglePhraseCut(phrase)   // estaba cortada en el episodio: devolverla ahí
+            togglePhraseCut(phrase)   // it was cut in the episode: restore it there
         } else {
             project.reels[i].cuts.append(Cut(start: max(0, phrase.start - 0.05), end: phrase.end + 0.05, kind: .manual,
                                              label: "“\(phrase.text.prefix(40))…”"))
@@ -1790,7 +1790,7 @@ final class ProjectSession: ObservableObject {
         if previewReel?.id == reel.id { previewReel = project.reels[i] }
     }
 
-    /// Quita los silencios solo dentro de un reel (cortes propios del reel).
+    /// Removes silences only inside a reel (the reel's own cuts).
     func removeSilences(in reel: Reel) {
         run(String(localized: "Buscando silencios en el reel")) { [self] in
             try await ensureEnergy()
@@ -1803,7 +1803,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Silencios dentro de un reel que no estén ya cortados en el episodio (con el texto del reel si tiene uno propio).
+    /// Silences inside a reel not already cut in the episode (using the reel's text if it has its own).
     private func reelSilences(_ reel: Reel) -> [Cut] {
         let st = project.fix
         let words = reel.words ?? project.words
@@ -1818,7 +1818,7 @@ final class ProjectSession: ObservableObject {
             .filter { c in !project.cuts.contains { $0.enabled && $0.start <= c.start + 0.05 && $0.end >= c.end - 0.05 } }
     }
 
-    /// Solo el sonido de estudio (sin tocar cortes ni transcripción): para reels cuando el episodio no se limpió.
+    /// Studio sound only (without touching cuts or transcript): for reels when the episode wasn't cleaned.
     func enhanceAudioOnly() {
         run(String(localized: "Limpiando el sonido")) { [self] in
             try await enhanceAudio()
@@ -1827,9 +1827,9 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    // MARK: Subtítulos: ajustar al audio y volver a escuchar
+    // MARK: Subtitles: align to audio and re-listen
 
-    /// Ajusta al audio todas las palabras del episodio. Devuelve cuántas se corrieron y el corrimiento típico.
+    /// Aligns every word of the episode to the audio. Returns how many were shifted and the typical shift.
     @discardableResult
     func syncWords() async throws -> SubtitleSync.Result {
         report(String(localized: "Ajustando los subtítulos al audio"), "", 0)
@@ -1845,8 +1845,8 @@ final class ProjectSession: ObservableObject {
         return res
     }
 
-    /// Botón «Ajustar al audio»: corre las palabras a donde suena la voz y, si el episodio ya se arregló,
-    /// vuelve a calcular sus silencios y muletillas (y los silencios de cada reel) con los tiempos nuevos.
+    /// «Ajustar al audio» button: shifts words to where the voice sounds and, if the episode was already fixed,
+    /// recomputes its silences and filler words (and each reel's silences) with the new timings.
     func syncSubtitles() {
         run(String(localized: "Ajustando los subtítulos al audio")) { [self] in
             let res = try await syncWords()
@@ -1860,7 +1860,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Recalcula los cortes automáticos (si el episodio se arregló) y los silencios propios de los reels. true si cambió algo.
+    /// Recomputes automatic cuts (if the episode was fixed) and the reels' own silences. true if something changed.
     private func redoAutoCuts() async throws -> Bool {
         var changed = false
         if project.fix.lastRun != nil {
@@ -1884,9 +1884,9 @@ final class ProjectSession: ObservableObject {
         return changed
     }
 
-    /// Vuelve a escuchar TODO el episodio y escribe la transcripción de nuevo (ya ajustada al audio).
-    /// Se pierden las correcciones hechas a mano en el texto; las palabras sensibles se vuelven a buscar
-    /// y conservan lo que se había elegido (pitido, cambio) cuando son la misma palabra.
+    /// Re-listens to the WHOLE episode and writes the transcript again (already aligned to the audio).
+    /// Manual text corrections are lost; sensitive words are searched again
+    /// and keep what had been chosen (beep, replacement) when they're the same word.
     func relistenEpisode() {
         run(String(localized: "Escribiendo la transcripción de nuevo")) { [self] in
             let previous = project.sensitive
@@ -1898,7 +1898,7 @@ final class ProjectSession: ObservableObject {
             do {
                 try await transcribeMissing()
             } catch {
-                // Cancelado o con error: se devuelve el texto que había (nunca quedar sin transcripción)
+                // Cancelled or failed: the previous text is restored (never left without a transcript)
                 var back = project
                 (back.words, back.transcribedLanes, back.wordsSynced) = backup
                 project = back
@@ -1921,7 +1921,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Vuelve a escuchar solo el tramo de un reel y le deja ese texto propio (el episodio no cambia).
+    /// Re-listens to just a reel's span and gives it that text of its own (the episode doesn't change).
     func relistenReel(_ reel: Reel) {
         run(String(localized: "Escuchando el reel de nuevo")) { [self] in
             var words = try await SubtitleSync.listen(project: project, from: reel.start, to: reel.end) { [weak self] detail, f in
@@ -1945,7 +1945,7 @@ final class ProjectSession: ObservableObject {
         }
     }
 
-    /// Deja que el reel vuelva a usar el texto del episodio.
+    /// Lets the reel use the episode's text again.
     func useEpisodeText(_ reel: Reel) {
         guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
         project.reels[i].words = nil
@@ -1965,8 +1965,8 @@ final class ProjectSession: ObservableObject {
         var words = reelIndex.flatMap { project.reels[$0].words } ?? project.words
         guard phrase.range.upperBound <= words.count else { return }
         let old = Array(words[phrase.range])
-        // Las palabras que quedan iguales conservan su tiempo; solo las nuevas se reparten en su hueco
-        // (antes se repartía toda la frase en partes iguales y los subtítulos dejaban de coincidir con la voz).
+        // Words that stay the same keep their timing; only new ones are spread over their gap
+        // (previously the whole phrase was split in equal parts and subtitles stopped matching the voice).
         words.replaceSubrange(phrase.range, with: EditEngine.retime(old: old, tokens: tokens, lane: phrase.lane))
         if let reelIndex {
             project.reels[reelIndex].words = words

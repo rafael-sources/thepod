@@ -2,12 +2,12 @@ import CoreMIDI
 import Combine
 import Foundation
 
-/// Superficie de control MIDI para la consola de Studio: faders, M/S, reproducir y A/B desde un controlador
-/// (o un Stream Deck que mande MIDI). Escucha todos los dispositivos conectados.
+/// MIDI control surface for the Studio console: faders, M/S, play and A/B from a controller
+/// (or a Stream Deck sending MIDI). Listens to all connected devices.
 ///
-/// Mapa por defecto = Korg nanoKONTROL2 (el más común): faders CC 0–7, S CC 32–39, M CC 48–55, Play CC 41,
-/// Stop CC 42, Rec CC 45 (A/B). Cualquier otro aparato se asigna con «Aprender»: eliges qué controlar y mueves
-/// el control. El mapa queda guardado en esta Mac.
+/// Default map = Korg nanoKONTROL2 (the most common): faders CC 0–7, S CC 32–39, M CC 48–55, Play CC 41,
+/// Stop CC 42, Rec CC 45 (A/B). Any other device is assigned with «Aprender» (Learn): you pick what to control and move
+/// the control. The map is saved on this Mac.
 @MainActor
 final class MIDIControl: ObservableObject {
     static let shared = MIDIControl()
@@ -21,13 +21,13 @@ final class MIDIControl: ObservableObject {
             }
         }
     }
-    /// Un control: "cc:<n>" o "note:<n>" (sin canal: los aparatos chicos usan uno solo)
+    /// A control: "cc:<n>" or "note:<n>" (no channel: small devices use only one)
     @Published var map: [String: Action] = [:]
     @Published var connected = false
     @Published var sources: [String] = []
     @Published var learning: Action?
     @Published var lastControl: String?
-    /// Quien recibe las acciones (la sesión abierta).
+    /// Who receives the actions (the open session).
     var handler: ((Action, Double) -> Void)?
 
     private var client = MIDIClientRef()
@@ -51,7 +51,7 @@ final class MIDIControl: ObservableObject {
         guard !started else { return }
         started = true
         let status = MIDIClientCreateWithBlock("thePod" as CFString, &client) { [weak self] notification in
-            // Un aparato se conectó o se fue: volver a enlazar las fuentes
+            // A device connected or left: relink the sources
             let id = notification.pointee.messageID
             if id == .msgObjectAdded || id == .msgObjectRemoved || id == .msgSetupChanged { Task { @MainActor in self?.connectSources() } }
         }
@@ -83,7 +83,7 @@ final class MIDIControl: ObservableObject {
         connected = n > 0
     }
 
-    /// Palabras UMP del protocolo 1.0: tipo 2 = mensaje de canal; estado en bits 16–23, datos en 8–15 y 0–7.
+    /// UMP words of protocol 1.0: type 2 = channel message; status in bits 16–23, data in 8–15 and 0–7.
     func handle(words: [UInt32]) {
         for w in words {
             guard (w >> 28) & 0xF == 0x2 else { continue }
@@ -99,7 +99,7 @@ final class MIDIControl: ObservableObject {
             }
             lastControl = key
             if let l = learning {
-                // Aprender: el primer control que se mueve queda asignado
+                // Learn: the first control moved gets assigned
                 map = map.filter { $0.value != l }
                 map[key] = l
                 learning = nil
@@ -111,7 +111,7 @@ final class MIDIControl: ObservableObject {
             case .fader:
                 handler?(action, value)
             case .mute, .solo, .play, .stop, .ab:
-                // botones: solo al pulsar (valor > 0)
+                // buttons: only on press (value > 0)
                 if value > 0.5 { handler?(action, 1) }
             }
         }
@@ -123,7 +123,7 @@ final class MIDIControl: ObservableObject {
     func resetToNanoKontrol() { map = Self.nanoKontrol2; save() }
     func clear() { map = [:]; save() }
 
-    /// Valor de fader MIDI (0…1) → volumen lineal de la pista: 0 = silencio, ~0,79 = 0 dB, 1 = +6 dB.
+    /// MIDI fader value (0…1) → linear track volume: 0 = silence, ~0.79 = 0 dB, 1 = +6 dB.
     static func volume(forFader v: Double) -> Double {
         guard v > 0.002 else { return 0 }
         let db = v < 0.79 ? -40 + (v / 0.79) * 40 : (v - 0.79) / 0.21 * 6

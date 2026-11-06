@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-// Configuración del podcast en prePod: datos, branding, equipo, sponsors, soundboard y distribución.
+// Podcast configuration in prePod: details, branding, team, sponsors, soundboard and distribution.
 
 struct PodcastConfig: Decodable, Hashable {
     let slug: String
@@ -83,10 +83,10 @@ extension PrePodClient {
     }
     private func pc(_ slug: String) -> String { "/api/podcasts/\(slug)" }
 
-    // General y branding
+    // General and branding
     func podcastConfig(_ slug: String) async throws -> PodcastConfig { try dec(PodcastConfig.self, await send("GET", pc(slug))) }
 
-    /// Cadenas de voz del estudio guardadas en el podcast (viajan con él a cualquier Mac).
+    /// Studio voice chains saved in the podcast (they travel with it to any Mac).
     func voicePresets(_ slug: String) async throws -> [ChainPresets.Item] {
         let d = try await send("GET", pc(slug))
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
@@ -97,7 +97,7 @@ extension PrePodClient {
         let data = try JSONEncoder().encode(items)
         _ = try await send("PUT", pc(slug), json: ["voice_presets": String(decoding: data, as: UTF8.self)])
     }
-    /// Plantillas de título de Studio · Video guardadas en el podcast.
+    /// Studio · Video title templates saved in the podcast.
     func titlePresets(_ slug: String) async throws -> [TitlePresets.Item] {
         let d = try await send("GET", pc(slug))
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
@@ -118,11 +118,11 @@ extension PrePodClient {
         _ = try await upload(pc(slug) + "/branding/\(kind)", field: "file", file: file)
     }
     func deleteBranding(_ slug: String, kind: String) async throws { _ = try await send("DELETE", pc(slug) + "/branding/\(kind)") }
-    /// Imágenes y audios de prePod (necesitan la sesión).
+    /// prePod images and audio (they need the session).
     func media(_ path: String) async throws -> Data { try await send("GET", path) }
 
-    /// Baja un archivo de prePod (calendario, reporte, exportación) y lo guarda donde la persona elija.
-    /// Devuelve dónde quedó, o nil si canceló.
+    /// Downloads a prePod file (calendar, report, export) and saves it where the person chooses.
+    /// Returns where it ended up, or nil if cancelled.
     @MainActor
     func saveDownload(_ path: String, suggestedName: String) async throws -> URL? {
         let data = try await send("GET", path)
@@ -134,13 +134,13 @@ extension PrePodClient {
         return url
     }
 
-    /// Reporte de un sponsor: en qué episodios aparece y cuánto tiempo al aire.
+    /// A sponsor's report: which episodes it appears in and how much airtime.
     func sponsorReport(_ slug: String, _ id: Int) async throws -> [String: Any] {
         let d = try await send("GET", "/api/podcasts/\(slug)/sponsors/\(id)/report")
         return (try JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
     }
 
-    // Equipo
+    // Team
     func hosts(_ slug: String) async throws -> PodcastHosts { try dec(PodcastHosts.self, await send("GET", pc(slug) + "/hosts")) }
     func setHosts(_ slug: String, _ list: [String]) async throws { _ = try await send("PUT", pc(slug) + "/hosts", json: ["extra_hosts": list]) }
     func inviteHost(_ slug: String, _ user: String) async throws { _ = try await send("POST", pc(slug) + "/invite-host", json: ["username": user]) }
@@ -181,7 +181,7 @@ extension PrePodClient {
     }
     func importSounds(_ slug: String, _ files: [String]) async throws { _ = try await send("POST", pc(slug) + "/sounds/import", json: ["filenames": files]) }
 
-    // Distribución
+    // Distribution
     func distribution(_ slug: String) async throws -> DistributionInfo { try dec(DistributionInfo.self, await send("GET", pc(slug) + "/distribution")) }
     func setDistribution(_ slug: String, platform: String, status: String, url: String) async throws {
         _ = try await send("POST", pc(slug) + "/distribution", json: ["platform": platform, "status": status, "external_url": url])

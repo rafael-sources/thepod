@@ -3,10 +3,10 @@ import AVFoundation
 import AppKit
 import LiveKit
 
-/// Diccionario que cruza de hilo (los mensajes de la sala llegan fuera del hilo principal).
+/// Dictionary that crosses threads (room messages arrive off the main thread).
 struct SendableDict: @unchecked Sendable { let value: [String: Any]; init(_ v: [String: Any]) { value = v } }
 
-/// Voz tal como sale a la sala (sin eco): con parlantes, esto es lo que se graba.
+/// Voice as it goes out to the room (no echo): with speakers, this is what's recorded.
 final class CleanVoiceFeed: NSObject, AudioRenderer, @unchecked Sendable {
     private let lock = NSLock()
     private var recorder: FragmentRecorder?
@@ -14,7 +14,7 @@ final class CleanVoiceFeed: NSObject, AudioRenderer, @unchecked Sendable {
 
     func render(pcmBuffer: AVAudioPCMBuffer) {
         guard let r = lock.withLock({ recorder }) else { return }
-        // Hora de la muestra en el mismo reloj que la cámara
+        // Sample time on the same clock as the camera
         let dur = Double(pcmBuffer.frameLength) / pcmBuffer.format.sampleRate
         let now = CMClockGetTime(CMClockGetHostTimeClock())
         let pts = CMTimeSubtract(now, CMTime(seconds: dur, preferredTimescale: 48_000))
@@ -23,7 +23,7 @@ final class CleanVoiceFeed: NSObject, AudioRenderer, @unchecked Sendable {
 }
 
 extension ProdStudio {
-    // MARK: Prueba inicial (igual que la web)
+    // MARK: Initial test (same as the web)
 
     func runPreflight() async {
         preflight = String(localized: "Midiendo tu conexión…")
@@ -43,12 +43,12 @@ extension ProdStudio {
         }
     }
 
-    /// Solo se puede bajar la calidad, nunca subir por encima de lo que dio la prueba.
+    /// Quality can only be lowered, never raised above what the test gave.
     var recChoices: [RecordingQuality] {
         RecordingQuality.options.filter { $0.height < recMax.height || ($0.height == recMax.height && $0.bitrate <= recMax.bitrate) }
     }
 
-    // MARK: Al entrar
+    // MARK: On joining
 
     func afterJoin() async {
         _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recording-quality",
@@ -66,10 +66,10 @@ extension ProdStudio {
 
     func updateDirectorPresence() {
         let inRoom = room?.remoteParticipants.values.contains { $0.identity?.stringValue.hasPrefix("director_") ?? false } ?? false
-        directorPresent = inRoom        // igual que la web: solo cuenta si está conectado ahora
+        directorPresent = inRoom        // same as the web: only counts if connected now
     }
 
-    // MARK: Mensajes de la sala
+    // MARK: Room messages
 
     func send(_ msg: [String: Any]) {
         guard let room, let data = try? JSONSerialization.data(withJSONObject: msg) else { return }
@@ -81,7 +81,7 @@ extension ProdStudio {
         case "ready_toggle":
             if let id = m["identity"] as? String { readyMap[id] = (m["ready"] as? Bool) ?? false }
             if isOwner && !directorPresent { maybeFireCountdown() }
-        case "ready_request":           // el director pregunta quién está preparado
+        case "ready_request":           // the director asks who's ready
             send(["type": "ready_toggle", "identity": myIdentity, "ready": ownReady])
         case "countdown_start":
             if let ms = (m["start_at_ms"] as? Double) ?? (m["start_at_ms"] as? Int).map(Double.init) { beginCountdown(ms) }
@@ -150,7 +150,7 @@ extension ProdStudio {
         }
     }
 
-    /// La voz del director solo se oye mientras te habla al oído.
+    /// The director's voice is only heard while they talk in your ear.
     func applyIFB() {
         guard let room else { return }
         for p in room.remoteParticipants.values where p.identity?.stringValue.hasPrefix("director_") ?? false {
@@ -159,7 +159,7 @@ extension ProdStudio {
         if ifbOn { flash(String(localized: "El director te está hablando")) }
     }
 
-    // MARK: Preparado y cuenta regresiva
+    // MARK: Ready and countdown
 
     func toggleReady() {
         guard !recording, countdown == nil else { return }
@@ -169,7 +169,7 @@ extension ProdStudio {
         if isOwner && !directorPresent { maybeFireCountdown() }
     }
 
-    /// Sin director, el dueño de la sala arranca cuando todos los conectados están listos.
+    /// Without a director, the room owner starts when everyone connected is ready.
     func maybeFireCountdown() {
         guard !recording, countdown == nil, !sessionEnded || practice, let room else { return }
         var ids = [myIdentity]
@@ -200,14 +200,14 @@ extension ProdStudio {
         }
     }
 
-    // MARK: Grabar
+    // MARK: Record
 
     func beginRecordingNow() async {
         guard !recording else { return }
         if isOwner && !practice {
             do { _ = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/start") }
             catch {
-                // Plan Gratis sin episodios: no se graba, y se avisa a los demás para que tampoco
+                // Free plan with no episodes: nothing is recorded, and the others are told so they don't either
                 if error.localizedDescription.hasPrefix(String(localized: "El plan")) {
                     send(["type": "recording_stop"])
                     self.error = error.localizedDescription
@@ -234,7 +234,7 @@ extension ProdStudio {
         triggerLog = []
         firedSponsors = []
         if isOwner { Task { await loadTeleprompterScript() } }
-        // Con audífonos: micrófono directo (mejor calidad). Con parlantes: la voz ya sin eco.
+        // With headphones: direct microphone (better quality). With speakers: the voice already without echo.
         let raw = headphones
         pipe.recordRawAudio = raw
         voiceFeed.attach(raw ? nil : recorder)
@@ -245,14 +245,14 @@ extension ProdStudio {
             uploadSamples = []
             await ChunkUploader.shared.begin(sessionId: session.id, file: file)
             myUpload = UploadState(state: "streaming", bytes: 0)
-            // Respaldo grabado por el servidor (red de seguridad si la subida no llega). Si está apagado no hace nada.
+            // Backup recorded by the server (safety net if the upload doesn't arrive). If off it does nothing.
             let sid = session.id
             Task { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(sid)/backup/start") }
         }
         flash(practice ? String(localized: "Ensayo: se graba solo en tu Mac") : String(localized: "Grabando"))
     }
 
-    /// Botón Detener (solo quien creó la sala, como en la web).
+    /// Stop button (only whoever created the room, as on the web).
     func stopRecording() {
         guard recording else { return }
         Task {
@@ -281,8 +281,8 @@ extension ProdStudio {
         ownReady = false
         readyMap = [:]
         flash(wasPractice ? String(localized: "Ensayo terminado") : String(localized: "Grabación terminada: subiendo tu pista"))
-        // Como en la web: la grabación ya se detuvo (las pistas quedan sincronizadas); recién después de
-        // avisar con una cuenta 3-2-1 se apagan cámara y micrófono, en vez de cortarlos de golpe.
+        // As on the web: the recording already stopped (tracks stay in sync); only after
+        // announcing with a 3-2-1 countdown are camera and microphone turned off, instead of cutting them abruptly.
         for n in [3, 2, 1] {
             endCountdown = n
             try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -298,11 +298,11 @@ extension ProdStudio {
         send(["type": "practice_mode", "active": practice])
     }
 
-    // MARK: Subida
+    // MARK: Upload
 
     func uploadProgress(file: String, sent: Int64, total: Int64, done: Bool, message: String?) {
         guard file == recordFile?.path else { return }
-        // Cuánto falta y en cuánto tiempo, con la velocidad real de los últimos ~30 s (lo mismo que manda la web)
+        // How much is left and how long, with the real speed of the last ~30 s (same as the web sends)
         let now = Date()
         uploadSamples.append((now, sent))
         uploadSamples.removeAll { now.timeIntervalSince($0.at) > 30 }
@@ -337,7 +337,7 @@ extension ProdStudio {
         }
     }
 
-    // MARK: Momentos
+    // MARK: Moments
 
     func markMoment() {
         guard recording, !practice else { return }
@@ -378,7 +378,7 @@ extension ProdStudio {
         p.play()
     }
 
-    /// Suena para todos. Con ⌥ suena solo para ti (para escucharlo antes).
+    /// Plays for everyone. With ⌥ it plays only for you (to preview it).
     func trigger(_ pad: Pad, onlyMe: Bool = false) {
         play(pad.filename)
         guard !onlyMe else { return }
@@ -394,7 +394,7 @@ extension ProdStudio {
         removeKeyMonitor()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] ev in
             guard let self else { return ev }
-            // No interferir si estás escribiendo
+            // Don't interfere if you're typing
             if NSApp.keyWindow?.firstResponder is NSTextView { return ev }
             if ev.modifierFlags.intersection([.command, .control]).isEmpty,
                let ch = ev.charactersIgnoringModifiers?.lowercased(),
@@ -411,7 +411,7 @@ extension ProdStudio {
         keyMonitor = nil
     }
 
-    // MARK: Sponsors en pantalla
+    // MARK: Sponsors on screen
 
     func loadSponsors() async {
         guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/chapter-markers"),
@@ -424,13 +424,13 @@ extension ProdStudio {
         }.sorted { $0.at < $1.at }
     }
 
-    /// Cada décima de segundo mientras se graba: reloj, avisos de sponsor y momento automático.
+    /// Every tenth of a second while recording: clock, sponsor notices and automatic moment.
     func tickRecording() {
         if !overlays.isEmpty { overlays.removeAll { ($0.expires ?? .distantFuture) < Date() } }
         guard recording else { return }
         let t = Date().timeIntervalSince(recordStart)
         recSeconds = Int(t)
-        // Plan Gratis: aviso un minuto antes y corte al llegar al máximo (lo detiene quien creó la sala)
+        // Free plan: notice one minute before and cut when the max is reached (stopped by whoever created the room)
         if let maxS = session.limits?.max_record_seconds, maxS > 0, !practice {
             let name = session.limits?.plan_name ?? String(localized: "Gratis")
             if !planWarned, t >= Double(maxS - 60) {

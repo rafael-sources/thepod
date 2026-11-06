@@ -1,8 +1,8 @@
 import SwiftUI
 import AVFoundation
 
-/// Multicámara: los ángulos del episodio en una tira; clic o tecla 1–4 corta a esa cámara en el segundo actual.
-/// El corte queda como tramo a mano (borde punteado en la pista Cámaras) hasta el siguiente corte.
+/// Multicam: the episode's angles in a strip; click or key 1–4 cuts to that camera at the current second.
+/// The cut stays as a manual span (dashed border on the Cameras track) until the next cut.
 struct MulticamStrip: View {
     @ObservedObject var session: ProjectSession
     @Binding var selectedCut: UUID?
@@ -36,7 +36,7 @@ struct MulticamStrip: View {
         .task(id: cams.map(\.id)) { await loadThumbs(cams) }
         .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in tick += 1 }
         .background {
-            // Teclas 1–4 sin modificador: cortar a esa cámara
+            // Keys 1–4 without modifier: cut to that camera
             ForEach(Array(cams.prefix(4).enumerated()), id: \.element.id) { i, lane in
                 Button("") { cut(to: lane.id) }.keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: []).hidden()
             }
@@ -78,7 +78,7 @@ struct MulticamStrip: View {
         session.selectedTrack = nil
     }
 
-    /// Una miniatura por cámara (un cuadro del medio de su grabación), una sola vez.
+    /// One thumbnail per camera (a frame from the middle of its recording), only once.
     private func loadThumbs(_ cams: [Lane]) async {
         for lane in cams where thumbs[lane.id] == nil {
             guard let clip = lane.clips.first, let m = session.project.mediaItem(clip.mediaId), m.hasVideo else { continue }
@@ -94,13 +94,13 @@ struct MulticamStrip: View {
 }
 
 extension ProjectSession {
-    /// Cortar a una cámara en el segundo actual (multicámara en vivo).
+    /// Cut to a camera at the current second (live multicam).
     @discardableResult
     func liveCut(to lane: Int) -> CameraCut {
         project.studioVideo.liveCut(to: lane, at: playheadTimeline, duration: project.duration)
     }
 
-    /// Qué cámara está al aire en `t` (tiempo del episodio): el tramo a mano, o quien habla según la vista previa.
+    /// Which camera is on air at `t` (episode time): the manual span, or the speaker according to the preview.
     func liveLane(at t: Double) -> Int? {
         if let c = project.studioVideo.cut(at: t), let l = c.lane { return l }
         guard let b = built, let sc = b.scene, let o = EditEngine.toOutput(t, keep: b.keep) else { return project.lanes.first?.id }

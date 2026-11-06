@@ -1,9 +1,9 @@
 import SwiftUI
 import AVFoundation
 
-/// El estudio: ventana aparte con la línea de tiempo y la consola del episodio abierto.
-/// Mismo proyecto, mismo motor: lo que suena aquí es lo que exporta el nivel simple.
-/// Qué pestaña de Studio está abierta (Audio o Video); la cambian los botones y ⌘E / ⌘⇧E.
+/// The studio: a separate window with the timeline and the console of the open episode.
+/// Same project, same engine: what plays here is what the simple level exports.
+/// Which Studio tab is open (Audio or Video); changed by the buttons and ⌘E / ⌘⇧E.
 final class StudioTab: ObservableObject {
     static let shared = StudioTab()
     enum Tab: String, CaseIterable, Identifiable { case audio, video; var id: String { rawValue } }
@@ -40,7 +40,7 @@ struct StudioRoot: View {
         .onChange(of: app.session?.project.id) { _, _ in wireMIDI() }
     }
 
-    /// La superficie MIDI mueve lo mismo que la consola: faders (por orden de la consola), M/S, play, A/B.
+    /// The MIDI surface moves the same as the console: faders (in console order), M/S, play, A/B.
     private func wireMIDI() {
         MIDIControl.shared.handler = { [weak app] action, value in
             guard let s = app?.session else { return }
@@ -56,7 +56,7 @@ struct StudioRoot: View {
     }
 }
 
-/// Menú MIDI de la consola: qué aparatos hay, aprender un control, mapa por defecto.
+/// The console's MIDI menu: which devices there are, learn a control, default map.
 struct MIDIMenu: View {
     @ObservedObject var session: ProjectSession
     @ObservedObject private var midi = MIDIControl.shared
@@ -90,7 +90,7 @@ struct MIDIMenu: View {
     }
 }
 
-/// Transporte común a las dos pestañas: título, Audio/Video, reproducir, reloj, sonoridad y Exportar.
+/// Transport shared by both tabs: title, Audio/Video, play, clock, loudness and Export.
 struct StudioTransport: View {
     @ObservedObject var session: ProjectSession
     @Binding var tab: StudioTab.Tab
@@ -169,7 +169,7 @@ struct AudioStudioView: View {
         }
     }
 
-    // MARK: Consola
+    // MARK: Console
 
     private var console: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -197,7 +197,7 @@ struct AudioStudioView: View {
     }
 }
 
-/// Sonoridad: la medida real llega al exportar (EBU R128); mientras, el objetivo del destino.
+/// Loudness: the real measurement arrives on export (EBU R128); meanwhile, the destination's target.
 struct MasterBadge: View {
     @ObservedObject var session: ProjectSession
     var body: some View {
@@ -244,7 +244,7 @@ struct LoudnessBar: View {
     }
 }
 
-/// Un canal de la consola: nombre, inserts, fader en dB, medidor, M/S.
+/// A console channel: name, inserts, fader in dB, meter, M/S.
 struct ChannelStrip: View {
     @ObservedObject var session: ProjectSession
     let index: Int
@@ -273,7 +273,7 @@ struct ChannelStrip: View {
                 }
             }
             VStack(spacing: 3) {
-                // Clics y ruido por huella (nivel simple y Studio comparten los mismos ajustes)
+                // Clicks and noise print (simple level and Studio share the same settings)
                 HStack(spacing: 6) {
                     Circle().fill(lane.declick ? Theme.good : Color.clear).overlay(Circle().strokeBorder(lane.declick ? Theme.good : Theme.secondary, lineWidth: 1)).frame(width: 7, height: 7)
                     Text("Clics").font(.caption).lineLimit(1)
@@ -446,7 +446,7 @@ struct ChannelStrip: View {
     }
 }
 
-/// Fader vertical en dB sobre el volumen lineal de la pista (0…2).
+/// Vertical fader in dB over the track's linear volume (0…2).
 struct Fader: View {
     @Binding var volume: Double
     static let minDB = -40.0, maxDB = 6.0
@@ -469,12 +469,12 @@ struct Fader: View {
             }
         }
         .frame(width: 40)
-        .simultaneousGesture(TapGesture().modifiers(.option).onEnded { volume = 1 })   // ⌥ clic: de vuelta a 0 dB
+        .simultaneousGesture(TapGesture().modifiers(.option).onEnded { volume = 1 })   // ⌥ click: back to 0 dB
         .help("Doble clic en el número para escribir dB · ⌥ clic: volver a 0 dB")
     }
 }
 
-/// Medidor de lo que suena de esa persona (después del volumen), leído del motor mientras reproduce.
+/// Meter of what that person sounds like (after the volume), read from the engine while playing.
 struct Meter: View {
     @ObservedObject var session: ProjectSession
     let laneId: Int
@@ -517,12 +517,12 @@ struct MasterStrip: View {
     }
 }
 
-/// Editor de un insert. Cada cambio se oye al instante.
+/// Editor for an insert. Every change is heard instantly.
 struct InsertEditor: View {
     @ObservedObject var session: ProjectSession
     let ref: AudioStudioView.InsertRef
     @Environment(\.dismiss) private var dismiss
-    @State private var writing = false      // «Escribir»: mover un control deja un punto en el segundo actual
+    @State private var writing = false      // «Escribir» (Write): moving a control leaves a point at the current second
 
     private var index: Int? { session.project.lanes.firstIndex { $0.id == ref.laneId } }
     private var chain: Binding<ChainSettings> {
@@ -598,7 +598,7 @@ struct InsertEditor: View {
 
     private func param(_ name: String, _ v: Binding<Double>, _ range: ClosedRange<Double>, _ fmt: String, auto: String? = nil) -> some View {
         let points = auto.flatMap { chain.wrappedValue.automation[$0] } ?? []
-        // Con «Escribir» encendido, mover el control deja un punto en el segundo actual en vez de cambiar la base
+        // With «Escribir» on, moving the control leaves a point at the current second instead of changing the base
         let bound: Binding<Double> = (writing && auto != nil)
             ? Binding(get: { chain.wrappedValue.value(of: auto!, at: session.playheadTimeline) ?? v.wrappedValue },
                       set: { nv in var c = chain.wrappedValue; c.writePoint(auto!, t: session.playheadTimeline, v: nv); chain.wrappedValue = c })
@@ -626,7 +626,7 @@ struct InsertEditor: View {
     }
 }
 
-/// Ecualizador paramétrico: hasta 8 bandas, cada una con tipo, frecuencia, ganancia y ancho.
+/// Parametric equalizer: up to 8 bands, each with type, frequency, gain and width.
 struct EQEditor: View {
     @Binding var chain: ChainSettings
     var writing = false
@@ -695,7 +695,7 @@ struct EQEditor: View {
     private func freqLabel(_ f: Double) -> String { f >= 1000 ? String(format: "%.1f k", f / 1000) : String(format: "%.0f", f) }
 }
 
-/// La curva aproximada del ecualizador (dibujo orientativo, no la respuesta exacta del AU).
+/// The equalizer's approximate curve (indicative drawing, not the AU's exact response).
 struct EQCurve: View {
     let bands: [EQBand]
     var body: some View {
@@ -731,7 +731,7 @@ struct EQCurve: View {
         }
     }
 
-    /// Suma orientativa de las bandas (campanas gaussianas en octavas; estantes y pasos como rampas).
+    /// Indicative sum of the bands (Gaussian bells in octaves; shelves and passes as ramps).
     private func gain(at f: Double) -> Double {
         var g = 0.0
         for b in bands where b.enabled {

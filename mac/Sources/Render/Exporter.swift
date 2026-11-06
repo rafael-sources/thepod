@@ -7,8 +7,8 @@ enum Exporter {
     }
 
     /// Renders the project (or a window of it, e.g. a reel) to ~/Movies/postPod/<slug>/exports.
-    /// Pistas por separado (WAV 48 kHz): una por persona con sus cortes, fades, línea de volumen y pitidos,
-    /// y una con la música y los efectos. Para terminar en Logic, Audition o Reaper.
+    /// Separate tracks (48 kHz WAV): one per person with their cuts, fades, volume line and beeps,
+    /// and one with the music and effects. To finish in Logic, Audition or Reaper.
     static func exportStems(project: Project, energy: EnergyMap?, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         let stamp = DateFormatter.fileStamp.string(from: Date())
         let folder = ProjectStore.exportsFolder(for: project.id).appendingPathComponent("pistas_\(stamp)", isDirectory: true)
@@ -46,7 +46,7 @@ enum Exporter {
     static func export(project: Project, format: ExportFormat, window: EditEngine.Span? = nil,
                        baseName: String? = nil, energy: EnergyMap?, layout: LayoutTemplate? = nil,
                        progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        // El A/B («Sin procesar») es solo para escuchar: el export siempre lleva la cadena de voz
+        // The A/B («Sin procesar») is only for listening: the export always carries the voice chain
         await MainActor.run { VoiceChainRegistry.shared.bypassAll = false }
         let built = try await CompositionBuilder.build(project: project, format: format, window: window, energy: energy, layoutOverride: layout)
         let folder = ProjectStore.exportsFolder(for: project.id)
@@ -59,16 +59,16 @@ enum Exporter {
                           audioMix: built.audioMix, to: m4a, type: .m4a) { progress($0 * (FFmpeg.isAvailable ? 0.8 : 1)) }
             guard FFmpeg.isAvailable else { return m4a }
             let mp3 = folder.appendingPathComponent(name + ".mp3")
-            // Volumen final para Spotify/Apple (−16 LUFS): se mide y se corrige en la misma conversión a MP3
+            // Final volume for Spotify/Apple (−16 LUFS): measured and corrected in the same MP3 conversion
             var af: [String] = []
             if project.normalizeLoudness, let lufs = await AudioAnalysis.loudness(m4a), abs(lufs + 16) > 0.7 {
                 af = ["-af", String(format: "volume=%.2fdB,alimiter=limit=0.89:level=0", -16 - lufs)]
             }
-            // Capítulos dentro del MP3 (Apple Podcasts y otros los muestran)
+            // Chapters inside the MP3 (Apple Podcasts and others show them)
             let chap = window == nil ? chapterFile(chapterList(project: project, keep: built.keep, introDuration: 0,
                                                                total: built.duration), total: built.duration) : nil
             defer { if let chap { try? FileManager.default.removeItem(at: chap) } }
-            // La transcripción completa dentro del MP3 (etiqueta de letra ID3, la muestran VLC, Apple Music y otros)
+            // The full transcript inside the MP3 (ID3 lyrics tag, shown by VLC, Apple Music and others)
             let lyrics: [String] = (window == nil && project.isTranscribed) ? ["-metadata", "lyrics=" + transcriptText(project: project)] : []
             try await FFmpeg.run(["-i", m4a.path] + (chap.map { ["-i", $0.path, "-map", "0:a", "-map_chapters", "1"] } ?? [])
                                  + af + ["-c:a", "libmp3lame", "-b:a", "192k", "-id3v2_version", "3",
@@ -84,14 +84,14 @@ enum Exporter {
 
         var url = folder.appendingPathComponent(name + ".mp4")
         let meta = metadata(project: project)
-        // H.264 se ve en todas partes (WhatsApp, TikTok, YouTube); HEVC es más rápido de exportar y pesa la mitad.
+        // H.264 plays everywhere (WhatsApp, TikTok, YouTube); HEVC exports faster and is half the size.
         let preset = project.exportHEVC ? AVAssetExportPresetHEVCHighestQuality : AVAssetExportPresetHighestQuality
         let fix = project.normalizeLoudness && FFmpeg.isAvailable
         try await run(asset: built.asset, preset: preset, videoComposition: built.videoComposition,
                       audioMix: built.audioMix, to: url, type: .mp4, metadata: meta) { progress($0 * (fix ? 0.95 : 1)) }
-        // Volumen final: medir y, si hace falta, corregir solo el audio (el video se copia tal cual, es rápido).
-        // El video va a YouTube/Instagram/TikTok, que normalizan a −14 LUFS: se entrega ya a ese nivel
-        // (el audio solo, para Spotify/Apple, va a −16).
+        // Final volume: measure and, if needed, correct only the audio (the video is copied as is, it's fast).
+        // The video goes to YouTube/Instagram/TikTok, which normalize to −14 LUFS: it's delivered already at that level
+        // (audio only, for Spotify/Apple, goes to −16).
         let target = -14.0
         if fix, let lufs = await AudioAnalysis.loudness(url), abs(lufs - target) > 0.7 {
             let fixed = folder.appendingPathComponent(name + "_vol.mp4")
@@ -107,8 +107,8 @@ enum Exporter {
         if window == nil {
             let total = built.introDuration + EditEngine.outputDuration(built.keep)
             let chapters = chapterList(project: project, keep: built.keep, introDuration: built.introDuration, total: total)
-            // Capítulos y subtítulos dentro del video (QuickTime, VLC, Apple TV y Plex los muestran; YouTube toma los
-            // capítulos de la descripción y los subtítulos del .srt que va al lado)
+            // Chapters and subtitles inside the video (QuickTime, VLC, Apple TV and Plex show them; YouTube takes the
+            // chapters from the description and the subtitles from the .srt that goes alongside)
             let chap = chapterFile(chapters, total: built.duration)
             var srtTmp: URL?
             if project.isTranscribed {
@@ -163,9 +163,9 @@ enum Exporter {
 }
 
 extension Exporter {
-    /// Capítulos en el tiempo del archivo exportado, con las reglas de YouTube para que los muestre:
-    /// el primero en 00:00, al menos 3, y cada uno de 10 s o más. Los que caen a menos de 10 s del
-    /// anterior (o del final) se saltan; si no llegan a 3, no hay capítulos.
+    /// Chapters in the exported file's time, with YouTube's rules so it shows them:
+    /// the first at 00:00, at least 3, and each 10 s or longer. Those within 10 s of the
+    /// previous (or the end) are skipped; if fewer than 3 remain, there are no chapters.
     static func chapterList(project p: Project, keep: [EditEngine.Span], introDuration: Double,
                             total: Double) -> [(time: Double, title: String)] {
         let raw = p.chapters.compactMap { c -> (Double, String)? in
@@ -179,7 +179,7 @@ extension Exporter {
         for (t, title) in raw {
             if out.isEmpty {
                 if t >= 10 { out.append((0, introDuration > 0 ? String(localized: "Intro") : String(localized: "Inicio"))) }
-                else { out.append((0, title)); continue }       // el primero se lleva a 00:00
+                else { out.append((0, title)); continue }       // the first is moved to 00:00
             }
             guard t - out.last!.time >= 10, total - t >= 10 else { continue }
             out.append((t, title))
@@ -187,7 +187,7 @@ extension Exporter {
         return out.count >= 3 ? out : []
     }
 
-    /// Archivo de capítulos para ffmpeg (nil si no hay).
+    /// Chapters file for ffmpeg (nil if none).
     static func chapterFile(_ chapters: [(time: Double, title: String)], total: Double) -> URL? {
         guard !chapters.isEmpty else { return nil }
         func esc(_ s: String) -> String {
@@ -232,7 +232,7 @@ extension Exporter {
     }
 
     /// Ready-to-paste text for YouTube / Spotify / Apple: title, description, chapters, guests, sponsors.
-    /// `introDuration`: lo que dura la intro del video (los capítulos se corren eso). El MP3 no lleva intro.
+    /// `introDuration`: how long the video intro lasts (chapters are shifted by that). The MP3 has no intro.
     static func notes(project p: Project, keep: [EditEngine.Span], introDuration: Double = 0) -> String {
         var out = episodeTitle(p) + "\n\n"
         if let d = p.episode.description, !d.isEmpty { out += d + "\n\n" }
@@ -262,7 +262,7 @@ extension Exporter {
 }
 
 extension Exporter {
-    /// Subtítulos en SRT sobre el video ya editado (sin cortes), corridos el intro si lo hay.
+    /// SRT subtitles over the already edited video (no cuts), shifted by the intro if any.
     static func srt(project p: Project) -> String {
         let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
         let lines = EditEngine.captionLines(words: p.captionWords, keep: keep, vertical: false, uppercase: false)
@@ -278,7 +278,7 @@ extension Exporter {
         return out
     }
 
-    /// Subtítulos en WebVTT (el formato del «transcript» de Podcasting 2.0 y de la web), con quién habla en cada línea.
+    /// WebVTT subtitles (the Podcasting 2.0 and web «transcript» format), with who speaks on each line.
     static func vtt(project p: Project) -> String {
         let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
         let lines = EditEngine.captionLines(words: p.captionWords, keep: keep, vertical: false, uppercase: false)
@@ -297,7 +297,7 @@ extension Exporter {
         return out
     }
 
-    /// Capítulos en el JSON de Podcasting 2.0 (lo leen Apple Podcasts, Pocket Casts, Overcast…).
+    /// Chapters in Podcasting 2.0 JSON (read by Apple Podcasts, Pocket Casts, Overcast…).
     static func chaptersJSON(_ chapters: [(time: Double, title: String)]) -> String? {
         guard !chapters.isEmpty else { return nil }
         let items: [[String: Any]] = chapters.map { ["startTime": ($0.time * 1000).rounded() / 1000, "title": $0.title] }
@@ -306,8 +306,8 @@ extension Exporter {
         return String(data: d, encoding: .utf8)
     }
 
-    /// Los archivos que acompañan a un export completo: subtítulos (.srt y .vtt) y capítulos (.chapters.json).
-    /// Los reproductores y las plataformas que los entienden los toman de ahí; el resto no estorba.
+    /// The files accompanying a full export: subtitles (.srt and .vtt) and chapters (.chapters.json).
+    /// Players and platforms that understand them take them from there; for the rest they're harmless.
     @discardableResult
     static func writeSidecars(project p: Project, next url: URL, chapters: [(time: Double, title: String)]) -> [URL] {
         var out: [URL] = []
@@ -324,7 +324,7 @@ extension Exporter {
         return out
     }
 
-    /// Transcripción en texto corrido, con el nombre de quien habla en cada cambio de persona.
+    /// Plain-text transcript, with the speaker's name at each change of person.
     static func transcriptText(project p: Project) -> String {
         let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
         let words = p.captionWords.filter { w in keep.contains { w.s >= $0.start - 0.05 && w.s < $0.end } }.sorted { $0.s < $1.s }

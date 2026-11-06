@@ -97,7 +97,7 @@ actor PrePodClient {
         return data
     }
 
-    /// Sube un archivo como formulario (multipart), igual que el navegador en prePod web.
+    /// Uploads a file as a form (multipart), same as the browser in prePod web.
     func upload(_ path: String, field: String, file: URL, fields: [String: String] = [:], method: String = "POST") async throws -> Data {
         let boundary = "thepod-\(UUID().uuidString)"
         var body = Data()
@@ -125,8 +125,8 @@ actor PrePodClient {
     func resetAdminCache() { adminCache = nil }
 
     private var adminCache: Bool?
-    /// Si la cuenta es administradora (prePod `/api/auth/me`). Ante cualquier duda, no.
-    /// El usuario de verdad de la cuenta (si se entró con el correo, devuelve el usuario).
+    /// Whether the account is an administrator (prePod `/api/auth/me`). When in doubt, no.
+    /// The account's real username (if logged in with the email, returns the username).
     func canonicalUsername() async -> String? {
         guard let d = try? await send("GET", "/api/auth/me"),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
@@ -139,7 +139,7 @@ actor PrePodClient {
         return (o["is_admin"] as? Bool) ?? false
     }
 
-    /// La cuenta: usuario, si es admin y su plan (también lo guarda en `Plan`).
+    /// The account: username, whether admin and its plan (also saved in `Plan`).
     func me() async -> [String: Any]? {
         guard let d = try? await send("GET", "/api/auth/me"),
               let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return nil }
@@ -149,7 +149,7 @@ actor PrePodClient {
         return o
     }
 
-    /// Cuenta un episodio nuevo hecho en la Mac. nil si se pudo; el mensaje si el plan ya no tiene episodios.
+    /// Counts a new episode made on the Mac. nil if it worked; the message if the plan has no episodes left.
     func claimEpisode(_ ref: String) async -> String? {
         do {
             let d = try await send("POST", "/api/auth/plan/claim", json: ["ref": ref])
@@ -158,11 +158,11 @@ actor PrePodClient {
             return nil
         } catch {
             let msg = error.localizedDescription
-            return msg.hasPrefix(String(localized: "El plan")) ? msg : nil      // sin conexión: no se bloquea
+            return msg.hasPrefix(String(localized: "El plan")) ? msg : nil      // offline: doesn't block
         }
     }
 
-    /// Crea (o encuentra) la sala de grabación de prodPod para un episodio. Devuelve el número de sesión.
+    /// Creates (or finds) the prodPod recording room for an episode. Returns the session number.
     func sendToProdPod(slug: String, episodeId: Int) async throws -> Int {
         let d = try await send("POST", "/api/podcasts/\(slug)/episodes/\(episodeId)/send-to-prodpod", json: [:])
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
@@ -236,7 +236,7 @@ actor PrePodClient {
                                     "privacy": privacy]))
     }
 
-    // MARK: pubPod (reels a redes)
+    // MARK: pubPod (reels to social networks)
 
     struct PubAccount: Decodable, Hashable { let connected: Bool; let username: String? }
     struct PubPost: Decodable, Identifiable, Hashable {
@@ -256,12 +256,12 @@ actor PrePodClient {
         return try JSONDecoder().decode(Out.self, from: await send("GET", "/api/pubpod/podcasts/\(slug)/posts")).posts
     }
 
-    /// action: "cancel" (programado) o "retry" (falló).
+    /// action: "cancel" (scheduled) or "retry" (failed).
     func pubPostAction(slug: String, id: Int, action: String) async throws {
         _ = try await send("POST", "/api/pubpod/podcasts/\(slug)/posts/\(id)/\(action)")
     }
 
-    /// Texto fijo por destino (hashtags, firma) que el servidor agrega al final de cada publicación.
+    /// Fixed text per destination (hashtags, signature) the server appends to each post.
     func pubSignatures(slug: String) async throws -> [String: String] {
         struct Out: Decodable { let signatures: [String: String] }
         return try JSONDecoder().decode(Out.self, from: await send("GET", "/api/pubpod/podcasts/\(slug)/prefs")).signatures
@@ -278,13 +278,13 @@ actor PrePodClient {
         }
     }
 
-    /// Qué redes tiene habilitadas thePod en el servidor (las que aún no, se muestran como «muy pronto»).
+    /// Which networks thePod has enabled on the server (those not yet are shown as «muy pronto»).
     func pubNetworks() async -> [String: Bool] {
         guard let d = try? await send("GET", "/api/pubpod/networks") else { return [:] }
         return (try? JSONDecoder().decode([String: Bool].self, from: d)) ?? [:]
     }
 
-    /// Página de la red para dar el permiso a thePod (se abre en el navegador).
+    /// The network's page to grant thePod permission (opens in the browser).
     func connectURL(network: String, slug: String) async throws -> URL {
         let path = network == "youtube" ? "/api/youtube/auth-url?slug=\(slug)" : "/api/pubpod/\(network)/auth-url?slug=\(slug)"
         let obj = try JSONSerialization.jsonObject(with: await send("GET", path)) as? [String: Any]
@@ -299,7 +299,7 @@ actor PrePodClient {
                                  from: await send("GET", "/api/pubpod/podcasts/\(slug)/accounts"))
     }
 
-    /// Crea una publicación por red para un reel ya subido. `at` nil = ahora.
+    /// Creates one post per network for an already uploaded reel. `at` nil = now.
     func createReelPosts(slug: String, episodeId: Int?, uploadId: String, title: String,
                          targets: [(platform: String, caption: String)], at: Date?, kind: String = "reel") async throws -> [PubPost] {
         var json: [String: Any] = [
@@ -337,7 +337,7 @@ actor PrePodClient {
 }
 
 
-/// Lo que puede hacer la cuenta en la interfaz (por ahora: si es administradora).
+/// What the account can do in the UI (for now: whether it's an administrator).
 @MainActor final class AccountRole: ObservableObject {
     static let shared = AccountRole()
     @Published private(set) var isAdmin = false
@@ -352,7 +352,7 @@ actor PrePodClient {
     func clear() { isAdmin = false; Plan.clear(); planSummary = nil }
 
     private var lastRefresh = Date.distantPast
-    /// Como `refresh`, pero no más de una vez por minuto (se llama cada vez que la app vuelve al frente).
+    /// Like `refresh`, but no more than once a minute (called every time the app comes to the front).
     func refreshIfStale() {
         guard Date().timeIntervalSince(lastRefresh) > 60 else { return }
         lastRefresh = Date()

@@ -8,13 +8,13 @@ import AVFoundation
 /// Imports, fixes (enhance + transcribe + silences/fillers), suggests reels and exports
 /// a landscape video, the first reel (vertical) and the audio. Prints progress and a JSON report.
 enum SelfTest {
-    /// Cualquier bandera de prueba o captura (`--algo-test`, `--algo-snapshot`, `--render`…) entra por aquí:
-    /// así una bandera nueva no se queda sin arrancar por olvidarla en una lista.
+    /// Any test or snapshot flag (`--algo-test`, `--algo-snapshot`, `--render`…) comes in here:
+    /// that way a new flag doesn't fail to start because it was forgotten in a list.
     static var isRequested: Bool {
         CommandLine.arguments.dropFirst().contains { $0.hasPrefix("--") }
     }
 
-    /// Capturas de pubPod con los episodios y las redes reales (solo lectura: no publica nada).
+    /// pubPod snapshots with the real episodes and networks (read-only: publishes nothing).
     @MainActor
     static func pubSnapshot(dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -46,7 +46,7 @@ enum SelfTest {
         DispatchQueue.main.asyncAfter(deadline: .now() + 31) { fflush(stdout); exit(0) }
     }
 
-    /// Capturas de la sección pre, con datos reales y sin mostrar ventanas (solo lectura; deja las preferencias como estaban).
+    /// Snapshots of the pre section, with real data and without showing windows (read-only; leaves preferences as they were).
     @MainActor
     static func preSnapshot(_ dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -96,7 +96,7 @@ enum SelfTest {
         }
     }
 
-    /// Capturas de prod sin cámara ni micrófono (no pide permisos, no entra a ninguna sala).
+    /// prod snapshots without camera or microphone (asks for no permissions, joins no room).
     @MainActor
     static func prodSnapshot(_ dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -138,7 +138,7 @@ enum SelfTest {
         }
     }
 
-    /// Graba 6 s de imagen sintética en MP4 por fragmentos y lo sube por partes a una sala de prueba.
+    /// Records 6 s of synthetic video into fragmented MP4 and uploads it in parts to a test room.
     @MainActor
     static func recTest(_ sid: Int) {
         Task { @MainActor in
@@ -147,7 +147,7 @@ enum SelfTest {
             do { try rec.start(to: url, quality: RecordingQuality(height: 1080, bitrate: 5_000_000)) }
             catch { print("ERROR start \(error)"); exit(1) }
             await ChunkUploader.shared.setProgress { f, sent, total, done, msg in
-                print("subida \(sent)/\(total) \(done ? "LISTA" : "") \(msg ?? "")"); fflush(stdout)
+                print("upload \(sent)/\(total) \(done ? "DONE" : "") \(msg ?? "")"); fflush(stdout)
             }
             await ChunkUploader.shared.begin(sessionId: sid, file: url)
             var pool: CVPixelBufferPool?
@@ -184,19 +184,19 @@ enum SelfTest {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if await ChunkUploader.shared.pending().isEmpty { break }
             }
-            print(await ChunkUploader.shared.pending().isEmpty ? "OK subida finalizada" : "ERROR la subida no terminó")
+            print(await ChunkUploader.shared.pending().isEmpty ? "OK upload finished" : "ERROR the upload didn't finish")
             fflush(stdout); exit(0)
         }
     }
 
-    /// Capturas de amaPod con datos de ejemplo (no abre ningún evento; solo lee tu lista de eventos, sin cambiar nada).
+    /// amaPod snapshots with sample data (opens no event; only reads your event list, without changing anything).
     @MainActor
     static func amaSnapshot(dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let defaults = UserDefaults.standard
         let oldTab = defaults.object(forKey: "amaPestana")
         Task { @MainActor in
-            do { let evs = try await AmaClient.shared.events(); print("amaPod OK: \(evs.count) eventos") }
+            do { let evs = try await AmaClient.shared.events(); print("amaPod OK: \(evs.count) events") }
             catch { print("amaPod ERROR: \(error.localizedDescription)") }
             let ev = AmaClient.Event(id: 7, title: "Pregúntanos lo que quieras — Lee La Letra Chica", description: "Contratos, letra chica y todo lo que nunca te explicaron.",
                                      status: "active", chat_mode: "moderated", like_count: 128, spectator_count: 342)
@@ -243,7 +243,7 @@ enum SelfTest {
         }
     }
 
-    /// Capturas del cuarto de control con datos de ejemplo (no entra a ninguna sala; solo lee la marca del podcast).
+    /// Control room snapshots with sample data (joins no room; only reads the podcast's branding).
     @MainActor
     static func directorSnapshot(slug: String, dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -305,16 +305,16 @@ enum SelfTest {
         }
     }
 
-    /// Editor de postPod (Arreglar y Exportar) con un proyecto real, en una ventana fuera de la pantalla.
+    /// postPod editor (Fix and Export) with a real project, in an off-screen window.
     @MainActor
-    /// "--studio-snapshot <slug> <carpeta>": la ventana del estudio y el editor del EQ, en PNG.
+    /// "--studio-snapshot <slug> <folder>": the studio window and the EQ editor, as PNG.
     static func studioSnapshot(slug: String, dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         Task { @MainActor in
             do {
                 let app = AppModel()
                 var p = try ProjectStore.load(slug: slug)
-                // Una voz «ajustada en el estudio» para ver la etiqueta y los inserts encendidos
+                // A voice «adjusted in the studio» to see the label and the inserts switched on
                 if !p.lanes.isEmpty {
                     var c = ChainSettings.preset(VoiceEQ.preset("clear"))
                     c.bands.append(EQBand(kind: .highshelf, freq: 9000, gain: 2.5, q: 0.7))
@@ -344,7 +344,7 @@ enum SelfTest {
                 }
                 StudioTab.shared.tab = .audio
                 await shoot(StudioRoot(), "estudio", w: 1280, h: 820)
-                // Video: un título con keyframes seleccionado y un tramo de cámara a mano
+                // Video: a title with keyframes selected and a manual camera span
                 if let first = session.project.overlays.first {
                     var a = LayerAnimation()
                     a.write(LayerAnimation.x, t: first.start, v: 0.2); a.write(LayerAnimation.x, t: first.end, v: 0.8)
@@ -368,7 +368,7 @@ enum SelfTest {
                 }
                 session.step = .fix
                 await shoot(ProjectView(session: session), "limpiar-sonido", w: 1440, h: 900)
-                // Exportar con la cola a medias: uno listo, uno corriendo, uno esperando y uno fallido
+                // Export with the queue half done: one finished, one running, one waiting and one failed
                 session.exportQueueRunner = { _ in try await Task.sleep(nanoseconds: 3_000_000_000); return [] }
                 session.exportQueue = [
                     { var j = ExportJob(kind: .format(.landscape)); j.status = .done([URL(fileURLWithPath: "/tmp/episodio.mp4")]); return j }(),
@@ -391,7 +391,7 @@ enum SelfTest {
             do {
                 let app = AppModel()
                 var p = try ProjectStore.load(slug: slug)
-                // --words <json>: pone esas palabras y los cortes automáticos (para ver sugerencias y revisión)
+                // --words <json>: sets those words and the automatic cuts (to see suggestions and review)
                 let args = CommandLine.arguments
                 if let j = args.firstIndex(of: "--words"), args.count > j + 1,
                    let d = try? Data(contentsOf: URL(fileURLWithPath: args[j + 1])),
@@ -436,12 +436,12 @@ enum SelfTest {
                         try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + ".png"))
                         print("snapshot \(name)")
                     }
-                    // Reels: borrar el que se está viendo con la pantalla abierta (antes la app se cerraba de golpe)
+                    // Reels: delete the one being viewed with the screen open (the app used to crash)
                     if step == .reels, let first = session.project.reels.first {
                         session.project.reels.removeAll { $0.id == first.id }
                         try? await Task.sleep(nanoseconds: 2_000_000_000)
                         host.layoutSubtreeIfNeeded()
-                        print("reel borrado sin cerrar la app")
+                        print("reel deleted without closing the app")
                     }
                 }
             } catch { print("ERROR \(error.localizedDescription)") }
@@ -449,7 +449,7 @@ enum SelfTest {
         }
     }
 
-    /// Cintillos con los logos y sponsors reales de un podcast (solo lectura, no entra a ninguna sala).
+    /// Lower thirds with a podcast's real logos and sponsors (read-only, joins no room).
     @MainActor
     static func cintilloSnapshot(slug: String, dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -484,7 +484,7 @@ enum SelfTest {
                 host.cacheDisplay(in: host.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent("cintillos.png"))
             }
-            // El mismo cintillo como sale en el video final (1920×1080)
+            // The same lower third as it comes out in the final video (1920×1080)
             let logo = d.podcastLogo?.cgImage(forProposedRect: nil, context: nil, hints: nil)
             let spLogo = sp.flatMap { d.sponsorLogo($0) }?.cgImage(forProposedRect: nil, context: nil, hints: nil)
             var frame = CIImage(color: CIColor(red: 0.2, green: 0.25, blue: 0.3)).cropped(to: CGRect(x: 0, y: 0, width: 1920, height: 1080))
@@ -509,7 +509,7 @@ enum SelfTest {
         }
     }
 
-    /// Diagnóstico del login a prePod con el mismo código que usa Ajustes (no imprime la contraseña).
+    /// Diagnosis of the prePod login with the same code Settings uses (doesn't print the password).
     @MainActor
     static func prepodTest() {
         Task { @MainActor in
@@ -523,28 +523,28 @@ enum SelfTest {
         }
     }
 
-    /// Lista los proyectos de postPod web; con `--download <slug>` también baja el paquete (sin importarlo).
+    /// Lists the postPod web projects; with `--download <slug>` also downloads the bundle (without importing it).
     @MainActor
     static func postpodTest() {
         Task { @MainActor in
             print("url=\(PostPodWebClient.baseURL) user=[\(PrePodClient.username)] configured=\(PrePodClient.isConfigured)")
             do {
                 let list = try await PostPodWebClient.shared.projects()
-                print("OK proyectos=\(list.count)")
+                print("OK projects=\(list.count)")
                 for p in list { print("  \(p.slug) · \(p.name) · \(p.owner ?? "-")") }
                 let a = CommandLine.arguments
                 if let i = a.firstIndex(of: "--download"), a.count > i + 1 {
                     let t0 = Date()
                     let url = try await PostPodWebClient.shared.downloadBundle(slug: a[i + 1]) { phase in
                         switch phase {
-                        case .preparing(let f): print(String(format: "  %.0fs preparando %@", Date().timeIntervalSince(t0), f.map { "\(Int($0 * 100))%" } ?? "…"))
+                        case .preparing(let f): print(String(format: "  %.0fs building %@", Date().timeIntervalSince(t0), f.map { "\(Int($0 * 100))%" } ?? "…"))
                         case .downloading(let got, let total): print(String(format: "  %.0fs %lld/%lld", Date().timeIntervalSince(t0), got, total))
-                        case .reconnecting: print("  reconectando…")
+                        case .reconnecting: print("  reconnecting…")
                         }
                         fflush(stdout)
                     }
                     let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value ?? 0
-                    print("DESCARGADO \(url.path) \(size) bytes en \(Int(Date().timeIntervalSince(t0)))s")
+                    print("DOWNLOADED \(url.path) \(size) bytes in \(Int(Date().timeIntervalSince(t0)))s")
                 }
             } catch { print("ERROR \(error.localizedDescription)") }
             fflush(stdout); exit(0)
@@ -553,28 +553,28 @@ enum SelfTest {
 
     /// postPod --render <slug> <start> <end> <landscape|vertical|square>: export a window of an existing project.
     @MainActor
-    /// "--enhance-test <slug> <mediaId> <nivel>": limpia la voz de un archivo como «Sonido de estudio» y dice dónde quedó.
+    /// "--enhance-test <slug> <mediaId> <level>": cleans a file's voice like «Sonido de estudio» and says where it ended up.
     static func enhanceTest() {
         let a = CommandLine.arguments
         guard let i = a.firstIndex(of: "--enhance-test"), a.count > i + 3, let mid = Int(a[i + 2]), let level = Int(a[i + 3]) else {
-            print("uso: --enhance-test <slug> <mediaId> <nivel>"); exit(2)
+            print("usage: --enhance-test <slug> <mediaId> <level>"); exit(2)
         }
         Task { @MainActor in
             do {
                 let p = try ProjectStore.load(slug: a[i + 1])
-                guard let m = p.media.first(where: { $0.id == mid }) else { print("ERROR no existe ese archivo"); exit(1) }
-                print("aislador de Apple: \(VoiceIsolation.isAvailable ? "sí" : "no")")
+                guard let m = p.media.first(where: { $0.id == mid }) else { print("ERROR that file doesn't exist"); exit(1) }
+                print("Apple isolator: \(VoiceIsolation.isAvailable ? "yes" : "no")")
                 let t0 = Date()
                 let rel = try await AudioAnalysis.enhance(media: m, slug: p.id, level: level) { _ in }
-                print(String(format: "OK %@ en %.0f s", ProjectStore.url(rel, in: p.id).path, Date().timeIntervalSince(t0)))
+                print(String(format: "OK %@ in %.0f s", ProjectStore.url(rel, in: p.id).path, Date().timeIntervalSince(t0)))
                 exit(0)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
         }
     }
 
-    /// "--voice-chain-test": genera un tono de 300 Hz + 7 kHz, lo pasa por la cadena de voz con agudos a −12 dB
-    /// y de-esser dentro de un export real (AVAssetExportSession + AVAudioMix + tap), y comprueba que la
-    /// banda alta baje y la baja no. Es la misma ruta que la vista previa y el export de verdad.
+    /// "--voice-chain-test": generates a 300 Hz + 7 kHz tone, runs it through the voice chain with treble at −12 dB
+    /// and de-esser inside a real export (AVAssetExportSession + AVAudioMix + tap), and checks that the
+    /// high band drops and the low one doesn't. It's the same path as the real preview and export.
     static func voiceChainTest() {
         Task {
             do {
@@ -611,7 +611,7 @@ enum SelfTest {
                     _ = tap
                     return out
                 }
-                /// Energía (dB) de una banda, con una DFT directa a esa frecuencia (Goertzel) sobre el segundo central.
+                /// Energy (dB) of a band, with a direct DFT at that frequency (Goertzel) over the middle second.
                 func band(_ url: URL, hz: Double, third: Int = 1) throws -> Double {
                     let f = try AVAudioFile(forReading: url)
                     let b = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: AVAudioFrameCount(f.length))!
@@ -629,36 +629,36 @@ enum SelfTest {
                 let cut = try await export(ChainSettings.preset(e))
                 let lo0 = try band(flat, hz: 300), hi0 = try band(flat, hz: 7000)
                 let lo1 = try band(cut, hz: 300), hi1 = try band(cut, hz: 7000)
-                print(String(format: "plano: 300 Hz %.1f dB · 7 kHz %.1f dB", lo0, hi0))
-                print(String(format: "agudos −12 + siseo: 300 Hz %.1f dB · 7 kHz %.1f dB", lo1, hi1))
+                print(String(format: "flat: 300 Hz %.1f dB · 7 kHz %.1f dB", lo0, hi0))
+                print(String(format: "treble −12 + sibilance: 300 Hz %.1f dB · 7 kHz %.1f dB", lo1, hi1))
                 var ok = abs(lo0 - lo1) < 2 && (hi0 - hi1) > 8 && lo0 > -20
-                // Automatización: la banda de 7 kHz baja de 0 a −18 dB a lo largo de los 3 s
+                // Automation: the 7 kHz band goes down from 0 to −18 dB over the 3 s
                 var auto = ChainSettings()
                 let hb = EQBand(kind: .peak, freq: 7000, gain: 0, q: 0.8)
                 auto.bands = [hb]
                 auto.automation[ChainSettings.bandGain(hb)] = [AutoPoint(t: 0, v: 0), AutoPoint(t: secs, v: -18)]
                 let swept = try await export(auto)
                 let first = try band(swept, hz: 7000, third: 0), last = try band(swept, hz: 7000, third: 2)
-                print(String(format: "automatización 0 → −18 dB: primer tercio %.1f dB · último tercio %.1f dB", first, last))
+                print(String(format: "automation 0 → −18 dB: first third %.1f dB · last third %.1f dB", first, last))
                 ok = ok && (first - last) > 6
-                // Filtro K: un seno de 1 kHz a −20 dBFS debe medir −23,0 LUFS (BS.1770)
+                // K filter: a 1 kHz sine at −20 dBFS must measure −23.0 LUFS (BS.1770)
                 var k = KWeight(sampleRate: 48_000)
                 var tone = [Float](repeating: 0, count: 48_000)
                 for i in tone.indices { tone[i] = Float(0.1 * sin(2 * .pi * 1000 * Double(i) / 48_000)) }
-                _ = tone.withUnsafeBufferPointer { k.meanSquare($0.baseAddress!, 24_000) }   // que asiente el filtro
+                _ = tone.withUnsafeBufferPointer { k.meanSquare($0.baseAddress!, 24_000) }   // let the filter settle
                 let pwr = tone.withUnsafeBufferPointer { k.meanSquare($0.baseAddress! + 24_000, 24_000) }
                 let lufs = MixLoudness.lufs(pwr)
-                print(String(format: "filtro K: seno 1 kHz a −20 dBFS = %.2f LUFS (esperado −23.0)", lufs))
+                print(String(format: "K filter: 1 kHz sine at −20 dBFS = %.2f LUFS (expected −23.0)", lufs))
                 ok = ok && abs(lufs + 23.0) < 0.3
-                // A/B: con «Sin procesar» encendido la cadena no toca nada (misma cadena de agudos −12)
+                // A/B: with «Sin procesar» (Bypass) on, the chain touches nothing (same −12 treble chain)
                 VoiceChainRegistry.shared.bypassAll = true
                 let ab = try await export(ChainSettings.preset(e))
                 VoiceChainRegistry.shared.bypassAll = false
                 let hiAB = try band(ab, hz: 7000)
-                print(String(format: "A/B sin procesar: 7 kHz %.1f dB (plano %.1f)", hiAB, hi0))
+                print(String(format: "A/B bypass: 7 kHz %.1f dB (flat %.1f)", hiAB, hi0))
                 ok = ok && abs(hiAB - hi0) < 1
-                // Plugin AU dentro de la cadena: un paso alto de Apple (no es de la cadena) a 2 kHz debe hundir
-                // los 300 Hz y dejar los 7 kHz. Su corte va en el estado guardado, así se prueba guardar/restaurar.
+                // AU plugin inside the chain: an Apple high-pass (not part of the chain) at 2 kHz must sink
+                // the 300 Hz and keep the 7 kHz. Its cutoff is in the saved state, so save/restore is tested.
                 var hp = PluginInsert(type: kAudioUnitType_Effect, subtype: kAudioUnitSubType_HighPassFilter,
                                       manufacturer: kAudioUnitManufacturer_Apple, name: "AUHighPassFilter", vendor: "Apple")
                 if let u = PluginHost.instantiate(hp) {
@@ -669,37 +669,37 @@ enum SelfTest {
                 var withPlugin = ChainSettings(); withPlugin.plugins = [hp]
                 let plugged = try await export(withPlugin)
                 let lo2 = try band(plugged, hz: 300), hi2 = try band(plugged, hz: 7000)
-                print(String(format: "plugin AU (paso alto 2 kHz, estado restaurado): 300 Hz %.1f dB · 7 kHz %.1f dB", lo2, hi2))
+                print(String(format: "AU plugin (2 kHz high-pass, restored state): 300 Hz %.1f dB · 7 kHz %.1f dB", lo2, hi2))
                 let pluginOK = hp.state != nil && (lo0 - lo2) > 12 && abs(hi0 - hi2) < 2
                 ok = ok && pluginOK
-                print(ok ? "OK la cadena de voz procesa dentro del export (con automatización, plugin AU y A/B) y el filtro K mide bien" : "FAIL")
+                print(ok ? "OK the voice chain processes inside the export (with automation, AU plugin and A/B) and the K filter measures correctly" : "FAIL")
                 try? FileManager.default.removeItem(at: dir)
                 exit(ok ? 0 : 1)
             } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
         }
     }
 
-    /// "--chapters-test <slug> [intro_s]": los capítulos que saldrían en las notas y en el archivo.
+    /// "--chapters-test <slug> [intro_s]": the chapters that would go into the notes and the file.
     static func chaptersTest() {
         let a = CommandLine.arguments
-        guard let i = a.firstIndex(of: "--chapters-test"), a.count > i + 1 else { print("uso: --chapters-test <slug> [intro]"); exit(2) }
+        guard let i = a.firstIndex(of: "--chapters-test"), a.count > i + 1 else { print("usage: --chapters-test <slug> [intro]"); exit(2) }
         Task { @MainActor in
             do {
                 var p = try ProjectStore.load(slug: a[i + 1])
                 let intro = a.count > i + 2 ? Double(a[i + 2]) ?? 0 : 0
-                if a.contains("--fake") {        // capítulos de mentira (solo en memoria) para probar las reglas
+                if a.contains("--fake") {        // fake chapters (in memory only) to test the rules
                     let fake: [(Double, String)] = [(4, "Bienvenida"), (40, "Tema uno"), (44, "Muy cerca"),
                                                     (900, "Tema dos"), (1800, "Preguntas = respuestas; #1"), (p.duration - 3, "Al final")]
                     p.moments += fake.enumerated().map { Moment(id: 9000 + $0.offset, time: $0.element.0, duration: nil, label: $0.element.1) }
                 }
                 let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts)
-                print("marcados: \(p.chapters.count) · cortes: \(p.cuts.count) · dura \(EditEngine.clock(EditEngine.outputDuration(keep)))")
-                for c in p.chapters { print("  bruto \(EditEngine.clock(c.time)) \(c.title)") }
+                print("marked: \(p.chapters.count) · cuts: \(p.cuts.count) · length \(EditEngine.clock(EditEngine.outputDuration(keep)))")
+                for c in p.chapters { print("  raw \(EditEngine.clock(c.time)) \(c.title)") }
                 let list = Exporter.chapterList(project: p, keep: keep, introDuration: intro,
                                                 total: intro + EditEngine.outputDuration(keep))
-                print("capítulos (intro \(intro) s): \(list.count)")
+                print("chapters (intro \(intro) s): \(list.count)")
                 for c in list { print("  \(EditEngine.clock(c.time)) \(c.title)") }
-                if a.contains("--export-audio") {     // MP3 completo con los capítulos adentro
+                if a.contains("--export-audio") {     // full MP3 with the chapters inside
                     let proj = p
                     let url = try await Exporter.export(project: proj, format: .audio, baseName: "render-test",
                                                         energy: AudioAnalysis.loadEnergy(proj.id)) { _ in }
@@ -714,17 +714,17 @@ enum SelfTest {
         let a = CommandLine.arguments
         guard let i = a.firstIndex(of: "--render"), a.count > i + 4,
               let s = Double(a[i + 2]), let e = Double(a[i + 3]), let fmt = ExportFormat(rawValue: a[i + 4]) else {
-            print("uso: --render <slug> <inicio> <fin> <formato>"); exit(2)
+            print("usage: --render <slug> <start> <end> <format>"); exit(2)
         }
         Task { @MainActor in
             do {
                 var p = try ProjectStore.load(slug: a[i + 1])
-                let window: EditEngine.Span? = (s <= 0 && e >= p.duration) ? nil : (s, e)   // todo el episodio: sin ventana (con intro/cierre)
-                // "--render … vertical reel N": con el diseño del reel N (1 = el primero), como al exportar reels
+                let window: EditEngine.Span? = (s <= 0 && e >= p.duration) ? nil : (s, e)   // the whole episode: no window (with intro/outro)
+                // "--render … vertical reel N": with reel N's design (1 = the first), as when exporting reels
                 if a.count > i + 6, a[i + 5] == "reel", let n = Int(a[i + 6]), n >= 1, n <= p.reels.count {
                     p = p.applying(p.look(for: p.reels[n - 1]), reel: p.reels[n - 1])
                 }
-                let uhd = a.contains("--uhd")       // "--render … landscape --uhd": en 4K
+                let uhd = a.contains("--uhd")       // "--render … landscape --uhd": in 4K
                 let proj = p
                 let url = try await ExportFormat.$uhd.withValue(uhd) {
                     try await Exporter.export(project: proj, format: fmt, window: window, baseName: "render-test",
@@ -762,7 +762,7 @@ enum SelfTest {
         if args.contains("--review-test") { exit(StudioTests.reviewTest() ? 0 : 1) }
         if args.contains("--pan-test") { Task { exit(await StudioTests.panTest() ? 0 : 1) }; return }
         if let i = args.firstIndex(of: "--loudness-report-sample"), args.count > i + 1 {
-            // Un PDF de muestra en la carpeta dada (para mirarlo)
+            // A sample PDF in the given folder (to look at)
             var p = Project(id: "x", name: "Lee la letra chica", podcastName: "Lee la letra chica", createdAt: Date(), importedFrom: "tracks")
             p.episode.title = "El proceso que transforma"; p.episode.number = 15
             let m = LoudnessReport.Measure(integrated: -16.3, truePeak: -1.4, range: 7.2, duration: 3721)
@@ -773,7 +773,7 @@ enum SelfTest {
         if args.contains("--title-presets-test") { exit(StudioTests.titlePresetsTest() ? 0 : 1) }
         if args.contains("--proxy-test") { Task { exit(await StudioTests.proxyTest() ? 0 : 1) }; return }
         if let i = args.firstIndex(of: "--export-bench"), args.count > i + 1 {
-            // Rendimiento con un episodio real: exporta los primeros N segundos (60 de serie) en 16:9 y dice cuánto tardó
+            // Performance with a real episode: exports the first N seconds (60 by default) in 16:9 and reports how long it took
             let slug = args[i + 1]
             let secs = args.count > i + 2 ? Double(args[i + 2]) ?? 60 : 60
             Task { @MainActor in
@@ -781,12 +781,12 @@ enum SelfTest {
                     let p = try ProjectStore.load(slug: slug)
                     let energy = AudioAnalysis.loadEnergy(p.id)
                     let cams = p.lanes.filter { p.laneHasVideo($0.id) }.count
-                    print("Proyecto \(p.name): \(p.lanes.count) personas, \(cams) con cámara, \(p.overlays.count) capas, \(p.brolls.count) b-roll, Studio: \(p.videoTunedInStudio ? "sí" : "no")")
+                    print("Project \(p.name): \(p.lanes.count) people, \(cams) with camera, \(p.overlays.count) layers, \(p.brolls.count) b-roll, Studio: \(p.videoTunedInStudio ? "yes" : "no")")
                     let t0 = Date()
                     let url = try await Exporter.export(project: p, format: .landscape, window: (0, secs), baseName: "bench-\(Int(secs))s", energy: energy) { _ in }
                     let wall = Date().timeIntervalSince(t0)
                     let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-                    print(String(format: "Exportados %.0f s en %.1f s → %.2f× tiempo real · %.1f MB · %@", secs, wall, secs / wall, Double(size) / 1e6, url.lastPathComponent))
+                    print(String(format: "Exported %.0f s in %.1f s → %.2f× real time · %.1f MB · %@", secs, wall, secs / wall, Double(size) / 1e6, url.lastPathComponent))
                     try? FileManager.default.removeItem(at: url)
                     exit(0)
                 } catch { print("ERROR \(error.localizedDescription)"); exit(1) }
@@ -800,47 +800,47 @@ enum SelfTest {
         if args.contains("--export-queue-test") { Task { exit(await StudioTests.exportQueueTest() ? 0 : 1) }; return }
         if args.contains("--delivery-test") { Task { exit(await StudioTests.deliveryTest() ? 0 : 1) }; return }
         if args.contains("--studio-tests") {
-            // Todo Studio seguido: primero lo que no necesita archivos, luego la entrega (ffmpeg) y la cadena de voz (export real)
+            // All of Studio in a row: first what needs no files, then delivery (ffmpeg) and the voice chain (real export)
             Task { @MainActor in
                 print("== Studio · Video =="); fflush(stdout)
                 guard StudioTests.videoStudioTest() else { exit(1) }
-                print("== Voces parejas por medición =="); fflush(stdout)
+                print("== Even voices by measurement =="); fflush(stdout)
                 guard StudioTests.loudnessMatchTest() else { exit(1) }
-                print("== Tono de sala =="); fflush(stdout)
+                print("== Room tone =="); fflush(stdout)
                 guard StudioTests.roomToneTest() else { exit(1) }
-                print("== Imán al ritmo =="); fflush(stdout)
+                print("== Beat snap =="); fflush(stdout)
                 guard StudioTests.beatGridTest() else { exit(1) }
-                print("== Punch-in dinámico =="); fflush(stdout)
+                print("== Dynamic punch-in =="); fflush(stdout)
                 guard StudioTests.punchInTest() else { exit(1) }
-                print("== Reducción de ruido por huella =="); fflush(stdout)
+                print("== Noise-print reduction =="); fflush(stdout)
                 guard StudioTests.noiseReducerTest() else { exit(1) }
-                print("== Quitar clics =="); fflush(stdout)
+                print("== De-click =="); fflush(stdout)
                 guard StudioTests.declickTest() else { exit(1) }
-                print("== Superficie MIDI =="); fflush(stdout)
+                print("== MIDI surface =="); fflush(stdout)
                 guard StudioTests.midiTest() else { exit(1) }
-                print("== Audiograma =="); fflush(stdout)
+                print("== Audiogram =="); fflush(stdout)
                 guard StudioTests.audiogramTest() else { exit(1) }
-                print("== Revisión compartida =="); fflush(stdout)
+                print("== Shared review =="); fflush(stdout)
                 guard StudioTests.reviewTest() else { exit(1) }
-                print("== Plantillas de título =="); fflush(stdout)
+                print("== Title templates =="); fflush(stdout)
                 guard StudioTests.titlePresetsTest() else { exit(1) }
-                print("== Pulido: atajos y migración =="); fflush(stdout)
+                print("== Polish: shortcuts and migration =="); fflush(stdout)
                 guard StudioTests.polishTest() else { exit(1) }
                 print("== Color =="); fflush(stdout)
                 guard StudioTests.colorTest() else { exit(1) }
-                print("== Multicámara =="); fflush(stdout)
+                print("== Multicam =="); fflush(stdout)
                 guard StudioTests.multicamTest() else { exit(1) }
-                print("== Proxys =="); fflush(stdout)
+                print("== Proxies =="); fflush(stdout)
                 guard await StudioTests.proxyTest() else { exit(1) }
-                print("== Velocidad (time-stretch) =="); fflush(stdout)
+                print("== Speed (time-stretch) =="); fflush(stdout)
                 guard await StudioTests.speedTest() else { exit(1) }
-                print("== Cola de exportación =="); fflush(stdout)
+                print("== Export queue =="); fflush(stdout)
                 guard await StudioTests.exportQueueTest() else { exit(1) }
-                print("== Entrega: subtítulos y capítulos =="); fflush(stdout)
+                print("== Delivery: subtitles and chapters =="); fflush(stdout)
                 guard await StudioTests.deliveryTest() else { exit(1) }
-                print("== Panorama de conversación =="); fflush(stdout)
+                print("== Conversation panning =="); fflush(stdout)
                 guard await StudioTests.panTest() else { exit(1) }
-                print("== Informe de sonoridad =="); fflush(stdout)
+                print("== Loudness report =="); fflush(stdout)
                 guard await StudioTests.loudnessReportTest() else { exit(1) }
                 print("== Studio · Audio =="); fflush(stdout)
                 voiceChainTest()
@@ -848,7 +848,7 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--intro-snapshot"), args.count > i + 1 {
-            // Capturas de la entrada (logo con las estrellas) a 0.35 s, 0.8 s y 1.6 s
+            // Snapshots of the intro (logo with the stars) at 0.35 s, 0.8 s and 1.6 s
             let dir = URL(fileURLWithPath: args[i + 1])
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             Task { @MainActor in
@@ -886,10 +886,10 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--frame-test"), args.count > i + 4 {
-            // Solo lectura: un cuadro de un reel en 9:16 a PNG. Con --crowd le suma (en memoria) un cintillo y un texto
-            // abajo en ese momento, para ver que lo automático se acomoda sin pisarse.
+            // Read-only: a frame of a reel in 9:16 to PNG. With --crowd it adds (in memory) a lower third and a text
+            // at the bottom at that moment, to check the automatic layout makes room without overlapping.
             Task { @MainActor in
-                // --episode: reel 0 = el episodio en 16:9 y el segundo es tiempo del episodio
+                // --episode: reel 0 = the episode in 16:9 and the second is episode time
                 let episode = args.contains("--episode")
                 guard var p = try? ProjectStore.load(slug: args[i + 1]), let n = Int(args[i + 2]),
                       episode || (n >= 1 && n <= p.reels.count), let off = Double(args[i + 3]) else { print("FAIL args"); exit(1) }
@@ -923,15 +923,15 @@ enum SelfTest {
                     }
                     if let l = try? JSONDecoder().decode(VideoLayer.self, from: JSONSerialization.data(withJSONObject: layer)) { p.overlays.append(l) }
                 }
-                if args.contains("--capbottom") {   // subtítulos en su lugar de siempre (sin la posición arrastrada)
+                if args.contains("--capbottom") {   // subtitles in their usual place (without the dragged position)
                     p.captionStyle.freeX = nil; p.captionStyle.freeY = nil
                     p.reelLook.captionStyle?.freeX = nil; p.reelLook.captionStyle?.freeY = nil
                     for k in p.reels.indices { p.reels[k].look?.captionStyle?.freeX = nil; p.reels[k].look?.captionStyle?.freeY = nil }
                 }
-                if args.contains("--bgpodcast") {   // fondo virtual «Fondo del podcast» para todas las personas
+                if args.contains("--bgpodcast") {   // virtual background «Fondo del podcast» for everyone
                     for l in p.lanes { var vb = VirtualBackground(); vb.mode = .podcast; p.laneBackground[l.id] = vb }
                 }
-                if let h = args.firstIndex(of: "--hook"), args.count > h + 1 { p.reels[n - 1].hook = args[h + 1] }   // título de gancho
+                if let h = args.firstIndex(of: "--hook"), args.count > h + 1 { p.reels[n - 1].hook = args[h + 1] }   // hook title
                 let reelNow = p.reels[n - 1]
                 p = p.applying(p.look(for: reelNow), reel: reelNow)
                 do {
@@ -947,8 +947,8 @@ enum SelfTest {
                     try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[i + 4]))
                     if let sc = built.scene {
                         let plan = sc.arrangement(at: outT, brollFrames: [:])
-                        print("subtitulos", plan.captionBand.map { "\(Int($0.minY))-\(Int($0.maxY))" } ?? "-",
-                              "cintillos", plan.cintilloY, "sponsors", plan.sponsorY)
+                        print("subtitles", plan.captionBand.map { "\(Int($0.minY))-\(Int($0.maxY))" } ?? "-",
+                              "lower thirds", plan.cintilloY, "sponsors", plan.sponsorY)
                     }
                     print("OK \(args[i + 4])")
                 } catch { print("FAIL \(error.localizedDescription)") }
@@ -957,27 +957,27 @@ enum SelfTest {
             return
         }
         if args.contains("--miccheck-test") {
-            // La cuenta de la prueba de micrófono, con voces simuladas (energía de 100 lecturas en dB)
+            // The microphone test's math, with simulated voices (energy of 100 readings in dB)
             Task { @MainActor in
                 func run(_ name: String, _ levels: [Float], expect: Int?) {
                     let r = ProdStudio.evaluate(power: levels.map { powf(10, $0 / 10) }, peak: levels.max() ?? -160)
-                    print(r.suggested == expect ? "OK" : "FAIL", name, "avg", r.avg, "peak", r.peak, "sugerido", r.suggested.map(String.init) ?? "nada")
+                    print(r.suggested == expect ? "OK" : "FAIL", name, "avg", r.avg, "peak", r.peak, "suggested", r.suggested.map(String.init) ?? "none")
                 }
-                run("voz baja", Array(repeating: -36, count: 100), expect: 18)
-                run("voz normal", Array(repeating: -18, count: 100), expect: 0)
-                run("voz fuerte", Array(repeating: -4, count: 100), expect: -12)
-                run("pausas", Array(repeating: -24, count: 50) + Array(repeating: -70, count: 50), expect: 9)
-                run("silencio", Array(repeating: -80, count: 100), expect: nil)
+                run("quiet voice", Array(repeating: -36, count: 100), expect: 18)
+                run("normal voice", Array(repeating: -18, count: 100), expect: 0)
+                run("loud voice", Array(repeating: -4, count: 100), expect: -12)
+                run("pauses", Array(repeating: -24, count: 50) + Array(repeating: -70, count: 50), expect: 9)
+                run("silence", Array(repeating: -80, count: 100), expect: nil)
                 LiveGate.shared.makeupDb = 6
-                print(abs(LiveGate.shared.makeupDb - 6) < 0.01 ? "OK" : "FAIL", "ganancia 6 dB =", LiveGate.shared.makeupDb)
+                print(abs(LiveGate.shared.makeupDb - 6) < 0.01 ? "OK" : "FAIL", "gain 6 dB =", LiveGate.shared.makeupDb)
                 LiveGate.shared.makeupDb = 0
                 fflush(stdout); exit(0)
             }
             return
         }
         if let i = args.firstIndex(of: "--meter-test"), args.count > i + 1 {
-            // Solo lectura: el medidor mide lo que sale (con el volumen aplicado). Lee 20 s con la persona 1 a volumen
-            // normal y al 25 %: la diferencia debe rondar −12 dB.
+            // Read-only: the meter measures what goes out (with the volume applied). Reads 20 s with person 1 at normal
+            // volume and at 25 %: the difference should be around −12 dB.
             Task { @MainActor in
                 guard let base = try? ProjectStore.load(slug: args[i + 1]), let lane = base.lanes.first else { print("FAIL no project"); exit(1) }
                 func measure(_ vol: Double) async throws -> Float {
@@ -986,8 +986,8 @@ enum SelfTest {
                     let start = min(300, max(0, p.duration - 30))
                     let built = try await CompositionBuilder.build(project: p, format: .audio, window: (start, start + 20),
                                                                    energy: AudioAnalysis.loadEnergy(p.id), preview: true)
-                    guard built.meters[lane.id] != nil else { print("FAIL sin medidor"); return -999 }
-                    // Como en la app: reproduciendo con AVPlayer (sin sonido en la Mac)
+                    guard built.meters[lane.id] != nil else { print("FAIL no meter"); return -999 }
+                    // As in the app: playing with AVPlayer (no sound on the Mac)
                     let player = AVPlayer(playerItem: built.playerItem())
                     player.volume = 0
                     player.play()
@@ -1001,16 +1001,16 @@ enum SelfTest {
                 }
                 do {
                     let a = try await measure(1.0), b = try await measure(0.25)
-                    print(String(format: "medidor persona 1: normal %.1f dB, al 25%% %.1f dB, diferencia %.1f dB", a, b, b - a))
+                    print(String(format: "meter person 1: normal %.1f dB, at 25%% %.1f dB, difference %.1f dB", a, b, b - a))
                 } catch { print("FAIL \(error.localizedDescription)") }
                 fflush(stdout); exit(0)
             }
             return
         }
         if let i = args.firstIndex(of: "--filler-test"), args.count > i + 1 {
-            // Solo lectura: compara las muletillas de antes (todas las palabras de la lista) con las nuevas
+            // Read-only: compares the old filler words (every word on the list) with the new ones
             Task { @MainActor in
-                // --words <json>: palabras de un archivo (las que deja --sync-test) en vez de las del proyecto
+                // --words <json>: words from a file (the ones --sync-test leaves) instead of the project's
                 var words: [Word] = []
                 var energy: EnergyMap?
                 if let j = args.firstIndex(of: "--words"), args.count > j + 1,
@@ -1033,14 +1033,14 @@ enum SelfTest {
                 if let energy {
                     snd = EditEngine.soundOnlyCuts(words: words, energy: energy).filter { c in !(f + r).contains { $0.start < c.end && $0.end > c.start } }
                 }
-                print(String(format: "palabras %d · antes %d muletillas cortadas · %.2f s", words.count, oldCount, Date().timeIntervalSince(t0)))
-                print("ahora: \(f.filter(\.enabled).count) seguras, \(f.filter { !$0.enabled }.count) dudosas, \(r.count) repetidas, \(snd.count) sonidos sin palabras")
-                // contexto de cada «bueno»
+                print(String(format: "words %d · before %d fillers cut · %.2f s", words.count, oldCount, Date().timeIntervalSince(t0)))
+                print("now: \(f.filter(\.enabled).count) safe, \(f.filter { !$0.enabled }.count) doubtful, \(r.count) repeated, \(snd.count) wordless sounds")
+                // context of each «bueno»
                 let sorted = words.sorted { $0.s < $1.s }
                 for (k, w) in sorted.enumerated() where EditEngine.normalize(w.w) == "bueno" {
                     let ctx = sorted[max(0, k - 3)...min(sorted.count - 1, k + 3)].filter { $0.lane == w.lane }.map(\.w).joined(separator: " ")
                     let c = f.first { $0.start <= w.s + 0.05 && $0.end >= w.e - 0.05 }
-                    print("  bueno @\(EditEngine.clock(w.s)) → \(c == nil ? "NO se marca" : (c!.enabled ? "SE CORTA" : "sugerencia")) · …\(ctx)…")
+                    print("  bueno @\(EditEngine.clock(w.s)) → \(c == nil ? "NOT marked" : (c!.enabled ? "CUT" : "suggestion")) · …\(ctx)…")
                 }
                 for c in (f.filter { !$0.enabled } + r + snd).sorted(by: { $0.start < $1.start }).prefix(40) {
                     print("  \(EditEngine.clock(c.start)) \(String(format: "%.2f", c.length))s \(c.label)")
@@ -1050,10 +1050,10 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--sync-test"), args.count > i + 1 {
-            // Solo lectura: ajusta las palabras al audio y deja el resultado en /tmp (no guarda el proyecto)
+            // Read-only: aligns the words to the audio and leaves the result in /tmp (doesn't save the project)
             Task { @MainActor in
                 guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
-                // Corregir texto: las palabras iguales conservan su tiempo
+                // Correct text: unchanged words keep their timing
                 let old = [Word(w: "hola", s: 1, e: 1.3), Word(w: "que", s: 1.3, e: 1.5), Word(w: "tal", s: 1.6, e: 2.0)]
                 let r1 = EditEngine.retime(old: old, tokens: ["hola", "qué", "tal", "amigos"], lane: 1)
                 print("retime 1:", r1.map { "\($0.w)@\(String(format: "%.2f-%.2f", $0.s, $0.e))" }.joined(separator: " "))
@@ -1062,16 +1062,16 @@ enum SelfTest {
                 let t0 = Date()
                 do {
                     let res = try await SubtitleSync.align(p.words, project: p)
-                    print(String(format: "OK %d palabras, %d corridas, típico %+.3f s, %.1f s", p.words.count, res.moved, res.typicalShift, Date().timeIntervalSince(t0)))
+                    print(String(format: "OK %d words, %d shifted, typical %+.3f s, %.1f s", p.words.count, res.moved, res.typicalShift, Date().timeIntervalSince(t0)))
                     let out = res.words.map { ["w": $0.w, "s": $0.s, "e": $0.e, "lane": Double($0.lane)] as [String: Any] }
                     let data = try JSONSerialization.data(withJSONObject: out)
                     try data.write(to: URL(fileURLWithPath: "/tmp/thepod-sync-\(p.id).json"))
-                    // Volver a escuchar el primer reel (si hay): cuántas palabras y cómo quedan
+                    // Re-listen to the first reel (if any): how many words and how they end up
                     if let reel = p.reels.first, args.contains("--listen") {
                         let t1 = Date()
                         let heard = try await SubtitleSync.listen(project: p, from: reel.start, to: reel.end) { _, _ in }
                         let synced = try await SubtitleSync.align(heard, project: p).words
-                        print(String(format: "reel %@: %d palabras escuchadas en %.1f s", reel.title, heard.count, Date().timeIntervalSince(t1)))
+                        print(String(format: "reel %@: %d words heard in %.1f s", reel.title, heard.count, Date().timeIntervalSince(t1)))
                         print(synced.sorted { $0.s < $1.s }.prefix(25).map { "\($0.w)@\(String(format: "%.2f", $0.s))" }.joined(separator: " "))
                         let out = synced.map { ["w": $0.w, "s": $0.s, "e": $0.e, "lane": Double($0.lane)] as [String: Any] }
                         try JSONSerialization.data(withJSONObject: out).write(to: URL(fileURLWithPath: "/tmp/thepod-reel-\(p.id).json"))
@@ -1082,21 +1082,21 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--sensitive-test"), args.count > i + 1 {
-            // Busca palabras sensibles en un proyecto, pone pitido en la primera y guarda (en una copia de prueba)
+            // Finds sensitive words in a project, puts a beep on the first and saves (in a test copy)
             Task { @MainActor in
                 let app = AppModel()
                 guard var p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
                 p.sensitive = SensitiveWords.scan(p)
                 p.sensitiveScanned = true
-                print("encontradas \(p.sensitive.count)")
+                print("found \(p.sensitive.count)")
                 for m in p.sensitive.prefix(12) { print("  \(Timecode.string(m.s, tenths: false)) \(p.laneName(m.lane)): \(m.word) → \(m.category.rawValue) / \(m.replacement)") }
                 let cw = p.captionWords
                 let changed = zip(p.words, cw).filter { $0.0.w != $0.1.w }.count
-                print("subtitulos cambiados \(changed)")
+                print("subtitles changed \(changed)")
                 if let first = p.sensitive.first {
                     p.sensitive[0].bleep = true
                     try? ProjectStore.save(p)
-                    print("pitido en \(first.s)-\(first.e) lane \(first.lane)")
+                    print("beep at \(first.s)-\(first.e) lane \(first.lane)")
                 }
                 _ = app
                 fflush(stdout); exit(0)
@@ -1104,7 +1104,7 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--extras-test"), args.count > i + 1 {
-            // Deshacer/rehacer, I/O y plantillas, sin ventanas
+            // Undo/redo, I/O and templates, without windows
             Task { @MainActor in
                 let app = AppModel()
                 guard let p = try? ProjectStore.load(slug: args[i + 1]) else { print("FAIL no project"); exit(1) }
@@ -1123,11 +1123,11 @@ enum SelfTest {
                 // I / O
                 session.inPoint = 30
                 let n = session.project.reels.count
-                session.markOut()           // playhead en 0 → reel 0…30
+                session.markOut()           // playhead at 0 → reel 0…30
                 guard session.project.reels.count == n + 1, let r = session.project.reels.last, r.start == 0, r.end == 30 else { print("FAIL markOut"); exit(1) }
                 session.undoChange()
                 guard session.project.reels.count == n else { print("FAIL undo reel"); exit(1) }
-                // plantillas
+                // templates
                 var look = ReelLook(); look.layout = .stack; look.showNames = false; look.logoFile = "x.png"
                 let t = ReelTemplate(name: "prueba", look: look)
                 var cur = ReelLook(); cur.logoFile = "mio.png"
@@ -1136,7 +1136,7 @@ enum SelfTest {
                 var list = ReelTemplate.load(); list.removeAll { $0.name == "prueba" }; list.append(t); ReelTemplate.save(list)
                 guard ReelTemplate.load().contains(where: { $0.name == "prueba" }) else { print("FAIL template save"); exit(1) }
                 list.removeAll { $0.name == "prueba" }; ReelTemplate.save(list)
-                print("OK extras: deshacer/rehacer, I/O, plantillas")
+                print("OK extras: undo/redo, I/O, templates")
                 fflush(stdout); exit(0)
             }
             return
@@ -1149,7 +1149,7 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--intro-frames"), args.count > i + 4 {
-            // --intro-frames <carpeta> <ancho> <alto> <0 con fondo | 1 transparente | 2 transparente para fondo claro>: cuadros a 30 fps.
+            // --intro-frames <folder> <width> <height> <0 with background | 1 transparent | 2 transparent for light background>: frames at 30 fps.
             let dir = URL(fileURLWithPath: args[i + 1])
             let w = Double(args[i + 2]) ?? 1920, h = Double(args[i + 3]) ?? 1080
             Task { @MainActor in
@@ -1159,13 +1159,13 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--tts"), args.count > i + 2 {
-            // --tts "<texto>" <salida.caf>: prueba de la voz artificial
+            // --tts "<text>" <output.caf>: synthetic voice test
             Task { @MainActor in
                 do {
                     let v = Speech.defaultVoice()
                     try await Speech.synthesize(args[i + 1], voice: v, rate: 0.5, to: URL(fileURLWithPath: args[i + 2]))
                     print("OK voz=\(v?.name ?? "-") \(v?.language ?? "") \(v?.quality ?? "") → \(args[i + 2])")
-                    print("voces es: " + Speech.voices().filter { $0.language.hasPrefix("es") }.map { "\($0.name)(\($0.language)\($0.quality.isEmpty ? "" : ",\($0.quality)"))" }.joined(separator: ", "))
+                    print("Spanish voices: " + Speech.voices().filter { $0.language.hasPrefix("es") }.map { "\($0.name)(\($0.language)\($0.quality.isEmpty ? "" : ",\($0.quality)"))" }.joined(separator: ", "))
                 } catch { print("ERROR \(error.localizedDescription)") }
                 fflush(stdout); exit(0)
             }
@@ -1175,7 +1175,7 @@ enum SelfTest {
         if args.contains("--postpod-test") { postpodTest(); return }
         if let i = args.firstIndex(of: "--pre-snapshot"), args.count > i + 1 {
             let dir = URL(fileURLWithPath: args[i + 1])
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { preSnapshot(dir) }   // después de esconder la ventana normal
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { preSnapshot(dir) }   // after hiding the normal window
             return
         }
         if let i = args.firstIndex(of: "--prod-snapshot"), args.count > i + 1 {
@@ -1188,7 +1188,7 @@ enum SelfTest {
             return
         }
         if let i = args.firstIndex(of: "--prod-recs"), args.count > i + 1, let sid = Int(args[i + 1]) {
-            Task { @MainActor in             // solo lectura: grabaciones, momentos y personas de una sala
+            Task { @MainActor in             // read-only: a room's recordings, moments and people
                 for path in ["/api/sessions/\(sid)/recordings", "/api/sessions/\(sid)/chapter-markers",
                              "/api/sessions/\(sid)/participants", "/api/sessions/\(sid)/sound-triggers/stats"] {
                     let d = (try? await ProdPodClient.shared.get(path)) ?? Data()
@@ -1208,22 +1208,22 @@ enum SelfTest {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { postSnapshot(slug: slug, dir: dir) }
             return
         }
-        if let i = args.firstIndex(of: "--cover-scan") {   // busca portadas en un proyecto y deja las imágenes en una carpeta
+        if let i = args.firstIndex(of: "--cover-scan") {   // finds covers in a project and leaves the images in a folder
             let slug = args.count > i + 1 ? args[i + 1] : (ProjectStore.listProjects().first?.id ?? "")
             let dir = URL(fileURLWithPath: args.count > i + 2 ? args[i + 2] : "/tmp/coverscan")
             Task { @MainActor in
                 do {
                     let project = try ProjectStore.load(slug: slug)
                     let t0 = Date()
-                    print("proyecto \(project.id) · \(Int(project.duration)) s · pistas con video: \(project.lanes.count)")
+                    print("project \(project.id) · \(Int(project.duration)) s · lanes with video: \(project.lanes.count)")
                     let found = try await CoverScout.scan(project: project) { f, what in
                         if Int(f * 100) % 10 == 0 { print(String(format: "  %3d%% %@", Int(f * 100), what)) }
                     }
-                    print("encontradas \(found.count) en \(Int(Date().timeIntervalSince(t0))) s")
+                    print("found \(found.count) in \(Int(Date().timeIntervalSince(t0))) s")
                     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                     let imgs = try await CoverScout.renderAll(project: project, times: found.map { $0.time }, energy: AudioAnalysis.loadEnergy(project.id), maxSize: 960) { _ in }
                     for s in found {
-                        print(String(format: "  %@  score %.2f  %@  caras %d", EditEngine.clock(s.time), s.score, s.allSmiling ? "SONRÍEN" : "       ", s.faces))
+                        print(String(format: "  %@  score %.2f  %@  faces %d", EditEngine.clock(s.time), s.score, s.allSmiling ? "SMILING" : "       ", s.faces))
                         if let img = imgs[s.time], let d = CoverScout.jpeg(img) {
                             try? d.write(to: dir.appendingPathComponent(String(format: "%05d.jpg", Int(s.time))))
                         }
@@ -1254,28 +1254,28 @@ enum SelfTest {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { cintilloSnapshot(slug: slug, dir: dir) }
             return
         }
-        if args.contains("--prod-test") {            // solo lectura: sesiones de prodPod
+        if args.contains("--prod-test") {            // read-only: prodPod sessions
             Task { @MainActor in
                 do {
                     let list = try await ProdPodClient.shared.sessions()
-                    print("OK prodPod sesiones=\(list.count)")
+                    print("OK prodPod sessions=\(list.count)")
                     let dp = (try? await ProdPodClient.shared.directorProjects()) ?? []
-                    print("director de: \(dp.count) podcasts; salas dirigibles: \(list.filter { dp.contains($0.shared_project_id ?? "-") }.map(\.id))")
+                    print("director of: \(dp.count) podcasts; directable rooms: \(list.filter { dp.contains($0.shared_project_id ?? "-") }.map(\.id))")
                     for s in list.prefix(8) { print("  #\(s.id) · \(s.title) · \(s.status ?? "-")") }
                 } catch { print("ERROR \(error.localizedDescription)") }
                 fflush(stdout); exit(0)
             }
             return
         }
-        if args.contains("--update-test") {          // qué versión publica el servidor (no baja nada)
+        if args.contains("--update-test") {          // which version the server publishes (downloads nothing)
             Updater.shared.check()
             Task { @MainActor in
                 for _ in 0..<40 {
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     if Updater.shared.state != .checking { break }
                 }
-                print("instalada=\(Updater.currentVersion) (\(Updater.currentBuild)) servidor=\(Updater.shared.state)")
-                // --download: baja lo publicado (sin instalar) y muestra cómo avanza la barra
+                print("installed=\(Updater.currentVersion) (\(Updater.currentBuild)) server=\(Updater.shared.state)")
+                // --download: downloads what's published (without installing) and shows how the bar advances
                 if args.contains("--download") {
                     let rel = Updater.Release(version: "0", build: "0", size: nil, sha256: nil)
                     Updater.shared.download(rel)
@@ -1288,13 +1288,13 @@ enum SelfTest {
                         } else if case .downloading = Updater.shared.state {
                         } else { break }
                     }
-                    print("avance visto:", seen.map(String.init).joined(separator: " "), "→", Updater.shared.state)
+                    print("progress seen:", seen.map(String.init).joined(separator: " "), "→", Updater.shared.state)
                 }
                 fflush(stdout); exit(0)
             }
             return
         }
-        if args.contains("--pre-test") {             // solo lectura: podcasts, episodios y el detalle del primero
+        if args.contains("--pre-test") {             // read-only: podcasts, episodes and the detail of the first one
             Task { @MainActor in
                 do {
                     let api = PrePodClient.shared
@@ -1304,25 +1304,25 @@ enum SelfTest {
                         let c = try await api.podcastConfig(p.slug); let h = try await api.hosts(p.slug)
                         let sp = try await api.sponsors(p.slug); let so = try await api.sounds(p.slug)
                         let di = try await api.distribution(p.slug); let fo = try await api.fonts()
-                        print("config \(c.name): colores=\(c.colorPrimary ?? "-") fuente=\(c.fontHeading ?? "-") logo=\(c.logoUrl != nil) · dueño=\(h.owner ?? "-") conductores=\(h.extraHosts.count) directores=\((h.directors ?? []).count) · sponsors=\(sp.count) sonidos=\(so.count) · plataformas=\(di.platforms.keys.sorted()) feed=\(di.feedUrl ?? "-") · fuentes=\(fo.count)")
+                        print("config \(c.name): colors=\(c.colorPrimary ?? "-") font=\(c.fontHeading ?? "-") logo=\(c.logoUrl != nil) · owner=\(h.owner ?? "-") hosts=\(h.extraHosts.count) directors=\((h.directors ?? []).count) · sponsors=\(sp.count) sounds=\(so.count) · platforms=\(di.platforms.keys.sorted()) feed=\(di.feedUrl ?? "-") · fonts=\(fo.count)")
                         if let u = c.logoUrl { print("logo bytes=\((try? await api.media(u))?.count ?? -1)") }
                         let tp = try await api.templates(p.slug)
                         var td: TemplateDetail?
                         if let first = tp.first { td = try await api.template(p.slug, first.id) }
                         let la = try await api.landing(p.slug); let tm = try await api.team(p.slug)
-                        print("plantillas=\(tp.count) [\(td.map { "\($0.name): \($0.blocks.count) bloques, \($0.sections.count) secciones" } ?? "-")] · landing=\(la.template ?? "-") episodios=\(la.showEpisodes ?? false) · equipo=\(tm.count)")
+                        print("templates=\(tp.count) [\(td.map { "\($0.name): \($0.blocks.count) blocks, \($0.sections.count) sections" } ?? "-")] · landing=\(la.template ?? "-") episodes=\(la.showEpisodes ?? false) · team=\(tm.count)")
                         let allEps = try await api.preEpisodes(p.slug)
                         if let e = allEps.first(where: { $0.episodeNumber == 14 }) ?? allEps.first {
                             let ide = try await api.ideas(p.slug, e.id); let ln = try await api.links(p.slug, e.id); let sn = try await api.showNotes(p.slug, e.id)
-                            print("\(e.label): ideas=\(ide.count) links=\(ln.map(\.platform)) notas=\(sn.text.count) caracteres")
+                            print("\(e.label): ideas=\(ide.count) links=\(ln.map(\.platform)) notes=\(sn.text.count) characters")
                         }
                     }
                     for p in pods {
                         let eps = try await api.preEpisodes(p.slug)
-                        print("  \(p.name): \(eps.count) episodios · " + Dictionary(grouping: eps, by: \.status).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " "))
+                        print("  \(p.name): \(eps.count) episodes · " + Dictionary(grouping: eps, by: \.status).map { "\($0.key)=\($0.value.count)" }.sorted().joined(separator: " "))
                         if let e = eps.last {
                             let sc = try await api.script(p.slug, e.id), bl = try await api.blocks(p.slug, e.id), gu = try await api.guests(p.slug, e.id)
-                            print("    \(e.label) [\(e.whenText ?? "sin fecha")]: guion=\(sc.count) rundown=\(bl.count) invitados=\(gu.count)")
+                            print("    \(e.label) [\(e.whenText ?? "no date")]: script=\(sc.count) rundown=\(bl.count) guests=\(gu.count)")
                         }
                     }
                 } catch { print("ERROR \(error)") }
@@ -1340,13 +1340,13 @@ enum SelfTest {
                 fflush(stdout)
             }
             do {
-                log("Importando \(inputs.map(\.lastPathComponent))")
+                log("Importing \(inputs.map(\.lastPathComponent))")
                 var lastPct = -1
                 let project = try await Importer.importItems(inputs) { stage, f in
                     let pct = Int(f * 100)
                     if pct / 10 != lastPct / 10 { lastPct = pct; print("   import \(pct)% \(stage)"); fflush(stdout) }
                 }
-                log("Proyecto \(project.id): \(project.lanes.count) pistas, \(EditEngine.clock(project.duration))")
+                log("Project \(project.id): \(project.lanes.count) lanes, \(EditEngine.clock(project.duration))")
                 let app = AppModel()
                 let session = ProjectSession(project: project, app: app)
                 let watcher = Task { @MainActor in
@@ -1360,8 +1360,8 @@ enum SelfTest {
                     }
                 }
                 try await session.performFix()
-                log(session.fixSummary ?? "fix sin resumen")
-                log("Palabras: \(session.project.words.count), cortes: \(session.project.cuts.count)")
+                log(session.fixSummary ?? "fix without summary")
+                log("Words: \(session.project.words.count), cuts: \(session.project.cuts.count)")
                 if session.project.reels.isEmpty {
                     session.project.reels = session.project.reelsFromMoments()
                 }
@@ -1372,16 +1372,16 @@ enum SelfTest {
                 var outputs: [String] = []
                 if !skipLandscape {
                     outputs.append(try await session.performExport(format: .landscape).path)
-                    log("Landscape listo")
+                    log("Landscape done")
                 }
                 if !session.project.reels.isEmpty {
                     for idx in session.project.reels.indices { session.project.reels[idx].selected = idx == 0 }
                     session.project.reelLook.layout = .auto
                     outputs += try await session.performExportReels().map(\.path)
-                    log("Reel listo")
+                    log("Reel done")
                 }
                 outputs.append(try await session.performExport(format: .audio).path)
-                log("Audio listo")
+                log("Audio done")
                 watcher.cancel()
                 try ProjectStore.save(session.project)
                 let report: [String: Any] = [

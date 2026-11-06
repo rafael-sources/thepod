@@ -3,8 +3,8 @@ import AVFoundation
 import ScreenCaptureKit
 import LiveKit
 
-/// Compartir pantalla: macOS muestra su propio selector (una pantalla o una ventana).
-/// La imagen va a la sala (a menos que sea "solo grabar") y se graba en la Mac para subirla aparte.
+/// Screen sharing: macOS shows its own picker (a screen or a window).
+/// The image goes to the room (unless it's "solo grabar") and is recorded on the Mac to upload separately.
 @MainActor
 final class ScreenShare: NSObject, ObservableObject {
     @Published var active = false
@@ -18,7 +18,7 @@ final class ScreenShare: NSObject, ObservableObject {
     private var onPicked: ((SCContentFilter) -> Void)?
     private var onCancel: (() -> Void)?
 
-    /// Abre el selector de macOS. Devuelve la selección o nil si se canceló.
+    /// Opens the macOS picker. Returns the selection or nil if cancelled.
     func pick() async -> SCContentFilter? {
         await withCheckedContinuation { (c: CheckedContinuation<SCContentFilter?, Never>) in
             var done = false
@@ -61,7 +61,7 @@ final class ScreenShare: NSObject, ObservableObject {
         try await s.startCapture()
         stream = s
         if let t = track, let room {
-            try await Task.sleep(nanoseconds: 300_000_000)      // al menos un cuadro antes de publicar
+            try await Task.sleep(nanoseconds: 300_000_000)      // at least one frame before publishing
             publication = try await room.localParticipant.publish(
                 videoTrack: t,
                 options: VideoPublishOptions(name: "screen", screenShareEncoding: VideoEncoding(maxBitrate: 2_500_000, maxFps: 18),

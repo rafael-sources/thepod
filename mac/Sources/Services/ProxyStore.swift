@@ -1,11 +1,11 @@
 import Foundation
 import AVFoundation
 
-/// Proxys: copias livianas (960×540, H.264) de las grabaciones grandes (más de 1080p) para que la vista previa y
-/// Studio respondan al instante. Se guardan en la caché del proyecto; el export usa siempre los originales.
-/// Mismos tiempos y misma rotación que el original: lo que se ve con el proxy es lo que sale con el original.
+/// Proxies: lightweight copies (960×540, H.264) of large recordings (above 1080p) so the preview and
+/// Studio respond instantly. Saved in the project cache; the export always uses the originals.
+/// Same timings and rotation as the original: what's seen with the proxy is what comes out with the original.
 enum ProxyStore {
-    static let maxOriginalWidth = 1920.0          // por encima de esto conviene un proxy
+    static let maxOriginalWidth = 1920.0          // above this a proxy is worthwhile
     static var enabled: Bool {
         get { UserDefaults.standard.object(forKey: "proxys") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "proxys") }
@@ -18,7 +18,7 @@ enum ProxyStore {
         FileManager.default.fileExists(atPath: url(mediaId: mediaId, project: slug).path)
     }
 
-    /// ¿Esta grabación merece proxy? Video con más de 1920 px de ancho (o de alto, si es vertical).
+    /// Does this recording deserve a proxy? Video wider than 1920 px (or taller, if vertical).
     static func needsProxy(_ file: URL) async -> Bool {
         let a = AVURLAsset(url: file)
         guard let v = try? await a.loadTracks(withMediaType: .video).first,
@@ -26,7 +26,7 @@ enum ProxyStore {
         return max(size.width, size.height) > maxOriginalWidth + 1
     }
 
-    /// Los archivos del proyecto que piden proxy y aún no lo tienen.
+    /// The project files that want a proxy and don't have one yet.
     static func pending(project: Project) async -> [SourceMedia] {
         var out: [SourceMedia] = []
         for m in project.media where m.hasVideo && m.kind == .video {
@@ -36,7 +36,7 @@ enum ProxyStore {
         return out
     }
 
-    /// Genera el proxy de una grabación (en un archivo temporal que se renombra al terminar, para no dejar medios).
+    /// Generates a recording's proxy (into a temp file renamed when done, so nothing is left half-written).
     static func make(_ m: SourceMedia, project slug: String, progress: ((Double) -> Void)? = nil) async throws {
         let src = ProjectStore.url(m.file, in: slug)
         let dest = url(mediaId: m.id, project: slug)

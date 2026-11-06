@@ -3,11 +3,11 @@ import AudioToolbox
 import AppKit
 import CoreAudioKit
 
-/// Plugins Audio Unit de terceros (y del sistema) en la cadena de voz: buscar los instalados, instanciar,
-/// guardar y restaurar su estado, y abrir su ventana.
+/// Third-party (and system) Audio Unit plugins in the voice chain: find the installed ones, instantiate,
+/// save and restore their state, and open their window.
 ///
-/// Los AUv3 corren fuera de proceso (lo pide `.loadOutOfProcess`): si uno falla, no cae la app. Los AUv2
-/// corren dentro; se avisa en la lista.
+/// AUv3s run out of process (requested by `.loadOutOfProcess`): if one fails, the app doesn't go down. AUv2s
+/// run in process; the list warns about it.
 enum PluginHost {
     struct Available: Identifiable, Hashable {
         let name: String
@@ -20,14 +20,14 @@ enum PluginHost {
         var insert: PluginInsert { PluginInsert(type: type, subtype: subtype, manufacturer: manufacturer, name: name, vendor: vendor) }
     }
 
-    /// Efectos instalados en esta Mac (sin los que ya usa la cadena por dentro).
+    /// Effects installed on this Mac (minus the ones the chain already uses internally).
     static func available() -> [Available] {
         var out: [Available] = []
         for t in [kAudioUnitType_Effect, kAudioUnitType_MusicEffect] {
             let desc = AudioComponentDescription(componentType: t, componentSubType: 0, componentManufacturer: 0, componentFlags: 0, componentFlagsMask: 0)
             for c in AVAudioUnitComponentManager.shared().components(matching: desc) {
                 let d = c.audioComponentDescription
-                // Los que ya forman la cadena no se ofrecen (estarían duplicados)
+                // Those already forming the chain aren't offered (they'd be duplicated)
                 if d.componentManufacturer == kAudioUnitManufacturer_Apple,
                    [kAudioUnitSubType_NBandEQ, kAudioUnitSubType_DynamicsProcessor, kAudioUnitSubType_PeakLimiter].contains(d.componentSubType) { continue }
                 out.append(Available(name: c.name, vendor: c.manufacturerName, type: d.componentType, subtype: d.componentSubType,
@@ -37,7 +37,7 @@ enum PluginHost {
         return out.sorted { ($0.vendor, $0.name) < ($1.vendor, $1.name) }
     }
 
-    // MARK: Usados hace poco (los últimos 6 que se metieron en una cadena, en esta Mac)
+    // MARK: Recently used (the last 6 put into a chain, on this Mac)
 
     private static let usedKey = "estudio.plugins.usados"
     static func noteUsed(_ a: Available) {
@@ -53,7 +53,7 @@ enum PluginHost {
         AudioComponentDescription(componentType: p.type, componentSubType: p.subtype, componentManufacturer: p.manufacturer, componentFlags: 0, componentFlagsMask: 0)
     }
 
-    /// Instancia el plugin (fuera de proceso si se puede). Espera como mucho 5 s. Nil si no está instalado o falla.
+    /// Instantiates the plugin (out of process if possible). Waits at most 5 s. Nil if not installed or it fails.
     static func instantiate(_ p: PluginInsert) -> AudioUnit? {
         var desc = description(p)
         guard let comp = AudioComponentFindNext(nil, &desc) else { return nil }
@@ -65,14 +65,14 @@ enum PluginHost {
         }
         if sem.wait(timeout: .now() + 5) == .timedOut { return nil }
         if result == nil {
-            // Algunos AUv2 no aceptan fuera de proceso: dentro entonces
+            // Some AUv2s don't accept out-of-process: in process then
             var u: AudioUnit?
             if AudioComponentInstanceNew(comp, &u) == noErr { result = u }
         }
         return result
     }
 
-    /// Formato y tamaño de bloque como el resto de la cadena. Falso si el plugin no acepta ese formato.
+    /// Format and block size like the rest of the chain. False if the plugin doesn't accept that format.
     static func configure(_ u: AudioUnit, format: inout AudioStreamBasicDescription, maxFrames: UInt32) -> Bool {
         var frames = maxFrames
         let sz = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
@@ -87,7 +87,7 @@ enum PluginHost {
         AudioUnitSetProperty(u, kAudioUnitProperty_BypassEffect, kAudioUnitScope_Global, 0, &v, UInt32(MemoryLayout<UInt32>.size))
     }
 
-    /// El estado completo del plugin (sus parámetros y preset), como plist binario.
+    /// The plugin's full state (its parameters and preset), as a binary plist.
     static func state(of u: AudioUnit) -> Data? {
         var plist: Unmanaged<CFPropertyList>?
         var size = UInt32(MemoryLayout<Unmanaged<CFPropertyList>?>.size)
@@ -102,11 +102,11 @@ enum PluginHost {
         AudioUnitSetProperty(u, kAudioUnitProperty_ClassInfo, kAudioUnitScope_Global, 0, &plist, UInt32(MemoryLayout<Unmanaged<CFPropertyList>?>.size))
     }
 
-    // MARK: La ventana del plugin
+    // MARK: The plugin window
 
-    /// Una instancia «de edición» por plugin abierto: su interfaz vive aquí; cada cambio se guarda en el
-    /// proyecto y las cadenas que suenan lo reciben (`restore`). Así la ventana sobrevive a que la vista
-    /// previa se rearme.
+    /// One «editing» instance per open plugin: its UI lives here; every change is saved to the
+    /// project and the playing chains receive it (`restore`). That way the window survives the
+    /// preview being rebuilt.
     @MainActor
     final class Editor {
         let insert: PluginInsert
@@ -135,7 +135,7 @@ enum PluginHost {
                     if let st = self.insert.state, let dict = (try? PropertyListSerialization.propertyList(from: st, options: [], format: nil)) as? [String: Any] {
                         au.fullState = dict
                     }
-                    // Cada cambio de parámetro → guardar estado (con un respiro para no saturar)
+                    // Every parameter change → save state (with a breather so as not to saturate)
                     self.token = au.parameterTree?.token(byAddingParameterObserver: { [weak self] _, _ in
                         Task { @MainActor in self?.scheduleSave() }
                     })
@@ -190,7 +190,7 @@ enum PluginHost {
         }
     }
 
-    /// Las ventanas abiertas, por id de insert.
+    /// The open windows, by insert id.
     @MainActor static var editors: [UUID: Editor] = [:]
 
     @MainActor static func openEditor(_ insert: PluginInsert, title: String, onChange: @escaping (Data) -> Void) {

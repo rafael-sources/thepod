@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
 
-// MARK: - Efectos de sonido
+// MARK: - Sound effects
 
 struct SoundsStep: View {
     @ObservedObject var session: ProjectSession
@@ -135,7 +135,7 @@ struct SoundsStep: View {
     }
 }
 
-// MARK: - Publicar
+// MARK: - Publish
 
 struct PublishStep: View {
     @ObservedObject var session: ProjectSession
@@ -328,7 +328,7 @@ struct PublishStep: View {
     }
 }
 
-// MARK: - Ajustes: prePod
+// MARK: - Settings: prePod
 
 struct PrePodSettingsSection: View {
     @State private var url = PrePodClient.baseURL
@@ -399,7 +399,7 @@ struct PrePodSettingsSection: View {
             await resetAll()
             do {
                 let list = try await PrePodClient.shared.podcasts()
-                // Si entró con el correo, se guarda su usuario (salas y permisos se reconocen por usuario)
+                // If logged in with the email, the username is saved (rooms and permissions are recognized by username)
                 if let canonical = await PrePodClient.shared.canonicalUsername(), canonical != PrePodClient.username {
                     PrePodClient.username = canonical
                     user = canonical
@@ -436,7 +436,7 @@ struct PrePodSettingsSection: View {
 }
 
 
-/// Texto a voz: escribe algo y la Mac lo lee con una de sus voces; queda como un sonido más del episodio.
+/// Text to speech: type something and the Mac reads it with one of its voices; it stays as one more sound in the episode.
 struct VoiceSheet: View {
     @ObservedObject var session: ProjectSession
     @State private var text = ""

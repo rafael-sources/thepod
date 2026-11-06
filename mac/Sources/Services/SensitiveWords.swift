@@ -1,20 +1,20 @@
 import Foundation
 
-/// Palabras que conviene no decir ni escribir en redes: groserías (se pitan) y temas que las plataformas
-/// bajan de alcance o desmonetizan (se cambian en el subtítulo por el eufemismo que se usa en redes).
-/// La lista es un punto de partida: el usuario agrega las suyas en la sección.
+/// Words better not said or written on social networks: profanity (beeped) and topics platforms
+/// reduce reach for or demonetize (replaced in the subtitle by the euphemism used on social media).
+/// The list is a starting point: the user adds their own in the section.
 enum SensitiveWords {
     enum Category: String, Codable { case groseria, sensible }
 
     struct Entry {
-        let stem: String            // sin acentos, minúsculas; `prefix` = cualquier palabra que empiece así
+        let stem: String            // without accents, lowercase; `prefix` = any word starting like this
         let prefix: Bool
         let category: Category
-        let replacement: String     // lo que se pone en el subtítulo
+        let replacement: String     // what goes into the subtitle
     }
 
     static let entries: [Entry] = [
-        // Groserías (varias regiones). Se pitan y en el subtítulo se suavizan.
+        // Profanity (several regions). Beeped and softened in the subtitle.
         .init(stem: "mierd", prefix: true, category: .groseria, replacement: "miércoles"),
         .init(stem: "coño", prefix: false, category: .groseria, replacement: "caramba"),
         .init(stem: "coñ", prefix: true, category: .groseria, replacement: "caramba"),
@@ -68,8 +68,8 @@ enum SensitiveWords {
         .init(stem: "shit", prefix: false, category: .groseria, replacement: "s***"),
         .init(stem: "bitch", prefix: false, category: .groseria, replacement: "b***"),
 
-        // Temas sensibles (las redes bajan el alcance): no se pitan por defecto; se cambia el subtítulo
-        // por la palabra que se usa en redes para decir lo mismo.
+        // Sensitive topics (networks reduce reach): not beeped by default; the subtitle is replaced
+        // with the word used on social media to say the same thing.
         .init(stem: "suicid", prefix: true, category: .sensible, replacement: "desvivirse"),
         .init(stem: "matar", prefix: true, category: .sensible, replacement: "quitar la vida"),
         .init(stem: "mato", prefix: false, category: .sensible, replacement: "le quitó la vida"),
@@ -111,13 +111,13 @@ enum SensitiveWords {
         .init(stem: "fumar", prefix: false, category: .sensible, replacement: "f*mar"),
     ]
 
-    /// Minúsculas, sin acentos ni signos.
+    /// Lowercase, no accents or punctuation.
     static func normalize(_ w: String) -> String {
         let folded = w.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es"))
         return folded.lowercased().filter { $0.isLetter || $0 == " " }
     }
 
-    /// Qué entrada coincide con una palabra (o nil). Las palabras propias del usuario cuentan como groserías.
+    /// Which entry matches a word (or nil). The user's own words count as profanity.
     static func match(_ word: String, custom: [String]) -> (category: Category, replacement: String)? {
         let n = normalize(word).trimmingCharacters(in: .whitespaces)
         guard n.count >= 3 else { return nil }
@@ -131,7 +131,7 @@ enum SensitiveWords {
         return nil
     }
 
-    /// Busca en la transcripción. Conserva lo que el usuario ya decidió (pitido, cambio) en las que siguen ahí.
+    /// Searches the transcript. Keeps what the user already decided (beep, replacement) for those still there.
     static func scan(_ project: Project) -> [SensitiveMark] {
         let previous = Dictionary(project.sensitive.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var out: [SensitiveMark] = []
@@ -150,7 +150,7 @@ enum SensitiveWords {
     }
 }
 
-/// Una palabra detectada y qué hacer con ella.
+/// A detected word and what to do with it.
 struct SensitiveMark: Codable, Identifiable, Equatable, Hashable {
     var id: String
     var word: String
@@ -158,10 +158,10 @@ struct SensitiveMark: Codable, Identifiable, Equatable, Hashable {
     var s: Double
     var e: Double
     var category: SensitiveWords.Category
-    var bleep: Bool                 // pitido encima (no se oye)
-    var replacement: String         // con qué se cambia en el subtítulo
-    var replace: Bool               // si se cambia el subtítulo
-    var ignored: Bool = false       // el usuario dijo que esta está bien
+    var bleep: Bool                 // beep on top (not heard)
+    var replacement: String         // what it's replaced with in the subtitle
+    var replace: Bool               // whether the subtitle is replaced
+    var ignored: Bool = false       // the user said this one is fine
 
     static func makeId(lane: Int, s: Double) -> String { "\(lane)-\(Int((s * 100).rounded()))" }
 

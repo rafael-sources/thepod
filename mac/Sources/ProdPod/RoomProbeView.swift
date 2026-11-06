@@ -1,7 +1,7 @@
 import SwiftUI
 import LiveKit
 
-/// Ventana "Prueba de sala": comprueba cámara, eco y servidor antes de construir prod.
+/// "Prueba de sala" window: checks camera, echo and server before building prod.
 struct RoomProbeView: View {
     @StateObject private var probe = RoomProbe()
 
@@ -26,7 +26,7 @@ struct RoomProbeView: View {
 
     private var connected: Bool { probe.phase == .connected }
 
-    // MARK: Controles
+    // MARK: Controls
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -105,7 +105,7 @@ struct RoomProbeView: View {
         }
     }
 
-    // MARK: Resultados
+    // MARK: Results
 
     private var results: some View {
         Card {

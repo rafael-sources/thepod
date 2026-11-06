@@ -4,9 +4,9 @@ import VideoToolbox
 import AppKit
 import LiveKit
 
-/// Prueba de sala: entra a una sala de prodPod desde la Mac, manda la cámara en 720p,
-/// graba la misma cámara en 1080p en la Mac y guarda la voz tal como sale hacia la sala.
-/// Deja un registro (prueba.json) para revisar el resultado.
+/// Room test: joins a prodPod room from the Mac, sends the camera at 720p,
+/// records the same camera at 1080p on the Mac and saves the voice as it goes out to the room.
+/// Leaves a log (prueba.json) to review the result.
 @MainActor
 final class RoomProbe: NSObject, ObservableObject {
     enum Phase: Equatable { case idle, connecting, connected, failed(String) }
@@ -33,7 +33,7 @@ final class RoomProbe: NSObject, ObservableObject {
     @Published var busy = false
     @Published var error: String?
 
-    // Resultados
+    // Results
     @Published var captureSize = ""
     @Published var roomSize = ""
     @Published var framesRecorded = 0
@@ -47,7 +47,7 @@ final class RoomProbe: NSObject, ObservableObject {
     private var timer: Timer?
     private var startedAt = Date()
 
-    // MARK: Preparar
+    // MARK: Prepare
 
     func load() {
         cameras = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
@@ -93,7 +93,7 @@ final class RoomProbe: NSObject, ObservableObject {
         return (cam, mic)
     }
 
-    // MARK: Entrar
+    // MARK: Join
 
     func join() {
         guard let sid = sessionId, let device = cameras.first(where: { $0.uniqueID == cameraId }) ?? cameras.first else {
@@ -109,28 +109,28 @@ final class RoomProbe: NSObject, ObservableObject {
                 return
             }
             do {
-                // 1. Cámara en 1080p (o lo máximo que dé)
+                // 1. Camera at 1080p (or the most it gives)
                 let size = try pipe.start(device: device)
                 captureSize = "\(size.width)×\(size.height)"
                 note(String(localized: "Cámara: \(device.localizedName) a \(captureSize)"))
 
-                // 2. Permiso para entrar a la sala
+                // 2. Permission to join the room
                 let info = try await ProdPodClient.shared.join(sid)
                 joinedSession = sid
                 note(String(localized: "prodPod te dejó entrar como \(info.display_name) (\(info.role))"))
 
-                // 3. Conectar a la sala
+                // 3. Connect to the room
                 let room = Room(delegate: self)
                 self.room = room
                 try await room.connect(url: info.livekit_ws_url, token: info.livekit_token)
                 note(String(localized: "Conectado a la sala"))
 
-                // 4. Mandar la cámara en 720p (la misma que se graba en 1080p)
+                // 4. Send the camera at 720p (the same one recorded at 1080p)
                 let track = await LocalVideoTrack.createBufferTrack(
                     name: "camera", source: .camera,
                     options: BufferCaptureOptions(dimensions: Dimensions(width: 1280, height: 720), fps: 30))
                 if let cap = track.capturer as? BufferCapturer { pipe.sink = cap }
-                try await Task.sleep(nanoseconds: 400_000_000)       // que llegue al menos un cuadro
+                try await Task.sleep(nanoseconds: 400_000_000)       // wait for at least one frame
                 _ = try await room.localParticipant.publish(
                     videoTrack: track,
                     options: VideoPublishOptions(encoding: VideoEncoding(maxBitrate: 2_500_000, maxFps: 30),
@@ -138,7 +138,7 @@ final class RoomProbe: NSObject, ObservableObject {
                 localTrack = track
                 note(String(localized: "Tu cámara ya se ve en la sala"))
 
-                // 5. Micrófono (con cancelación de eco) y copia de la voz que sale a la sala
+                // 5. Microphone (with echo cancellation) and a copy of the voice going out to the room
                 let pub = try await room.localParticipant.setMicrophone(enabled: true)
                 if let mic = pub?.track as? LocalAudioTrack {
                     let tap = VoiceTap()
@@ -174,7 +174,7 @@ final class RoomProbe: NSObject, ObservableObject {
         writeLog()
     }
 
-    // MARK: Grabar
+    // MARK: Record
 
     func startRecording() {
         let dir = Self.baseFolder.appendingPathComponent(Self.stamp())
@@ -223,7 +223,7 @@ final class RoomProbe: NSObject, ObservableObject {
         }.sorted { $0.name < $1.name }
     }
 
-    // MARK: Registro
+    // MARK: Log
 
     private func note(_ s: String) {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"

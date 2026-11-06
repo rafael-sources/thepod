@@ -1,15 +1,15 @@
 import SwiftUI
 import AVFoundation
 
-/// Miniaturas para pubPod: un cuadro del episodio (16:9) y de cada reel (9:16), tal como se ven en el editor.
-/// Se guardan en la caché del proyecto y se rehacen solas cuando el proyecto cambia.
+/// Thumbnails for pubPod: a frame of the episode (16:9) and of each reel (9:16), as they look in the editor.
+/// They're saved in the project cache and regenerate themselves when the project changes.
 @MainActor
 final class PubThumbs: ObservableObject {
     static let shared = PubThumbs()
     @Published private(set) var images: [String: NSImage] = [:]
     private var inFlight: Set<String> = []
 
-    /// Clave estable: proyecto + lo que se ve + un sello de cambios.
+    /// Stable key: project + what's shown + a change stamp.
     static func key(_ p: Project, reel: Reel?) -> String {
         let stamp = "\(p.cuts.count)-\(Int(p.duration))-\(p.reelLook.layout.rawValue)-\(p.lanes.count)"
         if let reel { return "\(p.id)/reel-\(reel.id.uuidString)-\(Int(reel.start))-\(Int(reel.end))-\(stamp)" }
@@ -22,7 +22,7 @@ final class PubThumbs: ObservableObject {
         let file = ProjectStore.cacheFolder(for: p.id).appendingPathComponent("pub-" + (reel.map { "reel-\($0.id.uuidString)" } ?? "episodio") + ".jpg")
         if let img = NSImage(contentsOf: file), !inFlight.contains(k), FileManager.default.fileExists(atPath: file.path) {
             images[k] = img
-            // Si cambió el proyecto, se rehace en segundo plano
+            // If the project changed, it's regenerated in the background
             if (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map({ Date().timeIntervalSince($0) > 3600 }) ?? true {
                 render(p, reel: reel, key: k, to: file)
             }
@@ -56,13 +56,13 @@ final class PubThumbs: ObservableObject {
                 }
                 self?.images[k] = img
             } catch {
-                // Sin miniatura: la tarjeta queda con su fondo gris
+                // No thumbnail: the card keeps its gray background
             }
         }
     }
 }
 
-/// Miniatura con su fondo gris mientras se calcula.
+/// Thumbnail with its gray background while it's computed.
 struct PubThumb: View {
     let project: Project
     var reel: Reel? = nil

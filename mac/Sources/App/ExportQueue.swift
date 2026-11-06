@@ -2,8 +2,8 @@ import Foundation
 import AppKit
 import UserNotifications
 
-/// Un trabajo en la cola de exportación: se procesan uno detrás de otro, en segundo plano,
-/// sin bloquear la app. Al terminar todos, un aviso del sistema.
+/// A job in the export queue: they're processed one after another, in the background,
+/// without blocking the app. When all are done, a system notification.
 struct ExportJob: Identifiable, Equatable {
     enum Kind: Equatable {
         case format(ExportFormat)
@@ -38,8 +38,8 @@ struct ExportJob: Identifiable, Equatable {
 @MainActor
 extension ProjectSession {
 
-    /// Agrega un trabajo al final de la cola y arranca el procesado si no está corriendo.
-    /// Si ya hay uno igual esperando, no lo duplica.
+    /// Adds a job to the end of the queue and starts processing if it isn't running.
+    /// If an identical one is already waiting, it isn't duplicated.
     @discardableResult
     func enqueue(_ kind: ExportJob.Kind) -> Bool {
         if exportQueue.contains(where: { $0.kind == kind && !$0.status.isFinished }) { return false }
@@ -48,7 +48,7 @@ extension ProjectSession {
         return true
     }
 
-    /// Todo lo que suele hacer falta para publicar: YouTube, MP3 y los reels marcados.
+    /// Everything usually needed to publish: YouTube, MP3 and the marked reels.
     func enqueueAll() {
         enqueue(.format(.landscape))
         enqueue(.format(.audio))
@@ -69,8 +69,8 @@ extension ProjectSession {
         if let i = exportQueue.firstIndex(where: { $0.id == id }) { exportQueue[i].status = s }
     }
 
-    /// Procesa la cola de a uno. Espera a que termine cualquier otro trabajo de la app (arreglar,
-    /// transcribir…) antes de arrancar el siguiente, para no exportar dos cosas a la vez.
+    /// Processes the queue one at a time. Waits for any other app job to finish (fix,
+    /// transcribe…) before starting the next, so two things aren't exported at once.
     func processExportQueue() {
         guard exportQueueTask == nil else { return }
         exportQueueTask = Task { [self] in
@@ -82,7 +82,7 @@ extension ProjectSession {
                     try? await Task.sleep(nanoseconds: 250_000_000)
                     if Task.isCancelled { return }
                 }
-                guard exportQueue.contains(where: { $0.id == next.id }) else { continue }   // lo quitaron mientras esperaba
+                guard exportQueue.contains(where: { $0.id == next.id }) else { continue }   // removed while it was waiting
                 setQueueStatus(next.id, .running)
                 let runner = exportQueueRunner ?? { [self] kind in try await self.runQueuedExport(kind) }
                 let t = Task<[URL], Error> { try await runner(next.kind) }
@@ -93,7 +93,7 @@ extension ProjectSession {
                     setQueueStatus(next.id, .done(urls))
                 } catch is CancellationError {
                     setQueueStatus(next.id, .failed(String(localized: "Cancelado")))
-                    // Cancelar el trabajo en curso vacía también lo que esperaba: así "Cancelar" significa parar.
+                    // Cancelling the running job also empties what was waiting: that way "Cancel" means stop.
                     exportQueue.removeAll { $0.status == .waiting }
                 } catch {
                     failures += 1
@@ -130,7 +130,7 @@ extension ProjectSession {
         return left == 0 ? "" : (left == 1 ? String(localized: "1 más esperando") : String(localized: "\(left) más esperando"))
     }
 
-    // MARK: Aviso al terminar
+    // MARK: Notification when done
 
     func notifyQueueFinished(files: Int, failures: Int) {
         guard Bundle.main.bundleIdentifier != nil, exportQueueRunner == nil else { return }

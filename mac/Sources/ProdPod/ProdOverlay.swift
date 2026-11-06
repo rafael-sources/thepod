@@ -1,25 +1,25 @@
 import SwiftUI
 import AppKit
 
-/// Algo que el director pone en pantalla: cintillo de sponsor, cintillo del podcast, segmento, etc.
+/// Something the director puts on screen: sponsor lower third, podcast lower third, segment, etc.
 struct Overlay: Identifiable, Equatable {
-    let id: Int                 // event_id del servidor
+    let id: Int                 // server's event_id
     let kind: String            // sponsor | banner | segment | comment | countdown | graphic
     var title: String
     var text: String
     var filePath: String?
     var image: NSImage?
     var expires: Date?
-    var endsAt: Date?            // cuenta regresiva: hasta cuándo
+    var endsAt: Date?            // countdown: until when
 
     static func == (a: Overlay, b: Overlay) -> Bool { a.id == b.id && a.title == b.title && a.text == b.text && (a.image == nil) == (b.image == nil) }
 
-    /// Cuánto dura en pantalla (igual que la web; 0 = hasta que se quite).
+    /// How long it stays on screen (same as the web; 0 = until removed).
     static func seconds(for kind: String) -> Double {
         ["banner": 10, "segment": 12, "comment": 10, "sponsor": 15, "graphic": 10, "countdown": 0][kind] ?? 10
     }
 
-    /// Arma el cintillo desde el mensaje de la sala.
+    /// Builds the lower third from the room message.
     static func from(_ m: [String: Any]) -> Overlay? {
         guard let id = m["event_id"] as? Int else { return nil }
         let kind = m["event_type"] as? String ?? "banner"
@@ -55,7 +55,7 @@ struct Overlay: Identifiable, Equatable {
     }
 }
 
-/// Cintillo tipo noticiero: logo a la izquierda, texto al lado, en la parte de abajo.
+/// News-style lower third: logo on the left, text beside it, at the bottom.
 struct Cintillo: View {
     let overlay: Overlay
     var scale: CGFloat = 1
@@ -116,7 +116,7 @@ struct Cintillo: View {
     }
 }
 
-/// Pide la imagen del cintillo (logo) al servidor.
+/// Requests the lower third image (logo) from the server.
 enum OverlayImages {
     @MainActor static var cache: [String: NSImage] = [:]
     @MainActor static func load(sessionId: Int, filePath: String?) async -> NSImage? {

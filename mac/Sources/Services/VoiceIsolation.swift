@@ -1,14 +1,14 @@
 import AVFoundation
 import AudioToolbox
 
-/// Aislador de voz de Apple (el mismo efecto que usa Final Cut, «AUSoundIsolation»): una red neuronal que
-/// deja la voz y saca teclas, perro, calle, ventilador. Trabaja en la Mac, sin internet, sobre un archivo.
+/// Apple's voice isolator (the same effect Final Cut uses, «AUSoundIsolation»): a neural network that
+/// keeps the voice and removes keys, dog, street, fan. Works on the Mac, offline, on a file.
 enum VoiceIsolation {
     private static let desc = AudioComponentDescription(
         componentType: kAudioUnitType_Effect, componentSubType: 0x766f6973 /* 'vois' */,
         componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
 
-    /// Si esta Mac lo trae (macOS reciente).
+    /// Whether this Mac has it (recent macOS).
     static var isAvailable: Bool {
         var d = desc
         return AudioComponentFindNext(nil, &d) != nil
@@ -24,8 +24,8 @@ enum VoiceIsolation {
         }
     }
 
-    /// Procesa `input` (WAV) y escribe `output` (WAV). `wet` 0…1: cuánto de la voz aislada (el resto es el original).
-    /// Compensa el atraso propio del efecto para que la voz siga pegada a los labios.
+    /// Processes `input` (WAV) and writes `output` (WAV). `wet` 0…1: how much of the isolated voice (the rest is the original).
+    /// Compensates the effect's own latency so the voice stays in sync with the lips.
     static func process(input: URL, output: URL, wet: Double, progress: @escaping @Sendable (Double) -> Void) async throws {
         guard isAvailable else { throw Failure.unavailable }
         try await Task.detached(priority: .userInitiated) {
@@ -45,7 +45,7 @@ enum VoiceIsolation {
             try engine.start()
             player.scheduleFile(file, at: nil)
             player.play()
-            // El efecto entrega la voz un poco tarde: se descartan esas primeras muestras y se procesa ese tanto de más al final
+            // The effect delivers the voice slightly late: those first samples are discarded and that much extra is processed at the end
             let latency = AVAudioFramePosition((iso.auAudioUnit.latency * fmt.sampleRate).rounded())
             let total = file.length + latency
             let out = try AVAudioFile(forWriting: output, settings: fmt.settings)
@@ -59,7 +59,7 @@ enum VoiceIsolation {
                     if skip >= AVAudioFramePosition(buf.frameLength) {
                         skip -= AVAudioFramePosition(buf.frameLength)
                     } else if skip > 0 {
-                        // Escribir solo lo que viene después del atraso
+                        // Write only what comes after the latency
                         let rest = AVAudioFrameCount(AVAudioFramePosition(buf.frameLength) - skip)
                         if let tail = AVAudioPCMBuffer(pcmFormat: buf.format, frameCapacity: rest) {
                             tail.frameLength = rest

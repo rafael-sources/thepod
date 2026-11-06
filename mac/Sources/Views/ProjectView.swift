@@ -139,7 +139,7 @@ struct ProjectView: View {
         }
     }
 
-    /// Pista corta a la derecha de una sección que todavía no está hecha.
+    /// Short hint to the right of a section not done yet.
     private func hint(_ step: Step) -> String? {
         let p = session.project
         switch step {
@@ -156,10 +156,10 @@ struct ProjectView: View {
         }
     }
 
-    /// Cajita "Listo para exportar": qué falta antes de entregar.
+    /// "Listo para exportar" box: what's missing before delivering.
     private var readiness: some View {
         let p = session.project
-        let items: [(Bool, String, Bool)] = [   // (hecho, texto, opcional)
+        let items: [(Bool, String, Bool)] = [   // (done, text, optional)
             (p.fix.lastRun != nil, String(localized: "Sonido limpio"), false),
             (p.isTranscribed, String(localized: "Subtítulos"), true),
             (p.backgroundFile != nil && p.logoFile != nil, String(localized: "Fondo y logo del podcast"), true),
@@ -204,7 +204,7 @@ struct PlayerView: NSViewRepresentable {
 struct PreviewPane: View {
     @ObservedObject var session: ProjectSession
     var allowedFormats: [ExportFormat] = [.landscape, .vertical, .square]
-    var showInspector = true              // en Reels el panel de la pista va en su pestaña, no bajo el video
+    var showInspector = true              // in Reels the track panel goes in its tab, not below the video
     @State private var marked = false
 
     var body: some View {
@@ -224,7 +224,7 @@ struct PreviewPane: View {
                 }
             }
             .frame(minHeight: 260)
-            // El panel de la pista puede ser alto (cintillos, capas): se desplaza y el video no se achica
+            // The track panel can be tall (lower thirds, layers): it scrolls and the video doesn't shrink
             ScrollView { TrackInspector(session: session) }
                 .frame(maxHeight: 340)
                 .fixedSize(horizontal: false, vertical: true)
@@ -256,7 +256,7 @@ struct PreviewPane: View {
     }
 }
 
-/// Panel bajo el video con lo editable de la pista elegida en el timeline (persona o música/efecto).
+/// Panel below the video with what's editable for the track selected in the timeline (person or music/effect).
 struct TrackInspector: View {
     @ObservedObject var session: ProjectSession
 
@@ -545,7 +545,7 @@ extension Color {
 }
 
 
-/// Segundos de desfase escritos a mano: «-9» o «-9,5». Se aplica al pulsar Enter o al salir del campo.
+/// Offset seconds typed by hand: «-9» or «-9,5». Applied on pressing Enter or leaving the field.
 struct OffsetField: View {
     let value: Double
     let commit: (Double) -> Void

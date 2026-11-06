@@ -17,7 +17,7 @@ actor PostPodWebClient {
         let owner: String?
         let podcastName: String?
         let episodeNumber: Int?
-        var importing: Int? = nil          // pistas que todavía están llegando desde prodPod (nil = listo)
+        var importing: Int? = nil          // tracks still arriving from prodPod (nil = ready)
         var id: String { slug }
     }
 
@@ -97,8 +97,8 @@ actor PostPodWebClient {
         return f
     }()
 
-    /// Notas y momentos de un episodio de la Mac con la IA del servidor. Se hace una sola vez por episodio:
-    /// si ya se hizo, el servidor devuelve lo mismo (sin volver a gastar). Espera hasta ~5 minutos.
+    /// Notes and moments for a Mac episode with the server's AI. Done only once per episode:
+    /// if already done, the server returns the same thing (without spending again). Waits up to ~5 minutes.
     func aiMoments(ref: String, text: String, language: String = "es") async throws -> [String: Any] {
         let d = try await send("POST", "/api/ai/mac/analyze", json: ["ref": ref, "text": text, "language": language])
         var o = (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
@@ -118,9 +118,9 @@ actor PostPodWebClient {
         throw Failure(message: String(localized: "La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo."))
     }
 
-    // MARK: Revisión compartida
+    // MARK: Shared review
 
-    /// Sube una versión (MP3/M4A/MP4) y devuelve el enlace público.
+    /// Uploads a version (MP3/M4A/MP4) and returns the public link.
     func uploadReview(slug: String, file: URL, title: String) async throws -> (token: String, url: String) {
         if !loggedIn { try await login() }
         let boundary = "thepod-\(UUID().uuidString)"
@@ -174,7 +174,7 @@ actor PostPodWebClient {
             let source = m["source"] as? [String: Any]
             let created = (m["created_at"] as? String).flatMap { iso.date(from: $0) }
             let number = (source?["episode_number"] as? Int) ?? (source?["episode_number"] as? String).flatMap(Int.init)
-            // «Episodio en proceso»: prodPod todavía está mandando pistas. Una marca de más de 6 h es un envío cortado.
+            // «Episodio en proceso»: prodPod is still sending tracks. A mark older than 6 h is a broken send.
             var importing: Int?
             if let imp = m["importing"] as? [String: Any] {
                 let started = (imp["started_at"] as? String).flatMap { iso.date(from: $0) ?? Self.isoFrac.date(from: $0) }
@@ -195,22 +195,22 @@ actor PostPodWebClient {
     // MARK: Bundle: generate with progress + resumable download
 
     enum Phase: Sendable {
-        case preparing(Double?)            // postPod armando el paquete (fracción si el servidor la da)
-        case downloading(Int64, Int64)     // bytes recibidos, total
-        case reconnecting                  // se cortó: reintentando desde donde quedó
+        case preparing(Double?)            // postPod building the bundle (fraction if the server gives it)
+        case downloading(Int64, Int64)     // bytes received, total
+        case reconnecting                  // it dropped: retrying from where it left off
     }
 
     struct BundleInfo {
         let state: String                  // idle | building | ready | error
         let progress: Double?
         let size: Int64
-        let version: String                // cambia cuando el paquete se regenera
+        let version: String                // changes when the bundle is regenerated
         let error: String?
     }
 
     private struct LegacyServer: Error {}
 
-    /// Carpeta donde quedan las descargas a medias para poder reanudarlas.
+    /// Folder where half-done downloads stay so they can be resumed.
     nonisolated static var partialFolder: URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let url = base.appendingPathComponent("postPod/descargas", isDirectory: true)
@@ -223,7 +223,7 @@ actor PostPodWebClient {
     nonisolated private static func partURL(_ slug: String) -> URL { partialFolder.appendingPathComponent("\(slug).part") }
     nonisolated private static func metaURL(_ slug: String) -> URL { partialFolder.appendingPathComponent("\(slug).json") }
 
-    /// Si hay una descarga a medias de este proyecto: (bytes que ya están, total).
+    /// If there's a half-done download of this project: (bytes already there, total).
     nonisolated static func partial(slug: String) -> (got: Int64, total: Int64)? {
         guard let data = try? Data(contentsOf: metaURL(slug)),
               let meta = try? JSONDecoder().decode(PartialMeta.self, from: data),
@@ -256,14 +256,14 @@ actor PostPodWebClient {
                                   version: (obj["version"] as? String) ?? "",
                                   error: obj["error"] as? String)
             }
-            if (code == 404 || code == 405), obj?["error"] == nil { throw LegacyServer() }   // postPod sin la API nueva
+            if (code == 404 || code == 405), obj?["error"] == nil { throw LegacyServer() }   // postPod without the new API
             throw Failure(message: Self.errorMessage(data, code: code))
         }
         throw Failure(message: String(localized: "postPod no aceptó la sesión"))
     }
 
-    /// Pide a postPod el paquete del proyecto, informa cuánto lleva armado, y lo descarga
-    /// pudiendo reanudar (tras un corte de red o si la app se cerró). Devuelve un .zip que el llamador borra.
+    /// Asks postPod for the project's bundle, reports how far it is built, and downloads it
+    /// with resume support (after a network drop or if the app closed). Returns a .zip the caller deletes.
     func downloadBundle(slug: String, progress: @escaping @Sendable (Phase) -> Void) async throws -> URL {
         var info: BundleInfo
         do {
@@ -280,7 +280,7 @@ actor PostPodWebClient {
 
         let part = Self.partURL(slug), metaURL = Self.metaURL(slug)
         var meta = (try? Data(contentsOf: metaURL)).flatMap { try? JSONDecoder().decode(PartialMeta.self, from: $0) }
-        if meta?.version != info.version || meta?.size != info.size {      // el paquete cambió: empezar de cero
+        if meta?.version != info.version || meta?.size != info.size {      // the bundle changed: start from scratch
             Self.discardPartial(slug: slug)
             meta = PartialMeta(version: info.version, size: info.size, etag: nil)
         }
@@ -309,7 +309,7 @@ actor PostPodWebClient {
                     meta?.etag = etag
                     try? JSONEncoder().encode(meta!).write(to: metaURL)
                 }
-                if info.size <= 0 { break }                                  // sin tamaño conocido: terminó el cuerpo
+                if info.size <= 0 { break }                                  // no known size: the body ended
             } catch let e as URLError where e.code != .cancelled && failures < 20 {
                 failures += 1
                 progress(.reconnecting)
@@ -325,7 +325,7 @@ actor PostPodWebClient {
         return dest
     }
 
-    /// postPod sin la API nueva: una sola petición que arma y envía (sin % ni reanudar).
+    /// postPod without the new API: a single request that builds and sends (no % or resume).
     private func legacyDownload(slug: String, progress: @escaping @Sendable (Phase) -> Void) async throws -> URL {
         let path = bundlePath(slug) + "/export-bundle"
         for attempt in 0..<2 {
@@ -358,7 +358,7 @@ actor PostPodWebClient {
     }
 }
 
-/// Descarga que escribe directo al archivo parcial: continúa con Range (206) o empieza de cero (200).
+/// Download that writes straight to the partial file: continues with Range (206) or starts from scratch (200).
 private final class StreamingDownload: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     struct Result { let status: Int; let response: HTTPURLResponse; let errorBody: Data }
 
@@ -406,7 +406,7 @@ private final class StreamingDownload: NSObject, URLSessionDataDelegate, @unchec
             written = offset
             total = expected > 0 ? expected : offset + max(0, response.expectedContentLength)
         } else if status == 200 {
-            fm.createFile(atPath: file.path, contents: nil)                  // respuesta completa: desde cero
+            fm.createFile(atPath: file.path, contents: nil)                  // full response: from scratch
             handle = try? FileHandle(forWritingTo: file)
             written = 0
             total = response.expectedContentLength > 0 ? response.expectedContentLength : expected

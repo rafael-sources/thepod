@@ -1,8 +1,8 @@
 import AVFoundation
 
-/// Voces parejas por medición: la sonoridad integrada de cada persona (ITU-R BS.1770-4: filtro K, bloques de
-/// 400 ms cada 100 ms, compuerta absoluta −70 LUFS y relativa −10 LU) y la ganancia fija que las iguala.
-/// La compuerta deja fuera los silencios, así que lo que se compara es lo que cada uno habla.
+/// Even voices by measurement: each person's integrated loudness (ITU-R BS.1770-4: K filter, 400 ms
+/// blocks every 100 ms, absolute gate −70 LUFS and relative −10 LU) and the fixed gain that matches them.
+/// The gate leaves out silences, so what's compared is what each one says.
 enum LoudnessMatch {
     struct Result: Equatable {
         let lane: Int
@@ -10,7 +10,7 @@ enum LoudnessMatch {
         let gainDB: Double
     }
 
-    /// Sonoridad integrada de un archivo (mezclado a mono), o nil si está vacío o no se pudo leer.
+    /// Integrated loudness of a file (mixed to mono), or nil if empty or unreadable.
     static func integratedLUFS(url: URL, maxSeconds: Double = .infinity) -> Double? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let fmt = file.processingFormat
@@ -20,7 +20,7 @@ enum LoudnessMatch {
         var k = KWeight(sampleRate: sr)
         let hop = Int(sr * 0.1)
         var mono = [Float](repeating: 0, count: hop)
-        var hopPowers: [Double] = []          // potencia K de cada 100 ms
+        var hopPowers: [Double] = []          // K power every 100 ms
         guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(hop)) else { return nil }
         let maxFrames = maxSeconds.isFinite ? AVAudioFramePosition(maxSeconds * sr) : file.length
         while file.framePosition < min(file.length, maxFrames) {
@@ -37,7 +37,7 @@ enum LoudnessMatch {
             if n < hop { break }
         }
         guard hopPowers.count >= 4 else { return nil }
-        // Bloques de 400 ms (4 saltos de 100 ms) con solape del 75 %
+        // 400 ms blocks (4 hops of 100 ms) with 75 % overlap
         var blocks: [Double] = []
         blocks.reserveCapacity(hopPowers.count)
         for i in 3..<hopPowers.count { blocks.append((hopPowers[i - 3] + hopPowers[i - 2] + hopPowers[i - 1] + hopPowers[i]) / 4) }
@@ -49,8 +49,8 @@ enum LoudnessMatch {
         return MixLoudness.lufs(kept.reduce(0, +) / Double(kept.count))
     }
 
-    /// Mide cada persona del proyecto (el archivo mejorado si lo hay) y calcula la ganancia que la lleva al
-    /// promedio de todas, acotada a ±12 dB para no subir el ruido de una grabación floja hasta las nubes.
+    /// Measures each person in the project (the enhanced file if any) and computes the gain that brings them to the
+    /// average of all, clamped to ±12 dB so as not to raise a weak recording's noise sky-high.
     static func measure(project: Project) -> [Result] {
         var measured: [(Int, Double)] = []
         for lane in project.lanes {
@@ -62,7 +62,7 @@ enum LoudnessMatch {
         return gains(for: measured)
     }
 
-    /// La parte sin archivos: dadas las sonoridades, las ganancias hacia el promedio (±12 dB).
+    /// The file-free part: given the loudnesses, the gains towards the average (±12 dB).
     static func gains(for measured: [(lane: Int, lufs: Double)]) -> [Result] {
         guard !measured.isEmpty else { return [] }
         let target = measured.map(\.lufs).reduce(0, +) / Double(measured.count)

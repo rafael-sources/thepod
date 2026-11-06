@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// pubPod desde la app: publica un reel en las redes conectadas del podcast (ahora o programado).
+/// pubPod from the app: publishes a reel to the podcast's connected networks (now or scheduled).
 struct PublishReelSheet: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -80,7 +80,7 @@ struct PublishReelSheet: View {
         .onAppear(perform: load)
         .onDisappear { watcher?.cancel() }
         .onChange(of: session.isBusy) { _, busy in
-            // Si falló, el error queda aquí en la ventana y no detrás de ella
+            // If it failed, the error stays here in the window and not behind it
             if sent, !busy, session.reelPosts == nil, let msg = session.errorMessage {
                 failure = msg
                 session.errorMessage = nil
@@ -202,7 +202,7 @@ struct PublishReelSheet: View {
         }
     }
 
-    /// Abre la página de la red en el navegador y espera a que la conexión aparezca (hasta 5 minutos).
+    /// Opens the network's page in the browser and waits for the connection to appear (up to 5 minutes).
     private func connect(_ net: String) {
         guard let slug else { return }
         failure = nil

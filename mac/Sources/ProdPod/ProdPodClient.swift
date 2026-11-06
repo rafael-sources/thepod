@@ -1,7 +1,7 @@
 import Foundation
 
-/// prodPod web: sesiones de grabación, invitaciones y el permiso para entrar a la sala.
-/// Misma cuenta que prePod y postPod (usuario y contraseña de Ajustes).
+/// prodPod web: recording sessions, invitations and permission to join the room.
+/// Same account as prePod and postPod (username and password from Settings).
 actor ProdPodClient {
     static let shared = ProdPodClient()
 
@@ -25,7 +25,7 @@ actor ProdPodClient {
         var limits: Limits?
     }
 
-    /// Plan de quien creó la sala: cuánto puede durar la grabación y la resolución máxima (nil = sin límite).
+    /// Plan of whoever created the room: how long the recording can last and the max resolution (nil = no limit).
     struct Limits: Decodable, Hashable {
         var plan: String?
         var plan_name: String?
@@ -67,7 +67,7 @@ actor ProdPodClient {
     }()
     private var cookies: [String: String] = [:]
     private var loggedIn = false
-    /// Olvida la sesión (al cerrar sesión o cambiar de cuenta).
+    /// Forgets the session (on logout or account switch).
     func resetSession() { loggedIn = false; cookies = [:]; }
 
     private func send(_ method: String, _ path: String, json: [String: Any]? = nil, retry: Bool = true) async throws -> Data {
@@ -108,7 +108,7 @@ actor ProdPodClient {
         loggedIn = true
     }
 
-    /// Formulario con un archivo (para la subida por partes). Devuelve el código y la respuesta.
+    /// Form with a file (for the chunked upload). Returns the status code and the response.
     func multipart(_ path: String, fields: [String: String], fileField: String?, fileName: String, fileData: Data?,
                    retry: Bool = true) async throws -> (Int, [String: Any]) {
         if !loggedIn { try await login() }
@@ -140,7 +140,7 @@ actor ProdPodClient {
         return (code, obj)
     }
 
-    /// POST con JSON; devuelve la respuesta como diccionario.
+    /// POST with JSON; returns the response as a dictionary.
     @discardableResult
     func postJSON(_ path: String, _ json: [String: Any] = [:]) async throws -> [String: Any] {
         let d = try await send("POST", path, json: json)
@@ -154,7 +154,7 @@ actor ProdPodClient {
         try await send(method, path, json: json)
     }
 
-    /// Mide la subida: manda 2.5 MB que el servidor descarta. Devuelve Mbps.
+    /// Measures upload: sends 2.5 MB the server discards. Returns Mbps.
     func uploadTest() async throws -> Double {
         if !loggedIn { try await login() }
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
@@ -201,14 +201,14 @@ actor ProdPodClient {
         try JSONDecoder().decode(DirectorJoin.self, from: await send("GET", "/api/sessions/\(id)/director-token"))
     }
 
-    /// Podcasts (shared_project_id) donde tu cuenta es director.
+    /// Podcasts (shared_project_id) where your account is director.
     func directorProjects() async throws -> Set<String> {
         let d = try await send("GET", "/api/director/my-podcasts")
         let list = (try? JSONSerialization.jsonObject(with: d) as? [[String: Any]]) ?? []
         return Set(list.compactMap { $0["shared_project_id"] as? String })
     }
 
-    /// Sube una imagen para los cintillos; devuelve su file_path en el servidor.
+    /// Uploads an image for lower thirds; returns its file_path on the server.
     func uploadDirectorAsset(_ sid: Int, data: Data, name: String) async throws -> String {
         let (code, obj) = try await multipart("/api/sessions/\(sid)/director/assets", fields: [:], fileField: "file",
                                               fileName: name, fileData: data)

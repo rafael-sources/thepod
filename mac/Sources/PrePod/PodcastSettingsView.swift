@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
 
-/// "Configurar podcast": lo mismo que la configuración del podcast en prePod web.
+/// "Configurar podcast": the same as the podcast settings in prePod web.
 struct PodcastSettingsView: View {
     let slug: String
     let onClose: () -> Void
@@ -254,7 +254,7 @@ private struct BrandingTab: View {
     }
 }
 
-// MARK: Equipo
+// MARK: Team
 
 private struct TeamTab: View {
     let slug: String
@@ -509,7 +509,7 @@ private struct SoundboardTab: View {
     }
 }
 
-// MARK: Distribución
+// MARK: Distribution
 
 private struct DistributionTab: View {
     let slug: String
@@ -588,8 +588,8 @@ private struct PlatformCard: View {
 }
 
 
-/// Reporte para el sponsor: en qué episodios salió (o va a salir), cuántas menciones y minutos al aire.
-/// Igual que en prePod web; se guarda como .csv para mandárselo.
+/// Sponsor report: which episodes it appeared in (or will), how many mentions and minutes on air.
+/// Same as in prePod web; saved as .csv to send it.
 private struct SponsorReportSheet: View {
     let slug: String
     let sponsor: Sponsor2

@@ -2,19 +2,19 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension Color {
-    /// pubPod: el blanco de las estrellas.
+    /// pubPod: the target of the stars.
     static let pubPod = Color.white
 }
 
-// MARK: - Las 8 estrellas
+// MARK: - The 8 stars
 
-/// Una estrella = un destino. `platform` es el destino en el servidor; Spotify y Apple comparten el feed.
+/// One star = one destination. `platform` is the destination on the server; Spotify and Apple share the feed.
 struct PubStar: Identifiable, Hashable {
     let id: String
     let name: String
     let platform: String        // instagram, instagram_image, youtube, tiktok, feed, facebook
-    let account: String         // la conexión que necesita (de prePod → Redes)
-    let forEpisode: Bool        // episodio completo (true) o reel (false)
+    let account: String         // the connection it needs (from prePod → Redes)
+    let forEpisode: Bool        // full episode (true) or reel (false)
 
     static let all = [
         PubStar(id: "spotify", name: "Spotify", platform: "feed", account: "feed", forEpisode: true),
@@ -27,7 +27,7 @@ struct PubStar: Identifiable, Hashable {
         PubStar(id: "facebook", name: "Facebook", platform: "facebook", account: "facebook", forEpisode: false),
     ]
 
-    /// La estrella de una publicación ya hecha (para la lista).
+    /// The star of an already made post (for the list).
     static func of(platform: String, kind: String?) -> PubStar? {
         switch platform {
         case "feed": return all[0]
@@ -53,7 +53,7 @@ struct StarShape: Shape {
     }
 }
 
-/// Ícono propio de cada red (trazos simples, no los logos de las marcas).
+/// Each network's own icon (simple strokes, not the brands' logos).
 struct PubGlyph: View {
     let id: String
     var body: some View {
@@ -167,7 +167,7 @@ private struct StarButton: View {
 
 struct PubHomeView: View {
     @EnvironmentObject var app: AppModel
-    /// Solo para las capturas de prueba: abrir con el primer reel elegido.
+    /// Only for test snapshots: open with the first reel selected.
     static var snapshotReel = false
     static var snapshotPanel: String?
 
@@ -179,15 +179,15 @@ struct PubHomeView: View {
     @State private var accounts: [String: PrePodClient.PubAccount] = [:]
     @State private var error: String?
     @State private var title = ""
-    @State private var picked: Set<String> = []        // ids de estrella
-    @State private var captions: [String: String] = [:] // por destino (platform)
+    @State private var picked: Set<String> = []        // star ids
+    @State private var captions: [String: String] = [:] // per destination (platform)
     @State private var tab: String?
     @State private var later = false
     @State private var whenDate = Date().addingTimeInterval(3600)
     @State private var phase: Phase = .choose
     @State private var progress = 0.0
     @State private var postsVersion = 0
-    @State private var panel: PubStar?                  // panel de una estrella (al tocar su nombre o mantener)
+    @State private var panel: PubStar?                  // a star's panel (when tapping its name or holding)
     @State private var signatures: [String: String] = [:]
     @State private var posts: [PrePodClient.PubPost] = []
 
@@ -203,7 +203,7 @@ struct PubHomeView: View {
     private func online(_ s: PubStar) -> Bool { accounts[s.account]?.connected == true }
     private func eligible(_ s: PubStar) -> Bool { s.forEpisode == isEpisode }
     private func isOn(_ s: PubStar) -> Bool { picked.contains(s.id) && online(s) && eligible(s) }
-    /// Destinos elegidos, sin repetir (Spotify y Apple son un solo envío al feed).
+    /// Chosen destinations, without repeats (Spotify and Apple are a single send to the feed).
     private var targets: [PubStar] {
         var seen = Set<String>()
         return PubStar.all.filter { isOn($0) && seen.insert($0.platform).inserted }
@@ -267,7 +267,7 @@ struct PubHomeView: View {
         }
     }
 
-    // MARK: Episodios
+    // MARK: Episodes
 
     private var episodesColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -311,14 +311,14 @@ struct PubHomeView: View {
         }
     }
 
-    // MARK: Las estrellas
+    // MARK: The stars
 
     private func constellation(_ p: Project) -> some View {
         GeometryReader { g in
             let n = PubStar.all.count
             ZStack(alignment: .topLeading) {
                 ForEach(Array(PubStar.all.enumerated()), id: \.element.id) { i, s in
-                    // Arco de la bandera: separación pareja a lo ancho y las puntas más abajo
+                    // Flag arc: even spacing across the width and the tips lower
                     let u = Double(i) / Double(n - 1) * 2 - 1            // -1 … 1
                     let margin = 64.0
                     let x = margin + (g.size.width - 2 * margin) * (u + 1) / 2
@@ -327,7 +327,7 @@ struct PubHomeView: View {
                                pulsing: phase == .sending && isOn(s), done: phase == .done && isOn(s),
                                toggle: { toggle(s) }, connect: { app.section = .pre },
                                open: { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { panel = panel?.id == s.id ? nil : s } })
-                        .position(x: x, y: y + 58 - 32)     // el centro de la estrella cae en (x, y)
+                        .position(x: x, y: y + 58 - 32)     // the star's center falls at (x, y)
                 }
                 VStack(spacing: 10) {
                     centerThumb(p)
@@ -363,7 +363,7 @@ struct PubHomeView: View {
 
     private func toggle(_ s: PubStar) {
         guard phase == .choose, online(s), eligible(s) else { return }
-        // Spotify y Apple Podcasts salen del mismo feed: se encienden y se apagan juntas
+        // Spotify and Apple Podcasts come from the same feed: they turn on and off together
         let group = PubStar.all.filter { $0.platform == s.platform && $0.forEpisode == s.forEpisode }.map(\.id)
         if picked.contains(s.id) { picked.subtract(group) } else { picked.formUnion(group) }
     }
@@ -383,7 +383,7 @@ struct PubHomeView: View {
         }
     }
 
-    // MARK: Panel de una estrella
+    // MARK: A star's panel
 
     private func starPanel(_ s: PubStar) -> some View {
         let acc = accounts[s.account]
@@ -491,7 +491,7 @@ struct PubHomeView: View {
         Task { try? await PrePodClient.shared.setPubSignatures(slug: slug, sigs) }
     }
 
-    // MARK: Qué publicas
+    // MARK: What you publish
 
     private func chooser(_ p: Project) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -553,7 +553,7 @@ struct PubHomeView: View {
         pick(.file(u))
     }
 
-    /// Vuelve a elegir: se encienden las estrellas conectadas que corresponden y los textos sugeridos.
+    /// Choose again: the matching connected stars and the suggested texts light up.
     private func reset() {
         phase = .choose
         error = nil
@@ -578,7 +578,7 @@ struct PubHomeView: View {
         }
     }
 
-    // MARK: Texto y momento
+    // MARK: Text and moment
 
     private var composer: some View {
         let ts = targets
@@ -719,7 +719,7 @@ struct PubHomeView: View {
     }
 }
 
-// MARK: - Publicaciones de un podcast
+// MARK: - A podcast's posts
 
 struct PubPostsList: View {
     let slug: String

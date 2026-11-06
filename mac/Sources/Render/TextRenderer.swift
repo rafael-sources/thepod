@@ -95,7 +95,7 @@ enum TextRenderer {
         let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
         let padX = fontSize * 0.7, padY = fontSize * 0.42
         let height = ceil(fontSize * 1.25 + padY * 2)
-        // Con foto: un círculo con la cara a la izquierda, dentro de la píldora.
+        // With photo: a circle with the face on the left, inside the pill.
         let photoCG = photo.flatMap { CIContext().createCGImage($0, from: $0.extent) }
         let photoD = height - fontSize * 0.3
         let lead = photoCG != nil ? photoD + fontSize * 0.35 : 0
@@ -107,7 +107,7 @@ enum TextRenderer {
             ctx.fillPath()
             if let cg = photoCG {
                 let c = CGRect(x: fontSize * 0.15, y: fontSize * 0.15, width: photoD, height: photoD)
-                // recorte cuadrado centrado de la foto, dentro de un círculo
+                // centered square crop of the photo, inside a circle
                 let side = CGFloat(min(cg.width, cg.height))
                 let crop = CGRect(x: (CGFloat(cg.width) - side) / 2, y: (CGFloat(cg.height) - side) / 2, width: side, height: side)
                 ctx.saveGState()
@@ -147,7 +147,7 @@ enum TextRenderer {
         }
     }
 
-    /// Letras de los cintillos (vienen con la app; si faltaran, las condensadas del sistema).
+    /// Lower third fonts (bundled with the app; if missing, the system's condensed ones).
     static func condensed(_ size: CGFloat, heavy: Bool = true) -> NSFont {
         NSFont(name: heavy ? "BarlowCondensed-ExtraBold" : "BarlowCondensed-SemiBold", size: size)
             ?? NSFont(name: heavy ? "AvenirNextCondensed-Heavy" : "AvenirNextCondensed-DemiBold", size: size)
@@ -157,11 +157,11 @@ enum TextRenderer {
         NSFont(name: medium ? "Barlow-Medium" : "Barlow-SemiBold", size: size) ?? NSFont.systemFont(ofSize: size, weight: medium ? .medium : .semibold)
     }
 
-    /// Un cintillo dibujado en dos capas: `base` (logo y barras, sin texto) y `full` (con texto),
-    /// para que al entrar se desplieguen las barras y después aparezca el texto. `logoW` = ancho de la cajita del logo.
+    /// A lower third drawn in two layers: `base` (logo and bars, no text) and `full` (with text),
+    /// so the bars unfold on entry and then the text appears. `logoW` = width of the logo box.
     struct CintilloArt { let base: CIImage; let full: CIImage; let logoW: CGFloat }
 
-    /// Noticiero: cajita del logo, barra de color con etiqueta y título, barra blanca con el texto.
+    /// News: logo box, colored bar with label and title, white bar with the text.
     static func cintilloNews(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CintilloArt? {
         let showLogo = logo != nil || !tag.isEmpty || !title.isEmpty
         let logoW = showLogo ? height : 0
@@ -196,7 +196,7 @@ enum TextRenderer {
         return CintilloArt(base: base, full: full, logoW: logoW)
     }
 
-    /// Limpio: una línea de color, título grande condensado y texto chico, con sombra; sin cajas.
+    /// Clean: a colored line, large condensed title and small text, with shadow; no boxes.
     static func cintilloClean(title: String, text: String, accent: NSColor, width: CGFloat, height: CGFloat) -> CintilloArt? {
         let lineH = height * 0.07, titleH = height * 0.52, gap = height * 0.06
         func paint(withText: Bool) -> CIImage? {
@@ -216,7 +216,7 @@ enum TextRenderer {
         return CintilloArt(base: base, full: full, logoW: 0)
     }
 
-    /// Sponsor: tarjeta oscura con borde de color, logo grande a la izquierda, PATROCINA, nombre y frase.
+    /// Sponsor: dark card with colored border, large logo on the left, PATROCINA, name and tagline.
     static func cintilloSponsor(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CintilloArt? {
         let edge = height * 0.07, pad = height * 0.12
         let logoBoxW = height * 1.25
@@ -275,12 +275,12 @@ enum TextRenderer {
         return w
     }
 
-    /// Compatibilidad: el cintillo viejo (noticiero) como una sola imagen.
+    /// Compatibility: the old (news) lower third as a single image.
     static func cintillo(title: String, text: String, tag: String, accent: NSColor, logo: CGImage?, width: CGFloat, height: CGFloat) -> CIImage? {
         cintilloNews(title: title, text: text, tag: tag, accent: accent, logo: logo, width: width, height: height)?.full
     }
 
-    /// Texto de una capa: título con contorno, texto en caja oscura o etiqueta de color.
+    /// A layer's text: outlined title, text in a dark box or colored tag.
     static func overlayText(_ text: String, style: VideoLayer.Style, color hex: String, fontSize: CGFloat, maxWidth: CGFloat) -> CIImage? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -298,7 +298,7 @@ enum TextRenderer {
         }()
         let fg: NSColor = {
             guard style == .label else { return chosen }
-            // Sobre el color de la etiqueta: texto negro o blanco, el que se lea mejor
+            // On the tag color: black or white text, whichever reads better
             let c = chosen.usingColorSpace(.sRGB) ?? chosen
             let lum = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
             return lum > 0.6 ? .black : .white
@@ -339,7 +339,7 @@ enum TextRenderer {
         }
     }
 
-    /// Sticker: un emoji grande con sombra suave.
+    /// Sticker: a large emoji with a soft shadow.
     static func sticker(_ emoji: String, fontSize: CGFloat) -> CIImage? {
         let e = emoji.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !e.isEmpty else { return nil }

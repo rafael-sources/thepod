@@ -281,9 +281,9 @@ enum Importer {
             }
         }
 
-        // Librería de efectos = el soundboard del podcast (sounds/ + sounds.json), en el orden y con los
-        // nombres de prodPod. global_audio/ es la biblioteca general de postPod (de todos los podcasts):
-        // no se ofrece como librería; los sonidos de ahí que el episodio usa ya llegan en su línea de audio.
+        // Effects library = the podcast's soundboard (sounds/ + sounds.json), in prodPod's order and with its
+        // names. global_audio/ is postPod's general library (for all podcasts):
+        // it isn't offered as a library; sounds from there that the episode uses already arrive on its audio line.
         let soundsDir = root.appendingPathComponent("sounds")
         var manifest: [[String: Any]] = []
         if let data = try? Data(contentsOf: soundsDir.appendingPathComponent("sounds.json")),
@@ -344,7 +344,7 @@ enum Importer {
             }
         }
 
-        // Cintillos del director (prodPod): sponsor, podcast, segmento. Los avisos privados ("cue") no van al video.
+        // Director lower thirds (prodPod): sponsor, podcast, segment. Private notices ("cue") don't go into the video.
         if db.tableExists("director_events") {
             let iso = ISO8601DateFormatter()
             func date(_ s: String?) -> Date? {
@@ -431,18 +431,18 @@ enum Importer {
         return project
     }
 
-    // MARK: - Branding desde prePod
+    // MARK: - Branding from prePod
 
-    /// El paquete de postPod web solo trae el fondo si allá ya se exportó con fondo. Si el proyecto viene de
-    /// prePod y le falta el fondo o el logo, los bajamos de la configuración del podcast en prePod.
-    /// Devuelve true si cambió algo (el que llama guarda el proyecto). Nunca lanza error: si falla, queda como estaba.
+    /// The postPod web bundle only includes the background if it was already exported with one there. If the project comes from
+    /// prePod and lacks the background or logo, we download them from the podcast's settings in prePod.
+    /// Returns true if something changed (the caller saves the project). Never throws: if it fails, it stays as it was.
     static func fetchBrandingFromPrepod(_ project: inout Project) async -> Bool {
         guard project.backgroundFile == nil || project.logoFile == nil || project.sponsors.isEmpty || project.segments.isEmpty else { return false }
         let api = PrePodClient.shared
         var slug = project.episode.prepodSlug ?? ""
         if slug.isEmpty {
-            // Paquetes viejos de postPod sin datos de prePod: buscar el podcast cuyo slug encabeza el del proyecto
-            // (p. ej. "lee-la-letra-chica" dentro de "lee-la-letra-chica-ep-14-…") o cuyo nombre coincide.
+            // Old postPod bundles without prePod data: look for the podcast whose slug prefixes the project's
+            // (e.g. "lee-la-letra-chica" inside "lee-la-letra-chica-ep-14-…") or whose name matches.
             guard let list = try? await api.podcasts(), !list.isEmpty else { return false }
             let keys = [project.postpodSlug ?? "", project.id, project.name.lowercased()]
             let match = list
@@ -467,7 +467,7 @@ enum Importer {
             if kind == "background" { project.backgroundFile = rel } else { project.logoFile = rel }
             changed = true
         }
-        // Sponsors del podcast (los activos), con su logo
+        // The podcast's (active) sponsors, with their logo
         if project.sponsors.isEmpty, let list = try? await api.sponsors(slug) {
             var out: [Sponsor] = []
             for sp in list where sp.isActive {
@@ -484,7 +484,7 @@ enum Importer {
             }
             if !out.isEmpty { project.sponsors = out; changed = true }
         }
-        // Guion del episodio (bloques con su sponsor): hace falta para saber en qué momento va cada sponsor
+        // The episode script (blocks with their sponsor): needed to know at what moment each sponsor goes
         if project.segments.isEmpty {
             var epId = project.episode.prepodEpisodeId
             if epId == nil, let eps = try? await api.preEpisodes(slug) {
@@ -506,7 +506,7 @@ enum Importer {
         return changed
     }
 
-    /// "Ep 14" / "Episodio 14" / "ep14" dentro del nombre del proyecto.
+    /// "Ep 14" / "Episodio 14" / "ep14" inside the project name.
     static func episodeNumber(in name: String) -> Int? {
         let lower = name.lowercased()
         guard let r = lower.range(of: #"ep(isodio)?\s*\.?\s*(\d+)"#, options: .regularExpression) else { return nil }
@@ -514,7 +514,7 @@ enum Importer {
         return Int(digits)
     }
 
-    /// Fondo (o logo) elegido a mano por el usuario: se copia dentro del proyecto.
+    /// Background (or logo) chosen by hand by the user: copied into the project.
     static func setBranding(_ project: inout Project, kind: String, from src: URL) throws {
         let ext = src.pathExtension.isEmpty ? "png" : src.pathExtension.lowercased()
         let rel = "branding/\(kind)-manual.\(ext)"
@@ -697,7 +697,7 @@ enum Importer {
         }
     }
 
-    /// "Karelia_video_60" → "Karelia"
+    /// "Guest_video_60" → "Guest"
     static func personName(from stem: String) -> String {
         var s = (stem as NSString).deletingPathExtension
         for marker in ["_video_", "_audio_", "_track_", "-video-", "-audio-"] {

@@ -1,14 +1,14 @@
-"""Escáner de literales de cadena de Swift (con interpolaciones anidadas). Devuelve (inicio, fin, contenido) por línea."""
+"""Swift string literal scanner (with nested interpolations). Returns (start, end, content) per line."""
 def literals(line):
     out = []; i = 0; n = len(line)
     while i < n:
         c = line[i]
-        if c == '/' and i + 1 < n and line[i+1] == '/': break           # comentario
-        if c == '#' and i + 1 < n and line[i+1] == '"':                 # raw string: se salta entero
+        if c == '/' and i + 1 < n and line[i+1] == '/': break           # comment
+        if c == '#' and i + 1 < n and line[i+1] == '"':                 # raw string: skipped entirely
             j = line.find('"#', i + 2)
             i = n if j < 0 else j + 2; continue
         if c == '"':
-            if line.startswith('"""', i): return out                    # multilínea: fuera
+            if line.startswith('"""', i): return out                    # multiline: out
             j = i + 1; depth = 0; body = ''
             while j < n:
                 ch = line[j]
@@ -19,7 +19,7 @@ def literals(line):
                     if ch == '"': break
                     body += ch; j += 1
                 else:
-                    if ch == '"':                                        # literal anidado dentro de \( )
+                    if ch == '"':                                        # nested literal inside \( )
                         k = j + 1
                         while k < n and line[k] != '"':
                             if line[k] == '\\': k += 1
@@ -34,7 +34,7 @@ def literals(line):
 
 
 def split_interp(s):
-    """Separa un literal en texto fijo y las interpolaciones \\( ) (con paréntesis y literales anidados)."""
+    """Splits a literal into fixed text and the \\( ) interpolations (with nested parentheses and literals)."""
     parts, cur, i, n = [], '', 0, len(s)
     while i < n:
         if s.startswith('\\(', i):
@@ -55,18 +55,18 @@ def split_interp(s):
 
 
 def key_regex(s):
-    """Regex de la clave que generaría Xcode para el literal: \\( ) → %@/%lld/…, % → %%, escapes resueltos."""
+    """Regex of the key Xcode would generate for the literal: \\( ) → %@/%lld/…, % → %%, escapes resolved."""
     import re
     esc = {'\\n': '\n', '\\t': '\t', '\\"': '"', '\\\\': '\\', "\\'": "'"}
     parts = split_interp(s)
-    # Xcode solo duplica los % si el literal lleva interpolaciones; sin ellas la clave es el texto tal cual
+    # Xcode only doubles % if the literal has interpolations; without them the key is the text as is
     fixed = [re.sub(r'\\[nt"\\\']', lambda m: esc[m.group(0)], p) for p in parts]
     if len(parts) > 1: fixed = [p.replace('%', '%%') for p in fixed]
     return re.compile(r'(?:%@|%lld|%ld|%d|%lf|%f)'.join(re.escape(p) for p in fixed) + r'\Z')
 
 
 def multiline_spans(src):
-    """Números de línea (1-based) dentro de literales multilínea \"\"\" ... \"\"\"."""
+    """Line numbers (1-based) inside multiline literals \"\"\" ... \"\"\"."""
     inside, out = False, set()
     for ln, line in enumerate(src.splitlines(), 1):
         if inside: out.add(ln)

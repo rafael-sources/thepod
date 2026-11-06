@@ -1,9 +1,9 @@
 import SwiftUI
 import AppKit
 
-/// Idioma de la app: Sistema, Español o English. Las claves de texto son el español del código; el inglés vive en
-/// `Resources/en.lproj/Localizable.strings`. Cambiarlo escribe `AppleLanguages` y relanza la app: así todas las
-/// pantallas salen en el idioma nuevo sin casos raros (es lo que hacen Final Cut o Logic).
+/// App language: System, Español or English. Text keys are the Spanish in the code; the English lives in
+/// `Resources/en.lproj/Localizable.strings`. Changing it writes `AppleLanguages` and relaunches the app: that way every
+/// screen comes up in the new language without odd cases (it's what Final Cut or Logic do).
 enum AppLanguage: String, CaseIterable, Identifiable {
     case system, es, en
     var id: String { rawValue }
@@ -21,16 +21,16 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         AppLanguage(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system
     }
 
-    /// El idioma con el que está corriendo la app ahora (es o en).
+    /// The language the app is running in now (es or en).
     static var running: String {
         let code = Bundle.main.preferredLocalizations.first ?? "es"
         return code.hasPrefix("en") ? "en" : "es"
     }
 
-    /// Locale para fechas y números en pantalla: el del idioma con el que corre la app.
+    /// Locale for on-screen dates and numbers: that of the language the app runs in.
     static var locale: Locale { Locale(identifier: running == "en" ? "en_US" : "es") }
 
-    /// Guarda la elección y deja `AppleLanguages` como toca. Devuelve true si hace falta relanzar.
+    /// Saves the choice and sets `AppleLanguages` accordingly. Returns true if a relaunch is needed.
     @discardableResult
     static func apply(_ lang: AppLanguage) -> Bool {
         let d = UserDefaults.standard
@@ -45,7 +45,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         return wanted != running
     }
 
-    /// Cierra la app y la vuelve a abrir (medio segundo después, cuando ya salió).
+    /// Quits the app and reopens it (half a second later, once it has exited).
     static func relaunch() {
         let path = Bundle.main.bundlePath
         let p = Process()
@@ -56,7 +56,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-/// Sección de Ajustes: elegir idioma; si cambia, avisa y relanza.
+/// Settings section: pick the language; if it changes, notifies and relaunches.
 struct LanguageSettingsSection: View {
     @State private var choice = AppLanguage.current
     @State private var askRelaunch = false

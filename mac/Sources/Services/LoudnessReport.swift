@@ -1,8 +1,8 @@
 import AVFoundation
 import AppKit
 
-/// Informe de sonoridad por export: la medida real (EBU R128 con ffmpeg) del archivo entregado —sonoridad
-/// integrada, pico real, rango de sonoridad— y si cumple lo que pide cada destino. Va en PDF junto al archivo.
+/// Per-export loudness report: the real measurement (EBU R128 with ffmpeg) of the delivered file —integrated
+/// loudness, true peak, loudness range— and whether it meets what each destination asks. Goes as a PDF next to the file.
 enum LoudnessReport {
     struct Measure: Equatable {
         var integrated: Double          // LUFS
@@ -18,7 +18,7 @@ enum LoudnessReport {
         let maxPeak: Double             // dBTP
         var passes: (Measure) -> Bool { { m in abs(m.integrated - lufs) <= tolerance && m.truePeak <= maxPeak } }
     }
-    /// Lo que piden los destinos más comunes (valores públicos de cada plataforma).
+    /// What the most common destinations ask for (each platform's public values).
     static let targets: [Target] = [
         Target(name: "Spotify (podcasts)", lufs: -16, tolerance: 1, maxPeak: -1),
         Target(name: "Apple Podcasts", lufs: -16, tolerance: 1, maxPeak: -1),
@@ -26,13 +26,13 @@ enum LoudnessReport {
         Target(name: "Radio · EBU R128", lufs: -23, tolerance: 1, maxPeak: -1),
     ]
 
-    /// Mide el archivo con ffmpeg (ebur128 con pico real). Nil si no hay ffmpeg o no se pudo leer.
+    /// Measures the file with ffmpeg (ebur128 with true peak). Nil if there's no ffmpeg or it couldn't be read.
     static func measure(_ url: URL) async -> Measure? {
         guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-"], allowFailure: true) else { return nil }
         return parse(out, duration: (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 0)
     }
 
-    /// Lee el resumen final de ffmpeg: "I: -16.3 LUFS", "LRA: 7.2 LU", "Peak: -1.4 dBFS" (el pico real).
+    /// Reads ffmpeg's final summary: "I: -16.3 LUFS", "LRA: 7.2 LU", "Peak: -1.4 dBFS" (the true peak).
     static func parse(_ out: String, duration: Double) -> Measure? {
         func num(_ pattern: String) -> Double? {
             guard let r = out.range(of: pattern, options: [.regularExpression, .backwards]) else { return nil }
@@ -50,7 +50,7 @@ enum LoudnessReport {
         String(format: String(localized: "%.1f LUFS integrados · pico real %.1f dBTP · rango %.1f LU · objetivo %.0f"), m.integrated, m.truePeak, m.range, target)
     }
 
-    /// El PDF de una página junto al archivo exportado. Devuelve su ruta, o nil si no se pudo escribir.
+    /// The one-page PDF next to the exported file. Returns its path, or nil if it couldn't be written.
     @discardableResult
     static func writePDF(project p: Project, file: URL, format: ExportFormat, measure m: Measure, target: Double) -> URL? {
         let pdf = file.deletingPathExtension().appendingPathExtension("sonoridad.pdf")
@@ -73,7 +73,7 @@ enum LoudnessReport {
         let df = DateFormatter(); df.dateStyle = .long; df.timeStyle = .short; df.locale = AppLanguage.locale
         text(String(localized: "Archivo: \(file.lastPathComponent) · ") + df.string(from: Date()), size: 10, color: NSColor(white: 0.45, alpha: 1), at: y); y -= 24
         rule(y); y -= 30
-        // Medidas grandes
+        // Large measurements
         func big(_ value: String, _ label: String, x: CGFloat) {
             text(value, size: 26, bold: true, at: y, x: x)
             text(label, size: 9, color: NSColor(white: 0.45, alpha: 1), at: y - 14, x: x)

@@ -1,6 +1,6 @@
 import Foundation
 
-// Sección "pre" de thePod: lo mismo que prePod web, leído y guardado directo en prePod.
+// thePod's "pre" section: the same as prePod web, read from and saved directly to prePod.
 
 enum EpisodeStatus: String, CaseIterable, Identifiable, Codable {
     case idea, planning, scripted, recorded, published, archived
@@ -50,7 +50,7 @@ struct PreEpisode: Decodable, Identifiable, Hashable {
 
     var statusValue: EpisodeStatus { EpisodeStatus(rawValue: status) ?? .idea }
     var label: String { "\(episodeNumber.map { "Ep \($0) · " } ?? "")\(title)" }
-    /// Fecha programada legible (acepta "2026-10-02" o "2026-10-02T19:00…").
+    /// Human-readable scheduled date (accepts "2026-10-02" or "2026-10-02T19:00…").
     var whenText: String? {
         guard let raw = scheduledAt ?? scheduledDate, raw.count >= 10 else { return nil }
         let f = DateFormatter(); f.locale = Locale(identifier: "es"); f.dateFormat = "yyyy-MM-dd"
@@ -69,7 +69,7 @@ struct ScriptSection: Decodable, Identifiable, Hashable {
     var content: String
     var estimatedDuration: Double?
     var notes: String
-    // Teleprompter (0.11): quién lo lee (usuario del conductor o nombre del invitado), cuándo, velocidad y tamaño
+    // Teleprompter (0.11): who reads it (host username or guest name), when, speed and size
     var tpEnabled: Bool?
     var tpOffsetSeconds: Double?
     var tpSpeed: String?
@@ -132,7 +132,7 @@ extension PrePodClient {
         try decode([PrePodcast].self, await send("GET", "/api/podcasts"))
     }
 
-    /// Crea un podcast nuevo en prePod (igual que «+ Nuevo podcast» en la web) y devuelve su slug.
+    /// Creates a new podcast in prePod (same as «+ Nuevo podcast» on the web) and returns its slug.
     func createPrePodcast(name: String) async throws -> String {
         let d = try await send("POST", "/api/podcasts", json: ["name": name])
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any], let slug = o["slug"] as? String else {
@@ -141,7 +141,7 @@ extension PrePodClient {
         return slug
     }
 
-    // Episodios
+    // Episodes
     func preEpisodes(_ slug: String) async throws -> [PreEpisode] {
         try decode([PreEpisode].self, await send("GET", ep(slug) + "/episodes"))
     }
@@ -155,7 +155,7 @@ extension PrePodClient {
         _ = try await send("DELETE", ep(slug) + "/episodes/\(id)")
     }
 
-    // Guion
+    // Script
     func script(_ slug: String, _ epId: Int) async throws -> [ScriptSection] {
         try decode([ScriptSection].self, await send("GET", ep(slug) + "/episodes/\(epId)/script"))
     }
@@ -188,7 +188,7 @@ extension PrePodClient {
         _ = try await send("DELETE", ep(slug) + "/blocks/\(id)")
     }
 
-    // Invitados
+    // Guests
     func guests(_ slug: String, _ epId: Int) async throws -> [PreGuest] {
         try decode([PreGuest].self, await send("GET", ep(slug) + "/episodes/\(epId)/guests"))
     }
@@ -202,7 +202,7 @@ extension PrePodClient {
     func deleteGuest(_ slug: String, _ id: Int) async throws {
         _ = try await send("DELETE", ep(slug) + "/guests/\(id)")
     }
-    /// Envía la invitación por correo. Devuelve (ok, mensaje para mostrar).
+    /// Sends the invitation by email. Returns (ok, message to show).
     func sendRSVP(_ slug: String, _ id: Int) async throws -> (Bool, String) {
         let data = try await send("POST", ep(slug) + "/guests/\(id)/send-rsvp")
         let obj = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
@@ -212,7 +212,7 @@ extension PrePodClient {
     }
 }
 
-// MARK: - Ideas, plantillas, landing, notas, correos
+// MARK: - Ideas, templates, landing, notes, emails
 
 struct EpisodeIdea: Decodable, Identifiable, Hashable {
     let id: Int
@@ -255,7 +255,7 @@ struct LandingConfig: Decodable {
     var socialTiktok: String?
     var socialTwitter: String?
 
-    // prePod guarda show_* como 0/1
+    // prePod stores show_* as 0/1
     enum CodingKeys: String, CodingKey {
         case template, showEpisodes, showTeam, ownerName, ownerEmail, language, socialYoutube, socialSpotify,
              socialApplePodcasts, socialInstagram, socialTiktok, socialTwitter
@@ -318,7 +318,7 @@ extension PrePodClient {
     func deleteIdea(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/ideas/\(id)") }
     func vote(_ slug: String, _ id: Int, on: Bool) async throws { _ = try await send(on ? "POST" : "DELETE", pp(slug) + "/ideas/\(id)/vote") }
 
-    // Plantillas
+    // Templates
     func templates(_ slug: String) async throws -> [ShowTemplate] { try dj([ShowTemplate].self, await send("GET", pp(slug) + "/templates")) }
     func template(_ slug: String, _ id: Int) async throws -> TemplateDetail { try dj(TemplateDetail.self, await send("GET", pp(slug) + "/templates/\(id)")) }
     func addTemplate(_ slug: String, name: String) async throws -> ShowTemplate {
@@ -339,18 +339,18 @@ extension PrePodClient {
     }
     func updateTemplateSection(_ slug: String, _ id: Int, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/template-sections/\(id)", json: fields) }
     func deleteTemplateSection(_ slug: String, _ id: Int) async throws { _ = try await send("DELETE", pp(slug) + "/template-sections/\(id)") }
-    /// Crea el episodio con una plantilla elegida (nil = sin plantilla).
+    /// Creates the episode with a chosen template (nil = no template).
     func createEpisode(_ slug: String, title: String, templateId: Int?) async throws -> PreEpisode {
         try dj(PreEpisode.self, await send("POST", pp(slug) + "/episodes",
                                           json: ["title": title, "template_id": templateId.map { $0 as Any } ?? NSNull()]))
     }
 
-    // Sponsor por bloque
+    // Sponsor per block
     func setBlockSponsor(_ slug: String, _ blockId: Int, sponsorId: Int?) async throws {
         _ = try await send("PUT", pp(slug) + "/blocks/\(blockId)/sponsor", json: ["sponsor_id": sponsorId.map { $0 as Any } ?? NSNull()])
     }
 
-    // Notas del episodio, links y correos
+    // Episode notes, links and emails
     func showNotes(_ slug: String, _ epId: Int) async throws -> ShowNotes { try dj(ShowNotes.self, await send("GET", pp(slug) + "/episodes/\(epId)/show-notes")) }
     func syncNotes(_ slug: String, _ epId: Int) async throws { _ = try await send("POST", pp(slug) + "/episodes/\(epId)/sync-notes") }
     func links(_ slug: String, _ epId: Int) async throws -> [EpisodeLink] { try dj([EpisodeLink].self, await send("GET", pp(slug) + "/episodes/\(epId)/links")) }
@@ -358,7 +358,7 @@ extension PrePodClient {
         _ = try await send("POST", pp(slug) + "/episodes/\(epId)/links", json: ["platform": platform, "url": url])
     }
     func deleteLink(_ slug: String, _ epId: Int, platform: String) async throws { _ = try await send("DELETE", pp(slug) + "/episodes/\(epId)/links/\(platform)") }
-    /// Correo de preparación a todos los invitados con correo. Devuelve (enviados, total, detalle).
+    /// Prep email to every guest with an email. Returns (sent, total, detail).
     func sendPreRecording(_ slug: String, _ epId: Int) async throws -> (Int, Int, String) {
         let d = try await send("POST", pp(slug) + "/episodes/\(epId)/send-pre-recording", json: [:])
         let o = (try? JSONSerialization.jsonObject(with: d) as? [String: Any]) ?? [:]
@@ -368,7 +368,7 @@ extension PrePodClient {
                 noSMTP ? String(localized: "prePod no tiene configurado el envío de correos.") : "")
     }
 
-    // Landing y equipo
+    // Landing and team
     func landing(_ slug: String) async throws -> LandingConfig { try dj(LandingConfig.self, await send("GET", pp(slug) + "/landing")) }
     func updateLanding(_ slug: String, _ fields: [String: Any]) async throws { _ = try await send("PUT", pp(slug) + "/landing", json: fields) }
     func team(_ slug: String) async throws -> [TeamMember] { try dj([TeamMember].self, await send("GET", pp(slug) + "/team")) }

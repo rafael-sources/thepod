@@ -20,11 +20,11 @@ struct Project: Codable, Identifiable, Equatable {
 
     var language: String = "es"
     var words: [Word] = []              // merged transcript, timeline time
-    var sensitive: [SensitiveMark] = [] // palabras sensibles detectadas y qué hacer con cada una
-    var sensitiveCustom: [String] = []  // palabras propias que también se buscan
+    var sensitive: [SensitiveMark] = [] // sensitive words detected and what to do with each
+    var sensitiveCustom: [String] = []  // custom words that are also searched
     var sensitiveScanned = false
     var transcribedLanes: [Int] = []    // lane ids already transcribed
-    var wordsSynced = false             // las palabras ya se ajustaron al audio (SubtitleSync)
+    var wordsSynced = false             // the words were already aligned to the audio (SubtitleSync)
 
     var cuts: [Cut] = []
     var fix = FixSettings()
@@ -32,54 +32,54 @@ struct Project: Codable, Identifiable, Equatable {
 
     var captionStyle = CaptionStyle()
     var layout: LayoutTemplate = .auto
-    var layoutOptions = LayoutOptions()  // ajustes de cada diseño (marco de estudio, quien habla en grande…)
-    var reelLayout: LayoutTemplate = .auto   // (viejo) ahora vive en reelLook.layout
-    var reelLook = ReelLook()           // diseño y marca para todos los reels (cada reel puede tener el suyo)
-    var showBackground: Bool = true     // usar la imagen de fondo del podcast detrás del video
-    var intro: Bumper?                  // imagen (y música) antes del video
+    var layoutOptions = LayoutOptions()  // settings for each layout (studio frame, speaker large…)
+    var reelLayout: LayoutTemplate = .auto   // (old) now lives in reelLook.layout
+    var reelLook = ReelLook()           // design and branding for all reels (each reel can have its own)
+    var showBackground: Bool = true     // use the podcast's background image behind the video
+    var intro: Bumper?                  // image (and music) before the video
     var colorLook: String = "none"      // none | warm | cool | cine | bw | vivid
-    var matchColors = false             // igualar el color de las cámaras
-    var matchVoices = false             // voces parejas por medición: aplicar `Lane.matchGain`
-    var grade: ColorGrade?              // Studio · Video: color de toda la pista (todas las cámaras)
-    var conversationPan = false         // panorama de conversación: cada persona un poco a un lado, como en pantalla
-    var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (calculado al activar matchColors)
-    var exportHEVC = false              // archivo más liviano (HEVC) en vez de compatible (H.264)
-    var normalizeLoudness = true        // ajustar el volumen final a −16 LUFS
-    var outro: Bumper?                  // imagen (y música) al final
+    var matchColors = false             // match the cameras' color
+    var matchVoices = false             // even voices by measurement: apply `Lane.matchGain`
+    var grade: ColorGrade?              // Studio · Video: whole-track color (all cameras)
+    var conversationPan = false         // conversation panning: each person slightly to one side, as on screen
+    var laneColorGain: [Int: [Double]] = [:]   // lane id -> [r, g, b] (computed when matchColors is enabled)
+    var exportHEVC = false              // lighter file (HEVC) instead of compatible (H.264)
+    var normalizeLoudness = true        // adjust final volume to −16 LUFS
+    var outro: Bumper?                  // image (and music) at the end
     var showNames: Bool = true
     var showLogo: Bool = true
     var laneCrop: [Int: Double] = [:]   // lane id -> horizontal crop center 0...1 for vertical
-    var laneMirror: [Int: Bool] = [:]   // lane id -> voltear el video en espejo (horizontal)
-    var laneBackground: [Int: VirtualBackground] = [:]   // lane id -> fondo virtual (quitar el fondo real de esa persona)
-    var laneOrder: [Int] = []           // orden en pantalla (ids de pista); vacío = el orden de las pistas
+    var laneMirror: [Int: Bool] = [:]   // lane id -> mirror the video (horizontal)
+    var laneBackground: [Int: VirtualBackground] = [:]   // lane id -> virtual background (remove that person's real background)
+    var laneOrder: [Int] = []           // on-screen order (lane ids); empty = lane order
 
     var episode = EpisodeInfo()         // from prePod (via postPod's proyecto.json)
     var sponsors: [Sponsor] = []
     var segments: [Segment] = []        // script blocks with timing (prePod "blocks")
     var showSponsors: Bool = true
-    var cintillos: [DirectorCintillo] = []   // cintillos que el director puso en vivo (prodPod)
+    var cintillos: [DirectorCintillo] = []   // lower thirds the director placed live (prodPod)
     var showCintillos: Bool = true
-    var overlays: [VideoLayer] = []        // textos, imágenes y stickers encima del video
-    var brolls: [BRollClip] = []           // b-roll: un video o imagen que tapa la pantalla un rato (la voz sigue)
-    var studioVideo = StudioVideoSettings() // Studio · Video: cortes de cámara a mano y cómo sigue a quien habla
-    var review: ReviewLink?                 // revisión compartida: enlace y comentarios traídos
+    var overlays: [VideoLayer] = []        // texts, images and stickers on top of the video
+    var brolls: [BRollClip] = []           // b-roll: a video or image covering the screen for a while (the voice continues)
+    var studioVideo = StudioVideoSettings() // Studio · Video: manual camera cuts and how it follows the speaker
+    var review: ReviewLink?                 // shared review: link and fetched comments
     var sfxLibrary: [String] = []       // relative paths of sound effects available for this project
-    var sfxNames: [String: String] = [:] // nombre de cada sonido en el soundboard de prodPod
-    var moments: [Moment] = []          // "Momentos" marcados en postPod/prodPod → fuente de los reels
+    var sfxNames: [String: String] = [:] // name of each sound in prodPod's soundboard
+    var moments: [Moment] = []          // "Momentos" marked in postPod/prodPod → source of the reels
     var reels: [Reel] = []
     var aiSummary: String?
-    var aiAnalyzedAt: Date?             // la IA ya buscó notas y momentos de este episodio (se hace una sola vez)
-    var coverTime: Double?              // portada: segundo del episodio elegido (nil = el de siempre: primer reel o un cuarto)
-    var coverCandidates: [CoverCandidate] = []   // capturas encontradas (la imagen queda en la caché del proyecto)
+    var aiAnalyzedAt: Date?             // the AI already looked for notes and moments in this episode (done only once)
+    var coverTime: Double?              // cover: chosen episode second (nil = the usual one: first reel or a quarter in)
+    var coverCandidates: [CoverCandidate] = []   // captures found (the image stays in the project cache)
     var coverScannedAt: Date?
 
     var logoFile: String?               // relative to project folder
     var backgroundFile: String?
-    var postpodSlug: String?            // proyecto de postPod web del que se descargó
+    var postpodSlug: String?            // postPod web project it was downloaded from
 
     var duration: Double {
-        // El episodio dura lo que duran las grabaciones de las personas. Una música más larga se corta al final
-        // (antes alargaba el episodio y la música seguía sola, sin video, antes del cierre).
+        // The episode lasts as long as the people's recordings. Longer music is cut at the end
+        // (it used to lengthen the episode and the music kept playing alone, without video, before the outro).
         let laneEnd = lanes.map { $0.duration }.max() ?? 0
         if laneEnd > 0 { return laneEnd }
         return audioLane.map { $0.tlEnd }.max() ?? 0
@@ -87,7 +87,7 @@ struct Project: Codable, Identifiable, Equatable {
 
     func mediaItem(_ id: Int) -> SourceMedia? { media.first { $0.id == id } }
 
-    /// Pistas en el orden en que van en pantalla (izquierda→derecha / arriba→abajo). Las que no estén en `laneOrder` van al final.
+    /// Lanes in on-screen order (left→right / top→bottom). Those not in `laneOrder` go at the end.
     var lanesOnScreen: [Lane] {
         let byId = Dictionary(uniqueKeysWithValues: lanes.map { ($0.id, $0) })
         var out = laneOrder.compactMap { byId[$0] }
@@ -95,7 +95,7 @@ struct Project: Codable, Identifiable, Equatable {
         return out
     }
 
-    /// ¿Esta pista tiene cámara (alguno de sus archivos trae video)?
+    /// Does this lane have a camera (does any of its files carry video)?
     func laneHasVideo(_ laneId: Int) -> Bool {
         guard let lane = lanes.first(where: { $0.id == laneId }) else { return false }
         return lane.clips.contains { mediaItem($0.mediaId)?.hasVideo == true }
@@ -131,7 +131,7 @@ struct SourceMedia: Codable, Identifiable, Equatable {
     var hasVideo: Bool = true
     var enhancedAudioFile: String?      // relative, produced by "Mejorar audio"
     var transcriptionAudioFile: String? // 16 kHz mono wav for Whisper
-    var eqAudioFile: String?            // audio con el ecualizador de la persona aplicado
+    var eqAudioFile: String?            // audio with the person's equalizer applied
     var startOffset: Double = 0         // recording started this late vs. the others (lost head chunk)
 }
 
@@ -182,7 +182,7 @@ extension Lane {
     }
 }
 
-/// Un punto de la línea de volumen de una persona: en el segundo `t` del episodio, `db` más o menos (0 = como está).
+/// A point on a person's volume line: at episode second `t`, `db` more or less (0 = as is).
 struct VolumePoint: Codable, Equatable, Hashable, Identifiable {
     var id = UUID()
     var t: Double
@@ -191,7 +191,7 @@ struct VolumePoint: Codable, Equatable, Hashable, Identifiable {
 }
 
 extension Lane {
-    /// dB de la línea de volumen en el segundo `t` (interpolación lineal entre puntos; plano fuera de ellos).
+    /// Volume line dB at second `t` (linear interpolation between points; flat outside them).
     func automationDB(at t: Double) -> Double {
         let pts = volumePoints.sorted { $0.t < $1.t }
         guard let first = pts.first, let last = pts.last else { return 0 }
@@ -208,7 +208,7 @@ extension Lane {
 }
 
 extension Project {
-    /// Si una persona se oye, contando mudo y solo.
+    /// Whether a person is audible, accounting for mute and solo.
     func laneAudible(_ lane: Lane) -> Bool {
         if lane.muted { return false }
         let anySolo = lanes.contains { $0.solo }
@@ -216,13 +216,13 @@ extension Project {
     }
 }
 
-/// Ecualizador sencillo de voz. Todo en 0 = sin cambios.
+/// Simple voice equalizer. All at 0 = no change.
 struct VoiceEQ: Codable, Equatable {
-    var low: Double = 0                 // graves (dB, ~120 Hz)
-    var mid: Double = 0                 // medios (dB, ~1 kHz)
-    var high: Double = 0                // agudos (dB, ~6 kHz)
-    var rumbleCut = false               // quitar retumbe (corte bajo 120 Hz + menos 250 Hz)
-    var compress = false                // «Voz pareja»: compresor suave (lo bajo sube, lo alto no pega)
+    var low: Double = 0                 // bass (dB, ~120 Hz)
+    var mid: Double = 0                 // mids (dB, ~1 kHz)
+    var high: Double = 0                // treble (dB, ~6 kHz)
+    var rumbleCut = false               // remove rumble (low cut at 120 Hz + less 250 Hz)
+    var compress = false                // «Voz pareja»: gentle compressor (quiet goes up, loud doesn't hit)
     var deess = false                   // «Menos siseo»: de-esser
     var isFlat: Bool { abs(low) < 0.1 && abs(mid) < 0.1 && abs(high) < 0.1 && !rumbleCut && !compress && !deess }
     init() {}
@@ -245,7 +245,7 @@ struct VoiceEQ: Codable, Equatable {
         }
         return e
     }
-    /// Firma corta para nombrar el archivo procesado.
+    /// Short signature to name the processed file.
     var key: String { String(format: "l%+.1fm%+.1fh%+.1f%@%@%@", low, mid, high, rumbleCut ? "r" : "", compress ? "c" : "", deess ? "d" : "") }
     var ffmpegFilter: String {
         var f: [String] = []
@@ -260,14 +260,14 @@ struct VoiceEQ: Codable, Equatable {
     }
 }
 
-/// Una banda del ecualizador paramétrico del estudio.
+/// One band of the studio's parametric equalizer.
 struct EQBand: Codable, Equatable, Identifiable, Hashable {
     enum Kind: String, Codable, CaseIterable { case highpass, lowshelf, peak, highshelf, lowpass }
     var id = UUID()
     var kind: Kind = .peak
     var freq: Double = 1000             // Hz
-    var gain: Double = 0                // dB (no aplica a paso alto/bajo)
-    var q: Double = 1.0                 // ancho (octavas aprox. en AUNBandEQ)
+    var gain: Double = 0                // dB (doesn't apply to high/low-pass)
+    var q: Double = 1.0                 // width (approx. octaves in AUNBandEQ)
     var enabled = true
     var label: String {
         switch kind {
@@ -280,14 +280,14 @@ struct EQBand: Codable, Equatable, Identifiable, Hashable {
     }
 }
 
-/// Un punto de automatización: en el segundo `t` del episodio, el parámetro vale `v`.
+/// An automation point: at episode second `t`, the parameter is `v`.
 struct AutoPoint: Codable, Equatable, Hashable, Identifiable {
     var id = UUID()
     var t: Double
     var v: Double
 }
 
-/// Un plugin Audio Unit de terceros (o del sistema) insertado en la cadena de una persona.
+/// A third-party (or system) Audio Unit plugin inserted in a person's chain.
 struct PluginInsert: Codable, Equatable, Identifiable, Hashable {
     var id = UUID()
     var type: UInt32          // kAudioUnitType_Effect / MusicEffect
@@ -296,28 +296,28 @@ struct PluginInsert: Codable, Equatable, Identifiable, Hashable {
     var name: String
     var vendor: String = ""
     var enabled = true
-    var state: Data?          // ClassInfo / fullState del plugin (sus parámetros)
+    var state: Data?          // ClassInfo / fullState of the plugin (its parameters)
 }
 
-/// La cadena de voz completa de una persona (el estudio). El nivel simple (`VoiceEQ`) es un preset de esto.
+/// A person's full voice chain (the studio). The simple level (`VoiceEQ`) is a preset of this.
 struct ChainSettings: Codable, Equatable {
     static let maxBands = 8
     var bands: [EQBand] = []
-    /// Plugins después del compresor y antes del limitador, en orden.
+    /// Plugins after the compressor and before the limiter, in order.
     var plugins: [PluginInsert] = []
-    /// Automatización por parámetro (`comp.threshold`, `eq.<id de banda>.gain`, …): puntos en tiempo del episodio.
+    /// Per-parameter automation (`comp.threshold`, `eq.<band id>.gain`, …): points in episode time.
     var automation: [String: [AutoPoint]] = [:]
     var compressorOn = false
     var threshold: Double = -20          // dB
-    var ratio: Double = 3               // :1 (se traduce a «head room» del AU)
+    var ratio: Double = 3               // :1 (translated to the AU's «head room»)
     var attack: Double = 0.008          // s
     var release: Double = 0.14          // s
     var makeup: Double = 4              // dB
     var deesserOn = false
-    var deesserAmount: Double = 0.5     // 0…1 (cuánto baja las eses)
+    var deesserAmount: Double = 0.5     // 0…1 (how much it lowers the S's)
     var limiterOn = true
     var gateOn = false
-    var gateThreshold: Double = -45     // dB (expansión suave por debajo)
+    var gateThreshold: Double = -45     // dB (gentle expansion below)
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -338,13 +338,13 @@ struct ChainSettings: Codable, Equatable {
         plugins = try c.decodeIfPresent([PluginInsert].self, forKey: .plugins) ?? []
     }
 
-    // Parámetros automatizables (id → cómo leerlo y escribirlo)
+    // Automatable parameters (id → how to read and write it)
     static let compThreshold = "comp.threshold", compRatio = "comp.ratio", compMakeup = "comp.makeup"
     static let deesserAmount = "deesser.amount", gateThreshold = "gate.threshold"
     static func bandGain(_ b: EQBand) -> String { "eq.\(b.id.uuidString).gain" }
     static func bandFreq(_ b: EQBand) -> String { "eq.\(b.id.uuidString).freq" }
 
-    /// Valor actual (sin automatización) de un parámetro.
+    /// Current value (without automation) of a parameter.
     func value(of param: String) -> Double? {
         switch param {
         case Self.compThreshold: return threshold
@@ -373,7 +373,7 @@ struct ChainSettings: Codable, Equatable {
         }
     }
 
-    /// Valor de un parámetro en el segundo `t` del episodio, siguiendo su automatización (lineal entre puntos).
+    /// A parameter's value at episode second `t`, following its automation (linear between points).
     func value(of param: String, at t: Double) -> Double? {
         guard let pts = automation[param], let first = pts.first else { return value(of: param) }
         let sorted = pts.sorted { $0.t < $1.t }
@@ -387,7 +387,7 @@ struct ChainSettings: Codable, Equatable {
         return value(of: param)
     }
 
-    /// La cadena con todos los parámetros automatizados puestos en su valor de ese segundo.
+    /// The chain with every automated parameter set to its value at that second.
     func resolved(at t: Double) -> ChainSettings {
         var c = self
         for (param, _) in automation { if let v = value(of: param, at: t) { c.set(param, v) } }
@@ -397,14 +397,14 @@ struct ChainSettings: Codable, Equatable {
 
     var hasAutomation: Bool { automation.values.contains { !$0.isEmpty } }
 
-    /// Escribe un punto (o mueve el que haya a menos de 0,25 s) y deja el valor base también ahí.
+    /// Writes a point (or moves the one within 0.25 s) and also sets the base value there.
     mutating func writePoint(_ param: String, t: Double, v: Double) {
         var pts = automation[param] ?? []
         if let i = pts.firstIndex(where: { abs($0.t - t) < 0.25 }) { pts[i].v = v } else { pts.append(AutoPoint(t: t, v: v)) }
         automation[param] = pts.sorted { $0.t < $1.t }
     }
 
-    /// Lo que describe el nivel simple, traducido a la cadena.
+    /// What the simple level describes, translated to the chain.
     static func preset(_ e: VoiceEQ) -> ChainSettings {
         var c = ChainSettings()
         if e.rumbleCut {
@@ -419,7 +419,7 @@ struct ChainSettings: Codable, Equatable {
         return c
     }
 
-    /// Si esta cadena es exactamente lo que el nivel simple sabe decir, devuelve ese preset; si no, nil.
+    /// If this chain is exactly what the simple level can express, returns that preset; otherwise nil.
     var asSimple: VoiceEQ? {
         var e = VoiceEQ()
         var rest = bands.filter { $0.enabled }
@@ -455,32 +455,32 @@ struct Lane: Codable, Identifiable, Equatable {
     var clips: [LaneClip]               // played back-to-back starting at `offset`
     var volume: Double = 1.0
     var offset: Double = 0              // timeline time where this person's recording starts
-    var fadeIn: Double = 0              // segundos de entrada suave del audio de esta persona
-    var fadeOut: Double = 0             // segundos de salida suave
-    var eq = VoiceEQ()                  // ecualizador de 3 bandas (el nivel simple)
-    var chain: ChainSettings?           // la cadena completa del estudio; nil = la que describe `eq`
-    var muted: Bool = false             // M: esta persona no suena (vista previa y export)
-    var solo: Bool = false              // S: solo suenan las personas con solo
-    var volumePoints: [VolumePoint] = []   // volumen dibujado: puntos (tiempo del episodio, dB); vacío = plano
-    var pan: Double = 0                 // panorama: −1 izquierda … 0 centro … 1 derecha (lo pone «Panorama de conversación»)
-    var noiseReduce: Bool = false       // reducción de ruido por huella (resta espectral, sin IA)
-    var noiseAmount: Double = 0.6       // cuánto: 0,3 suave · 0,6 normal · 0,9 fuerte
-    var noiseProfile: [Float]?          // la huella: magnitud media por banda del segundo más quieto
-    var noiseProfileAt: Double?         // de qué segundo del episodio salió la huella
-    var declick: Bool = false           // quitar clics y chasquidos de boca
-    var declickAmount: Double = 0.5     // sensibilidad 0…1
-    var measuredLUFS: Double?           // sonoridad medida de esta voz (BS.1770 con compuerta), si se midió
-    var matchGain: Double = 0           // dB que la igualan con las demás (lo pone «Voces parejas por medición»)
-    var grade: ColorGrade?              // Studio · Video: color de esta cámara (toda la persona)
-    var mask: ShapeMask?                // Studio · Video: dónde se aplica ese color (y qué se oscurece fuera)
+    var fadeIn: Double = 0              // seconds of fade-in for this person's audio
+    var fadeOut: Double = 0             // seconds of fade-out
+    var eq = VoiceEQ()                  // 3-band equalizer (the simple level)
+    var chain: ChainSettings?           // the full studio chain; nil = the one `eq` describes
+    var muted: Bool = false             // M: this person is silent (preview and export)
+    var solo: Bool = false              // S: only people with solo sound
+    var volumePoints: [VolumePoint] = []   // drawn volume: points (episode time, dB); empty = flat
+    var pan: Double = 0                 // pan: −1 left … 0 center … 1 right (set by «Panorama de conversación»)
+    var noiseReduce: Bool = false       // noise-print reduction (spectral subtraction, no AI)
+    var noiseAmount: Double = 0.6       // amount: 0.3 gentle · 0.6 normal · 0.9 strong
+    var noiseProfile: [Float]?          // the print: mean magnitude per band of the quietest second
+    var noiseProfileAt: Double?         // which episode second the print came from
+    var declick: Bool = false           // remove clicks and mouth smacks
+    var declickAmount: Double = 0.5     // sensitivity 0…1
+    var measuredLUFS: Double?           // measured loudness of this voice (gated BS.1770), if measured
+    var matchGain: Double = 0           // dB that match it with the others (set by «Voces parejas por medición»)
+    var grade: ColorGrade?              // Studio · Video: this camera's color (the whole person)
+    var mask: ShapeMask?                // Studio · Video: where that color applies (and what's darkened outside)
 
-    /// La cadena que suena: la del estudio si existe, si no el preset del nivel simple.
+    /// The chain that plays: the studio's if it exists, otherwise the simple level's preset.
     var effectiveChain: ChainSettings { chain ?? ChainSettings.preset(eq) }
-    /// El estudio cambió algo que el nivel simple no sabe decir.
+    /// The studio changed something the simple level can't express.
     var tunedInStudio: Bool { chain != nil && chain?.asSimple == nil }
 
-    /// Guarda una cadena del estudio: si el nivel simple la sabe decir, va al preset (y los controles
-    /// simples la muestran); si no, queda como cadena del estudio y el simple avisa.
+    /// Saves a studio chain: if the simple level can express it, it goes to the preset (and the simple
+    /// controls show it); if not, it stays as a studio chain and the simple one warns.
     static func store(_ c: ChainSettings, in lane: inout Lane) {
         if let simple = c.asSimple { lane.eq = simple; lane.chain = nil } else { lane.chain = c }
     }
@@ -488,8 +488,8 @@ struct Lane: Codable, Identifiable, Equatable {
     var duration: Double { offset + clips.reduce(0) { $0 + $1.length } }
 
     /// Timeline spans of each clip.
-    /// Con desfase negativo la persona suena antes: se salta el principio de su grabación
-    /// (lo que quedaría antes del segundo 0 del episodio no se usa).
+    /// With a negative offset the person sounds earlier: the beginning of their recording is skipped
+    /// (what would fall before second 0 of the episode isn't used).
     var placed: [(clip: LaneClip, tlStart: Double, tlEnd: Double)] {
         var t = offset
         var out: [(clip: LaneClip, tlStart: Double, tlEnd: Double)] = []
@@ -508,7 +508,7 @@ struct Lane: Codable, Identifiable, Equatable {
         return out
     }
 
-    /// Lo más que se puede adelantar: siempre queda al menos un segundo de su grabación.
+    /// The most it can be advanced: at least one second of their recording always remains.
     var minOffset: Double { -max(0, clips.reduce(0) { $0 + $1.length } - 1) }
 
     var primaryMediaId: Int? { clips.first?.mediaId }
@@ -528,7 +528,7 @@ struct LaneClip: Codable, Equatable {
         mediaId = try c.decode(Int.self, forKey: .mediaId)
         srcIn = try c.decodeIfPresent(Double.self, forKey: .srcIn) ?? 0
         srcOut = try c.decode(Double.self, forKey: .srcOut)
-        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1.0   // proyectos de antes de que hubiera volumen por clip
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 1.0   // projects from before there was per-clip volume
     }
 }
 
@@ -541,14 +541,14 @@ struct AudioLaneClip: Codable, Identifiable, Equatable {
     var volume: Double = 0.7
     var fadeIn: Double = 0
     var fadeOut: Double = 0
-    var duck: Bool?                     // bajar bajo la voz; nil = automático (sí si dura más de 8 s: música, no efectos)
+    var duck: Bool?                     // duck under the voice; nil = automatic (yes if longer than 8 s: music, not effects)
     var duckDB: Double = 12
-    var loop: Bool = false              // repetir en bucle hasta el final del episodio
-    var crossfade: Bool = false         // Studio · Video: fades curvos (igual potencia), para cruzar con otro clip
-    /// Studio · Video: velocidad (1 = normal). 0,5 = a la mitad (dura el doble), 2 = al doble. El tono se mantiene.
+    var loop: Bool = false              // loop until the end of the episode
+    var crossfade: Bool = false         // Studio · Video: curved fades (equal power), to cross with another clip
+    /// Studio · Video: speed (1 = normal). 0.5 = half (lasts twice as long), 2 = double. Pitch is preserved.
     var speed: Double = 1
     var ducks: Bool { duck ?? ((srcOut - srcIn) > 8) }
-    /// Lo que dura en el episodio (la fuente, estirada o comprimida por la velocidad)
+    /// How long it lasts in the episode (the source, stretched or compressed by speed)
     var length: Double { (srcOut - srcIn) / max(0.1, speed) }
     var tlEnd: Double { tlStart + length }
     init(id: Int, mediaId: Int, tlStart: Double, srcIn: Double, srcOut: Double, volume: Double = 0.7, fadeIn: Double = 0, fadeOut: Double = 0) {
@@ -583,7 +583,7 @@ struct Participant: Codable, Identifiable, Equatable {
     var twitter: String?
     var youtube: String?
     var tiktok: String?
-    var photoFile: String?              // foto del invitado (de prePod), relativa al proyecto
+    var photoFile: String?              // guest photo (from prePod), relative to the project
 
     var handle: String? {
         for h in [instagram, tiktok, twitter, youtube] {
@@ -614,10 +614,10 @@ struct Cut: Codable, Identifiable, Equatable, Hashable {
     var kind: Kind
     var enabled: Bool = true
     var label: String = ""
-    /// Sugerencia dudosa (muletilla que puede ser palabra válida, frase repetida, sonido sin palabras):
-    /// nace apagada y no se quita hasta que la persona la marque.
+    /// Doubtful suggestion (filler that may be a valid word, repeated phrase, wordless sound):
+    /// starts off and isn't removed until the person marks it.
     var suggested: Bool? = nil
-    /// La persona ya la miró (la prendió o la apagó a mano). Se conserva al volver a arreglar.
+    /// The person already looked at it (switched it on or off by hand). Kept when fixing again.
     var reviewed: Bool? = nil
     var length: Double { max(0, end - start) }
 }
@@ -627,13 +627,13 @@ struct FixSettings: Codable, Equatable {
     var removeFillers = true
     var removeWordFillers = false       // "este", "o sea", "pues"... off by default
     var enhanceAudio = true
-    var strongNoise = false             // (versiones viejas) ya no se usa: ver `noiseLevel`
-    var noiseLevel = 2                  // cuánto se limpia la voz: 1 natural · 2 normal · 3 máximo
-    var gateOthers = true               // bajar la pista de quien no está hablando (teclas y ruidos del otro)
-    var gateDB: Double = 12             // cuánto se baja: 8 suave, 12 normal, 18 fuerte
+    var strongNoise = false             // (old versions) no longer used: see `noiseLevel`
+    var noiseLevel = 2                  // how much the voice is cleaned: 1 natural · 2 normal · 3 maximum
+    var gateOthers = true               // duck the track of whoever isn't speaking (the other's keys and noises)
+    var gateDB: Double = 12             // how much it's lowered: 8 gentle, 12 normal, 18 strong
     var minSilence: Double = 0.8        // seconds of silence before we cut
     var keepPad: Double = 0.18          // breathing room kept around speech
-    var roomTone = true                 // tono de sala: rellena los huecos muertos de cada persona con su propio ambiente y suaviza las uniones de los cortes
+    var roomTone = true                 // room tone: fills each person's dead gaps with their own ambience and smooths the cut joins
     var lastRun: Date?
     init() {}
     init(from decoder: Decoder) throws {
@@ -661,14 +661,14 @@ struct Reel: Codable, Identifiable, Equatable {
     var end: Double
     var selected: Bool = true
     var exportedFile: String?
-    var look: ReelLook?                 // diseño propio de este reel (nil = el de todos los reels)
-    var cuts: [Cut] = []                // cortes solo de este reel (frases quitadas, silencios), aparte de los del episodio
-    var brolls: [BRollClip] = []        // b-roll solo de este reel
-    var music: [AudioLaneClip] = []     // música propia del reel (se usa cuando el reel no lleva la del episodio)
-    var cintillos: [DirectorCintillo] = []   // cintillos solo de este reel
-    var words: [Word]?                  // texto propio del reel (se volvió a escuchar solo este reel); nil = el del episodio
-    var seen: Bool?                     // la persona ya lo miró en la vista previa (para la revisión antes de exportar)
-    var hook: String?                   // título de gancho: grande los primeros segundos del reel (nil = sin título)
+    var look: ReelLook?                 // this reel's own design (nil = the one for all reels)
+    var cuts: [Cut] = []                // cuts for this reel only (removed phrases, silences), apart from the episode's
+    var brolls: [BRollClip] = []        // b-roll for this reel only
+    var music: [AudioLaneClip] = []     // the reel's own music (used when the reel doesn't carry the episode's)
+    var cintillos: [DirectorCintillo] = []   // lower thirds for this reel only
+    var words: [Word]?                  // the reel's own text (only this reel was re-listened); nil = the episode's
+    var seen: Bool?                     // the person already looked at it in the preview (for the review before exporting)
+    var hook: String?                   // hook title: large during the first seconds of the reel (nil = no title)
     var length: Double { max(0, end - start) }
     static let hookSeconds = 3.0
 
@@ -696,8 +696,8 @@ struct Reel: Codable, Identifiable, Equatable {
     }
 }
 
-/// Fondo virtual de una persona: se separa a la persona de su fondo real (Apple Vision, en la Mac, sin internet)
-/// y detrás se pone lo que se elija.
+/// A person's virtual background: the person is separated from their real background (Apple Vision, on the Mac, offline)
+/// and whatever is chosen is placed behind.
 struct VirtualBackground: Codable, Equatable {
     enum Mode: String, Codable, CaseIterable {
         case blur, podcast, color, image
@@ -706,9 +706,9 @@ struct VirtualBackground: Codable, Equatable {
         }
     }
     var mode: Mode = .blur
-    var blur: Double = 18               // difuminado: cuánto (6 suave … 40 muy borroso)
+    var blur: Double = 18               // blur: how much (6 gentle … 40 very blurry)
     var color: String = "#14141A"
-    var imageFile: String?              // relativo a la carpeta del proyecto
+    var imageFile: String?              // relative to the project folder
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -719,8 +719,8 @@ struct VirtualBackground: Codable, Equatable {
     }
 }
 
-/// Cómo se ve un reel: diseño, sus opciones y la marca (fondo, logo, nombres), aparte del episodio.
-/// `logoFile` y `backgroundFile` son un logo y un fondo solo para reels; si están vacíos se usan los del podcast.
+/// How a reel looks: layout, its options and branding (background, logo, names), apart from the episode.
+/// `logoFile` and `backgroundFile` are a logo and background for reels only; if empty the podcast's are used.
 struct ReelLook: Codable, Equatable {
     var layout: LayoutTemplate = .auto
     var options = LayoutOptions()
@@ -729,11 +729,11 @@ struct ReelLook: Codable, Equatable {
     var showNames: Bool = true
     var logoFile: String?
     var backgroundFile: String?
-    var music: Bool = true              // música y efectos del episodio en el reel
-    var captions: Bool = true           // subtítulos en el reel
-    var captionStyle: CaptionStyle?     // estilo y posición propios de los subtítulos en el reel (nil = los del episodio)
-    var laneOrder: [Int]?               // orden en pantalla propio (nil = el del episodio)
-    var gateOthers: Bool?               // silenciar a quien no habla, propio (nil = como en Limpiar sonido)
+    var music: Bool = true              // episode music and effects in the reel
+    var captions: Bool = true           // subtitles in the reel
+    var captionStyle: CaptionStyle?     // the reel's own subtitle style and position (nil = the episode's)
+    var laneOrder: [Int]?               // own on-screen order (nil = the episode's)
+    var gateOthers: Bool?               // mute whoever isn't speaking, own setting (nil = as in Limpiar sonido)
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -753,19 +753,19 @@ struct ReelLook: Codable, Equatable {
 }
 
 extension Project {
-    /// El diseño que le toca a un reel: el suyo si tiene, si no el de todos los reels.
+    /// The design that applies to a reel: its own if it has one, otherwise the one for all reels.
     func look(for reel: Reel?) -> ReelLook { reel?.look ?? reelLook }
 
-    /// Copia del proyecto con el aspecto de un reel puesto encima (para la vista previa y el export de ese reel).
-    /// Con `reel` también entran sus cortes propios.
+    /// Copy of the project with a reel's look applied on top (for that reel's preview and export).
+    /// With `reel` its own cuts are also included.
     func applying(_ look: ReelLook, reel: Reel? = nil) -> Project {
         var p = self
         if let reel {
-            if let own = reel.words { p.words = own }   // el texto propio del reel (no cambia el episodio)
+            if let own = reel.words { p.words = own }   // the reel's own text (doesn't change the episode)
             p.cuts += reel.cuts
             p.brolls += reel.brolls
             if !reel.cintillos.isEmpty { p.cintillos += reel.cintillos; p.showCintillos = true }
-            // Título de gancho: arriba, grande, desde lo primero que suena del reel
+            // Hook title: at the top, large, from the first sound of the reel
             if let h = reel.hook?.trimmingCharacters(in: .whitespacesAndNewlines), !h.isEmpty {
                 let keep = EditEngine.keepRanges(duration: p.duration, cuts: p.cuts, window: (reel.start, reel.end))
                 let at = keep.first?.start ?? reel.start
@@ -783,14 +783,14 @@ extension Project {
         p.showNames = look.showNames
         if let f = look.logoFile { p.logoFile = f }
         if let f = look.backgroundFile { p.backgroundFile = f }
-        if !look.music { p.audioLane = reel?.music ?? [] }   // sin la del episodio: la propia del reel (si tiene)
+        if !look.music { p.audioLane = reel?.music ?? [] }   // without the episode's: the reel's own (if any)
         if let cs = look.captionStyle { p.captionStyle = cs }
         if !look.captions { p.captionStyle.enabled = false }
         return p
     }
 }
 
-/// Intro o cierre: una imagen fija unos segundos, con música opcional (relativa a la carpeta del proyecto).
+/// Intro or outro: a still image for a few seconds, with optional music (relative to the project folder).
 struct Bumper: Codable, Equatable {
     var imageFile: String
     var seconds: Double = 4
@@ -808,13 +808,13 @@ struct Bumper: Codable, Equatable {
     }
 }
 
-/// Ajustes de los diseños. Cada campo tiene valor por defecto para que los proyectos viejos abran igual.
+/// Layout settings. Each field has a default so old projects open the same.
 struct LayoutOptions: Codable, Equatable {
-    var soloStudio: Bool = false        // Quien habla: un recuadro con marco sobre el fondo del podcast (sin recortar el video)
-    var gridSpeakerBig: Bool = false    // Cuadrícula: quien habla en grande arriba, los demás en cuadritos abajo
-    var pipFollowSpeaker: Bool = true   // Ventanita: en grande quien habla (si no, siempre la primera persona)
-    var punchIn: Bool = false           // acercamiento sutil a cada persona cuando sube la energía de su voz
-    var audiogram: Bool = true          // episodios sin cámara: ondas que siguen la voz de quien habla
+    var soloStudio: Bool = false        // Speaker: a framed box over the podcast background (without cropping the video)
+    var gridSpeakerBig: Bool = false    // Grid: speaker large on top, the others in small tiles below
+    var pipFollowSpeaker: Bool = true   // Picture-in-picture: speaker large (otherwise, always the first person)
+    var punchIn: Bool = false           // subtle zoom-in on each person when their voice energy rises
+    var audiogram: Bool = true          // episodes without camera: waves following the speaker's voice
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -894,11 +894,11 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
         case .audio: return "waveform"
         }
     }
-    /// Tamaño del video. Con el plan Gratis el lado corto es 720 (1280×720, 720×1280, 720×720).
+    /// Video size. With the Free plan the short side is 720 (1280×720, 720×1280, 720×720).
     private var planNote: String { (Plan.maxHeight ?? 1080) < 1080 ? String(localized: " (plan \(Plan.name))") : "" }
 
-    /// 4K para YouTube: solo mientras se exporta (la vista previa sigue en 1080) y solo con un plan
-    /// que incluye la app. Se activa con `ExportFormat.$uhd.withValue(true) { … }`.
+    /// 4K for YouTube: only while exporting (the preview stays at 1080) and only with a plan
+    /// that includes the app. Enabled with `ExportFormat.$uhd.withValue(true) { … }`.
     @TaskLocal static var uhd = false
     static var uhdAvailable: Bool { Plan.maxHeight == nil }
     var uses4K: Bool { self == .landscape && Self.uhd && Self.uhdAvailable }
@@ -949,11 +949,11 @@ struct ScriptItem: Codable, Equatable, Identifiable {
     var text: String
 }
 
-/// Capa encima del video: un texto, una imagen o un sticker (emoji), en un momento del episodio.
-/// `start` es tiempo del episodio (como los cintillos): si se corta ese trozo, sale en lo siguiente que quede.
+/// Layer on top of the video: a text, an image or a sticker (emoji), at a moment of the episode.
+/// `start` is episode time (like lower thirds): if that span is cut, it shows in whatever remains next.
 struct VideoLayer: Codable, Identifiable, Equatable {
     enum Kind: String, Codable { case text, image, sticker }
-    /// Estilos de texto: título grande con contorno, texto en caja oscura, etiqueta de color.
+    /// Text styles: large outlined title, text in a dark box, colored tag.
     enum Style: String, Codable, CaseIterable { case title, box, label
         var name: String { switch self { case .title: return String(localized: "Título"); case .box: return String(localized: "Caja"); case .label: return String(localized: "Etiqueta") } }
     }
@@ -963,20 +963,20 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     var duration: Double = 5
     var text: String = ""
     var style: Style = .title
-    var color: String = "#FFFFFF"       // título/caja: color del texto · etiqueta: color de fondo
-    var imageFile: String?              // relativo a la carpeta del proyecto
-    var x: Double = 0.5                 // centro, 0 = izquierda … 1 = derecha
-    var y: Double = 0.5                 // centro, 0 = arriba … 1 = abajo
-    var scale: Double = 1               // tamaño (1 = normal)
-    var animate: Bool = true            // entra y sale con fundido y un pequeño salto
-    /// Studio · Video: keyframes de posición, tamaño, giro y opacidad (nil = la capa está quieta, como la puso el simple)
+    var color: String = "#FFFFFF"       // title/box: text color · tag: background color
+    var imageFile: String?              // relative to the project folder
+    var x: Double = 0.5                 // center, 0 = left … 1 = right
+    var y: Double = 0.5                 // center, 0 = top … 1 = bottom
+    var scale: Double = 1               // size (1 = normal)
+    var animate: Bool = true            // enters and leaves with a fade and a small bounce
+    /// Studio · Video: position, size, rotation and opacity keyframes (nil = the layer is still, as the simple step placed it)
     var animation: LayerAnimation?
-    /// Studio · Video: cómo entra y cómo sale (nil = el fundido con saltito de `animate`)
+    /// Studio · Video: how it enters and leaves (nil = `animate`'s fade with a little bounce)
     var enter: TitleMotion?
     var exit: TitleMotion?
 
     var end: Double { start + duration }
-    /// Tocada en Studio: tiene keyframes o entradas que el paso simple no sabe expresar.
+    /// Touched in Studio: has keyframes or ins the simple step can't express.
     var tunedInStudio: Bool { !(animation?.isEmpty ?? true) || enter != nil || exit != nil }
     var title: String {
         switch kind {
@@ -986,7 +986,7 @@ struct VideoLayer: Codable, Identifiable, Equatable {
         }
     }
 
-    /// Las 9 posiciones rápidas (fila 0…2, columna 0…2) → centro de la capa.
+    /// The 9 quick positions (row 0…2, column 0…2) → layer center.
     static func anchor(row: Int, col: Int) -> (x: Double, y: Double) {
         ([0.17, 0.5, 0.83][col], [0.14, 0.5, 0.84][row])
     }
@@ -1017,7 +1017,7 @@ struct VideoLayer: Codable, Identifiable, Equatable {
     }
 }
 
-/// Cómo entra (o sale) un título, sticker o imagen: la animación va sobre la capa ya dibujada.
+/// How a title, sticker or image enters (or leaves): the animation runs on the already drawn layer.
 struct TitleMotion: Codable, Equatable {
     enum Kind: String, Codable, CaseIterable {
         case rise, fade, reveal, grow, wipe, drop
@@ -1038,36 +1038,36 @@ struct TitleMotion: Codable, Equatable {
     }
 }
 
-/// B-roll: un video o una imagen que tapa la pantalla desde `start` (tiempo del episodio) durante `duration` segundos;
-/// la voz del podcast sigue debajo. El video del b-roll va sin su propio sonido salvo que se suba `volume`.
+/// B-roll: a video or image covering the screen from `start` (episode time) for `duration` seconds;
+/// the podcast's voice continues underneath. The b-roll video has no sound of its own unless `volume` is raised.
 struct BRollClip: Codable, Identifiable, Equatable {
     var id: Int
-    var file: String                    // relativo a la carpeta del proyecto (broll/…)
+    var file: String                    // relative to the project folder (broll/…)
     var isVideo: Bool
     var start: Double
     var duration: Double = 6
-    var srcIn: Double = 0               // desde qué segundo del video de b-roll
-    var fill: Bool = true               // llenar la pantalla (recorta) o entrar completo con bordes
-    var volume: Double = 0              // sonido del b-roll (0 = mudo)
-    var placement: String = "full"      // full | pipLeft | pipRight (ventanita abajo a la izquierda o a la derecha)
-    /// Studio · Video: cómo entra este clip (nil = el fundido corto de siempre)
+    var srcIn: Double = 0               // from which second of the b-roll video
+    var fill: Bool = true               // fill the screen (crops) or fit entirely with borders
+    var volume: Double = 0              // b-roll sound (0 = muted)
+    var placement: String = "full"      // full | pipLeft | pipRight (small window at bottom left or right)
+    /// Studio · Video: how this clip enters (nil = the usual short fade)
     var transitionIn: Transition?
-    /// Studio · Video: velocidad del video (1 = normal). 0,25–1 cámara lenta, 1–4 acelerado. `duration` sigue siendo lo que ocupa en pantalla.
+    /// Studio · Video: video speed (1 = normal). 0.25–1 slow motion, 1–4 fast. `duration` is still what it takes on screen.
     var speed: Double = 1
-    /// Rampa de velocidad: si está, el clip va de `speed` al inicio a `speedEnd` al final (suave); nil = velocidad fija.
+    /// Speed ramp: if set, the clip goes from `speed` at the start to `speedEnd` at the end (smoothly); nil = fixed speed.
     var speedEnd: Double?
-    var grade: ColorGrade?              // Studio · Video: color solo de este clip
+    var grade: ColorGrade?              // Studio · Video: color for this clip only
     var end: Double { start + duration }
     static let maxSeconds = 10.0
 
-    /// Velocidad en una fracción 0–1 del clip (con la rampa, interpolada suave; sin ella, `speed`).
+    /// Speed at a 0–1 fraction of the clip (with the ramp, smoothly interpolated; without it, `speed`).
     func speed(at f: Double) -> Double {
         guard let e = speedEnd else { return max(0.1, speed) }
         let k = min(1, max(0, f)); let ease = k * k * (3 - 2 * k)
         return max(0.1, speed + (e - speed) * ease)
     }
-    /// Tramos de la rampa para armar la mezcla: (segundos en pantalla, segundos de la fuente) por trozo, en orden.
-    /// Sin rampa, un solo tramo. `screenLen` es lo que ocupa en pantalla.
+    /// Ramp segments to build the mix: (seconds on screen, seconds of source) per chunk, in order.
+    /// Without a ramp, a single segment. `screenLen` is what it takes on screen.
     func speedSegments(screenLen: Double, step: Double = 0.25) -> [(screen: Double, source: Double)] {
         guard speedEnd != nil, screenLen > step else { return [(screenLen, screenLen * speed(at: 0))] }
         var out: [(Double, Double)] = []
@@ -1079,8 +1079,8 @@ struct BRollClip: Codable, Identifiable, Equatable {
         }
         return out
     }
-    /// Segundos de fuente que consume la rampa entera en `screenLen` segundos de pantalla.
-    func sourceNeeded(screenLen: Double) -> Double { speedSegments(screenLen: screenLen).reduce(0) { $0 + $1.source } }        // un b-roll es un apoyo corto, no otro video
+    /// Seconds of source the whole ramp consumes in `screenLen` seconds on screen.
+    func sourceNeeded(screenLen: Double) -> Double { speedSegments(screenLen: screenLen).reduce(0) { $0 + $1.source } }        // a b-roll is a short support, not another video
     var title: String { (((file as NSString).lastPathComponent) as NSString).deletingPathExtension }
 
     init(id: Int, file: String, isVideo: Bool, start: Double, duration: Double = 6) {
@@ -1106,7 +1106,7 @@ struct BRollClip: Codable, Identifiable, Equatable {
 
 // MARK: - Studio · Video
 
-/// Un punto de una curva: en qué segundo del episodio, qué valor, y cómo se llega al siguiente punto.
+/// A curve point: at which episode second, what value, and how to get to the next point.
 struct Keyframe: Codable, Equatable, Hashable, Identifiable {
     enum Ease: String, Codable, CaseIterable {
         case linear, smooth, hold
@@ -1126,9 +1126,9 @@ struct Keyframe: Codable, Equatable, Hashable, Identifiable {
     }
 }
 
-/// Animación de una capa: por parámetro, sus keyframes (tiempo del episodio). Posición en fracciones del cuadro
-/// (0–1, como `VideoLayer.x/y`) para que la misma curva valga en 16:9, 9:16 y 1:1; tamaño como factor; giro en
-/// grados; opacidad 0–1. Un parámetro sin keyframes usa el valor fijo de la capa.
+/// A layer's animation: per parameter, its keyframes (episode time). Position in frame fractions
+/// (0–1, like `VideoLayer.x/y`) so the same curve works in 16:9, 9:16 and 1:1; size as a factor; rotation in
+/// degrees; opacity 0–1. A parameter without keyframes uses the layer's fixed value.
 struct LayerAnimation: Codable, Equatable {
     static let x = "x", y = "y", scale = "scale", rotation = "rotation", opacity = "opacity"
     static let params = [x, y, scale, rotation, opacity]
@@ -1137,7 +1137,7 @@ struct LayerAnimation: Codable, Equatable {
     var isEmpty: Bool { tracks.values.allSatisfy(\.isEmpty) }
     func has(_ p: String) -> Bool { !(tracks[p] ?? []).isEmpty }
 
-    /// Valor del parámetro en `t`, o nil si no tiene keyframes.
+    /// The parameter's value at `t`, or nil if it has no keyframes.
     func value(_ p: String, at t: Double) -> Double? {
         guard let pts = tracks[p], !pts.isEmpty else { return nil }
         return Self.interpolate(pts, at: t)
@@ -1163,7 +1163,7 @@ struct LayerAnimation: Codable, Equatable {
         return last.v
     }
 
-    /// Pone (o mueve) un keyframe en `t`; dos keyframes a menos de 40 ms se consideran el mismo.
+    /// Sets (or moves) a keyframe at `t`; two keyframes less than 40 ms apart are considered the same.
     mutating func write(_ p: String, t: Double, v: Double, ease: Keyframe.Ease = .smooth) {
         var pts = tracks[p] ?? []
         if let i = pts.firstIndex(where: { abs($0.t - t) < 0.04 }) { pts[i].v = v; pts[i].ease = ease }
@@ -1177,7 +1177,7 @@ struct LayerAnimation: Codable, Equatable {
     }
     mutating func clear(_ p: String) { tracks[p] = nil }
 
-    /// La misma animación con los tiempos convertidos (p. ej. del episodio al video final).
+    /// The same animation with times converted (e.g. from the episode to the final video).
     func mapped(_ f: (Double) -> Double?) -> LayerAnimation {
         var out = LayerAnimation()
         for (p, pts) in tracks {
@@ -1188,23 +1188,23 @@ struct LayerAnimation: Codable, Equatable {
     }
 }
 
-/// Máscara de una cámara (Studio · Video): una elipse o un rectángulo, en fracciones del recuadro de esa persona, con
-/// borde suavizado. Dentro se aplica el color de la cámara; fuera, el cuadro queda como está (o se oscurece).
-/// Sigue el movimiento con keyframes de posición y tamaño (x, y, scale), a mano: ningún reconocimiento automático.
+/// A camera mask (Studio · Video): an ellipse or rectangle, in fractions of that person's box, with
+/// a feathered edge. Inside the camera color applies; outside, the frame stays as is (or is darkened).
+/// Follows motion with position and size keyframes (x, y, scale), by hand: no automatic tracking.
 struct ShapeMask: Codable, Equatable {
     enum Shape: String, Codable, CaseIterable {
         case ellipse, rect
         var name: String { self == .ellipse ? String(localized: "Elipse") : String(localized: "Rectángulo") }
     }
     var shape: Shape = .ellipse
-    var x: Double = 0.5                 // centro, fracción del recuadro (0 = izquierda)
-    var y: Double = 0.42                // centro, fracción del recuadro (0 = arriba)
-    var w: Double = 0.5                 // ancho, fracción del recuadro
-    var h: Double = 0.7                 // alto, fracción del recuadro
-    var feather: Double = 24            // suavizado del borde, px a 1080p
-    var invert: Bool = false            // el color va fuera, no dentro
-    var dimOutside: Double = 0          // 0…1: oscurecer lo que queda fuera
-    var animation: LayerAnimation?      // x, y, scale en tiempo del episodio
+    var x: Double = 0.5                 // center, fraction of the box (0 = left)
+    var y: Double = 0.42                // center, fraction of the box (0 = top)
+    var w: Double = 0.5                 // width, fraction of the box
+    var h: Double = 0.7                 // height, fraction of the box
+    var feather: Double = 24            // edge feather, px at 1080p
+    var invert: Bool = false            // the color goes outside, not inside
+    var dimOutside: Double = 0          // 0…1: darken what's outside
+    var animation: LayerAnimation?      // x, y, scale in episode time
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -1218,13 +1218,13 @@ struct ShapeMask: Codable, Equatable {
         dimOutside = try c.decodeIfPresent(Double.self, forKey: .dimOutside) ?? 0
         animation = try c.decodeIfPresent(LayerAnimation.self, forKey: .animation)
     }
-    /// Dónde está la máscara en `t`: centro y escala con los keyframes si los hay.
+    /// Where the mask is at `t`: center and scale with keyframes if any.
     func placement(at t: Double) -> (x: Double, y: Double, scale: Double) {
         (animation?.value(LayerAnimation.x, at: t) ?? x, animation?.value(LayerAnimation.y, at: t) ?? y, animation?.value(LayerAnimation.scale, at: t) ?? 1)
     }
 }
 
-/// Cómo entra un clip desde lo que había antes.
+/// How a clip enters from what came before.
 struct Transition: Codable, Equatable {
     enum Kind: String, Codable, CaseIterable {
         case cut, fade, black, slide, zoom
@@ -1245,13 +1245,13 @@ struct Transition: Codable, Equatable {
     }
 }
 
-/// Un tramo de cámara fijado a mano en Studio (tiempo del episodio): dentro de él gana sobre «sigue a quien habla».
+/// A camera span pinned by hand in Studio (episode time): within it, it beats «sigue a quien habla».
 struct CameraCut: Codable, Equatable, Identifiable {
     var id = UUID()
     var start: Double
     var end: Double
-    var lane: Int?                      // la persona en grande; nil = todas, con la plantilla
-    var template: LayoutTemplate?       // plantilla solo para este tramo; nil = la del proyecto
+    var lane: Int?                      // the person shown large; nil = everyone, with the template
+    var template: LayoutTemplate?       // template for this span only; nil = the project's
     init(start: Double, end: Double, lane: Int? = nil, template: LayoutTemplate? = nil) {
         self.start = start; self.end = end; self.lane = lane; self.template = template
     }
@@ -1265,12 +1265,12 @@ struct CameraCut: Codable, Equatable, Identifiable {
     }
 }
 
-/// Lo que Studio · Video decide sobre las cámaras.
+/// What Studio · Video decides about the cameras.
 struct StudioVideoSettings: Codable, Equatable {
-    var followSpeaker = true            // cortes automáticos a quien habla (apagado: la plantilla fija del proyecto)
-    var minHold = 2.5                   // segundos mínimos en una cámara antes de cambiar (para no «picar»)
-    var cuts: [CameraCut] = []          // tramos fijados a mano
-    /// Multicámara: cómo se pasa de una cámara a otra (nil = corte seco). Solo fundido o zoom suave tienen sentido aquí.
+    var followSpeaker = true            // automatic cuts to the speaker (off: the project's fixed template)
+    var minHold = 2.5                   // minimum seconds on a camera before switching (to avoid «flicking»)
+    var cuts: [CameraCut] = []          // spans pinned by hand
+    /// Multicam: how to go from one camera to another (nil = hard cut). Only fade or smooth zoom make sense here.
     var switchTransition: Transition?
     var isDefault: Bool { followSpeaker && abs(minHold - 2.5) < 1e-9 && cuts.isEmpty && switchTransition == nil }
     init() {}
@@ -1281,11 +1281,11 @@ struct StudioVideoSettings: Codable, Equatable {
         cuts = try c.decodeIfPresent([CameraCut].self, forKey: .cuts) ?? []
         switchTransition = try c.decodeIfPresent(Transition.self, forKey: .switchTransition)
     }
-    /// El tramo a mano que cubre `t` (tiempo del episodio), si hay.
+    /// The manual span covering `t` (episode time), if any.
     func cut(at t: Double) -> CameraCut? { cuts.first { t >= $0.start && t < $0.end } }
 
-    /// Multicámara en vivo: cortar a `lane` en el segundo `t` (tecla 1–4 o clic en el ángulo). El tramo que cubría `t`
-    /// termina ahí; el nuevo dura hasta el siguiente corte a mano o hasta `duration`. Devuelve el corte creado.
+    /// Live multicam: cut to `lane` at second `t` (key 1–4 or click on the angle). The span that covered `t`
+    /// ends there; the new one lasts until the next manual cut or until `duration`. Returns the created cut.
     @discardableResult
     mutating func liveCut(to lane: Int, at t: Double, duration: Double) -> CameraCut {
         for i in cuts.indices where cuts[i].start < t && cuts[i].end > t { cuts[i].end = t }
@@ -1299,9 +1299,9 @@ struct StudioVideoSettings: Codable, Equatable {
     }
 }
 
-// MARK: - Revisión compartida
+// MARK: - Shared review
 
-/// Un comentario dejado desde el enlace de revisión: `t` es el segundo del archivo revisado (video final, con intro).
+/// A comment left from the review link: `t` is the second of the reviewed file (final video, with intro).
 struct ReviewComment: Codable, Equatable, Identifiable {
     var id: Int
     var t: Double
@@ -1310,13 +1310,13 @@ struct ReviewComment: Codable, Equatable, Identifiable {
     var resolved: Bool
 }
 
-/// El enlace de revisión de este episodio y la última lectura de sus comentarios.
+/// This episode's review link and the last read of its comments.
 struct ReviewLink: Codable, Equatable {
     var token: String
     var url: String
     var sentAt: Date
-    var introDuration: Double = 0        // el archivo revisado llevaba esta intro: para pasar `t` al episodio
-    var keepPairs: [[Double]] = []       // y estos tramos [[inicio, fin], …]
+    var introDuration: Double = 0        // the reviewed file had this intro: to map `t` to the episode
+    var keepPairs: [[Double]] = []       // and these spans [[start, end], …]
     var comments: [ReviewComment] = []
     var fetchedAt: Date?
     init(token: String, url: String, sentAt: Date, introDuration: Double = 0, keep: [EditEngine.Span] = []) {
@@ -1324,27 +1324,27 @@ struct ReviewLink: Codable, Equatable {
         keepPairs = keep.map { [$0.start, $0.end] }
     }
     var keep: [EditEngine.Span] { keepPairs.compactMap { $0.count == 2 ? (start: $0[0], end: $0[1]) : nil } }
-    /// Segundo del episodio de un comentario (lo que marca la línea de tiempo).
+    /// Episode second of a comment (what the timeline marks).
     func timelineTime(_ c: ReviewComment) -> Double {
         keep.isEmpty ? max(0, c.t - introDuration) : EditEngine.toTimeline(max(0, c.t - introDuration), keep: keep)
     }
 }
 
-/// Cintillo tipo noticiero que el director lanzó durante la grabación.
+/// News-style lower third the director launched during recording.
 struct DirectorCintillo: Codable, Equatable, Identifiable {
     var id: Int
     var kind: String            // sponsor | banner | segment | comment
     var title: String
     var text: String
-    var start: Double           // segundos desde que empezó la grabación
+    var start: Double           // seconds since the recording started
     var duration: Double
-    var logoFile: String?       // relativo a la carpeta del proyecto
-    // Desde 0.10: cintillos creados en la app, con estilo
-    var style: String = "news"  // news (dos barras) | clean (línea y texto) | sponsor (tarjeta con logo)
-    var tag: String?            // etiqueta de la barra ("AHORA", "PATROCINA"…); nil = según `kind`; "" = sin etiqueta
-    var color: String?          // hex; nil = el color del podcast (o el de `kind`)
-    var sound: Bool = true      // whoosh bajo al entrar y salir
-    var fromDirector: Bool = false   // vino de prodPod (el director lo lanzó en vivo)
+    var logoFile: String?       // relative to the project folder
+    // Since 0.10: lower thirds created in the app, with a style
+    var style: String = "news"  // news (two bars) | clean (line and text) | sponsor (card with logo)
+    var tag: String?            // bar label ("AHORA", "PATROCINA"…); nil = per `kind`; "" = no label
+    var color: String?          // hex; nil = the podcast's color (or `kind`'s)
+    var sound: Bool = true      // low whoosh on entering and leaving
+    var fromDirector: Bool = false   // came from prodPod (the director launched it live)
 
     var end: Double { start + duration }
     var tagText: String {
@@ -1375,7 +1375,7 @@ struct DirectorCintillo: Codable, Equatable, Identifiable {
         tag = try c.decodeIfPresent(String.self, forKey: .tag)
         color = try c.decodeIfPresent(String.self, forKey: .color)
         sound = try c.decodeIfPresent(Bool.self, forKey: .sound) ?? true
-        // Los guardados antes de 0.10 eran todos del director
+        // Those saved before 0.10 were all from the director
         fromDirector = try c.decodeIfPresent(Bool.self, forKey: .fromDirector) ?? true
     }
 }
@@ -1400,14 +1400,14 @@ struct Segment: Codable, Equatable, Identifiable {
     var plannedOffset: Double?          // planned start from prePod
 }
 
-/// Una captura candidata a portada: un segundo del episodio donde todas las personas se ven bien.
+/// A cover candidate capture: an episode second where everyone looks good.
 struct CoverCandidate: Codable, Identifiable, Equatable {
     var id = UUID()
-    var time: Double                    // segundo del episodio (timeline)
-    var score: Double                   // 0…1: cuánto sonríen, ojos abiertos, nitidez
-    var allSmiling: Bool                // todas las personas con cara sonríen en este cuadro
-    var faces: Int                      // caras encontradas (sumando las pistas)
-    var file: String                    // JPEG en la caché del proyecto
+    var time: Double                    // episode second (timeline)
+    var score: Double                   // 0…1: how much they smile, eyes open, sharpness
+    var allSmiling: Bool                // everyone with a face is smiling in this frame
+    var faces: Int                      // faces found (summing the lanes)
+    var file: String                    // JPEG in the project cache
 }
 
 /// A moment marked in postPod (or prodPod chapters). Point moments have no duration.
@@ -1488,8 +1488,8 @@ extension Project {
         postpodSlug = try c.decodeIfPresent(String.self, forKey: .postpodSlug)
     }
 
-    /// Studio · Video: si el clip `id` se solapa con otro de la pista de música, los cruza (fades curvos del largo
-    /// del solape). Si ya no se solapan, los fades que había puesto un cruce se quitan.
+    /// Studio · Video: if clip `id` overlaps another on the music track, crosses them (curved fades the length
+    /// of the overlap). If they no longer overlap, fades a cross had set are removed.
     mutating func crossfadeOverlaps(touching id: Int) {
         guard let i = audioLane.firstIndex(where: { $0.id == id }) else { return }
         for j in audioLane.indices where j != i {
@@ -1500,27 +1500,27 @@ extension Project {
                 audioLane[a].fadeOut = overlap; audioLane[a].crossfade = true
                 audioLane[b].fadeIn = overlap; audioLane[b].crossfade = true
             } else if audioLane[a].crossfade, audioLane[b].crossfade, overlap <= 0.05, abs(audioLane[a].fadeOut - audioLane[b].fadeIn) < 0.01 {
-                // Se separaron: el cruce ya no existe
+                // They were separated: the cross no longer exists
                 audioLane[a].fadeOut = 0; audioLane[b].fadeIn = 0
             }
         }
     }
 
-    /// Cruza dos clips: adelanta el segundo para que se solapen `seconds` y pone fades curvos.
+    /// Crosses two clips: moves the second earlier so they overlap `seconds` and sets curved fades.
     mutating func crossfade(_ firstId: Int, with secondId: Int, seconds: Double) {
         guard let a = audioLane.firstIndex(where: { $0.id == firstId }), let b = audioLane.firstIndex(where: { $0.id == secondId }) else { return }
         audioLane[b].tlStart = max(audioLane[a].tlStart + 0.5, audioLane[a].tlEnd - seconds)
         crossfadeOverlaps(touching: secondId)
     }
 
-    /// Panorama de conversación: cada persona un poco a un lado, en el orden en que va en pantalla (izquierda →
-    /// derecha), sin pasar de ±0,3 para que en un altavoz mono no se pierda nadie. Una sola persona queda al centro.
+    /// Conversation panning: each person slightly to one side, in on-screen order (left →
+    /// right), never beyond ±0.3 so nobody gets lost on a mono speaker. A single person stays centered.
     static func conversationPans(count n: Int) -> [Double] {
         guard n >= 2 else { return [Double](repeating: 0, count: n) }
         let spread = min(0.3, 0.2 + 0.05 * Double(n - 2))
         return (0..<n).map { -spread + 2 * spread * Double($0) / Double(n - 1) }
     }
-    /// Pone los panoramas de conversación en las personas según su orden en pantalla.
+    /// Sets the conversation pans on the people according to their on-screen order.
     mutating func applyConversationPans() {
         let order = lanesOnScreen.map(\.id)
         let pans = Self.conversationPans(count: order.count)
@@ -1529,7 +1529,7 @@ extension Project {
         }
     }
 
-    /// Studio · Video tocó algo que el nivel simple no sabe expresar (keyframes, transiciones, cámaras a mano).
+    /// Studio · Video touched something the simple level can't express (keyframes, transitions, manual cameras).
     var videoTunedInStudio: Bool {
         overlays.contains(where: \.tunedInStudio) || brolls.contains { $0.transitionIn != nil || $0.grade?.isEmpty == false || $0.speed != 1 || $0.speedEnd != nil }
             || !studioVideo.isDefault || grade?.isEmpty == false || lanes.contains { $0.grade?.isEmpty == false || $0.mask != nil }
@@ -1589,8 +1589,8 @@ struct CaptionStyle: Codable, Equatable {
     var backgroundColor: String?        // nil = no box
     var highlightColor: String = "#FFD700"
     var position: Position = .bottom
-    var freeX: Double?                  // posición libre (centro, 0…1 desde la izquierda); nil = usar `position`
-    var freeY: Double?                  // posición libre (centro, 0…1 desde arriba)
+    var freeX: Double?                  // free position (center, 0…1 from the left); nil = use `position`
+    var freeY: Double?                  // free position (center, 0…1 from the top)
     var uppercase = false
     var karaoke = true                  // highlight the word being said
 
@@ -1647,20 +1647,20 @@ struct SpeakerSwitch: Equatable { var time: Double; var lane: Int }
 
 
 extension Project {
-    /// Las palabras para subtítulos y transcripción, con las palabras sensibles ya cambiadas.
+    /// Words for subtitles and transcript, with sensitive words already replaced.
     var captionWords: [Word] {
         let marks = sensitive.filter { $0.replace && !$0.ignored && !$0.replacement.isEmpty }
         guard !marks.isEmpty else { return words }
         let byId = Dictionary(marks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         func plain(_ t: String) -> String { t.lowercased().filter { $0.isLetter || $0.isNumber } }
         return words.map { w in
-            // Por id (persona + tiempo exacto); si no, la misma palabra de la misma persona a menos de 0,6 s
-            // (el texto propio de un reel se escribió de nuevo y sus tiempos no son idénticos a los del episodio).
+            // By id (person + exact time); otherwise the same word from the same person within 0.6 s
+            // (a reel's own text was written again and its timings aren't identical to the episode's).
             guard let m = byId[SensitiveMark.makeId(lane: w.lane, s: w.s)]
                     ?? marks.first(where: { $0.lane == w.lane && abs($0.s - w.s) < 0.6 && plain($0.word) == plain(w.w) })
             else { return w }
             var out = w
-            // Conserva mayúscula inicial y puntuación final de la palabra original
+            // Keeps the original word's initial capital and final punctuation
             let trimmed = w.w.trimmingCharacters(in: .whitespaces)
             let tail = trimmed.reversed().prefix { !$0.isLetter && !$0.isNumber }.reversed()
             var rep = m.replacement
@@ -1670,7 +1670,7 @@ extension Project {
         }
     }
 
-    /// Tramos (tiempo del episodio) que llevan pitido, por persona.
+    /// Spans (episode time) that carry a beep, per person.
     var bleeps: [(lane: Int, start: Double, end: Double)] {
         sensitive.filter { $0.bleep && !$0.ignored }.map { ($0.lane, $0.s, $0.e) }
     }

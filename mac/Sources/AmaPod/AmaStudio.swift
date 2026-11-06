@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import LiveKit
 
-/// El estudio del host de un evento de amaPod: tu cámara, quien está al aire, la cola, las solicitudes y el chat.
+/// The host's studio for an amaPod event: your camera, who's on air, the queue, the requests and the chat.
 @MainActor
 final class AmaStudio: NSObject, ObservableObject {
     enum Phase: Equatable { case prejoin, joining, live, ended }
@@ -21,7 +21,7 @@ final class AmaStudio: NSObject, ObservableObject {
     @Published var error: String?
     @Published var note: String?
 
-    // Tus equipos
+    // Your devices
     @Published var cameras: [AVCaptureDevice] = AVDevices.cameras
     @Published var mics: [AVCaptureDevice] = AVDevices.microphones
     @Published var camId: String = UserDefaults.standard.string(forKey: "amaCamara") ?? "" {
@@ -34,7 +34,7 @@ final class AmaStudio: NSObject, ObservableObject {
     @Published var micOn = true
     @Published private(set) var myVideo: LocalVideoTrack?
 
-    // Lo que pasa en el evento
+    // What's happening in the event
     @Published var tiles: [Tile] = []
     @Published var queue: [AmaClient.Person] = []
     @Published var requests: [AmaClient.Person] = []
@@ -64,7 +64,7 @@ final class AmaStudio: NSObject, ObservableObject {
         if micId.isEmpty || !mics.contains(where: { $0.uniqueID == micId }) { micId = mics.first?.uniqueID ?? "" }
     }
 
-    // MARK: Vista previa
+    // MARK: Preview
 
     func startPreview() {
         Task {
@@ -81,9 +81,9 @@ final class AmaStudio: NSObject, ObservableObject {
         Task { try? await t.stop() }
     }
 
-    // MARK: Empezar / terminar
+    // MARK: Start / end
 
-    /// Abre el evento (si estaba por empezar), entra a la sala, empieza a grabar en el servidor y a mirar la cola.
+    /// Opens the event (if it hadn't started), joins the room, starts recording on the server and watching the queue.
     func goLive() {
         guard phase == .prejoin else { return }
         phase = .joining
@@ -116,7 +116,7 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Cierra el evento para todos. Si se grabó, amaPod lo manda a postPod.
+    /// Closes the event for everyone. If it was recorded, amaPod sends it to postPod.
     func finish() {
         Task {
             busy = true
@@ -132,7 +132,7 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Sales de la sala sin terminar el evento (sigue abierto para el público).
+    /// You leave the room without ending the event (it stays open for the audience).
     func leave() async {
         await disconnect()
         if let t = myVideo { myVideo = nil; try? await t.stop() }
@@ -149,7 +149,7 @@ final class AmaStudio: NSObject, ObservableObject {
         tiles = []
     }
 
-    // MARK: Controles
+    // MARK: Controls
 
     func toggleMic() {
         micOn.toggle()
@@ -170,7 +170,7 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Cola
+    // MARK: Queue
 
     func approve(_ p: AmaClient.Person) { act { try await AmaClient.shared.approve(self.event.id, p.id) } }
     func reject(_ p: AmaClient.Person) { act { try await AmaClient.shared.reject(self.event.id, p.id) } }
@@ -208,12 +208,12 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Mueve a alguien en la cola (arrastrando).
+    /// Moves someone in the queue (by dragging).
     func move(from: IndexSet, to: Int) {
         var list = waiting
         list.move(fromOffsets: from, toOffset: to)
         let order = list.map(\.id)
-        // Se ve el cambio al instante; el servidor lo confirma en la próxima lectura.
+        // The change shows instantly; the server confirms it on the next read.
         let onAirNow = queue.filter { $0.status == "on_air" }
         queue = onAirNow + list.enumerated().map { i, p in var q = p; q.queue_position = i + 1; return q }
         act { try await AmaClient.shared.reorder(self.event.id, order) }
@@ -248,7 +248,7 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Chat moderado: publica el mensaje para todos y avisa al público para que recargue.
+    /// Moderated chat: publishes the message for everyone and tells the audience to reload.
     func approveMessage(_ m: AmaClient.Message) {
         Task {
             do {
@@ -269,10 +269,10 @@ final class AmaStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Mensajes que esperan aprobación.
+    /// Messages waiting for approval.
     var pendingCount: Int { chat.filter(\.isPending).count }
 
-    // MARK: Leer el estado
+    // MARK: Reading the state
 
     private func startPolling() {
         Task { await load(); await loadChat() }

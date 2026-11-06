@@ -157,16 +157,16 @@ enum AudioAnalysis {
         return cleaned.isEmpty ? [SpeakerSwitch(time: 0, lane: first)] : cleaned
     }
 
-    /// Punch-in dinámico: cuánto acercarse a una persona en cada 100 ms del video final (1 = nada … 1,045 = tope).
-    /// Sale de la energía de su voz: por encima de su nivel típico de habla (percentil 90) menos 12 dB va subiendo,
-    /// con subida rápida (0,25 s) y bajada lenta (0,8 s) para que no tiemble.
+    /// Dynamic punch-in: how much to zoom into a person every 100 ms of the final video (1 = none … 1.045 = max).
+    /// Comes from their voice energy: above their typical speaking level (90th percentile) minus 12 dB it rises,
+    /// with a fast attack (0.25 s) and slow release (0.8 s) so it doesn't shimmer.
     static func punchInCurve(energy: [Float], keep: [EditEngine.Span], amount: Double = 0.045) -> [Float] {
         guard !energy.isEmpty else { return [] }
         let talking = energy.filter { $0 > -60 }.sorted()
         guard talking.count > 10 else { return [] }
         let level = Double(talking[Int(Double(talking.count - 1) * 0.9)])
         let hop = EnergyMap.hop
-        // fuerza 0…1 en tiempo del episodio, suavizada hacia delante
+        // strength 0…1 in episode time, smoothed forward
         var smooth = [Float](repeating: 0, count: energy.count)
         var v = 0.0
         let aAtt = 1 - exp(-hop / 0.25), aRel = 1 - exp(-hop / 0.8)
@@ -175,7 +175,7 @@ enum AudioAnalysis {
             v += (raw > v ? aAtt : aRel) * (raw - v)
             smooth[i] = Float(v)
         }
-        // al tiempo del video final
+        // to final video time
         let outDur = EditEngine.outputDuration(keep)
         let n = Int(outDur / hop) + 1
         var out = [Float](repeating: 1, count: n)
@@ -187,8 +187,8 @@ enum AudioAnalysis {
         return out
     }
 
-    /// Audiograma: nivel de la voz 0…1 cada 100 ms del video final, para dibujar ondas que la siguen.
-    /// 0 = 30 dB por debajo del nivel típico de habla, 1 = el nivel típico; sube rápido (50 ms) y baja en 150 ms.
+    /// Audiogram: voice level 0…1 every 100 ms of the final video, to draw waves that follow it.
+    /// 0 = 30 dB below the typical speaking level, 1 = the typical level; rises fast (50 ms) and falls over 150 ms.
     static func audiogramCurve(energy: [Float], keep: [EditEngine.Span]) -> [Float] {
         guard !energy.isEmpty else { return [] }
         let talking = energy.filter { $0 > -60 }.sorted()
@@ -212,8 +212,8 @@ enum AudioAnalysis {
         return out
     }
 
-    /// Los cambios de cámara que ve la pantalla (Studio · Video): con «sigue a quien habla» apagado, una sola
-    /// cámara (la plantilla manda); si no, los mismos cambios pero sin cambiar antes de `minHold` segundos.
+    /// The camera switches the screen sees (Studio · Video): with «sigue a quien habla» off, a single
+    /// camera (the template rules); otherwise, the same switches but never before `minHold` seconds.
     static func cameraSwitches(_ switches: [SpeakerSwitch], settings: StudioVideoSettings) -> [SpeakerSwitch] {
         guard let first = switches.first else { return [] }
         guard settings.followSpeaker else { return [first] }
@@ -221,7 +221,7 @@ enum AudioAnalysis {
         let rest = Array(switches.dropFirst())
         for (i, s) in rest.enumerated() {
             guard let last = out.last else { continue }
-            // Si llega antes de la permanencia mínima, se pospone; si para entonces ya hay otro cambio, se salta
+            // If it comes before the minimum hold, it's postponed; if by then there's another switch, it's skipped
             let at = max(s.time, last.time + settings.minHold)
             if i + 1 < rest.count, rest[i + 1].time <= at { continue }
             if last.lane == s.lane { continue }
@@ -230,11 +230,11 @@ enum AudioAnalysis {
         return out
     }
 
-    /// «Silenciar a quien no habla», hecho como lo hace una puerta de mezcla de verdad: cada persona queda ABIERTA
-    /// mientras habla y un rato después (`hold`), y también cuando habla encima de quien tiene la palabra (risas,
-    /// interrupciones). Devuelve, por persona, los tramos abiertos en tiempo del video final (sin intro). Fuera de
-    /// esos tramos se baja; quien llama a esto pone las rampas (sube rápido antes de cada tramo, baja suave después).
-    /// Antes se bajaba al instante a la otra persona en cada cambio de turno y en conversaciones rápidas «bombeaba».
+    /// «Silenciar a quien no habla», done the way a real mixing gate does it: each person stays OPEN
+    /// while speaking and for a while after (`hold`), and also when talking over whoever has the floor (laughs,
+    /// interruptions). Returns, per person, the open spans in final video time (no intro). Outside
+    /// those spans it's lowered; the caller sets the ramps (fast rise before each span, gentle fall after).
+    /// Previously the other person was ducked instantly at every turn change and in fast conversations it «pumped».
     static func gateOpenings(project: Project, energy: EnergyMap, keep: [EditEngine.Span],
                              hold: Double = 1.5) -> [Int: [(start: Double, end: Double)]] {
         let ids = project.lanes.map(\.id)
@@ -244,23 +244,23 @@ enum AudioAnalysis {
         let holdN = Int((hold / EnergyMap.hop).rounded())
         var out: [Int: [(start: Double, end: Double)]] = [:]
         for id in ids {
-            // 1) dónde habla esta persona (en la rejilla de 100 ms del tiempo de la línea de tiempo)
+            // 1) where this person speaks (on the 100 ms grid of timeline time)
             var habla = [Bool](repeating: false, count: n)
             for i in 0..<n {
                 if active[i] == id { habla[i] = true; continue }
-                // hablando encima: su voz está a menos de 6 dB de la de quien tiene la palabra
+                // talking over: their voice is within 6 dB of whoever has the floor
                 let mio = energy.db(lane: id, at: Double(i) * EnergyMap.hop)
                 let suyo = energy.db(lane: active[i], at: Double(i) * EnergyMap.hop)
                 if mio > -42, mio > suyo - 6 { habla[i] = true }
             }
-            // 2) se mantiene abierta `hold` segundos después de dejar de hablar
+            // 2) stays open `hold` seconds after they stop speaking
             var abierta = [Bool](repeating: false, count: n)
             var resto = 0
             for i in 0..<n {
                 if habla[i] { resto = holdN + 1 }
                 if resto > 0 { abierta[i] = true; resto -= 1 }
             }
-            // 3) a tiempo del video final, siguiendo los cortes
+            // 3) to final video time, following the cuts
             var tramos: [(start: Double, end: Double)] = []
             var cursor = 0.0
             for r in keep {
@@ -277,8 +277,8 @@ enum AudioAnalysis {
                 }
                 cursor += r.end - r.start
             }
-            // 4) silencios cortos entre dos tramos (menos de 1,2 s) no cierran la puerta: bajar y volver a subir
-            //    en medio segundo es justo el bombeo que se quiere evitar
+            // 4) short silences between two spans (under 1.2 s) don't close the gate: dropping and rising again
+            //    in half a second is exactly the pumping we want to avoid
             var unidos: [(start: Double, end: Double)] = []
             for t in tramos {
                 if let u = unidos.last, t.start - u.end < 1.2 { unidos[unidos.count - 1].end = t.end }
@@ -291,22 +291,22 @@ enum AudioAnalysis {
 
     // MARK: ffmpeg-based jobs
 
-    /// Archivo con la voz limpia de una persona, uno por nivel de limpieza.
+    /// File with a person's clean voice, one per cleanup level.
     static func enhancedRel(mediaId: Int, level: Int) -> String { "media/voz_\(mediaId)_n\(level).m4a" }
 
-    /// Cuánto de la voz aislada entra en cada nivel (el resto es el original, para que suene natural).
+    /// How much of the isolated voice goes into each level (the rest is the original, so it sounds natural).
     static func isolationWet(_ level: Int) -> Double { [1: 0.7, 2: 0.88, 3: 1.0][level] ?? 0.88 }
 
-    /// Sonido de estudio: separa la voz del ruido (teclas, perro, calle, ventilador) con el aislador de voz de
-    /// Apple —o, si la Mac no lo trae, con la red neuronal de antes—, le da un poco de claridad y la deja a un
-    /// volumen parejo con una sola ganancia fija. Sin compresor ni nivelado automático: esos levantaban el ruido
-    /// que quedaba y le quitaban naturalidad a la voz. El volumen final de la mezcla se ajusta al exportar.
+    /// Studio sound: separates the voice from the noise (keys, dog, street, fan) with Apple's voice
+    /// isolator —or, if the Mac doesn't have it, with the previous neural network—, adds a bit of clarity and leaves it at an
+    /// even volume with a single fixed gain. No compressor or auto-leveling: those raised the remaining
+    /// noise and took the naturalness out of the voice. The final mix volume is adjusted on export.
     static func enhance(media: SourceMedia, slug: String, level: Int, progress: @escaping (Double) -> Void) async throws -> String {
         let rel = enhancedRel(mediaId: media.id, level: level)
         let dest = ProjectStore.url(rel, in: slug)
         if FileManager.default.fileExists(atPath: dest.path) { return rel }
         let cache = ProjectStore.cacheFolder(for: slug)
-        // Nombres únicos: dos ventanas trabajando el mismo proyecto no se pisan
+        // Unique names: two windows working on the same project don't collide
         let tag = "\(media.id)_\(UUID().uuidString)"
         let raw = cache.appendingPathComponent("voz_raw_\(tag).wav")
         let clean = cache.appendingPathComponent("voz_clean_\(tag).wav")
@@ -326,12 +326,12 @@ enum AudioAnalysis {
         } else {
             cleanedInput = ProjectStore.url(media.file, in: slug)
         }
-        // Claridad suave y volumen parejo entre personas (−19 LUFS por voz), con una ganancia fija
+        // Gentle clarity and even volume between people (−19 LUFS per voice), with a fixed gain
         var af = "highpass=f=70,equalizer=f=4000:t=q:w=1:g=2"
         if let lufs = await loudness(cleanedInput) {
             af += String(format: ",volume=%.2fdB", max(-15, min(15, -19 - lufs)))
         }
-        // Entre palabras, lo poco que deja el aislador (una tecla suelta) se baja: más en Máximo, nada en Natural
+        // Between words, the little the isolator leaves (a stray key) is lowered: more on Maximum, none on Natural
         if level >= 2 {
             af += ",agate=threshold=0.006:ratio=3:attack=10:release=250:range=\(level >= 3 ? "0.06" : "0.18")"
         }
@@ -344,7 +344,7 @@ enum AudioAnalysis {
         return rel
     }
 
-    /// Archivo del audio de una persona con su ecualizador, a partir de `base` (el limpio o el original).
+    /// File of a person's audio with their equalizer, from `base` (the clean one or the original).
     static func eqRel(mediaId: Int, base: String, eq: VoiceEQ) -> String {
         let b = (base as NSString).lastPathComponent.replacingOccurrences(of: ".", with: "_")
         let key = eq.key.replacingOccurrences(of: "+", with: "p").replacingOccurrences(of: "-", with: "m").replacingOccurrences(of: ".", with: "")
@@ -364,11 +364,11 @@ enum AudioAnalysis {
         return rel
     }
 
-    /// Volumen integrado (LUFS) de un archivo, medido con ffmpeg (EBU R128).
+    /// Integrated loudness (LUFS) of a file, measured with ffmpeg (EBU R128).
     static func loudness(_ url: URL) async -> Double? {
         guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=framelog=quiet", "-f", "null", "-"], allowFailure: true)
         else { return nil }
-        // En el resumen final: "I:         -16.3 LUFS"
+        // In the final summary: "I:         -16.3 LUFS"
         guard let r = out.range(of: #"I:\s+(-?[0-9.]+) LUFS"#, options: [.regularExpression, .backwards]) else { return nil }
         let num = out[r].replacingOccurrences(of: "I:", with: "").replacingOccurrences(of: String(localized: "LUFS"), with: "").trimmingCharacters(in: .whitespaces)
         return Double(num)

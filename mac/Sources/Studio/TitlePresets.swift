@@ -1,9 +1,9 @@
 import Foundation
 
-/// Plantillas de título de Studio · Video: el estilo, color, posición, tamaño, entrada y salida de una capa de texto,
-/// guardados con nombre. Viven en el podcast (prePod, `title_presets`) para que viajen a cualquier Mac con la cuenta;
-/// aquí queda una copia por podcast para trabajar sin conexión, y las que no son de ningún podcast («mías») solo en esta Mac.
-/// Una plantilla no lleva el texto ni el momento: eso es de cada capa.
+/// Studio · Video title templates: the style, color, position, size, in and out of a text layer,
+/// saved with a name. They live in the podcast (prePod, `title_presets`) so they travel to any Mac with the account;
+/// a copy per podcast stays here to work offline, and those that belong to no podcast («mías») only on this Mac.
+/// A template doesn't carry the text or the moment: those belong to each layer.
 enum TitlePresets {
     struct Item: Codable, Identifiable, Equatable {
         var id = UUID()
@@ -36,7 +36,7 @@ enum TitlePresets {
             duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? 5
         }
 
-        /// Aplica la plantilla a una capa: todo menos el texto, el momento y los keyframes propios.
+        /// Applies the template to a layer: everything except the text, the moment and its own keyframes.
         func apply(to layer: inout VideoLayer) {
             layer.style = style; layer.color = color; layer.x = x; layer.y = y; layer.scale = scale
             layer.enter = enter; layer.exit = exit
@@ -63,7 +63,7 @@ enum TitlePresets {
     }
     static func remove(_ id: UUID, podcast slug: String? = nil) { save(all(podcast: slug).filter { $0.id != id }, podcast: slug) }
 
-    /// Trae las del podcast desde prePod y actualiza la copia local (si prePod no responde, queda la copia).
+    /// Fetches the podcast's templates from prePod and updates the local copy (if prePod doesn't respond, the copy stays).
     static func refresh(podcast slug: String) async {
         guard PrePodClient.isConfigured, let items = try? await PrePodClient.shared.titlePresets(slug) else { return }
         if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key(slug)) }

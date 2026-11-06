@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Carriles de automatización del estudio: una tira por parámetro automatizado de cada persona, sobre todo
-/// el episodio. Arrastrar mueve el punto (tiempo y valor); doble clic lo borra; clic en el fondo va a ese segundo.
+/// Studio automation lanes: one strip per automated parameter of each person, over the whole
+/// episode. Dragging moves the point (time and value); double-click deletes it; clicking the background goes to that second.
 struct AutomationLanes: View {
     @ObservedObject var session: ProjectSession
 
@@ -47,7 +47,7 @@ struct AutomationStrip: View {
     private var points: [AutoPoint] { (chain.automation[param] ?? []).sorted { $0.t < $1.t } }
     private var duration: Double { max(1, session.project.duration) }
 
-    /// Rango del parámetro, para dibujar y para limitar el arrastre.
+    /// The parameter's range, for drawing and for clamping the drag.
     private var range: ClosedRange<Double> {
         switch param {
         case ChainSettings.compThreshold: return -60...0
@@ -112,7 +112,7 @@ struct AutomationStrip: View {
                             }.onEnded { _ in dragging = nil })
                             .onTapGesture(count: 2) { update { pts in pts.removeAll { $0.id == pt.id } } }
                     }
-                    // cabeza de reproducción
+                    // playhead
                     TimelineView(.periodic(from: .now, by: 0.2)) { _ in
                         Rectangle().fill(Color.white.opacity(0.7)).frame(width: 1)
                             .offset(x: x(session.playheadTimeline, w))

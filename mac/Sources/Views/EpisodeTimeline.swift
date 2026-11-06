@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// Timeline del episodio (como el de postPod web, para ver y moverse):
-/// una fila por persona con cuándo habla, lo que se corta, momentos/reels, sponsors y efectos.
-/// Clic o arrastre para mover el video; zoom para ver detalle.
+/// Episode timeline (like postPod web's, to view and navigate):
+/// one row per person with when they speak, what's cut, moments/reels, sponsors and effects.
+/// Click or drag to move the video; zoom to see detail.
 struct EpisodeTimeline: View {
     @ObservedObject var session: ProjectSession
     @State private var zoom: Double = 1
     @State private var collapsed = false
-    @State private var selection: (start: Double, end: Double)?   // trozo marcado con el ratón (tiempo del episodio)
+    @State private var selection: (start: Double, end: Double)?   // span marked with the mouse (episode time)
     @State private var dragAnchor: Double?
 
     static let palette: [Color] = [
-        Color(red: 0.353, green: 0.545, blue: 1.0),    // azul prePod
-        Color(red: 0.078, green: 0.722, blue: 0.651),  // teal amaPod
+        Color(red: 0.353, green: 0.545, blue: 1.0),    // prePod blue
+        Color(red: 0.078, green: 0.722, blue: 0.651),  // amaPod teal
         Color(red: 1.0, green: 0.42, blue: 0.42),
         Color(red: 0.72, green: 0.55, blue: 1.0),
         Color(red: 0.45, green: 0.85, blue: 0.5),
@@ -22,7 +22,7 @@ struct EpisodeTimeline: View {
     private let labelWidth: CGFloat = 132
     @State private var dragPoint: (lane: Int, id: UUID)?
     @State private var lastClick: (at: Date, x: CGFloat, y: CGFloat)?
-    @State private var selectionLane: Int?          // persona donde empezó el arrastre (para «solo a esta persona»)
+    @State private var selectionLane: Int?          // person where the drag started (for «solo a esta persona»)
     @State private var dragDB: Double?
     private let rulerH: CGFloat = 18
     private let marksH: CGFloat = 16
@@ -139,7 +139,7 @@ struct EpisodeTimeline: View {
                                 .onChanged { g in
                                     let t = min(max(0, Double(g.location.x / pps)), p.duration)
                                     if dragAnchor == nil && dragPoint == nil {
-                                        // ¿Empezó sobre un punto de la línea de volumen? Entonces se mueve el punto
+                                        // Did it start on a volume line point? Then the point is moved
                                         if let hit = hitPoint(p, at: g.startLocation, pps: pps) {
                                             dragPoint = hit
                                             session.selectedVolumePoint = hit
@@ -164,10 +164,10 @@ struct EpisodeTimeline: View {
                                     if dragPoint != nil { dragPoint = nil; dragDB = nil; dragAnchor = nil; return }
                                     if abs(g.translation.width) <= 4 {
                                         selection = nil
-                                        // Doble clic sobre una persona: agrega un punto de volumen ahí, AL MISMO volumen que ya tenía.
-                                        // Antes tomaba la altura del clic: un doble clic cerca del borde de abajo (al ubicar
-                                        // una cortina, al buscar un instante) dejaba a esa persona casi muda desde ahí.
-                                        // Ahora el punto no cambia nada hasta que se arrastra hacia arriba o abajo.
+                                        // Double-click on a person: adds a volume point there, AT THE SAME volume it already had.
+                                        // It used to take the click height: a double-click near the bottom edge (when placing
+                                        // a stinger, when looking for an instant) left that person almost muted from there on.
+                                        // Now the point changes nothing until it's dragged up or down.
                                         if let lc = lastClick, Date().timeIntervalSince(lc.at) < 0.4, abs(lc.x - g.location.x) < 6, abs(lc.y - g.location.y) < 6,
                                            let laneId = laneAt(p, y: g.location.y),
                                            let lane = p.lanes.first(where: { $0.id == laneId }) {
@@ -177,7 +177,7 @@ struct EpisodeTimeline: View {
                                         }
                                         lastClick = (Date(), g.location.x, g.location.y)
                                         session.selectedVolumePoint = nil
-                                        // Clic en la fila de textos: elegir esa capa para editarla
+                                        // Click on the texts row: select that layer to edit it
                                         let oy = rulerH + marksH + CGFloat(p.lanes.count) * laneH + fxH
                                         if (!p.overlays.isEmpty || !p.brolls.isEmpty), g.location.y >= oy, g.location.y <= oy + ovH {
                                             if let o = p.overlays.filter({ t >= $0.start - 0.3 && t <= $0.end + 0.3 }).max(by: { $0.start < $1.start }) {
@@ -235,7 +235,7 @@ struct EpisodeTimeline: View {
         return nil
     }
 
-    /// Persona (id) en la fila donde está `y`, o nil si no es una fila de persona.
+    /// Person (id) in the row where `y` is, or nil if it isn't a person row.
     private func laneAt(_ p: Project, y: CGFloat) -> Int? {
         let top = rulerH + marksH
         guard y >= top else { return nil }
@@ -246,12 +246,12 @@ struct EpisodeTimeline: View {
         let i = p.lanes.firstIndex { $0.id == laneId } ?? 0
         return rulerH + marksH + CGFloat(i) * laneH
     }
-    /// dB que corresponde a la altura `y` dentro de la fila de esa persona.
+    /// dB corresponding to height `y` within that person's row.
     private func dbAt(_ p: Project, y: CGFloat, laneId: Int) -> Double {
         let top = laneTop(p, laneId: laneId)
         let u = Double(1 - min(1, max(0, (y - top - 4) / (laneH - 8))))
         let db = VolumePoint.minDB + u * (VolumePoint.maxDB - VolumePoint.minDB)
-        return (db / 1).rounded()      // de a 1 dB
+        return (db / 1).rounded()      // in 1 dB steps
     }
     private func hitPoint(_ p: Project, at loc: CGPoint, pps: CGFloat) -> (lane: Int, id: UUID)? {
         guard let laneId = laneAt(p, y: loc.y), let lane = p.lanes.first(where: { $0.id == laneId }) else { return nil }
@@ -266,18 +266,18 @@ struct EpisodeTimeline: View {
 
     private func seek(to t: Double, duration: Double) {
         var t = min(max(0, t), duration)
-        if let w = session.previewWindow { t = min(max(t, w.start), w.end) }   // viendo un reel: dentro del reel
+        if let w = session.previewWindow { t = min(max(t, w.start), w.end) }   // viewing a reel: within the reel
         session.seek(timeline: t, play: false)
     }
 }
 
-/// Datos ya calculados para dibujar (no cambian mientras se reproduce).
+/// Precomputed drawing data (doesn't change while playing).
 struct TimelineModel: Equatable {
     var duration: Double
-    var lanes: [[ClosedRange<Double>]]          // tramos con voz por persona
-    var waves: [[Float]]                        // dB cada 100 ms por persona (forma de onda), vacío si no hay análisis
+    var lanes: [[ClosedRange<Double>]]          // voiced spans per person
+    var waves: [[Float]]                        // dB every 100 ms per person (waveform), empty if there's no analysis
     var audible: [Bool]
-    var automation: [[VolumePoint]]             // línea de volumen por persona
+    var automation: [[VolumePoint]]             // volume line per person
     var selectedPoint: UUID?
     var cuts: [ClosedRange<Double>]
     var moments: [Double]
@@ -348,7 +348,7 @@ private struct TimelineCanvas: View, Equatable {
                 ctx.fill(Path(roundedRect: CGRect(x: x(r.lowerBound), y: y, width: w, height: h), cornerRadius: radius), with: .color(c))
             }
 
-            // Regla
+            // Ruler
             let steps: [Double] = [5, 10, 15, 30, 60, 120, 300, 600]
             let stepT = steps.first { CGFloat($0) * pps >= 70 } ?? 600
             var t = 0.0
@@ -359,11 +359,11 @@ private struct TimelineCanvas: View, Equatable {
                 t += stepT
             }
 
-            // Momentos, reels y sponsors
+            // Moments, reels and sponsors
             let my = rulerH
             for r in model.reels { band(r, y: my + 3, h: marksH - 6, Theme.accent.opacity(0.28)) }
             for r in model.sponsors { band(r, y: my + 3, h: marksH - 6, Color.purple.opacity(0.8)) }
-            // Comentarios de la revisión compartida: una burbuja naranja (gris si ya está resuelto)
+            // Shared review comments: an orange bubble (gray if resolved)
             for rm in model.reviewMarks {
                 let col = rm.resolved ? Color.gray.opacity(0.6) : Color.orange
                 ctx.fill(Path(ellipseIn: CGRect(x: x(rm.t) - 4, y: my + 1, width: 8, height: 8)), with: .color(col))
@@ -377,7 +377,7 @@ private struct TimelineCanvas: View, Equatable {
                 ctx.fill(Path(CGRect(x: x(m), y: my, width: 1.2, height: size.height - my)), with: .color(Theme.accent.opacity(0.6)))
             }
 
-            // Personas: forma de onda (del análisis, dB cada 100 ms) o, si no hay, los tramos con voz
+            // People: waveform (from the analysis, dB every 100 ms) or, if none, the voiced spans
             for (i, spans) in model.lanes.enumerated() {
                 let y = rulerH + marksH + CGFloat(i) * laneH
                 ctx.fill(Path(CGRect(x: 0, y: y + 3, width: size.width, height: laneH - 6)), with: .color(.white.opacity(0.04)))
@@ -398,13 +398,13 @@ private struct TimelineCanvas: View, Equatable {
                         var peak: Float = -120
                         for k in i0...min(i1, wave.count - 1) { peak = max(peak, wave[k]) }
                         let a = CGFloat(min(1, max(0, (peak + 60) / 60)))     // −60 dB → 0, 0 dB → 1
-                        let h = max(1, a * a * half * 2)                      // curva: lo bajo se ve bajo
+                        let h = max(1, a * a * half * 2)                      // curve: quiet looks quiet
                         path.addRect(CGRect(x: px, y: mid - h / 2, width: colW, height: h))
                         px += colW
                     }
                     ctx.fill(path, with: .color(c.opacity(0.9)))
                 }
-                // Línea de volumen (amarilla) con sus puntos
+                // Volume line (yellow) with its points
                 let pts = model.automation[i]
                 if !pts.isEmpty {
                     func py(_ db: Double) -> CGFloat { y + laneH - 4 - CGFloat((db - VolumePoint.minDB) / (VolumePoint.maxDB - VolumePoint.minDB)) * (laneH - 8) }
@@ -422,11 +422,11 @@ private struct TimelineCanvas: View, Equatable {
                 }
             }
 
-            // Efectos
+            // Effects
             let fy = rulerH + marksH + CGFloat(model.lanes.count) * laneH
             for e in model.effects { band(e, y: fy + 3, h: fxH - 5, .white.opacity(0.8), radius: 3) }
 
-            // Textos, imágenes y stickers
+            // Texts, images and stickers
             let oy = fy + fxH
             for b in model.brolls { band(b, y: oy + 2, h: ovH - 4, Color.cyan.opacity(0.7), radius: 3) }
             for o in model.overlays { band(o, y: oy + 2, h: ovH - 4, Color.yellow.opacity(0.75), radius: 3) }
@@ -435,14 +435,14 @@ private struct TimelineCanvas: View, Equatable {
                 ctx.stroke(Path(roundedRect: r, cornerRadius: 3), with: .color(.white), lineWidth: 1.5)
             }
 
-            // Lo que se corta, encima de todo
+            // What's cut, on top of everything
             let top = rulerH + marksH
             for c in model.cuts { band(c, y: top, h: size.height - top, Color.red.opacity(0.38), radius: 0) }
         }
     }
 }
 
-/// Solo la línea de reproducción se redibuja mientras suena el video.
+/// Only the playhead is redrawn while the video plays.
 private struct PlayheadLayer: View {
     @ObservedObject var session: ProjectSession
     let pps: CGFloat
@@ -459,7 +459,7 @@ private struct PlayheadLayer: View {
 }
 
 
-/// Botón chico S / M de cada persona en el timeline.
+/// Small S / M button for each person in the timeline.
 struct LaneToggle: View {
     let letter: String
     let on: Bool
@@ -477,7 +477,7 @@ struct LaneToggle: View {
     }
 }
 
-/// Medidor de nivel de una persona: lo que realmente suena mientras se reproduce; en pausa, una estimación.
+/// A person's level meter: what actually sounds while playing; when paused, an estimate.
 struct LaneMeter: View {
     @ObservedObject var session: ProjectSession
     let laneId: Int

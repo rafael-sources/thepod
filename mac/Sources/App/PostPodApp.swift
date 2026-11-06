@@ -82,10 +82,10 @@ struct RootView: View {
         }
         .onAppear {
             if !(showIntro && introEnabled), Updater.checkOnLaunch, !SelfTest.isRequested { Updater.shared.check(quiet: true) }
-            // El plan de la cuenta (Gratis o Completo), para aplicarlo al exportar, grabar e importar
+            // The account's plan (Free or Full), applied when exporting, recording and importing
             if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refresh() }
         }
-        // Al volver a la app (por ejemplo, después de pagar en el navegador) se vuelve a mirar el plan.
+        // On returning to the app (for example, after paying in the browser) the plan is checked again.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if PrePodClient.isConfigured, !SelfTest.isRequested { AccountRole.shared.refreshIfStale() }
         }
@@ -118,7 +118,7 @@ struct RootView: View {
 }
 
 enum Theme {
-    static let accent = Color(red: 0.957, green: 0.780, blue: 0.439)   // #F4C770, color de postPod en thePod
+    static let accent = Color(red: 0.957, green: 0.780, blue: 0.439)   // #F4C770, postPod's color in thePod
     static let background = Color(red: 0.07, green: 0.07, blue: 0.09)
     static let panel = Color(white: 1, opacity: 0.05)
     static let panelStrong = Color(white: 1, opacity: 0.09)
@@ -141,7 +141,7 @@ enum Panels {
     }
 }
 
-/// Archivo → Prueba de sala… (abre la ventana de prueba de prodPod)
+/// File → Prueba de sala… (opens the prodPod room test window)
 struct OpenProbeButton: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
@@ -150,7 +150,7 @@ struct OpenProbeButton: View {
 }
 
 
-/// Páginas de thePod en la web (manual, privacidad), con la misma dirección que usan las actualizaciones.
+/// thePod web pages (manual, privacy), at the same address the updates use.
 @MainActor enum Links {
     static func url(_ path: String) -> URL? {
         URL(string: Updater.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path)

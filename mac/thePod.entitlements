@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Firmada con «hardened runtime» (lo pide Apple para notarizar): cámara y micrófono hay que pedirlos aquí -->
+	<!-- Signed with the «hardened runtime» (Apple requires it for notarization): camera and microphone must be requested here -->
 	<key>com.apple.security.device.camera</key>
 	<true/>
 	<key>com.apple.security.device.audio-input</key>

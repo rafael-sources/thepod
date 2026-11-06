@@ -2,7 +2,7 @@ import SwiftUI
 import AVFoundation
 import LiveKit
 
-// MARK: - Inicio de prod: las salas de grabación
+// MARK: - prod home: the recording rooms
 
 struct ProdHomeView: View {
     @EnvironmentObject var app: AppModel
@@ -164,7 +164,7 @@ private struct SessionCard: View {
             if let r = result { Text(r).font(.caption).foregroundStyle(Theme.good) }
             HStack {
                 Spacer()
-                // Solo administradores: el envío a postPod ya es automático al terminar las subidas
+                // Admins only: sending to postPod is already automatic when uploads finish
                 if session.status == "finished" && role.isAdmin {
                     Button { export() } label: { Label(sending ? String(localized: "Enviando…") : String(localized: "Enviar a post"), systemImage: "paperplane.fill") }
                         .disabled(sending)
@@ -193,11 +193,11 @@ private struct SessionCard: View {
     }
 }
 
-/// Datos para transmitir: plataforma, dirección y clave de transmisión (la clave la pones tú).
+/// Streaming details: platform, URL and stream key (you enter the key).
 struct LiveSheet: View {
     @ObservedObject var studio: ProdStudio
     @Environment(\.dismiss) private var dismiss
-    // Se recuerdan la plataforma, la dirección y la vista; la clave no (es secreta).
+    // The platform, URL and view are remembered; the key isn't (it's secret).
     @AppStorage("prodpod.live.preset") private var preset = "youtube"
     @AppStorage("prodpod.live.url") private var url = ""
     @State private var key = ""
@@ -243,7 +243,7 @@ struct LiveSheet: View {
     }
 }
 
-// MARK: - Estudio: pantalla previa y sala
+// MARK: - Studio: pre-join screen and room
 
 struct StudioView: View {
     @ObservedObject private var role = AccountRole.shared
@@ -281,7 +281,7 @@ struct StudioView: View {
         }
     }
 
-    // MARK: Pantalla previa
+    // MARK: Pre-join screen
 
     private var prejoin: some View {
         HStack(spacing: 0) {
@@ -393,7 +393,7 @@ struct StudioView: View {
         }
     }
 
-    /// Prueba de micrófono de 10 s, como en la web: mide y sugiere cuánto subir o bajar tu voz para la sala.
+    /// 10 s microphone test, as on the web: measures and suggests how much to raise or lower your voice for the room.
     @ViewBuilder private var micCheckBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let left = studio.micCheckLeft {
@@ -457,7 +457,7 @@ struct StudioView: View {
         return Theme.good
     }
 
-    // MARK: Sala
+    // MARK: Room
 
     private var room: some View {
         HStack(spacing: 0) {
@@ -551,7 +551,7 @@ struct StudioView: View {
                     if !studio.sponsors.isEmpty { sponsorsCard }
                     peopleCard(title: String(localized: "Personas"))
                     chatCard
-                    if studio.isOwner && ProdStudio.liveEnabled { liveCard }   // en vivo: al final del plan
+                    if studio.isOwner && ProdStudio.liveEnabled { liveCard }   // live: at the end of the plan
                     Card {
                         Label("Invitar a alguien más", systemImage: "person.badge.plus").font(.headline)
                         TextField("Nombre", text: $inviteName).textFieldStyle(.roundedBorder)
@@ -568,7 +568,7 @@ struct StudioView: View {
         }
     }
 
-    // MARK: Grabación
+    // MARK: Recording
 
     private var statusBadge: some View {
         let (text, color): (String, Color) = {
@@ -789,7 +789,7 @@ struct StudioView: View {
         .onAppear { studio.unreadChat = 0 }
     }
 
-    // MARK: En vivo
+    // MARK: Live
 
     @State private var showLive = false
 
@@ -885,7 +885,7 @@ struct StudioView: View {
     private func clock(_ s: Int) -> String { String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60) }
 }
 
-// MARK: - Piezas
+// MARK: - Pieces
 
 struct PersonTile: View {
     let person: RoomPerson
@@ -949,7 +949,7 @@ struct LevelMeter: View {
     }
 }
 
-/// Vista previa de la cámara (como un espejo) antes de entrar.
+/// Camera preview (like a mirror) before joining.
 struct CameraPreview: NSViewRepresentable {
     let session: AVCaptureSession
     func makeNSView(context: Context) -> NSView {

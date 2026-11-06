@@ -4,7 +4,7 @@ import VideoToolbox
 import CoreAudio
 import LiveKit
 
-// MARK: - Cámara: una sola captura, dos salidas (grabación 1080p y sala 720p)
+// MARK: - Camera: a single capture, two outputs (1080p recording and 720p room)
 
 final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let session = AVCaptureSession()
@@ -16,7 +16,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         set { lock.withLock { _sink = newValue } }
     }
     private var _sink: BufferCapturer?
-    /// Grabación de prod: recibe la cámara completa y, con audífonos, el micrófono directo.
+    /// prod recording: receives the full camera and, with headphones, the direct microphone.
     var recorder: FragmentRecorder? {
         get { lock.withLock { _recorder } }
         set { lock.withLock { _recorder = newValue } }
@@ -38,22 +38,22 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
 
     struct Size { let width: Int32; let height: Int32 }
 
-    /// Tamaño que se manda a la sala (la grabación siempre usa la captura completa).
+    /// Size sent to the room (the recording always uses the full capture).
     var target: (width: Int, height: Int) {
         get { lock.withLock { _target } }
         set { lock.withLock { if _target != newValue { _target = newValue; pool = nil } } }
     }
     private var _target: (width: Int, height: Int) = (1280, 720)
-    /// Para la vista previa de la pantalla previa.
+    /// For the preview on the pre-join screen.
     var captureSession: AVCaptureSession { session }
     private weak var audioConnection: AVCaptureConnection?
 
-    /// Nivel del micrófono en dB (−160 … 0); nil si no hay micrófono.
+    /// Microphone level in dB (−160 … 0); nil if there's no microphone.
     var micLevel: Float? {
         guard let c = audioConnection, let ch = c.audioChannels.first else { return nil }
         return ch.averagePowerLevel
     }
-    /// Pico reciente del micrófono en dB; nil si no hay micrófono.
+    /// Recent microphone peak in dB; nil if there's no microphone.
     var micPeak: Float? {
         guard let c = audioConnection, let ch = c.audioChannels.first else { return nil }
         return ch.peakHoldLevel
@@ -70,7 +70,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
             session.addInput(mic)
         }
 
-        // El formato más cercano a 1080p a 30 cuadros, sin pasar de 1080p
+        // The format closest to 1080p at 30 fps, without exceeding 1080p
         let best = device.formats
             .filter { f in
                 let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
@@ -81,8 +81,8 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
                 let db = CMVideoFormatDescriptionGetDimensions(b.formatDescription)
                 return Int(da.width) * Int(da.height) < Int(db.width) * Int(db.height)
             }
-        // La cámara queda bloqueada hasta después de arrancar: si no, macOS vuelve a su modo automático
-        // y con poca luz baja a 15 cuadros por segundo.
+        // The camera stays locked until after starting: otherwise macOS goes back to its automatic mode
+        // and in low light drops to 15 frames per second.
         try device.lockForConfiguration()
         if let best { device.activeFormat = best }
         let fps30 = CMTime(value: 1, timescale: 30)
@@ -118,7 +118,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         sink = nil
     }
 
-    // MARK: Grabación
+    // MARK: Recording
 
     func startRecording(to url: URL) throws {
         try? FileManager.default.removeItem(at: url)
@@ -155,7 +155,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         w.finishWriting {}
     }
 
-    // MARK: Cuadros
+    // MARK: Frames
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         let isVideo = output is AVCaptureVideoDataOutput
@@ -189,7 +189,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         }
     }
 
-    /// Reduce al tamaño de la sala (con el chip de video de la Mac).
+    /// Scales down to the room size (with the Mac's video chip).
     private func scaled(_ src: CVPixelBuffer) -> CVPixelBuffer? {
         let w = CVPixelBufferGetWidth(src)
         let (tw, th) = lock.withLock { _target }
@@ -211,7 +211,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
     }
 }
 
-// MARK: - Voz tal como sale hacia la sala (después de quitar el eco)
+// MARK: - Voice as it goes out to the room (after echo removal)
 
 final class VoiceTap: NSObject, AudioRenderer, @unchecked Sendable {
     private let lock = NSLock()
@@ -232,7 +232,7 @@ final class VoiceTap: NSObject, AudioRenderer, @unchecked Sendable {
     }
 }
 
-// MARK: - Dispositivos
+// MARK: - Devices
 
 enum AVDevices {
     static var cameras: [AVCaptureDevice] {
@@ -244,7 +244,7 @@ enum AVDevices {
                                          mediaType: .audio, position: .unspecified).devices
     }
 
-    /// El mismo micrófono para la sala (LiveKit usa sus propios identificadores).
+    /// The same microphone for the room (LiveKit uses its own identifiers).
     static func useForRoom(_ mic: AVCaptureDevice) {
         let list = AudioManager.shared.inputDevices
         if let d = list.first(where: { $0.deviceId == mic.uniqueID }) ?? list.first(where: { $0.name == mic.localizedName }) {
@@ -252,7 +252,7 @@ enum AVDevices {
         }
     }
 
-    /// ¿Parece que el sonido sale por audífonos? (Bluetooth, USB de auriculares, o el conector de audífonos)
+    /// Does the sound seem to be going out through headphones? (Bluetooth, USB headset, or the headphone jack)
     static var headphonesLikely: Bool {
         var dev = AudioObjectID(0)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
@@ -270,11 +270,11 @@ enum AVDevices {
             addr.mSelector = kAudioDevicePropertyDataSource
             addr.mScope = kAudioDevicePropertyScopeOutput
             if AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &source) == noErr {
-                return source == 0x6864706E   // 'hdpn' = audífonos en el conector
+                return source == 0x6864706E   // 'hdpn' = headphones in the jack
             }
             return false
         }
-        // USB u otros: por el nombre
+        // USB or others: by name
         var name: CFString = "" as CFString
         size = UInt32(MemoryLayout<CFString>.size)
         addr.mSelector = kAudioObjectPropertyName

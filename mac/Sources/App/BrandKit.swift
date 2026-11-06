@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Set de logos de thePod (solo por línea de comandos: `--brand-kit <carpeta>`).
-/// Genera PNG transparentes en varios tamaños y PDF vectorial de cada forma.
+/// thePod logo set (command line only: `--brand-kit <folder>`).
+/// Generates transparent PNGs in several sizes and a vector PDF of each shape.
 enum BrandKit {
     static let blue = Color(red: 0.353, green: 0.545, blue: 1.0)      // #5A8BFF prePod
     static let red = Color(red: 1.0, green: 0.231, blue: 0.231)       // #FF3B3B prodPod
@@ -11,8 +11,8 @@ enum BrandKit {
     static let dark = Color(red: 0.102, green: 0.082, blue: 0.063)    // #1A1510
     static let cream = Color(red: 0.937, green: 0.890, blue: 0.816)   // #EFE3D0
 
-    /// El disco de cuatro cuartos. `icons` usa las fichas con íconos; si no, cuartos lisos.
-    /// `mono` lo pinta de un solo color.
+    /// The four-quarter disc. `icons` uses the tiles with icons; otherwise plain quarters.
+    /// `mono` paints it a single color.
     struct Disc: View {
         var size: CGFloat
         var icons = false
@@ -35,8 +35,8 @@ enum BrandKit {
             }
             .frame(width: size, height: size)
         }
-        /// Las fichas traen un margen transparente (el dibujo ocupa el 68,75 % pegado a la esquina interior):
-        /// se agrandan y se corren para que el disco llene la ficha.
+        /// The tiles come with a transparent margin (the drawing takes 68.75 % flush to the inner corner):
+        /// they're enlarged and shifted so the disc fills the tile.
         private func tile(_ n: String, _ s: CGFloat, _ sx: CGFloat, _ sy: CGFloat) -> some View {
             let f = s / 0.6875
             return Image("tile-" + n).resizable().interpolation(.high).frame(width: f, height: f)
@@ -44,7 +44,7 @@ enum BrandKit {
                 .frame(width: s, height: s).clipped()
         }
         private func quarter(_ c: Color, _ s: CGFloat, _ corner: UIRectCornerLike) -> some View {
-            // Un círculo del doble de tamaño, centrado en la esquina que mira al centro del disco, recortado a la ficha.
+            // A circle twice the size, centered on the corner facing the disc's center, clipped to the tile.
             let dx: CGFloat = (corner == .topLeft || corner == .bottomLeft) ? s / 2 : -s / 2
             let dy: CGFloat = (corner == .topLeft || corner == .topRight) ? s / 2 : -s / 2
             return Circle().fill(c).frame(width: s * 2, height: s * 2).offset(x: dx, y: dy)
@@ -54,12 +54,12 @@ enum BrandKit {
 
     enum UIRectCornerLike { case topLeft, topRight, bottomLeft, bottomRight }
 
-    /// Las ocho estrellas en arco sobre el disco (misma geometría que la entrada).
+    /// The eight stars in an arc over the disc (same geometry as the intro).
     struct Stars: View {
         var discSize: CGFloat
         var color: Color = .white
         var body: some View {
-            // En la app: disco de ~140 pt, estrellas a 132 pt del centro, arco 26 pt más arriba
+            // In the app: ~140 pt disc, stars 132 pt from the center, arc 26 pt higher
             let radius = discSize * 0.94
             ZStack {
                 ForEach(0..<8, id: \.self) { i in
@@ -82,11 +82,11 @@ enum BrandKit {
         }
     }
 
-    // MARK: Formas
+    // MARK: Shapes
 
     @MainActor
     static func views() -> [(String, AnyView, CGFloat, CGFloat)] {
-        let s: CGFloat = 440           // tamaño del disco en la base de 512
+        let s: CGFloat = 440           // disc size on the 512 base
         let sq: CGFloat = 512, wide: CGFloat = 1024, tall: CGFloat = 640
         func box(_ w: CGFloat, _ h: CGFloat, _ v: some View) -> AnyView { AnyView(v.frame(width: w, height: h)) }
         return [
@@ -109,7 +109,7 @@ enum BrandKit {
         ]
     }
 
-    /// Escribe PNG (1024, 512, 256) y PDF de cada forma en `dir`.
+    /// Writes PNG (1024, 512, 256) and PDF of each shape into `dir`.
     @MainActor
     static func export(to dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -136,22 +136,22 @@ enum BrandKit {
 }
 
 
-// MARK: - La entrada como función del tiempo (para exportar GIF y video cuadro a cuadro)
+// MARK: - The intro as a function of time (to export GIF and video frame by frame)
 
-/// Misma coreografía que IntroView, pero sin animaciones de SwiftUI: todo sale de `t` (segundos).
+/// Same choreography as IntroView, but without SwiftUI animations: everything comes from `t` (seconds).
 struct IntroFrame: View {
     var t: Double
     var transparent = false
-    var light = false                // para fondos claros: estrellas doradas y nombre oscuro
-    var scale: CGFloat = 1           // 1 = el tamaño de la app (disco de 300 pt)
+    var light = false                // for light backgrounds: golden stars and dark name
+    var scale: CGFloat = 1           // 1 = the app size (300 pt disc)
 
-    private static let noteTimes: [Double] = [0.02, 0.68, 0.46, 0.24]   // pre, prod, post, ama (orden de las fichas)
+    private static let noteTimes: [Double] = [0.02, 0.68, 0.46, 0.24]   // pre, prod, post, ama (tile order)
     private static let bloom = 1.164
 
     private func easeOut(_ x: Double) -> Double { let u = min(1, max(0, x)); return 1 - pow(1 - u, 3) }
     private func easeIn(_ x: Double) -> Double { let u = min(1, max(0, x)); return u * u }
     private func easeInOut(_ x: Double) -> Double { let u = min(1, max(0, x)); return u < 0.5 ? 2 * u * u : 1 - pow(-2 * u + 2, 2) / 2 }
-    /// Resorte con un rebote corto (parecido a .spring(response 0.32, damping 0.55)).
+    /// Spring with a short bounce (similar to .spring(response 0.32, damping 0.55)).
     private func spring(_ x: Double) -> Double {
         let u = min(1, max(0, x))
         return 1 - exp(-6.5 * u) * cos(10 * u)
@@ -200,7 +200,7 @@ struct IntroFrame: View {
     private func tile(_ i: Int) -> some View {
         let b = Self.bloom
         let noteT = Self.noteTimes[i]
-        // Enciende con su nota (0.18 s), se apaga justo antes del bloom y vuelven todas juntas
+        // Lights up with its note (0.18 s), turns off just before the bloom and they all come back together
         var on: Double = t >= noteT ? easeOut((t - noteT) / 0.18) : 0
         if t >= b - 0.04 { on = 1 - easeOut((t - (b - 0.04)) / 0.18) }
         if t >= b + 0.05 { on = easeOut((t - (b + 0.05)) / 0.18) }
@@ -214,7 +214,7 @@ struct IntroFrame: View {
 }
 
 extension BrandKit {
-    /// Cuadros de la entrada a `fps`, tamaño w×h, con o sin fondo.
+    /// Intro frames at `fps`, size w×h, with or without background.
     @MainActor
     static func introFrames(to dir: URL, w: CGFloat, h: CGFloat, alpha: Bool, light: Bool = false, fps: Double = 30, seconds: Double = 2.7) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -230,6 +230,6 @@ extension BrandKit {
                     .write(to: dir.appendingPathComponent(String(format: "f%04d.png", i)))
             }
         }
-        print("frames \(n) a \(Int(fps)) fps")
+        print("frames \(n) at \(Int(fps)) fps")
     }
 }

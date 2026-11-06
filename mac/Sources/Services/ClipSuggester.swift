@@ -146,8 +146,8 @@ enum ClipSuggester {
 enum Keychain {
 
     /// One-time move of settings saved under the app's previous identifier.
-    /// Una sola vez: trae los ajustes guardados con los identificadores anteriores de la app
-    /// (postPod → thePod). La cuenta y los proyectos viven en carpetas que no cambian.
+    /// One time only: brings over settings saved with the app's previous identifiers
+    /// (postPod → thePod). The account and the projects live in folders that don't change.
     static func migrateLegacy() {
         let d = UserDefaults.standard
         guard !d.bool(forKey: "migradoAThePod") else { return }
@@ -164,11 +164,11 @@ enum Keychain {
         set { set(newValue, for: "anthropic-api-key") }
     }
 
-    // Sin cuenta de Apple Developer la app va firmada "ad hoc" y su firma cambia en cada versión.
-    // El llavero de macOS ata cada dato a la firma exacta de la app que lo guardó (partition list),
-    // así que con cada versión nueva volvía a pedir la clave de la Mac, aunque se eligiera "Permitir siempre".
-    // Por eso la cuenta se guarda en un archivo propio de postPod, legible solo por tu usuario (0600),
-    // en ~/Library/Application Support/postPod/cuenta.dat. No es cifrado fuerte: lo protege el acceso a tu usuario.
+    // Without an Apple Developer account the app is signed "ad hoc" and its signature changes with every version.
+    // The macOS keychain ties each item to the exact signature of the app that saved it (partition list),
+    // so with every new version it asked for the Mac's password again, even if "Always Allow" was chosen.
+    // That's why the account is saved in postPod's own file, readable only by your user (0600),
+    // in ~/Library/Application Support/postPod/cuenta.dat. It's not strong encryption: access to your user protects it.
     private static let lock = NSLock()
     nonisolated(unsafe) private static var cache: [String: String]?
 

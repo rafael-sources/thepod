@@ -1,24 +1,24 @@
 import SwiftUI
 import AVFoundation
 
-/// Entrada de thePod al abrir la app: el sonido oficial ("cambur pintón" en cuatro) y los cuatro
-/// íconos que se encienden con su nota y al final se unen en el disco de thePod.
-/// Con cada nota salen dos de las ocho estrellas (como las de la bandera de Venezuela), en arco sobre el disco.
-/// Tiempos tomados de ThePodSound.timing('cambur') del handoff de diseño.
+/// thePod intro on app launch: the official sound ("cambur pintón" in four parts) and the four
+/// icons that light up with their note and finally join into the thePod disc.
+/// With each note two of the eight stars appear (like those on the Venezuelan flag), in an arc over the disc.
+/// Timings taken from ThePodSound.timing('cambur') in the design handoff.
 struct IntroView: View {
     let onFinish: () -> Void
-    var transparent = false          // para exportar la animación sin fondo
+    var transparent = false          // to export the animation without background
     var silent = false
 
     private enum Pod: Int, CaseIterable { case pre, prod, ama, post }
-    // Segundos desde que arranca el audio (el WAV empieza a sonar a los 0.02 s).
+    // Seconds since the audio starts (the WAV starts sounding at 0.02 s).
     private static let noteTimes: [Pod: Double] = [.pre: 0.02, .ama: 0.24, .post: 0.46, .prod: 0.68]
     private static let bloom = 1.164
     private static let total = bloom + 1.5
 
     @State private var lit: Set<Pod> = []
-    @State private var stars = 0            // cuántas estrellas ya salieron (0…8), dos por nota
-    @State private var twinkle = false      // al final: un brillo corto en las ocho
+    @State private var stars = 0            // how many stars have appeared (0…8), two per note
+    @State private var twinkle = false      // at the end: a short shine on all eight
     @State private var allOn = false
     @State private var showName = false
     @State private var player: AVAudioPlayer?
@@ -47,16 +47,16 @@ struct IntroView: View {
         .onAppear(perform: start)
     }
 
-    /// Ocho estrellas en arco sobre el disco, como en la bandera. Salen de afuera hacia adentro, de a dos por nota.
+    /// Eight stars in an arc over the disc, as on the flag. They come out from the outside in, two per note.
     private var starsArc: some View {
-        // Orden de aparición: pares simétricos desde las puntas del arco hacia el centro
+        // Order of appearance: symmetric pairs from the arc's tips towards the center
         let order = [0, 7, 1, 6, 2, 5, 3, 4]
         let radius: CGFloat = 132
         return ZStack {
             ForEach(0..<8, id: \.self) { i in
-                let angle = Angle.degrees(162 - Double(i) * (144.0 / 7))   // de 162° a 18°, por arriba
+                let angle = Angle.degrees(162 - Double(i) * (144.0 / 7))   // from 162° to 18°, over the top
                 let x = cos(angle.radians) * radius
-                let y = -sin(angle.radians) * radius + 26                   // el arco centrado un poco arriba del disco
+                let y = -sin(angle.radians) * radius + 26                   // the arc centered slightly above the disc
                 let on = (order.firstIndex(of: i) ?? 8) < stars
                 Image(systemName: "star.fill")
                     .font(.system(size: 15, weight: .bold))

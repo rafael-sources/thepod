@@ -1,24 +1,24 @@
 import AVFoundation
 
-/// Imán al ritmo: los golpes de una música (ataques) y su tempo, sin inteligencia artificial.
-/// Energía por saltos de 10 ms (toda la banda y los graves), flujo positivo como «fuerza de ataque», picos con umbral
-/// adaptativo; el tempo sale de la autocorrelación de esa fuerza entre 60 y 200 BPM y la rejilla de beats se
-/// coloca con la fase que mejor cae sobre los ataques.
+/// Beat snap: a music clip's hits (onsets) and its tempo, without artificial intelligence.
+/// Energy per 10 ms hop (full band and lows), positive flux as «onset strength», peaks with an adaptive
+/// threshold; the tempo comes from the autocorrelation of that strength between 60 and 200 BPM and the beat grid is
+/// placed with the phase that best lands on the onsets.
 struct BeatGrid: Codable, Equatable {
     static let hop = 0.01
     var bpm: Double
-    var beats: [Double]           // segundos del archivo
-    var onsets: [Double]          // ataques detectados (segundos del archivo)
+    var beats: [Double]           // file seconds
+    var onsets: [Double]          // detected onsets (file seconds)
     var duration: Double
 
-    /// Beats de un clip puestos en el tiempo del episodio.
+    /// A clip's beats placed in episode time.
     func beats(in clip: AudioLaneClip) -> [Double] {
         beats.filter { $0 >= clip.srcIn && $0 <= clip.srcOut }.map { clip.tlStart + ($0 - clip.srcIn) }
     }
 
-    // MARK: Análisis
+    // MARK: Analysis
 
-    /// Envolventes de energía (dB) por salto de 10 ms: toda la banda y solo graves (< 150 Hz, para la patada).
+    /// Energy envelopes (dB) per 10 ms hop: full band and lows only (< 150 Hz, for the kick).
     static func envelopes(url: URL) -> (full: [Float], low: [Float], sampleRate: Double)? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let fmt = file.processingFormat
@@ -26,7 +26,7 @@ struct BeatGrid: Codable, Equatable {
         guard sr > 0, ch > 0, file.length > 0 else { return nil }
         let hopN = Int(sr * hop)
         guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(hopN)) else { return nil }
-        // Paso bajo de 2.º orden a 150 Hz (Butterworth)
+        // 2nd-order low-pass at 150 Hz (Butterworth)
         let w0 = 2 * Double.pi * 150 / sr, cs = cos(w0), sn = sin(w0), alpha = sn / (2 * 0.7071)
         let b0 = (1 - cs) / 2, b1 = 1 - cs, b2 = (1 - cs) / 2, a0 = 1 + alpha, a1 = -2 * cs, a2 = 1 - alpha
         var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0
@@ -51,7 +51,7 @@ struct BeatGrid: Codable, Equatable {
         return (full, low, sr)
     }
 
-    /// Fuerza de ataque por salto: subida de energía (dB) de toda la banda y de los graves, pesando más los graves.
+    /// Onset strength per hop: energy rise (dB) of the full band and the lows, weighting the lows more.
     static func onsetStrength(full: [Float], low: [Float]) -> [Float] {
         let n = min(full.count, low.count)
         guard n > 1 else { return [] }
@@ -62,7 +62,7 @@ struct BeatGrid: Codable, Equatable {
         return s
     }
 
-    /// Ataques: picos de la fuerza por encima de la media local (±1 s) más 1,5 desviaciones, separados ≥ 120 ms.
+    /// Onsets: strength peaks above the local mean (±1 s) plus 1.5 deviations, separated ≥ 120 ms.
     static func onsets(strength s: [Float]) -> [Int] {
         let n = s.count
         guard n > 10 else { return [] }
@@ -80,7 +80,7 @@ struct BeatGrid: Codable, Equatable {
         return out
     }
 
-    /// Tempo por autocorrelación de la fuerza de ataque (60–200 BPM), prefiriendo el pulso más marcado.
+    /// Tempo by autocorrelation of the onset strength (60–200 BPM), preferring the strongest pulse.
     static func tempo(strength s: [Float]) -> Double? {
         let n = s.count
         guard n > Int(4.0 / hop) else { return nil }
@@ -95,7 +95,7 @@ struct BeatGrid: Codable, Equatable {
             var i = 0
             while i + lag < n { r += x[i] * x[i + lag]; i += 1 }
             r /= r0
-            // sesgo suave hacia 90–150 BPM (los tempos más comunes) para no caer en múltiplos
+            // gentle bias towards 90–150 BPM (the most common tempos) to avoid landing on multiples
             let bpm = 60 / (Double(lag) * hop)
             let bias: Float = bpm >= 90 && bpm <= 150 ? 1.0 : 0.85
             if best == nil || r * bias > best!.r { best = (lag, r * bias) }
@@ -104,7 +104,7 @@ struct BeatGrid: Codable, Equatable {
         return 60 / (Double(b.lag) * hop)
     }
 
-    /// Rejilla de beats con el periodo del tempo y la fase que mejor cae sobre los ataques.
+    /// Beat grid with the tempo's period and the phase that best lands on the onsets.
     static func grid(bpm: Double, strength s: [Float], duration: Double) -> [Double] {
         let period = 60 / bpm
         let pN = period / hop
@@ -133,13 +133,13 @@ struct BeatGrid: Codable, Equatable {
         return BeatGrid(bpm: (bpm * 10).rounded() / 10, beats: grid(bpm: bpm, strength: s, duration: duration), onsets: on, duration: duration)
     }
 
-    // MARK: Caché por proyecto
+    // MARK: Per-project cache
 
     static func cacheURL(project: Project, mediaId: Int) -> URL {
         ProjectStore.cacheFolder(for: project.id).appendingPathComponent("ritmo-\(mediaId).json")
     }
 
-    /// La rejilla de una música del proyecto (se calcula una vez y queda en caché).
+    /// The grid of a project's music clip (computed once and cached).
     static func load(project: Project, mediaId: Int) -> BeatGrid? {
         guard let media = project.mediaItem(mediaId) else { return nil }
         let url = cacheURL(project: project, mediaId: mediaId)
@@ -149,7 +149,7 @@ struct BeatGrid: Codable, Equatable {
         return g
     }
 
-    /// Todos los beats de la pista de música del proyecto, en tiempo del episodio, ordenados.
+    /// All beats of the project's music track, in episode time, sorted.
     static func episodeBeats(project: Project) -> [Double] {
         var out: [Double] = []
         for clip in project.audioLane {
@@ -159,7 +159,7 @@ struct BeatGrid: Codable, Equatable {
         return out.sorted()
     }
 
-    /// El beat más cercano a `t` si está a menos de `tolerance` segundos.
+    /// The beat nearest to `t` if within `tolerance` seconds.
     static func snap(_ t: Double, to beats: [Double], tolerance: Double) -> Double? {
         guard !beats.isEmpty else { return nil }
         var lo = 0, hi = beats.count - 1

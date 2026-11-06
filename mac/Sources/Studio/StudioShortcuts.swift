@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Los atajos de teclado de la app, en una sola lista: la ventana «?» de Studio y el manual salen de aquí.
-/// Valen cuando no se está escribiendo en un campo de texto.
+/// The app's keyboard shortcuts, in a single list: Studio's «?» window and the manual come from here.
+/// They apply when not typing in a text field.
 struct Shortcut: Identifiable, Equatable {
     enum Scope: String, CaseIterable {
         case everywhere, studio, video, audio
@@ -40,7 +40,7 @@ enum StudioShortcuts {
         Shortcut(keys: String(localized: "⌥ clic en un fader"), what: String(localized: "Volver ese fader a 0 dB"), scope: .audio),
     ]
 
-    /// Teclas repetidas dentro del mismo ámbito (para la prueba automática).
+    /// Repeated keys within the same scope (for the automated test).
     static var duplicates: [String] {
         var seen: Set<String> = [], dup: [String] = []
         for s in all {

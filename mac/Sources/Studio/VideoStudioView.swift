@@ -1,8 +1,8 @@
 import SwiftUI
 import AVFoundation
 
-/// Studio · Video: el visor con la capa seleccionada, el inspector con keyframes y las pistas (textos, b-roll,
-/// cámaras, cintillos, voces y música) encima de la plantilla del nivel simple. Mismo proyecto, mismo compositor.
+/// Studio · Video: the viewer with the selected layer, the inspector with keyframes and the tracks (texts, b-roll,
+/// cameras, lower thirds, voices and music) on top of the simple level's template. Same project, same compositor.
 struct VideoStudioView: View {
     @ObservedObject var session: ProjectSession
     @State private var selectedCut: UUID?
@@ -24,7 +24,7 @@ struct VideoStudioView: View {
         }
     }
 
-    // MARK: Visor
+    // MARK: Viewer
 
     private var viewer: some View {
         VStack(spacing: 0) {
@@ -70,7 +70,7 @@ struct VideoStudioView: View {
 struct VideoInspector: View {
     @ObservedObject var session: ProjectSession
     @Binding var selectedCut: UUID?
-    @State private var colorScope: Int = 0        // 0 = toda la pista; si no, el id de la cámara
+    @State private var colorScope: Int = 0        // 0 = the whole track; otherwise, the camera id
     @State private var matchRef: Int = 0
     @State private var askTemplateName = false
     @State private var templateName = ""
@@ -102,7 +102,7 @@ struct VideoInspector: View {
         }
     }
 
-    // Capa: posición, tamaño, giro y opacidad con keyframes
+    // Layer: position, size, rotation and opacity with keyframes
     private func overlayInspector(_ i: Int) -> some View {
         let o = session.project.overlays[i]
         let t = session.playheadTimeline
@@ -141,7 +141,7 @@ struct VideoInspector: View {
         }
     }
 
-    /// Plantillas de título: estilo, color, posición, tamaño, entrada y salida con nombre; las del podcast viajan con él.
+    /// Title templates: named style, color, position, size, in and out; the podcast's travel with it.
     private func templateMenu(_ i: Int) -> some View {
         let slug = session.project.episode.prepodSlug
         let ofPodcast = slug.map { TitlePresets.all(podcast: $0) } ?? []
@@ -181,7 +181,7 @@ struct VideoInspector: View {
                           : String(localized: "Guarda el estilo, el color, la posición, el tamaño, la entrada y la salida de este texto en esta Mac. (Este episodio no está vinculado a un podcast de prePod.)")) }
     }
 
-    /// Entrada o salida de una capa: tipo y duración.
+    /// A layer's in or out: type and duration.
     private func motionRow(_ label: String, _ m: Binding<TitleMotion?>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -217,7 +217,7 @@ struct VideoInspector: View {
         session.project.overlays[i].animation = a
     }
 
-    // B-roll: cómo entra
+    // B-roll: how it enters
     private func brollInspector(_ i: Int) -> some View {
         let b = session.project.brolls[i]
         return VStack(alignment: .leading, spacing: 10) {
@@ -264,7 +264,7 @@ struct VideoInspector: View {
         }
     }
 
-    // Clip de música o efecto: fades, cruce con el vecino
+    // Music or effect clip: fades, crossfade with the neighbor
     private func soundInspector(_ i: Int) -> some View {
         let c = session.project.audioLane[i]
         let name = session.project.mediaItem(c.mediaId)?.originalName ?? String(localized: "Música")
@@ -292,7 +292,7 @@ struct VideoInspector: View {
         }
     }
 
-    // Tramo de cámara a mano
+    // Manual camera span
     private func cutInspector(_ i: Int) -> some View {
         let c = session.project.studioVideo.cuts[i]
         return VStack(alignment: .leading, spacing: 10) {
@@ -322,7 +322,7 @@ struct VideoInspector: View {
         }
     }
 
-    /// Color por cámara o de toda la pista, e igualar cámaras tomando una como referencia.
+    /// Per-camera or whole-track color, and matching cameras using one as reference.
     private var colorSection: some View {
         let cams = session.project.lanes.filter { session.project.laneHasVideo($0.id) }
         return VStack(alignment: .leading, spacing: 8) {
@@ -358,7 +358,7 @@ struct VideoInspector: View {
         .onAppear { if matchRef == 0 { matchRef = cams.first?.id ?? 0 } }
     }
 
-    // Nada seleccionado: cómo decide las cámaras
+    // Nothing selected: how it decides the cameras
     private var camerasInspector: some View {
         VStack(alignment: .leading, spacing: 10) {
             header(String(localized: "Cámaras"), String(localized: "cómo se decide qué se ve"), color: EpisodeTimeline.palette[0])
@@ -400,8 +400,8 @@ struct VideoInspector: View {
     }
 }
 
-/// Una fila de parámetro con su rombo de keyframe: relleno = hay keyframe en este segundo; con borde = el parámetro
-/// está animado pero no aquí; vacío = quieto. Mover el control con el parámetro animado escribe un keyframe aquí.
+/// A parameter row with its keyframe diamond: filled = there's a keyframe at this second; outlined = the parameter
+/// is animated but not here; empty = still. Moving the control with the parameter animated writes a keyframe here.
 struct KeyParamRow: View {
     @ObservedObject var session: ProjectSession
     let index: Int
@@ -442,7 +442,7 @@ struct KeyParamRow: View {
     }
 }
 
-// MARK: - Pistas
+// MARK: - Tracks
 
 struct VideoTracks: View {
     @ObservedObject var session: ProjectSession
@@ -459,7 +459,7 @@ struct VideoTracks: View {
     private var duration: Double { max(1, session.project.duration) }
 
     @State private var viewportW: CGFloat = 1200
-    /// Imán al ritmo: los beats de la música del episodio (tiempo del episodio) y si se engancha a ellos
+    /// Beat snap: the episode music's beats (episode time) and whether to snap to them
     @State private var beats: [Double] = []
     @State private var beatSnap = true
     @State private var bpmLabel = ""
@@ -504,9 +504,9 @@ struct VideoTracks: View {
         }
     }
 
-    /// Segundos que cubren 8 px a la escala actual: la tolerancia del imán.
+    /// Seconds covered by 8 px at the current scale: the snap tolerance.
     private var snapTolerance: Double { 8 / Double(timelineWidth) * duration }
-    /// El tiempo enganchado al beat más cercano si el imán está puesto.
+    /// The time snapped to the nearest beat if snapping is on.
     private func snapped(_ t: Double) -> Double {
         guard beatSnap, !beats.isEmpty else { return t }
         return BeatGrid.snap(t, to: beats, tolerance: snapTolerance) ?? t
@@ -519,7 +519,7 @@ struct VideoTracks: View {
         }
     }
 
-    /// Zoom 1 = el episodio entero cabe en la ventana; cada paso de zoom lo estira.
+    /// Zoom 1 = the whole episode fits in the window; each zoom step stretches it.
     private var timelineWidth: CGFloat { max(300, viewportW - labelW) * zoom }
 
     private var toolbar: some View {
@@ -551,7 +551,7 @@ struct VideoTracks: View {
                 let pxPerSec = w / duration
                 let step: Double = pxPerSec > 20 ? 5 : pxPerSec > 8 ? 15 : pxPerSec > 3 ? 30 : pxPerSec > 1 ? 60 : pxPerSec > 0.4 ? 300 : 600
                 ZStack(alignment: .topLeading) {
-                    // Beats de la música: marcas finas (solo cuando se distinguen)
+                    // Music beats: thin marks (only when distinguishable)
                     if !beats.isEmpty, w / CGFloat(duration) * 0.4 > 2 {
                         Path { p in for b in beats { let x = CGFloat(b / duration) * w; p.move(to: CGPoint(x: x, y: 14)); p.addLine(to: CGPoint(x: x, y: 20)) } }
                             .stroke(VideoTracks.musicColor.opacity(beatSnap ? 0.9 : 0.4), lineWidth: 1)
@@ -597,7 +597,7 @@ struct VideoTracks: View {
 
     private func x(_ t: Double, _ w: CGFloat) -> CGFloat { CGFloat(t / duration) * w }
 
-    /// Un clip arrastrable (mueve el inicio) con asa a la derecha (cambia la duración).
+    /// A draggable clip (moves the start) with a handle on the right (changes the duration).
     private func clip(_ title: String, start: Double, dur: Double, color: Color, selected: Bool, w: CGFloat, height: CGFloat = 36, dashed: Bool = false,
                       onSelect: @escaping () -> Void, onMove: @escaping (Double) -> Void, onResize: ((Double) -> Void)? = nil) -> some View {
         let width = max(6, x(dur, w))
@@ -642,11 +642,11 @@ struct VideoTracks: View {
         }
     }
 
-    /// Cámaras: los cambios automáticos (atenuados) y los tramos a mano (borde punteado, se arrastran).
+    /// Cameras: automatic switches (dimmed) and manual spans (dashed border, draggable).
     private func camerasRow(_ w: CGFloat) -> some View {
         let auto = autoBlocks()
         return Group {
-            // Fondo con el menú para fijar una cámara en el segundo actual
+            // Background with the menu to pin a camera at the current second
             Rectangle().fill(Color.clear).frame(width: w, height: 56).contentShape(Rectangle())
                 .contextMenu {
                     Section("Fijar cámara en \(EditEngine.clock(session.playheadTimeline))") {
@@ -684,10 +684,10 @@ struct VideoTracks: View {
         selectedCut = c.id; session.selectedTrack = nil
     }
 
-    /// Los cambios automáticos de cámara, en tiempo del episodio (desde la vista previa armada).
+    /// Automatic camera switches, in episode time (from the built preview).
     private func autoBlocks() -> [(start: Double, end: Double, lane: Int)] {
         guard let b = session.built, let sc = b.scene else {
-            // Sin vista previa todavía: una sola cámara (la primera) a lo largo del episodio
+            // No preview yet: a single camera (the first) across the episode
             return session.project.lanes.first.map { [(0, duration, $0.id)] } ?? []
         }
         let sw = sc.switches
@@ -741,7 +741,7 @@ struct VideoTracks: View {
     }
 }
 
-/// Carril de keyframes de un parámetro de una capa: arrastra un rombo (tiempo y valor), doble clic lo quita.
+/// Keyframe lane of a layer parameter: drag a diamond (time and value), double-click removes it.
 struct KeyframeStrip: View {
     @ObservedObject var session: ProjectSession
     let overlayIndex: Int
@@ -807,7 +807,7 @@ struct KeyframeStrip: View {
 }
 
 
-/// Velocidad de un clip (b-roll o música), con paradas en los valores de siempre y vuelta a 1× con un clic.
+/// A clip's speed (b-roll or music), with detents at the usual values and back to 1× with a click.
 struct SpeedRow: View {
     @Binding var speed: Double
     let range: ClosedRange<Double>
@@ -831,8 +831,8 @@ struct SpeedRow: View {
 }
 
 
-/// Máscara de una cámara: forma, posición, tamaño, suavizado; el color de la cámara va solo dentro, y fuera se
-/// puede oscurecer. Sigue el movimiento con keyframes de posición y tamaño puestos a mano.
+/// A camera's mask: shape, position, size, feather; the camera color goes only inside, and outside it
+/// can be darkened. Follows motion with position and size keyframes set by hand.
 struct MaskPanel: View {
     @ObservedObject var session: ProjectSession
     let laneIndex: Int
@@ -871,7 +871,7 @@ struct MaskPanel: View {
         }
     }
 
-    /// Fila con rombo de keyframe: mover el control con la pista animada (o con ⌥) escribe un keyframe en este segundo.
+    /// Keyframe diamond row: moving the control with the track animated (or with ⌥) writes a keyframe at this second.
     private func keyRow(_ label: String, _ param: String, value: Double, range: ClosedRange<Double>, fixed: Bool = false, set staticSet: @escaping (Double) -> Void) -> some View {
         let anim = m.animation ?? LayerAnimation()
         let animated = anim.has(param)

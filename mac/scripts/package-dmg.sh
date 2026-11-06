@@ -1,9 +1,9 @@
 #!/bin/zsh
-# Compila thePod en Release y arma el .dmg para descargar desde thePod.
-#   zsh scripts/package-dmg.sh      → build/thePod-<versión>.dmg y build/thePod.json
-# Si en el Llavero está el certificado «Developer ID Application» y el perfil de notarización «thepod-notario»
-# (xcrun notarytool store-credentials thepod-notario …), la app sale firmada y notarizada por Apple: se abre
-# sin avisos de seguridad. Si no, sale con la firma local de antes (cada Mac debe autorizarla la primera vez).
+# Builds thePod in Release and assembles the .dmg to download from thePod.
+#   zsh scripts/package-dmg.sh      → build/thePod-<version>.dmg and build/thePod.json
+# If the Keychain has the «Developer ID Application» certificate and the «thepod-notario» notarization profile
+# (xcrun notarytool store-credentials thepod-notario …), the app comes out signed and notarized by Apple: it opens
+# without security warnings. Otherwise it gets the previous local signature (each Mac must authorize it the first time).
 set -euo pipefail
 ROOT=${0:A:h:h}
 cd "$ROOT"
@@ -13,7 +13,7 @@ xcodebuild -project PostPodApp.xcodeproj -scheme PostPodApp -configuration Relea
   -destination 'platform=macOS,arch=arm64' -derivedDataPath build.noindex/dd-release CURRENT_PROJECT_VERSION=$(date +%Y%m%d%H%M) build > build/release.log 2>&1 \
   || { grep -E "error:" build/release.log | head; exit 1; }
 APP=build.noindex/dd-release/Build/Products/Release/thePod.app
-# Que las copias de compilación no aparezcan como apps en la Mac (solo la de Aplicaciones)
+# Keep build copies from showing up as apps on the Mac (only the one in Applications)
 LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 unregister() { "$LSREG" -u "$1" 2>/dev/null || true; }
 unregister "$APP"
@@ -21,7 +21,7 @@ IDENTITY=$(security find-identity -v -p codesigning | grep -o '"Developer ID App
 NOTARY=thepod-notario
 SIGNED=0
 if [[ -n "$IDENTITY" ]]; then
-  # De adentro hacia afuera: frameworks, ffmpeg y al final la app con sus permisos (cámara y micrófono)
+  # Inside out: frameworks, ffmpeg and finally the app with its entitlements (camera and microphone)
   sign() { codesign --force --options runtime --timestamp -s "$IDENTITY" "$@"; }
   for fw in "$APP"/Contents/Frameworks/*.framework(N); do sign "$fw"; done
   for dylib in "$APP"/Contents/Frameworks/*.dylib(N); do sign "$dylib"; done
@@ -30,7 +30,7 @@ if [[ -n "$IDENTITY" ]]; then
   codesign --verify --deep --strict "$APP"
   SIGNED=1
   if xcrun notarytool history --keychain-profile "$NOTARY" >/dev/null 2>&1; then
-    # Apple revisa la app (unos minutos) y se le pega el comprobante para que abra sin internet
+    # Apple reviews the app (a few minutes) and the ticket is stapled so it opens offline
     ZIP=build.noindex/thePod-notarizar.zip
     rm -f "$ZIP"; ditto -c -k --keepParent "$APP" "$ZIP"
     xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY" --wait > build/notary-app.log 2>&1 \
@@ -64,5 +64,5 @@ SIZE=$(stat -f %z "$DMG")
 SHA=$(shasum -a 256 "$DMG" | cut -d' ' -f1)
 printf '{"version": "%s", "build": "%s", "size": %s, "sha256": "%s", "date": "%s", "min_macos": "15.0"}\n' \
   "$VERSION" "$BUILD" "$SIZE" "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > build/thePod.json
-echo "OK $DMG ($((SIZE/1048576)) MB) · firma: $([[ $SIGNED -eq 2 ]] && echo "Developer ID + notarizada" || ([[ $SIGNED -eq 1 ]] && echo "Developer ID sin notarizar" || echo "local"))"
+echo "OK $DMG ($((SIZE/1048576)) MB) · signature: $([[ $SIGNED -eq 2 ]] && echo "Developer ID + notarized" || ([[ $SIGNED -eq 1 ]] && echo "Developer ID, not notarized" || echo "local"))"
 cat build/thePod.json

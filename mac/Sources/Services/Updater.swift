@@ -2,8 +2,8 @@ import Foundation
 import AppKit
 import CryptoKit
 
-/// Actualizaciones desde thePod: pregunta a thepod.castmedia.space qué versión está publicada,
-/// baja el instalador, comprueba que llegó entero (sha256), y reemplaza la app al reiniciar.
+/// Updates from thePod: asks thepod.castmedia.space which version is published,
+/// downloads the installer, checks it arrived intact (sha256), and replaces the app on restart.
 @MainActor
 final class Updater: ObservableObject {
     static let shared = Updater()
@@ -19,7 +19,7 @@ final class Updater: ObservableObject {
         case idle, checking, upToDate
         case available(Release)
         case downloading(Double?)
-        case ready(Release)                 // descargada y lista: falta reiniciar
+        case ready(Release)                 // downloaded and ready: restart pending
         case failed(String)
     }
 
@@ -47,7 +47,7 @@ final class Updater: ObservableObject {
         return URLSession(configuration: c)
     }()
 
-    // MARK: HTTP (misma cuenta de thePod)
+    // MARK: HTTP (same thePod account)
 
     private func request(_ method: String, _ path: String, json: [String: Any]? = nil) throws -> URLRequest {
         guard let url = URL(string: Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + path) else {
@@ -80,9 +80,9 @@ final class Updater: ObservableObject {
         }
     }
 
-    // MARK: Buscar
+    // MARK: Check
 
-    /// `quiet`: al abrir la app no molesta si no hay nada nuevo o si falla la conexión.
+    /// `quiet`: on app launch it doesn't bother if there's nothing new or the connection fails.
     func check(quiet: Bool = false) {
         if case .downloading = state { return }
         if case .ready = state { return }
@@ -93,7 +93,7 @@ final class Updater: ObservableObject {
                 let (data, resp) = try await session.data(for: try request("GET", "/api/descargas/thepod-mac"))
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 guard code == 200 else {
-                    // 404 = el servidor todavía no publica la app de Mac: no es lo mismo que "estás al día".
+                    // 404 = the server doesn't publish the Mac app yet: not the same as "you're up to date".
                     if quiet { state = .idle } else {
                         state = .failed(code == 404 ? String(localized: "El servidor de thePod todavía no tiene publicada la versión para Mac.")
                                                     : String(localized: "thePod respondió \(code)"))
@@ -108,7 +108,7 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Compara primero la versión (1.2.10 > 1.2.9) y, si es igual, el número de compilación.
+    /// Compares the version first (1.2.10 > 1.2.9) and, if equal, the build number.
     static func isNewer(_ r: Release) -> Bool {
         let a = r.version.split(separator: ".").map { Int($0) ?? 0 }
         let b = currentVersion.split(separator: ".").map { Int($0) ?? 0 }
@@ -119,7 +119,7 @@ final class Updater: ObservableObject {
         return (Int(r.build) ?? 0) > (Int(currentBuild) ?? 0)
     }
 
-    // MARK: Bajar e instalar
+    // MARK: Download and install
 
     func download(_ rel: Release) {
         state = .downloading(0)
@@ -139,8 +139,8 @@ final class Updater: ObservableObject {
     private func fetchDMG(_ rel: Release) async throws -> URL {
         var req = try request("GET", "/descargas/thepod-mac")
         req.timeoutInterval = 600
-        // Descarga con una sesión propia y su delegado: con la descarga «async» de URLSession el avance no
-        // llegaba y la barra saltaba de 0 a 100. Si el servidor no dice el tamaño, se usa el de la ficha.
+        // Downloads with its own session and delegate: with URLSession's «async» download the progress didn't
+        // arrive and the bar jumped from 0 to 100. If the server doesn't give the size, the manifest's is used.
         let progress = UpdateProgress(expected: rel.size ?? 0) { [weak self] f in Task { @MainActor in self?.state = .downloading(f) } }
         let (tmp, resp) = try await progress.run(req, configuration: session.configuration)
         absorb(resp)
@@ -151,7 +151,7 @@ final class Updater: ObservableObject {
         }
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-update-\(UUID().uuidString).dmg")
         try FileManager.default.moveItem(at: file, to: dest)
-        // Comprobar que llegó entera (se lee por partes, sin cargar todo en memoria)
+        // Check it arrived intact (read in parts, without loading everything into memory)
         if let expected = rel.sha256, !expected.isEmpty {
             let h = try FileHandle(forReadingFrom: dest)
             defer { try? h.close() }
@@ -166,7 +166,7 @@ final class Updater: ObservableObject {
         return dest
     }
 
-    /// Monta el .dmg sin mostrarlo, copia thePod.app a una carpeta temporal y lo desmonta.
+    /// Mounts the .dmg without showing it, copies thePod.app to a temp folder and unmounts it.
     nonisolated static func extractApp(from dmg: URL) async throws -> URL {
         try await Task.detached {
             let mount = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-mnt-\(UUID().uuidString)")
@@ -197,13 +197,13 @@ final class Updater: ObservableObject {
         return text
     }
 
-    /// Cierra thePod, reemplaza la app instalada por la nueva y la vuelve a abrir.
+    /// Quits thePod, replaces the installed app with the new one and reopens it.
     func restartAndInstall() {
         guard let newApp = stagedApp else { return }
         let target = Bundle.main.bundleURL
         let pid = ProcessInfo.processInfo.processIdentifier
-        // Nunca borra la app instalada antes de tener la nueva copiada y completa al lado.
-        // Si algo falla, deja la que había y la vuelve a abrir. Todo queda en ~/Library/Logs/thePod-actualizacion.log
+        // Never deletes the installed app before the new one is copied complete alongside.
+        // If something fails, it keeps the old one and reopens it. Everything goes to ~/Library/Logs/thePod-actualizacion.log
         let t = target.path, n = target.path + ".nueva", o = target.path + ".anterior"
         let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/thePod-actualizacion.log").path
         let script = """
@@ -248,7 +248,7 @@ private final class UpdateProgress: NSObject, URLSessionDownloadDelegate, @unche
         self.report = report
     }
 
-    /// Baja `req` y devuelve el archivo (ya movido a un lugar propio) y la respuesta.
+    /// Downloads `req` and returns the file (already moved to its own place) and the response.
     func run(_ req: URLRequest, configuration: URLSessionConfiguration) async throws -> (URL, URLResponse) {
         let s = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
         defer { s.finishTasksAndInvalidate() }

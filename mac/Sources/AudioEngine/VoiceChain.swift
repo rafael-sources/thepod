@@ -2,12 +2,12 @@ import AVFoundation
 import Combine
 import AudioToolbox
 
-/// Cadena de voz en tiempo real: lo que se oye al mover un control es exactamente lo que se exporta.
+/// Real-time voice chain: what you hear when moving a control is exactly what's exported.
 ///
-/// Por cada persona: ecualizador paramétrico de hasta 8 bandas (`AUNBandEQ`), compresor/puerta
-/// (`AUDynamicsProcessor`), de-esser propio por bandas y limitador (`AUPeakLimiter`). Se engancha a la
-/// pista dentro de la mezcla (`ChainTap`), igual en la vista previa que en el export. La configuración
-/// es `ChainSettings` (el estudio); el nivel simple (`VoiceEQ`) es un preset de ella.
+/// Per person: parametric equalizer of up to 8 bands (`AUNBandEQ`), compressor/gate
+/// (`AUDynamicsProcessor`), our own band de-esser and limiter (`AUPeakLimiter`). It's hooked into the
+/// track inside the mix (`ChainTap`), the same in the preview as in the export. The configuration
+/// is `ChainSettings` (the studio); the simple level (`VoiceEQ`) is a preset of it.
 final class VoiceChain: @unchecked Sendable {
     private var eqUnit: AudioUnit?
     private var compUnit: AudioUnit?
@@ -18,7 +18,7 @@ final class VoiceChain: @unchecked Sendable {
     private var channels = 0
     private var sampleRate = 48_000.0
 
-    // De-esser por bandas (estado por canal)
+    // Band de-esser (per-channel state)
     private var dsLow: [Float] = []
     private var dsEnv: [Float] = []
     private var dsOn = false
@@ -33,7 +33,7 @@ final class VoiceChain: @unchecked Sendable {
     private var automated = false
 
     private static let bandCount: UInt32 = UInt32(ChainSettings.maxBands)
-    // Tipos de filtro de AUNBandEQ
+    // AUNBandEQ filter types
     private static let ftParametric: Float = 0, ftLowPass: Float = 1, ftHighPass: Float = 2, ftLowShelf: Float = 7, ftHighShelf: Float = 8
 
     init(settings: ChainSettings) { self.settings = settings }
@@ -41,7 +41,7 @@ final class VoiceChain: @unchecked Sendable {
 
     deinit { teardown() }
 
-    // MARK: Preparar con el formato de la pista
+    // MARK: Prepare with the track's format
 
     func prepare(format: AudioStreamBasicDescription, maxFrames: UInt32) {
         teardown()
@@ -60,7 +60,7 @@ final class VoiceChain: @unchecked Sendable {
             AudioUnitSetProperty(u, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &asbd, UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
             AudioUnitSetProperty(u, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global, 0, &frames, UInt32(MemoryLayout<UInt32>.size))
         }
-        // Plugins de terceros entre el compresor y el limitador
+        // Third-party plugins between the compressor and the limiter
         pluginUnits = []
         for pl in settings.plugins {
             guard let u = PluginHost.instantiate(pl) else { continue }
@@ -92,7 +92,7 @@ final class VoiceChain: @unchecked Sendable {
         automated = settings.hasAutomation
     }
 
-    /// Quién alimenta el primer eslabón (el tap llama con el audio de la pista).
+    /// Who feeds the first link (the tap calls with the track's audio).
     func setInput(_ proc: @escaping AURenderCallback, refCon: UnsafeMutableRawPointer) {
         guard let eq = eqUnit, let comp = compUnit, let lim = limUnit else { return }
         var cb = AURenderCallbackStruct(inputProc: proc, inputProcRefCon: refCon)
@@ -109,14 +109,14 @@ final class VoiceChain: @unchecked Sendable {
         prepared = false
     }
 
-    /// ¿La lista de plugins (ids y orden) es la que tiene montada esta cadena? Si no, hay que rearmar.
+    /// Is the plugin list (ids and order) the one this chain has mounted? If not, it must be rebuilt.
     func hasPlugins(_ plugins: [PluginInsert]) -> Bool { plugins.map(\.id) == pluginUnits.map(\.id) }
 
-    // MARK: Parámetros (desde cualquier hilo mientras suena)
+    // MARK: Parameters (from any thread while playing)
 
     func update(_ c: ChainSettings) {
         os_unfair_lock_lock(&lock); pending = c; settings = c; os_unfair_lock_unlock(&lock)
-        // Estado y bypass de los plugins ya montados: se aplica aquí (hilo normal), no en el de audio
+        // State and bypass of the already mounted plugins: applied here (normal thread), not on the audio one
         if prepared {
             for pl in c.plugins {
                 guard let u = pluginUnits.first(where: { $0.id == pl.id })?.unit else { continue }
@@ -129,7 +129,7 @@ final class VoiceChain: @unchecked Sendable {
 
     private func applyNow(_ c: ChainSettings) {
         guard let eqU = eqUnit, let comp = compUnit, let lim = limUnit else { return }
-        // Bandas: las que hay, el resto en bypass
+        // Bands: the ones there are, the rest bypassed
         let bands = Array(c.bands.prefix(ChainSettings.maxBands))
         for i in 0..<ChainSettings.maxBands {
             let b = UInt32(i)
@@ -152,8 +152,8 @@ final class VoiceChain: @unchecked Sendable {
                 AudioUnitSetParameter(eqU, kAUNBandEQParam_BypassBand + b, kAudioUnitScope_Global, 0, 1, 0)
             }
         }
-        // Compresor: el AU no tiene «ratio»; su «head room» es cuánto por encima del umbral sigue subiendo
-        // la salida. ratio r ≈ headroom = 40 / r (3:1 ≈ 13 dB… se ajusta a lo que suena como 3:1 en voz: 6 dB)
+        // Compressor: the AU has no «ratio»; its «head room» is how far above the threshold the output
+        // keeps rising. ratio r ≈ headroom = 40 / r (3:1 ≈ 13 dB… tuned to what sounds like 3:1 on voice: 6 dB)
         if c.compressorOn {
             let headroom = Float(max(0.5, min(40, 18 / max(1, c.ratio))))
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_Threshold, kAudioUnitScope_Global, 0, Float(c.threshold), 0)
@@ -166,7 +166,7 @@ final class VoiceChain: @unchecked Sendable {
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_HeadRoom, kAudioUnitScope_Global, 0, 40, 0)
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_OverallGain, kAudioUnitScope_Global, 0, 0, 0)
         }
-        // Puerta suave: expansión 1:2 por debajo del umbral
+        // Soft gate: 1:2 expansion below the threshold
         if c.gateOn {
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 2, 0)
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionThreshold, kAudioUnitScope_Global, 0, Float(c.gateThreshold), 0)
@@ -174,24 +174,24 @@ final class VoiceChain: @unchecked Sendable {
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionRatio, kAudioUnitScope_Global, 0, 1, 0)
             AudioUnitSetParameter(comp, kDynamicsProcessorParam_ExpansionThreshold, kAudioUnitScope_Global, 0, -120, 0)
         }
-        // Limitador: cuando está apagado se sube el techo para que no actúe
+        // Limiter: when off the ceiling is raised so it doesn't act
         AudioUnitSetParameter(lim, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, c.limiterOn ? 0 : -0.01, 0)
         dsOn = c.deesserOn
         let a = Float(max(0, min(1, c.deesserAmount)))
-        dsFloor = 1 - 0.75 * a            // hasta −12 dB
-        dsThr = 0.08 - 0.06 * a           // más cantidad = actúa antes
+        dsFloor = 1 - 0.75 * a            // down to −12 dB
+        dsThr = 0.08 - 0.06 * a           // more amount = acts earlier
     }
 
-    // MARK: Procesar un bloque (hilo de audio)
+    // MARK: Process a block (audio thread)
 
     func render(into list: UnsafeMutablePointer<AudioBufferList>, frames: UInt32, sampleTime: Double, timelineTime: Double? = nil) -> OSStatus {
         guard prepared, let lim = limUnit else { return noErr }
-        // A/B: con «Sin procesar» encendido el audio pasa tal cual (el buffer ya trae la fuente)
+        // A/B: with «Sin procesar» (Bypass) on the audio passes as-is (the buffer already carries the source)
         if VoiceChainRegistry.shared.bypassAll { return noErr }
         if os_unfair_lock_trylock(&lock) {
             if let p = pending { pending = nil; os_unfair_lock_unlock(&lock); applyNow(p); automated = p.hasAutomation } else { os_unfair_lock_unlock(&lock) }
         }
-        // Automatización: los parámetros que tienen puntos siguen su curva en este segundo del episodio
+        // Automation: parameters that have points follow their curve at this episode second
         if automated, let t = timelineTime {
             let c = settings
             if let eqU = eqUnit, let comp = compUnit {
@@ -224,8 +224,8 @@ final class VoiceChain: @unchecked Sendable {
         return st
     }
 
-    /// De-esser por bandas: separa lo que hay por encima de 5 kHz, sigue su envolvente y, cuando silba,
-    /// baja solo esa parte. Lo demás de la voz no se toca.
+    /// Band de-esser: splits off what's above 5 kHz, follows its envelope and, when it hisses,
+    /// lowers only that part. The rest of the voice isn't touched.
     private func deess(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         let thr = dsThr, floorGain = dsFloor
         var ch = 0
@@ -258,12 +258,12 @@ final class VoiceChain: @unchecked Sendable {
     }
 }
 
-/// Las cadenas vivas por persona: la vista previa y un export en marcha pueden tener cada uno la suya;
-/// al cambiar un control se actualizan todas (las muertas se descartan solas).
+/// Live chains per person: the preview and a running export can each have their own;
+/// when a control changes they're all updated (dead ones are discarded by themselves).
 final class VoiceChainRegistry: ObservableObject, @unchecked Sendable {
     static let shared = VoiceChainRegistry()
-    /// A/B instantáneo: true = ninguna cadena de voz procesa (se oye la grabación tal cual, con el mismo volumen).
-    /// Solo afecta a la reproducción; el export siempre procesa.
+    /// Instant A/B: true = no voice chain processes (you hear the recording as-is, at the same volume).
+    /// Only affects playback; the export always processes.
     @Published var bypassAll = false
     private var lock = os_unfair_lock()
     private var chains: [Int: [WeakChain]] = [:]

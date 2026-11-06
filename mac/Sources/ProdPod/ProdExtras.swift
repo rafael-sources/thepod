@@ -4,9 +4,9 @@ import LiveKit
 import UniformTypeIdentifiers
 
 extension ProdStudio {
-    // MARK: Compartir pantalla
+    // MARK: Screen sharing
 
-    /// Abre el selector de macOS y comparte (o solo graba) la pantalla o ventana elegida.
+    /// Opens the macOS picker and shares (or only records) the chosen screen or window.
     func shareScreen(recordOnly: Bool) {
         guard !screenOn else { return }
         if remoteScreen != nil && !recordOnly {
@@ -35,7 +35,7 @@ extension ProdStudio {
         }
     }
 
-    /// La pantalla se graba mientras se graba el episodio (así queda alineada en post).
+    /// The screen is recorded while the episode is recorded (so it stays aligned in post).
     func startScreenRecording() {
         guard screenRecorder.isRecording == false else { return }
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -118,7 +118,7 @@ extension ProdStudio {
         unreadChat += 1
     }
 
-    // MARK: Levantar la mano y sacar a alguien
+    // MARK: Raise hand and remove someone
 
     func toggleHand() {
         myHand.toggle()
@@ -126,7 +126,7 @@ extension ProdStudio {
         send(["type": "hand_raise", "identity": myIdentity, "up": myHand])
     }
 
-    /// Solo quien creó la sala, como en la web.
+    /// Only whoever created the room, as on the web.
     func kick(_ p: ProdPodClient.Person) {
         guard isOwner else { return }
         send(["type": "kick", "target_identity": "participant_\(p.id)"])
@@ -139,7 +139,7 @@ extension ProdStudio {
         }
     }
 
-    // MARK: Transmitir en vivo (YouTube, Twitch…)
+    // MARK: Live streaming (YouTube, Twitch…)
 
     func loadStreams() async {
         guard isOwner else { return }
@@ -150,8 +150,8 @@ extension ProdStudio {
         await refreshLive()
     }
 
-    /// Confirma con el servidor que la transmisión sigue saliendo. Si la plataforma la rechazó
-    /// (clave mala, directo no habilitado) o se cortó, se avisa con el motivo.
+    /// Confirms with the server that the stream is still going out. If the platform rejected it
+    /// (bad key, live not enabled) or it dropped, it notifies with the reason.
     func refreshLive() async {
         guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/streams"),
               let list = (try? JSONSerialization.jsonObject(with: d)) as? [[String: Any]] else { return }
@@ -184,10 +184,10 @@ extension ProdStudio {
     }
 }
 
-// MARK: - Paquetes de sesión (exportar / importar)
+// MARK: - Session bundles (export / import)
 
 enum SessionBundle {
-    /// Descarga la sala completa (grabaciones, sonidos y datos) como .zip.
+    /// Downloads the whole room (recordings, sounds and data) as .zip.
     @MainActor
     static func export(_ s: ProdPodClient.Session) async throws -> URL? {
         let panel = NSSavePanel()
@@ -199,7 +199,7 @@ enum SessionBundle {
         return dest
     }
 
-    /// Sube un .zip de sala y la crea en prodPod.
+    /// Uploads a room .zip and creates it in prodPod.
     @MainActor
     static func importZip() async throws -> Bool {
         let panel = NSOpenPanel()

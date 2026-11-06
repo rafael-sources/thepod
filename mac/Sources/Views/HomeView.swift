@@ -75,7 +75,7 @@ struct HomeView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.5)))
     }
 
-    /// Opción secundaria: traer archivos sueltos o un paquete descargado a mano.
+    /// Secondary option: bring in loose files or a bundle downloaded by hand.
     private var dropZone: some View {
         HStack(spacing: 14) {
             Image(systemName: "tray.and.arrow.down").font(.title3).foregroundStyle(Theme.secondary)
@@ -159,7 +159,7 @@ struct WebProjectsSection: View {
 
     var body: some View {
         list
-            // Mientras haya un episodio en proceso, revisar cada 20 s si ya terminó
+            // While there's an episode in progress, check every 20 s whether it finished
             .task(id: app.webProjects.contains { $0.importing != nil }) {
                 guard app.webProjects.contains(where: { $0.importing != nil }) else { return }
                 while !Task.isCancelled {
@@ -206,7 +206,7 @@ struct WebProjectsSection: View {
         }
     }
 
-    /// Traer a la Mac. Mientras el episodio todavía está llegando desde prodPod no se puede (quedaría incompleto).
+    /// Bring to the Mac. While the episode is still arriving from prodPod it can't be done (it would be incomplete).
     private func bring(_ w: PostPodWebClient.WebProject) {
         guard w.importing == nil else { return }
         app.importFromWeb(w)
@@ -239,7 +239,7 @@ struct WebProjectsSection: View {
             if busy {
                 ProgressView().controlSize(.small)
             } else if w.importing != nil {
-                // Todavía llegan pistas desde prodPod: no se puede traer hasta que esté listo en la web
+                // Tracks still arriving from prodPod: can't be brought in until it's ready on the web
                 Label("Se puede traer cuando esté listo en la web", systemImage: "hourglass")
                     .font(.callout).foregroundStyle(.red)
                     .help("La lista se actualiza sola cada 20 segundos")

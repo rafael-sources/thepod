@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Cintillos (textos tipo noticiero que entran abajo, con animación y sonido)
+// MARK: - Lower thirds (news-style texts that enter at the bottom, with animation and sound)
 
 struct CintillosStep: View {
     @ObservedObject var session: ProjectSession
@@ -129,7 +129,7 @@ struct CintillosStep: View {
     }
 }
 
-/// Panel bajo el video para el cintillo elegido.
+/// Panel below the video for the selected lower third.
 struct CintilloEditor: View {
     @ObservedObject var session: ProjectSession
     let sel: ProjectSession.TrackSel

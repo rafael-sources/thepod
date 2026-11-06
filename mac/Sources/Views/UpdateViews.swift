@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Aviso flotante cuando hay una versión nueva de thePod.
+/// Floating notice when there's a new thePod version.
 struct UpdateBanner: View {
     @ObservedObject var updater = Updater.shared
 
@@ -45,7 +45,7 @@ struct UpdateBanner: View {
     }
 }
 
-/// Sección de Ajustes → Actualizaciones.
+/// Settings → Updates section.
 struct UpdateSettingsSection: View {
     @ObservedObject var updater = Updater.shared
     @State private var auto = Updater.checkOnLaunch

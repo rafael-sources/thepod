@@ -2,15 +2,15 @@ import AVFoundation
 import AppKit
 import CoreImage
 
-/// Pruebas de Studio · Video. Se corren sin archivos de video: la escena se arma con imágenes de color y se
-/// dibuja con el mismo `RenderScene` que usa el export, así lo que se comprueba es lo que sale.
+/// Studio · Video tests. Run without video files: the scene is built from color images and
+/// drawn with the same `RenderScene` the export uses, so what's checked is what comes out.
 ///
-/// `--video-studio-test`: keyframes, transiciones, cortes de cámara, permanencia mínima, guardar/cargar.
-/// `--studio-tests`: todas las pruebas de Studio seguidas (audio y video).
+/// `--video-studio-test`: keyframes, transitions, camera cuts, minimum hold, save/load.
+/// `--studio-tests`: all Studio tests in a row (audio and video).
 enum StudioTests {
     private static let ctx = CIContext(options: [.cacheIntermediates: false])
 
-    /// Color medio (r, g, b) de un recuadro del cuadro dibujado (fracciones del cuadro, y desde arriba).
+    /// Mean color (r, g, b) of a box in the drawn frame (fractions of the frame, from the top).
     private static func mean(_ img: CIImage, _ box: CGRect, size: CGSize) -> (r: Double, g: Double, b: Double) {
         let W = size.width, H = size.height
         let r = CGRect(x: box.minX * W, y: (1 - box.maxY) * H, width: box.width * W, height: box.height * H)
@@ -24,7 +24,7 @@ enum StudioTests {
         CIImage(color: CIColor(red: r, green: g, blue: b)).cropped(to: CGRect(origin: .zero, size: size))
     }
 
-    /// Una escena de dos personas (1 = roja, 2 = verde) sin nombres, subtítulos ni logo.
+    /// A two-person scene (1 = red, 2 = green) without names, subtitles or logo.
     private static func scene(layout: LayoutTemplate, switches: [SpeakerSwitch]) -> RenderScene {
         var style = CaptionStyle(); style.enabled = false
         return RenderScene(renderSize: CGSize(width: 640, height: 360), format: .landscape, layout: layout, laneOrder: [1, 2],
@@ -32,8 +32,8 @@ enum StudioTests {
                            names: [:], showNames: false, cropX: [:], logo: nil, background: nil, title: "prueba")
     }
 
-    /// Voces parejas por medición: un tono a −20 dBFS mide −23 LUFS (BS.1770); dos archivos a 10 dB de diferencia
-    /// reciben ganancias de ±5 dB; el silencio no cuenta (compuerta); las ganancias se acotan a ±12 dB.
+    /// Even voices by measurement: a tone at −20 dBFS measures −23 LUFS (BS.1770); two files 10 dB apart
+    /// get ±5 dB gains; silence doesn't count (gate); gains are clamped to ±12 dB.
     static func loudnessMatchTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -57,36 +57,36 @@ enum StudioTests {
             return url
         }
         guard let a = tone("a.caf", dbfs: -20), let b = tone("b.caf", dbfs: -30), let c = tone("c.caf", dbfs: -20, silenceAfter: 8) else {
-            check(false, "no se pudieron escribir los tonos"); return false
+            check(false, "couldn't write the tones"); return false
         }
         let la = LoudnessMatch.integratedLUFS(url: a) ?? -999, lb = LoudnessMatch.integratedLUFS(url: b) ?? -999, lc = LoudnessMatch.integratedLUFS(url: c) ?? -999
-        check(abs(la + 23) < 0.3, String(format: "seno 1 kHz a −20 dBFS mide %.2f LUFS (esperado −23,0)", la))
-        check(abs(lb + 33) < 0.3, String(format: "a −30 dBFS mide %.2f LUFS", lb))
-        check(abs(lc - la) < 0.3, String(format: "8 s de silencio después no cambian la medida (%.2f): la compuerta los deja fuera", lc))
+        check(abs(la + 23) < 0.3, String(format: "1 kHz sine at −20 dBFS measures %.2f LUFS (expected −23.0)", la))
+        check(abs(lb + 33) < 0.3, String(format: "at −30 dBFS measures %.2f LUFS", lb))
+        check(abs(lc - la) < 0.3, String(format: "8 s of silence afterwards don't change the measurement (%.2f): the gate leaves them out", lc))
         let g = LoudnessMatch.gains(for: [(1, la), (2, lb)])
-        check(g.count == 2 && abs(g[0].gainDB + 5) < 0.15 && abs(g[1].gainDB - 5) < 0.15, "dos voces a 10 dB de diferencia: −5 dB y +5 dB hacia el promedio (\(g.map(\.gainDB)))")
+        check(g.count == 2 && abs(g[0].gainDB + 5) < 0.15 && abs(g[1].gainDB - 5) < 0.15, "two voices 10 dB apart: −5 dB and +5 dB towards the average (\(g.map(\.gainDB)))")
         let far = LoudnessMatch.gains(for: [(1, -10), (2, -50)])
-        check(far[1].gainDB == 12 && far[0].gainDB == -12, "las ganancias se acotan a ±12 dB")
-        print(ok ? "OK voces parejas por medición" : "FAIL voces parejas")
+        check(far[1].gainDB == 12 && far[0].gainDB == -12, "gains are clamped to ±12 dB")
+        print(ok ? "OK even voices by measurement" : "FAIL even voices")
         return ok
     }
 
-    /// Tono de sala: elige el segundo más quieto que no sea silencio digital, escribe un bucle sin costura,
-    /// calcula los huecos muertos y suaviza las uniones.
+    /// Room tone: picks the quietest second that isn't digital silence, writes a seamless loop,
+    /// computes the dead gaps and smooths the joins.
     static func roomToneTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        // 1) Energía: 3 s de voz (−20), 2 s de ambiente (−55), 2 s de silencio digital (−120), 1 s de ambiente inestable
+        // 1) Energy: 3 s of voice (−20), 2 s of ambience (−55), 2 s of digital silence (−120), 1 s of unstable ambience
         var e: [Float] = []
         e += [Float](repeating: -20, count: 30)
         e += [Float](repeating: -55, count: 20)
         e += [Float](repeating: -120, count: 20)
         e += (0..<10).map { Float(-50 - ($0 % 2) * 9) }
         let q = RoomTone.quietestWindow(energy: e)
-        check(q != nil && q!.start >= 3.0 && q!.start <= 4.0 && abs(q!.db + 55) < 0.5, "elige el ambiente (−55 dB), no la voz ni el silencio digital ni el tramo inestable (\(q.map { "\($0.start) s" } ?? "nil"))")
-        check(RoomTone.quietestWindow(energy: [Float](repeating: -120, count: 50)) == nil, "una pista en silencio digital no tiene tono de sala")
-        check(RoomTone.quietestWindow(energy: [Float](repeating: -25, count: 50)) == nil, "una pista que siempre habla tampoco")
-        // 2) Bucle: de 1 s de ruido sale un bucle de 4 s con el mismo nivel y sin saltos en las costuras
+        check(q != nil && q!.start >= 3.0 && q!.start <= 4.0 && abs(q!.db + 55) < 0.5, "picks the ambience (−55 dB), not the voice, the digital silence or the unstable span (\(q.map { "\($0.start) s" } ?? "nil"))")
+        check(RoomTone.quietestWindow(energy: [Float](repeating: -120, count: 50)) == nil, "a digitally silent track has no room tone")
+        check(RoomTone.quietestWindow(energy: [Float](repeating: -25, count: 50)) == nil, "a track that always speaks doesn't either")
+        // 2) Loop: from 1 s of noise comes a 4 s loop with the same level and no jumps at the seams
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tono-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -97,36 +97,36 @@ enum StudioTests {
             for i in 0..<Int(sr) { seed = seed &* 1664525 &+ 1013904223; buf.floatChannelData![0][i] = (Float(seed % 20000) / 10000 - 1) * 0.01 }
             let url = RoomTone.writeLoop(from: buf, to: dir.appendingPathComponent("loop.caf"))
             if let url, let f = try? AVAudioFile(forReading: url) {
-                check(abs(Double(f.length) / sr - RoomTone.loopSeconds) < 0.01, "el bucle dura \(RoomTone.loopSeconds) s")
+                check(abs(Double(f.length) / sr - RoomTone.loopSeconds) < 0.01, "the loop lasts \(RoomTone.loopSeconds) s")
                 let lufsSrc = LoudnessMatch.integratedLUFS(url: url) ?? -999
-                check(lufsSrc > -70 && lufsSrc < -30, String(format: "el bucle conserva un nivel de ambiente (%.1f LUFS)", lufsSrc))
-                // sin costura audible: la potencia en 20 ms alrededor de cada costura es la misma que en el medio (±1,5 dB)
+                check(lufsSrc > -70 && lufsSrc < -30, String(format: "the loop keeps an ambience level (%.1f LUFS)", lufsSrc))
+                // no audible seam: the power in 20 ms around each seam is the same as in the middle (±1.5 dB)
                 let n = AVAudioFrameCount(f.length)
                 if let all = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: n), (try? f.read(into: all)) != nil {
                     func rms(_ from: Int, _ len: Int) -> Double {
                         var sum = 0.0; for i in from..<(from + len) { let v = Double(all.floatChannelData![0][i]); sum += v * v }; return sqrt(sum / Double(len))
                     }
                     let w = Int(0.02 * sr)
-                    let seam = Int(sr) - Int(0.05 * sr) + Int(0.025 * sr) - w / 2      // centro del primer cruce
+                    let seam = Int(sr) - Int(0.05 * sr) + Int(0.025 * sr) - w / 2      // center of the first crossing
                     let mid = Int(0.5 * sr)
                     let ratio = 20 * log10(rms(seam, w) / max(1e-9, rms(mid, w)))
-                    check(abs(ratio) < 1.5, String(format: "la costura conserva la potencia (%.2f dB respecto al medio)", ratio))
+                    check(abs(ratio) < 1.5, String(format: "the seam keeps the power (%.2f dB relative to the middle)", ratio))
                 }
-            } else { check(false, "no se pudo escribir el bucle") }
+            } else { check(false, "couldn't write the loop") }
         }
-        // 3) Huecos muertos: antes y después del tramo de la persona, y bajo un pitido; los de < 150 ms no
+        // 3) Dead gaps: before and after the person's span, and under a beep; those < 150 ms are not
         let dead = RoomTone.deadSpans(laneSpan: (12, 100), content: (4, 130), bleeps: [(50, 50.6), (70, 70.05)])
-        check(dead.count == 3 && dead[0] == (4, 12) && dead[1] == (50, 50.6) && dead[2] == (100, 130), "huecos: antes (4–12), pitido (50–50,6) y después (100–130); el pitido de 50 ms no cuenta (\(dead))")
-        check(RoomTone.deadSpans(laneSpan: (4.05, 129.9), content: (4, 130), bleeps: []).isEmpty, "sin huecos si la persona cubre casi todo")
-        // 4) Unión de corte: cero justo en la unión, entero a 6 ms, sin tocar lejos
+        check(dead.count == 3 && dead[0] == (4, 12) && dead[1] == (50, 50.6) && dead[2] == (100, 130), "gaps: before (4–12), beep (50–50.6) and after (100–130); the 50 ms beep doesn't count (\(dead))")
+        check(RoomTone.deadSpans(laneSpan: (4.05, 129.9), content: (4, 130), bleeps: []).isEmpty, "no gaps if the person covers almost everything")
+        // 4) Cut join: zero right at the join, full at 6 ms, nothing touched further away
         check(RoomTone.joinDip(10, joins: [10]) == 0 && abs(RoomTone.joinDip(10.003, joins: [10]) - 0.5) < 1e-6 && RoomTone.joinDip(10.006, joins: [10]) >= 0.999 && RoomTone.joinDip(12, joins: [10]) == 1,
               "la unión baja a cero y vuelve en 6 ms")
-        print(ok ? "OK tono de sala" : "FAIL tono de sala")
+        print(ok ? "OK room tone" : "FAIL room tone")
         return ok
     }
 
-    /// Entrega: subtítulos .srt/.vtt y capítulos .chapters.json junto al export; subtítulos dentro del MP4 y
-    /// transcripción dentro del MP3 (con ffmpeg).
+    /// Delivery: .srt/.vtt subtitles and .chapters.json chapters next to the export; subtitles inside the MP4 and
+    /// transcript inside the MP3 (with ffmpeg).
     static func deliveryTest() async -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -137,21 +137,21 @@ enum StudioTests {
                    Word(w: "Qué", s: 3.0, e: 3.3, lane: 2), Word(w: "tal", s: 3.3, e: 3.6, lane: 2)]
         p.transcribedLanes = [1, 2]
         let v = Exporter.vtt(project: p)
-        check(v.hasPrefix("WEBVTT\n\n1\n00:00:00.200 --> "), "el VTT empieza con la cabecera y el primer tiempo con punto (\(v.prefix(30).replacingOccurrences(of: "\n", with: "⏎")))")
-        check(v.contains("<v Ana>") && v.contains("<v Beto>"), "el VTT dice quién habla en cada línea")
+        check(v.hasPrefix("WEBVTT\n\n1\n00:00:00.200 --> "), "the VTT starts with the header and the first timestamp uses a dot (\(v.prefix(30).replacingOccurrences(of: "\n", with: "⏎")))")
+        check(v.contains("<v Ana>") && v.contains("<v Beto>"), "the VTT says who speaks on each line")
         let srt = Exporter.srt(project: p)
-        check(srt.contains("00:00:00,200 -->") && !srt.contains("<v "), "el SRT usa coma en los tiempos y no lleva etiquetas de voz")
+        check(srt.contains("00:00:00,200 -->") && !srt.contains("<v "), "the SRT uses a comma in timestamps and has no voice tags")
         let chapters = [(time: 0.0, title: "Inicio"), (time: 61.5, title: "El tema"), (time: 125.0, title: "Cierre")]
         let json = Exporter.chaptersJSON(chapters) ?? ""
-        check(json.contains("\"version\" : \"1.2.0\"") && json.contains("\"startTime\" : 61.5") && json.contains("\"title\" : \"El tema\""), "el JSON de capítulos sigue Podcasting 2.0")
-        check(Exporter.chaptersJSON([]) == nil, "sin capítulos no hay JSON")
+        check(json.contains("\"version\" : \"1.2.0\"") && json.contains("\"startTime\" : 61.5") && json.contains("\"title\" : \"El tema\""), "the chapters JSON follows Podcasting 2.0")
+        check(Exporter.chaptersJSON([]) == nil, "no chapters, no JSON")
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("entrega-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let fake = dir.appendingPathComponent("episodio.mp4")
         let written = Exporter.writeSidecars(project: p, next: fake, chapters: chapters).map(\.lastPathComponent).sorted()
-        check(written == ["episodio.chapters.json", "episodio.srt", "episodio.vtt"], "junto al export quedan .srt, .vtt y .chapters.json (\(written))")
-        // Con ffmpeg: un MP4 de 5 s con subtítulos dentro y un MP3 con la transcripción
+        check(written == ["episodio.chapters.json", "episodio.srt", "episodio.vtt"], ".srt, .vtt and .chapters.json are written next to the export (\(written))")
+        // With ffmpeg: a 5 s MP4 with embedded subtitles and an MP3 with the transcript
         if FFmpeg.isAvailable {
             let mp4 = dir.appendingPathComponent("base.mp4")
             do {
@@ -161,20 +161,20 @@ enum StudioTests {
                 let with = dir.appendingPathComponent("con-subs.mp4")
                 _ = try await FFmpeg.run(["-i", mp4.path, "-i", srtURL.path, "-map", "0", "-map", "1", "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text", "-metadata:s:s:0", "language=spa", with.path])
                 let tracks = try await AVURLAsset(url: with).load(.tracks)
-                check(tracks.contains { $0.mediaType == .subtitle || $0.mediaType == .text }, "el MP4 lleva una pista de subtítulos (\(tracks.map { $0.mediaType.rawValue }))")
+                check(tracks.contains { $0.mediaType == .subtitle || $0.mediaType == .text }, "the MP4 carries a subtitle track (\(tracks.map { $0.mediaType.rawValue }))")
                 let mp3 = dir.appendingPathComponent("con-letra.mp3")
                 _ = try await FFmpeg.run(["-i", mp4.path, "-vn", "-c:a", "libmp3lame", "-b:a", "64k", "-id3v2_version", "3", "-metadata", "lyrics=" + Exporter.transcriptText(project: p), mp3.path])
-                // AVFoundation no expone la letra ID3; ffmpeg sí la lee
+                // AVFoundation doesn't expose the ID3 lyrics; ffmpeg does read them
                 let probe = (try? await FFmpeg.run(["-i", mp3.path], allowFailure: true)) ?? ""
-                check(probe.contains("lyrics") && probe.contains("Hola a todos"), "el MP3 lleva la transcripción dentro (etiqueta de letra ID3)")
+                check(probe.contains("lyrics") && probe.contains("Hola a todos"), "the MP3 carries the transcript inside (ID3 lyrics tag)")
             } catch { check(false, "ffmpeg: \(error.localizedDescription)") }
-        } else { print("  (sin ffmpeg: no se prueba la pista de subtítulos ni la letra)") }
-        print(ok ? "OK entrega: subtítulos y capítulos junto al archivo y dentro de él" : "FAIL entrega")
+        } else { print("  (no ffmpeg: the subtitle track and lyrics aren't tested)") }
+        print(ok ? "OK delivery: subtitles and chapters next to the file and inside it" : "FAIL delivery")
         return ok
     }
 
-    /// Imán al ritmo: una pista de golpes a 120 BPM (patada de 80 Hz cada 0,5 s con ruido) debe dar 120 BPM, los
-    /// beats sobre los golpes y los ataques contados; el enganche elige el beat más cercano dentro de la tolerancia.
+    /// Beat snap: a hit track at 120 BPM (80 Hz kick every 0.5 s with noise) must give 120 BPM, the
+    /// beats on the hits and the onsets counted; snapping picks the nearest beat within tolerance.
     static func beatGridTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -188,41 +188,41 @@ enum StudioTests {
         for i in 0..<Int(sr * secs) {
             let t = Double(i) / sr
             seed = seed &* 1664525 &+ 1013904223
-            var v = (Float(seed % 20000) / 10000 - 1) * 0.02                       // ruido de fondo
+            var v = (Float(seed % 20000) / 10000 - 1) * 0.02                       // background noise
             let inBeat = t.truncatingRemainder(dividingBy: period)
-            if inBeat < 0.06 { v += Float(0.6 * exp(-inBeat * 40) * sin(2 * .pi * 80 * t)) }   // patada que decae
+            if inBeat < 0.06 { v += Float(0.6 * exp(-inBeat * 40) * sin(2 * .pi * 80 * t)) }   // decaying kick
             buf.floatChannelData![0][i] = v
         }
         let url = dir.appendingPathComponent("golpes.caf")
         guard let f = try? AVAudioFile(forWriting: url, settings: fmt.settings), (try? f.write(from: buf)) != nil else { return false }
-        guard let g = BeatGrid.analyze(url: url) else { check(false, "no se pudo analizar"); return false }
-        check(abs(g.bpm - 120) < 1.5, String(format: "tempo detectado %.1f BPM (esperado 120)", g.bpm))
+        guard let g = BeatGrid.analyze(url: url) else { check(false, "couldn't analyze"); return false }
+        check(abs(g.bpm - 120) < 1.5, String(format: "detected tempo %.1f BPM (expected 120)", g.bpm))
         let expected = Int(secs / period)
-        check(abs(g.onsets.count - expected) <= 3, "ataques: \(g.onsets.count) (esperado ~\(expected))")
+        check(abs(g.onsets.count - expected) <= 3, "onsets: \(g.onsets.count) (expected ~\(expected))")
         let offsets = g.beats.map { b -> Double in let r = b.truncatingRemainder(dividingBy: period); return min(r, period - r) }
         let worst = offsets.max() ?? 1
-        check(g.beats.count >= expected - 2 && worst < 0.03, String(format: "la rejilla cae sobre los golpes (peor desvío %.0f ms, %d beats)", worst * 1000, g.beats.count))
-        // Enganche
+        check(g.beats.count >= expected - 2 && worst < 0.03, String(format: "the grid lands on the hits (worst deviation %.0f ms, %d beats)", worst * 1000, g.beats.count))
+        // Snapping
         let beats = [1.0, 1.5, 2.0]
         check(BeatGrid.snap(1.46, to: beats, tolerance: 0.1) == 1.5 && BeatGrid.snap(1.3, to: beats, tolerance: 0.1) == nil && BeatGrid.snap(0.2, to: beats, tolerance: 1) == 1.0,
               "el imán elige el beat más cercano solo dentro de la tolerancia")
         var clip = AudioLaneClip(id: 1, mediaId: 1, tlStart: 100, srcIn: 1.2, srcOut: 1.9)
-        check(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip) == [100.3], "los beats de un clip pasan al tiempo del episodio (el de 2,0 s queda fuera del clip) (\(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip)))")
+        check(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip) == [100.3], "a clip's beats map to episode time (the one at 2.0 s falls outside the clip) (\(BeatGrid(bpm: 120, beats: beats, onsets: [], duration: 3).beats(in: clip)))")
         clip.srcIn = 0
-        print(ok ? "OK imán al ritmo" : "FAIL imán al ritmo")
+        print(ok ? "OK beat snap" : "FAIL beat snap")
         return ok
     }
 
-    /// Panorama de conversación: los panoramas por orden en pantalla, y un tono estéreo con pan a la derecha sale
-    /// casi todo por el canal derecho dentro de un export real (mismo tap que la vista previa).
+    /// Conversation panning: pans by on-screen order, and a stereo tone panned right comes out
+    /// almost entirely on the right channel inside a real export (same tap as the preview).
     static func panTest() async -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        check(Project.conversationPans(count: 1) == [0], "una persona: al centro")
+        check(Project.conversationPans(count: 1) == [0], "one person: centered")
         let two = Project.conversationPans(count: 2)
-        check(two.count == 2 && abs(two[0] + 0.2) < 1e-9 && abs(two[1] - 0.2) < 1e-9, "dos personas: −20 % y +20 % (\(two))")
+        check(two.count == 2 && abs(two[0] + 0.2) < 1e-9 && abs(two[1] - 0.2) < 1e-9, "two people: −20 % and +20 % (\(two))")
         let four = Project.conversationPans(count: 4)
-        check(four.first! >= -0.3 && four.last! <= 0.3 && four == four.sorted(), "cuatro personas: de izquierda a derecha sin pasar de ±30 % (\(four.map { String(format: "%.2f", $0) }))")
+        check(four.first! >= -0.3 && four.last! <= 0.3 && four == four.sorted(), "four people: left to right without exceeding ±30 % (\(four.map { String(format: "%.2f", $0) }))")
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("pan-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -263,16 +263,16 @@ enum StudioTests {
                 return (sqrt(l / Double(m / 3)), sqrt(r / Double(m / 3)))
             }
             let c = try await export(pan: 0), right = try await export(pan: 1), half = try await export(pan: 0.5)
-            check(abs(c.l - c.r) < 0.01 && c.l > 0.15, String(format: "pan 0: igual por los dos lados (%.3f / %.3f)", c.l, c.r))
-            check(right.l < 0.02 && right.r > c.r * 1.3, String(format: "pan +1: casi nada a la izquierda y más a la derecha (%.3f / %.3f)", right.l, right.r))
-            check(half.r > half.l * 1.5 && half.l > 0.05, String(format: "pan +0,5: inclinado a la derecha sin perder la izquierda (%.3f / %.3f)", half.l, half.r))
+            check(abs(c.l - c.r) < 0.01 && c.l > 0.15, String(format: "pan 0: equal on both sides (%.3f / %.3f)", c.l, c.r))
+            check(right.l < 0.02 && right.r > c.r * 1.3, String(format: "pan +1: almost nothing on the left and more on the right (%.3f / %.3f)", right.l, right.r))
+            check(half.r > half.l * 1.5 && half.l > 0.05, String(format: "pan +0.5: leaning right without losing the left (%.3f / %.3f)", half.l, half.r))
         } catch { check(false, "export: \(error.localizedDescription)") }
-        print(ok ? "OK panorama de conversación" : "FAIL panorama")
+        print(ok ? "OK conversation panning" : "FAIL panning")
         return ok
     }
 
-    /// Informe de sonoridad: se lee el resumen de ffmpeg, se juzga cada destino y se escribe el PDF; con ffmpeg,
-    /// un tono a −20 dBFS mide −23 LUFS y pico −20 dBTP en el archivo real.
+    /// Loudness report: ffmpeg's summary is read, each destination is judged and the PDF is written; with ffmpeg,
+    /// a tone at −20 dBFS measures −23 LUFS and −20 dBTP peak in the real file.
     static func loudnessReportTest() async -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -293,12 +293,12 @@ enum StudioTests {
             Peak:       -1.4 dBFS
         """
         let m = LoudnessReport.parse(sample, duration: 125)
-        check(m == LoudnessReport.Measure(integrated: -16.3, truePeak: -1.4, range: 7.2, duration: 125), "lee integrado, LRA y pico real del resumen de ffmpeg (\(String(describing: m)))")
+        check(m == LoudnessReport.Measure(integrated: -16.3, truePeak: -1.4, range: 7.2, duration: 125), "reads integrated, LRA and true peak from ffmpeg's summary (\(String(describing: m)))")
         if let m {
             let ok16 = LoudnessReport.targets[0].passes(m), ok14 = LoudnessReport.targets[2].passes(m), ok23 = LoudnessReport.targets[3].passes(m)
-            check(ok16 && !ok14 && !ok23, "a −16,3 LUFS cumple Spotify/Apple y no YouTube ni radio")
+            check(ok16 && !ok14 && !ok23, "at −16.3 LUFS meets Spotify/Apple but not YouTube or radio")
             var hot = m; hot.truePeak = -0.2
-            check(!LoudnessReport.targets[0].passes(hot), "con pico real por encima de −1 dBTP no cumple aunque el nivel esté bien")
+            check(!LoudnessReport.targets[0].passes(hot), "with true peak above −1 dBTP it fails even if the level is fine")
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("informe-\(UUID().uuidString)")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
@@ -307,7 +307,7 @@ enum StudioTests {
             let fake = dir.appendingPathComponent("episodio.mp3")
             let pdf = LoudnessReport.writePDF(project: p, file: fake, format: .audio, measure: m, target: -16)
             let size = pdf.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? Int } ?? 0
-            check(pdf?.lastPathComponent == "episodio.sonoridad.pdf" && size > 2000, "escribe episodio.sonoridad.pdf (\(size) bytes)")
+            check(pdf?.lastPathComponent == "episodio.sonoridad.pdf" && size > 2000, "writes episodio.sonoridad.pdf (\(size) bytes)")
             if FFmpeg.isAvailable {
                 let tone = dir.appendingPathComponent("tono.caf")
                 let sr = 48_000.0
@@ -319,31 +319,31 @@ enum StudioTests {
                 }
                 do {
                     if let r = await LoudnessReport.measure(tone) {
-                        check(abs(r.integrated + 23) < 0.5 && abs(r.truePeak + 20) < 0.7 && r.duration > 5.5, String(format: "mide el archivo real: %.1f LUFS, pico %.1f dBTP, %.1f s", r.integrated, r.truePeak, r.duration))
-                    } else { check(false, "no midió el archivo") }
+                        check(abs(r.integrated + 23) < 0.5 && abs(r.truePeak + 20) < 0.7 && r.duration > 5.5, String(format: "measures the real file: %.1f LUFS, peak %.1f dBTP, %.1f s", r.integrated, r.truePeak, r.duration))
+                    } else { check(false, "didn't measure the file") }
                 } catch { check(false, "ffmpeg: \(error.localizedDescription)") }
             }
         }
-        print(ok ? "OK informe de sonoridad" : "FAIL informe de sonoridad")
+        print(ok ? "OK loudness report" : "FAIL loudness report")
         return ok
     }
 
-    /// Punch-in dinámico: la curva sube cuando la persona habla fuerte y baja despacio; en el cuadro, el borde del
-    /// video queda fuera cuando hay acercamiento.
+    /// Dynamic punch-in: the curve rises when the person speaks loudly and falls slowly; in the frame, the video's
+    /// edge stays outside when zoomed in.
     static func punchInTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        // 10 s: 4 s callado (−70), 2 s hablando normal (−30), 1 s fuerte (−22), 3 s callado
+        // 10 s: 4 s quiet (−70), 2 s normal speech (−30), 1 s loud (−22), 3 s quiet
         var e: [Float] = []
         e += [Float](repeating: -70, count: 40); e += [Float](repeating: -30, count: 20); e += [Float](repeating: -22, count: 10); e += [Float](repeating: -70, count: 30)
         let keep = [EditEngine.Span(start: 0, end: 10)]
         let c = AudioAnalysis.punchInCurve(energy: e, keep: keep)
-        check(c.count >= 100 && c[20] < 1.002, "callado: sin acercamiento (\(String(format: "%.3f", c[20])))")
-        check(c[69] > 1.03 && c[69] <= 1.046, "hablando fuerte: cerca del tope (\(String(format: "%.3f", c[69])))")
-        check(c[72] > c[80] && c[80] > c[95] && c[95] < 1.01, "al callarse baja despacio (\(String(format: "%.3f → %.3f → %.3f", c[72], c[80], c[95])))")
+        check(c.count >= 100 && c[20] < 1.002, "quiet: no zoom (\(String(format: "%.3f", c[20])))")
+        check(c[69] > 1.03 && c[69] <= 1.046, "speaking loudly: near the max (\(String(format: "%.3f", c[69])))")
+        check(c[72] > c[80] && c[80] > c[95] && c[95] < 1.01, "on going quiet it drops slowly (\(String(format: "%.3f → %.3f → %.3f", c[72], c[80], c[95])))")
         let cut = AudioAnalysis.punchInCurve(energy: e, keep: [EditEngine.Span(start: 6, end: 10)])
-        check(cut.count >= 40 && cut[5] > 1.03, "con cortes, la curva va en tiempo del video final (\(String(format: "%.3f", cut.count > 5 ? cut[5] : -1)))")
-        // Cuadro: persona roja con una franja azul a la izquierda (8 %); con acercamiento la franja se recorta
+        check(cut.count >= 40 && cut[5] > 1.03, "with cuts, the curve is in final video time (\(String(format: "%.3f", cut.count > 5 ? cut[5] : -1)))")
+        // Frame: red person with a blue stripe on the left (8 %); with zoom the stripe is cropped
         let size = CGSize(width: 640, height: 360)
         var style = CaptionStyle(); style.enabled = false
         let scene = RenderScene(renderSize: size, format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
@@ -354,25 +354,25 @@ enum StudioTests {
         let before = mean(scene.render(frames: [1: frame], time: 1), CGRect(x: 0.05, y: 0.4, width: 0.025, height: 0.2), size: size)
         scene.punchIn = [1: [Float](repeating: 1.1, count: 100)]
         let after = mean(scene.render(frames: [1: frame], time: 1), CGRect(x: 0.05, y: 0.4, width: 0.025, height: 0.2), size: size)
-        check(before.b > 0.7 && after.r > 0.7, "con acercamiento del 10 %, lo que estaba en el borde queda fuera del cuadro")
-        print(ok ? "OK punch-in dinámico" : "FAIL punch-in")
+        check(before.b > 0.7 && after.r > 0.7, "with a 10 % zoom, what was at the edge falls outside the frame")
+        print(ok ? "OK dynamic punch-in" : "FAIL punch-in")
         return ok
     }
 
-    /// Reducción de ruido por huella: con la huella del ruido, el ruido baja ≥ 10 dB y un tono de voz (300 Hz) a
-    /// 20 dB por encima se conserva (±1,5 dB); con una huella casi nula la señal pasa intacta (reconstrucción).
+    /// Noise-print reduction: with the noise print, noise drops ≥ 10 dB and a voice tone (300 Hz)
+    /// 20 dB above is kept (±1.5 dB); with an almost-zero print the signal passes intact (reconstruction).
     static func noiseReducerTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         let sr = 48_000.0
         var seed: UInt32 = 4242
         func noise() -> Float { seed = seed &* 1664525 &+ 1013904223; return (Float(seed % 20000) / 10000 - 1) * 0.02 }   // ≈ −41 dBFS rms
-        // Huella: 1 s solo ruido
+        // Print: 1 s of noise only
         var only = [Float](repeating: 0, count: Int(sr))
         for i in only.indices { only[i] = noise() }
-        guard let prof = only.withUnsafeBufferPointer({ NoiseReducer.profile(samples: $0.baseAddress!, count: $0.count) }) else { check(false, "sin huella"); return false }
-        check(prof.count == NoiseReducer.bins && prof.max()! > 0, "la huella tiene \(NoiseReducer.bins) bandas")
-        // Señal: 3 s de ruido + tono de 300 Hz a 0,2 (≈ −17 dBFS), procesada por bloques de 512 como en la mezcla
+        guard let prof = only.withUnsafeBufferPointer({ NoiseReducer.profile(samples: $0.baseAddress!, count: $0.count) }) else { check(false, "no print"); return false }
+        check(prof.count == NoiseReducer.bins && prof.max()! > 0, "the print has \(NoiseReducer.bins) bands")
+        // Signal: 3 s of noise + 300 Hz tone at 0.2 (≈ −17 dBFS), processed in 512-sample blocks as in the mix
         let total = Int(sr * 3)
         var sig = [Float](repeating: 0, count: total)
         for i in 0..<total { sig[i] = noise() + 0.2 * Float(sin(2 * .pi * 300 * Double(i) / sr)) }
@@ -392,7 +392,7 @@ enum StudioTests {
             }
             return out
         }
-        /// Potencia de una banda (Goertzel) y potencia total, sobre el segundo central
+        /// Power of a band (Goertzel) and total power, over the middle second
         func band(_ x: [Float], hz: Double) -> Double {
             let a = total / 3, len = total / 3, w = 2 * Double.pi * hz / sr
             var re = 0.0, im = 0.0
@@ -402,26 +402,26 @@ enum StudioTests {
         func rmsDB(_ x: [Float], from: Int, to: Int) -> Double { var s = 0.0; for i in from..<to { s += Double(x[i] * x[i]) }; return 10 * log10(max(1e-12, s / Double(to - from))) }
         let out = run(sig, amount: 0.6, profile: prof)
         let toneIn = band(sig, hz: 300), toneOut = band(out, hz: 300)
-        check(abs(toneOut - toneIn) < 1.5, String(format: "el tono de voz se conserva (%.1f → %.1f dB)", toneIn, toneOut))
-        // ruido: la señal sin tono, por el mismo reductor
+        check(abs(toneOut - toneIn) < 1.5, String(format: "the voice tone is kept (%.1f → %.1f dB)", toneIn, toneOut))
+        // noise: the signal without the tone, through the same reducer
         var onlyNoise = [Float](repeating: 0, count: total); for i in 0..<total { onlyNoise[i] = noise() }
         let nOut = run(onlyNoise, amount: 0.6, profile: prof)
         let lat = NoiseReducer.n
         let nIn = rmsDB(onlyNoise, from: total / 3, to: 2 * total / 3), nO = rmsDB(nOut, from: total / 3 + lat, to: 2 * total / 3 + lat)
-        check(nIn - nO >= 9, String(format: "el ruido baja %.1f dB (normal: ≥ 9)", nIn - nO))
+        check(nIn - nO >= 9, String(format: "the noise drops %.1f dB (normal: ≥ 9)", nIn - nO))
         let strong = run(onlyNoise, amount: 0.9, profile: prof)
-        check(nIn - rmsDB(strong, from: total / 3 + lat, to: 2 * total / 3 + lat) > nIn - nO, "en «Fuerte» baja más que en «Normal»")
-        // sin huella que restar: reconstrucción (retardada n muestras), error por debajo de −30 dB
+        check(nIn - rmsDB(strong, from: total / 3 + lat, to: 2 * total / 3 + lat) > nIn - nO, "on «Fuerte» it drops more than on «Normal»")
+        // no print to subtract: reconstruction (delayed n samples), error below −30 dB
         let clean = run(sig, amount: 0.6, profile: [Float](repeating: 1e-6, count: NoiseReducer.bins))
         var diff = 0.0, ref = 0.0
         for i in (total / 3)..<(2 * total / 3) { let d = Double(clean[i + lat] - sig[i]); diff += d * d; ref += Double(sig[i] * sig[i]) }
-        check(10 * log10(diff / ref) < -30, String(format: "sin ruido que restar la señal pasa intacta (error %.1f dB)", 10 * log10(diff / ref)))
-        print(ok ? "OK reducción de ruido por huella" : "FAIL reducción de ruido")
+        check(10 * log10(diff / ref) < -30, String(format: "with no noise to subtract the signal passes intact (error %.1f dB)", 10 * log10(diff / ref)))
+        print(ok ? "OK noise-print reduction" : "FAIL noise reduction")
         return ok
     }
 
-    /// Quitar clics: sobre un tono de voz con 20 clics de una muestra, los clics desaparecen (pico ≤ el del tono),
-    /// el tono se conserva, y sin clics la señal pasa intacta (retardada).
+    /// De-click: on a voice tone with 20 single-sample clicks, the clicks disappear (peak ≤ the tone's),
+    /// the tone is kept, and without clicks the signal passes intact (delayed).
     static func declickTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -447,23 +447,23 @@ enum StudioTests {
         }
         let lat = DeClicker.lookahead
         let (out, found) = run(dirty, amount: 0.5)
-        check(found >= 18 && found <= 24, "encuentra los clics (\(found) de 20)")
+        check(found >= 18 && found <= 24, "finds the clicks (\(found) of 20)")
         var maxResidual: Float = 0
         for pos in positions { for j in -3...4 { maxResidual = max(maxResidual, abs(out[pos + j + lat] - clean[pos + j])) } }
-        check(maxResidual < 0.06, String(format: "donde había clic queda la onda (residuo máximo %.3f)", maxResidual))
+        check(maxResidual < 0.06, String(format: "where there was a click the waveform remains (max residue %.3f)", maxResidual))
         var diff = 0.0, ref = 0.0
         for i in 1000..<(total - 2000) { let d = Double(out[i + lat] - clean[i]); diff += d * d; ref += Double(clean[i] * clean[i]) }
-        check(10 * log10(diff / ref) < -40, String(format: "el resto de la voz queda igual (error %.1f dB)", 10 * log10(diff / ref)))
+        check(10 * log10(diff / ref) < -40, String(format: "the rest of the voice stays the same (error %.1f dB)", 10 * log10(diff / ref)))
         let (same, none) = run(clean, amount: 0.5)
         var d2 = 0.0
         for i in 1000..<(total - 2000) { let d = Double(same[i + lat] - clean[i]); d2 += d * d }
-        check(none == 0 && 10 * log10(d2 / ref) < -60, String(format: "sin clics no toca nada (%d detectados, error %.1f dB)", none, 10 * log10(max(1e-20, d2) / ref)))
-        print(ok ? "OK quitar clics" : "FAIL quitar clics")
+        check(none == 0 && 10 * log10(d2 / ref) < -60, String(format: "without clicks nothing is touched (%d detected, error %.1f dB)", none, 10 * log10(max(1e-20, d2) / ref)))
+        print(ok ? "OK de-click" : "FAIL de-click")
         return ok
     }
 
-    /// Superficie MIDI: se interpretan los mensajes (UMP 1.0), el mapa por defecto mueve lo que debe, «Aprender»
-    /// asigna el siguiente control y la curva del fader da 0 dB a tres cuartos.
+    /// MIDI surface: messages are parsed (UMP 1.0), the default map moves what it should, «Aprender» (Learn)
+    /// assigns the next control and the fader curve gives 0 dB at three quarters.
     @MainActor static func midiTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
@@ -475,40 +475,40 @@ enum StudioTests {
         m.handle(words: [ump(0xB0, 0, 127), ump(0xB0, 3, 64), ump(0xB0, 48, 127), ump(0xB0, 48, 0), ump(0xB0, 41, 127), ump(0xB0, 45, 127)])
         check(got.count == 5 && got[0].0 == .fader(0) && abs(got[0].1 - 1) < 1e-9 && got[1].0 == .fader(3) && abs(got[1].1 - 64.0 / 127) < 1e-9,
               "faders CC 0 y 3 llegan con su valor (\(got.map { $0.0.name }))")
-        check(got[2].0 == .mute(0) && got[3].0 == .play && got[4].0 == .ab, "mute solo al pulsar (no al soltar), play y A/B")
+        check(got[2].0 == .mute(0) && got[3].0 == .play && got[4].0 == .ab, "mute only on press (not on release), play and A/B")
         got = []
         m.learning = .solo(2)
         m.handle(words: [ump(0x90, 60, 100)])
-        check(m.learning == nil && m.map["note:60"] == .solo(2), "«Aprender»: la nota 60 queda como Solo 3")
+        check(m.learning == nil && m.map["note:60"] == .solo(2), "«Aprender» (Learn): note 60 becomes Solo 3")
         m.handle(words: [ump(0x90, 60, 100), ump(0x80, 60, 0)])
-        check(got.count == 1 && got[0].0 == .solo(2), "la nota aprendida dispara Solo 3 una vez por pulsación")
+        check(got.count == 1 && got[0].0 == .solo(2), "the learned note fires Solo 3 once per press")
         check(MIDIControl.volume(forFader: 0) == 0 && abs(MIDIControl.volume(forFader: 0.79) - 1) < 1e-6 && abs(20 * log10(MIDIControl.volume(forFader: 1)) - 6) < 0.01,
               "curva del fader: 0 = silencio, 79 % = 0 dB, tope = +6 dB")
         m.handler = nil
         m.resetToNanoKontrol()
-        print(ok ? "OK superficie MIDI" : "FAIL MIDI")
+        print(ok ? "OK MIDI surface" : "FAIL MIDI")
         return ok
     }
 
-    /// Audiograma: la curva sigue la voz (0 en silencio, ~1 hablando, baja en ~150 ms) y en un cuadro sin cámara
-    /// las barras del centro crecen cuando la persona habla.
+    /// Audiogram: the curve follows the voice (0 in silence, ~1 speaking, drops in ~150 ms) and in a frame without camera
+    /// the center bars grow when the person speaks.
     static func audiogramTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         var e: [Float] = []
         e += [Float](repeating: -75, count: 20); e += [Float](repeating: -25, count: 20); e += [Float](repeating: -75, count: 20)
         let c = AudioAnalysis.audiogramCurve(energy: e, keep: [EditEngine.Span(start: 0, end: 6)])
-        check(c.count >= 60 && c[10] < 0.05 && c[30] > 0.85 && c[45] < 0.2, String(format: "curva: callado %.2f · hablando %.2f · poco después %.2f", c[10], c[30], c[45]))
+        check(c.count >= 60 && c[10] < 0.05 && c[30] > 0.85 && c[45] < 0.2, String(format: "curve: quiet %.2f · speaking %.2f · shortly after %.2f", c[10], c[30], c[45]))
         let size = CGSize(width: 640, height: 360)
         var style = CaptionStyle(); style.enabled = false
         let scene = RenderScene(renderSize: size, format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
                                 switches: [SpeakerSwitch(time: 0, lane: 1)], names: [1: ("Ana", nil)], showNames: false, cropX: [:], logo: nil, background: nil, title: "p")
-        // sin cámara: frames vacío → logo/nombre; con audiograma, barras al 14 % de alto
+        // no camera: empty frames → logo/name; with audiogram, bars at 14 % height
         let quiet = mean(scene.render(frames: [:], time: 1), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
         scene.audiogram = [1: c]
         let talking = mean(scene.render(frames: [:], time: 3), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
         let silent = mean(scene.render(frames: [:], time: 1), CGRect(x: 0.47, y: 0.80, width: 0.06, height: 0.06), size: size)
-        check(talking.r > quiet.r + 0.3 && talking.r > silent.r + 0.2, String(format: "las barras del centro crecen al hablar (%.2f → %.2f; callado %.2f)", quiet.r, talking.r, silent.r))
+        check(talking.r > quiet.r + 0.3 && talking.r > silent.r + 0.2, String(format: "the center bars grow when speaking (%.2f → %.2f; quiet %.2f)", quiet.r, talking.r, silent.r))
         if let dir = ProcessInfo.processInfo.environment["THEPOD_SHOT"] {
             let big = RenderScene(renderSize: CGSize(width: 1280, height: 720), format: .landscape, layout: .solo, laneOrder: [1], trackIDs: [:], captions: [], style: style,
                                   switches: [SpeakerSwitch(time: 0, lane: 1)], names: [1: ("Ana María", nil)], showNames: false, cropX: [:], logo: nil, background: nil, title: "p")
@@ -516,12 +516,12 @@ enum StudioTests {
             let img = big.render(frames: [:], time: 3.2)
             try? ctx.writePNGRepresentation(of: img, to: URL(fileURLWithPath: dir).appendingPathComponent("audiograma.png"), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
         }
-        print(ok ? "OK audiograma" : "FAIL audiograma")
+        print(ok ? "OK audiogram" : "FAIL audiogram")
         return ok
     }
 
-    /// Cola de exportación: se procesa de a uno, en orden, sin bloquear la app; un fallo no frena el resto;
-    /// no se duplica lo que ya espera; quitar de la cola y cancelar funcionan.
+    /// Export queue: processed one at a time, in order, without blocking the app; a failure doesn't stop the rest;
+    /// what's already waiting isn't duplicated; removing from the queue and cancelling work.
     @MainActor static func exportQueueTest() async -> Bool {
         setvbuf(stdout, nil, _IONBF, 0)
         var ok = true
@@ -538,75 +538,75 @@ enum StudioTests {
             if case .stems = kind { throw NSError(domain: "cola", code: 1, userInfo: [NSLocalizedDescriptionKey: "sin pistas"]) }
             return [URL(fileURLWithPath: "/tmp/\(kind.title).mp4")]
         }
-        check(s.enqueue(.format(.landscape)), "se agrega YouTube")
-        check(s.enqueue(.stems), "se agrega pistas")
-        check(s.enqueue(.format(.audio)), "se agrega MP3")
-        check(!s.enqueue(.format(.audio)), "MP3 ya esperando no se duplica")
-        check(s.exportQueue.count == 3 && s.queuePending == 3, "tres en cola")
-        try? await Task.sleep(nanoseconds: 10_000_000)   // la cola arranca en el siguiente ciclo
-        check(s.isBusy && s.job?.title.hasPrefix("En cola") == true, "la barra de trabajo muestra la cola")
-        // la app sigue respondiendo mientras exporta: el hilo principal no está bloqueado
+        check(s.enqueue(.format(.landscape)), "YouTube is added")
+        check(s.enqueue(.stems), "stems are added")
+        check(s.enqueue(.format(.audio)), "MP3 is added")
+        check(!s.enqueue(.format(.audio)), "an MP3 already waiting isn't duplicated")
+        check(s.exportQueue.count == 3 && s.queuePending == 3, "three in the queue")
+        try? await Task.sleep(nanoseconds: 10_000_000)   // the queue starts on the next cycle
+        check(s.isBusy && s.job?.title.hasPrefix("En cola") == true, "the job bar shows the queue")
+        // the app keeps responding while exporting: the main thread isn't blocked
         var ticks = 0
         while s.queuePending > 0 && ticks < 100 { ticks += 1; try? await Task.sleep(nanoseconds: 20_000_000) }
-        check(ticks > 2 && ticks < 100, "terminó en segundo plano mientras el hilo principal seguía libre (\(ticks) vueltas)")
-        check(order == ["YouTube", "Pistas por separado (WAV)", "Solo audio (MP3)"], "orden de llegada: \(order)")
-        check(!overlap, "nunca dos exportaciones a la vez")
-        check(s.exportQueue[0].status == .done([URL(fileURLWithPath: "/tmp/YouTube.mp4")]), "YouTube listo con su archivo")
-        if case .failed(let why) = s.exportQueue[1].status { check(why == "sin pistas", "pistas falló con su motivo") } else { check(false, "pistas debía fallar") }
-        check(s.exportQueue[2].status.isFinished && s.exportQueue[2].files.count == 1, "MP3 salió aunque pistas falló")
-        check(!s.isBusy && s.job == nil, "al terminar se libera la barra")
+        check(ticks > 2 && ticks < 100, "finished in the background while the main thread stayed free (\(ticks) ticks)")
+        check(order == ["YouTube", "Pistas por separado (WAV)", "Solo audio (MP3)"], "arrival order: \(order)")
+        check(!overlap, "never two exports at once")
+        check(s.exportQueue[0].status == .done([URL(fileURLWithPath: "/tmp/YouTube.mp4")]), "YouTube done with its file")
+        if case .failed(let why) = s.exportQueue[1].status { check(why == "sin pistas", "stems failed with its reason") } else { check(false, "stems should have failed") }
+        check(s.exportQueue[2].status.isFinished && s.exportQueue[2].files.count == 1, "MP3 came out even though stems failed")
+        check(!s.isBusy && s.job == nil, "when done the bar is released")
         s.clearFinishedExports()
-        check(s.exportQueue.isEmpty, "limpiar deja la cola vacía")
-        // quitar uno que espera y cancelar el que corre vacía el resto
+        check(s.exportQueue.isEmpty, "clearing leaves the queue empty")
+        // removing a waiting one and cancelling the running one empties the rest
         s.exportQueueRunner = { kind in try await Task.sleep(nanoseconds: 400_000_000); return [] }
         s.enqueue(.format(.vertical)); s.enqueue(.format(.square)); s.enqueue(.reels)
         try? await Task.sleep(nanoseconds: 30_000_000)
         let sq = s.exportQueue.first { $0.kind == .format(.square) }!
         s.removeFromQueue(sq.id)
-        check(s.exportQueue.count == 2, "se quita el que esperaba")
+        check(s.exportQueue.count == 2, "the waiting one is removed")
         s.removeFromQueue(s.exportQueue[0].id)
-        check(s.exportQueue.count == 2 && s.exportQueue[0].status == .running, "el que corre no se quita, se cancela")
+        check(s.exportQueue.count == 2 && s.exportQueue[0].status == .running, "the running one isn't removed, it's cancelled")
         s.cancelJob()
         ticks = 0
         while s.queuePending > 0 && ticks < 50 { ticks += 1; try? await Task.sleep(nanoseconds: 20_000_000) }
-        check(s.exportQueue.count == 1 && s.exportQueue[0].status == .failed("Cancelado"), "cancelar para el actual y vacía lo que esperaba")
-        // "Exportar todo" encola YouTube + MP3 (+ reels solo si hay marcados)
+        check(s.exportQueue.count == 1 && s.exportQueue[0].status == .failed("Cancelado"), "cancel stops the current one and empties what was waiting")
+        // "Exportar todo" queues YouTube + MP3 (+ reels only if any are marked)
         s.clearFinishedExports()
         s.exportQueueRunner = { _ in [] }
         s.enqueueAll()
-        check(s.exportQueue.map(\.kind) == [.format(.landscape), .format(.audio)], "exportar todo sin reels: YouTube y MP3")
+        check(s.exportQueue.map(\.kind) == [.format(.landscape), .format(.audio)], "export all without reels: YouTube and MP3")
         return ok
     }
 
-    /// Velocidad (time-stretch): un clip a 2× ocupa la mitad y a 0,5× el doble, y el tono no cambia (algoritmo espectral
-    /// de AVFoundation, el mismo que usa la mezcla). También el modelo: `length`, `tlEnd` y los proyectos viejos a 1×.
+    /// Speed (time-stretch): a clip at 2× takes half and at 0.5× double, and the pitch doesn't change (AVFoundation's
+    /// spectral algorithm, the same the mix uses). Also the model: `length`, `tlEnd` and old projects at 1×.
     static func speedTest() async -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         var c = AudioLaneClip(id: 1, mediaId: 1, tlStart: 10, srcIn: 2, srcOut: 6)
-        check(c.length == 4 && c.tlEnd == 14, "a 1× dura lo que la fuente")
+        check(c.length == 4 && c.tlEnd == 14, "at 1× lasts as long as the source")
         c.speed = 2
-        check(c.length == 2 && c.tlEnd == 12, "a 2× dura la mitad en el episodio")
+        check(c.length == 2 && c.tlEnd == 12, "at 2× lasts half in the episode")
         c.speed = 0.5
-        check(c.length == 8 && c.tlEnd == 18, "a 0,5× dura el doble")
+        check(c.length == 8 && c.tlEnd == 18, "at 0.5× lasts double")
         var p = Project(id: "vel", name: "Vel", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         p.audioLane = [c]
-        check(abs(p.duration - 18) < 1e-9, "sin voces, el episodio dura hasta donde llega la música estirada (\(p.duration))")
+        check(abs(p.duration - 18) < 1e-9, "without voices, the episode lasts as far as the stretched music reaches (\(p.duration))")
         if let old = try? JSONDecoder().decode(AudioLaneClip.self, from: Data(#"{"id":1,"mediaId":1,"tlStart":0,"srcOut":3}"#.utf8)) {
-            check(old.speed == 1 && old.length == 3, "un clip guardado antes abre a 1×")
-        } else { check(false, "no decodifica un clip viejo") }
-        if let b = try? JSONDecoder().decode(BRollClip.self, from: Data(#"{"id":1,"file":"x.mp4"}"#.utf8)) { check(b.speed == 1 && b.speedEnd == nil, "un b-roll viejo abre a 1× y sin rampa") }
-        else { check(false, "no decodifica un b-roll viejo") }
-        // Rampa: de 1× a 2× en 4 s de pantalla consume 6 s de fuente (velocidad media 1,5×), en trozos de 0,25 s
+            check(old.speed == 1 && old.length == 3, "a clip saved earlier opens at 1×")
+        } else { check(false, "doesn't decode an old clip") }
+        if let b = try? JSONDecoder().decode(BRollClip.self, from: Data(#"{"id":1,"file":"x.mp4"}"#.utf8)) { check(b.speed == 1 && b.speedEnd == nil, "an old b-roll opens at 1× and without ramp") }
+        else { check(false, "doesn't decode an old b-roll") }
+        // Ramp: from 1× to 2× over 4 s on screen consumes 6 s of source (average speed 1.5×), in 0.25 s chunks
         var br = BRollClip(id: 1, file: "x.mp4", isVideo: true, start: 0, duration: 4)
         br.speed = 1; br.speedEnd = 2
         let segs = br.speedSegments(screenLen: 4)
-        check(segs.count == 16 && abs(segs.reduce(0) { $0 + $1.screen } - 4) < 1e-9, "la rampa se parte en 16 trozos que suman 4 s de pantalla")
-        check(abs(br.sourceNeeded(screenLen: 4) - 6) < 0.05, String(format: "la rampa 1×→2× consume 6 s de fuente (%.2f)", br.sourceNeeded(screenLen: 4)))
-        check(segs.first!.source < segs.last!.source && abs(br.speed(at: 0) - 1) < 1e-9 && abs(br.speed(at: 1) - 2) < 1e-9, "empieza lento y termina rápido")
+        check(segs.count == 16 && abs(segs.reduce(0) { $0 + $1.screen } - 4) < 1e-9, "the ramp splits into 16 chunks adding up to 4 s on screen")
+        check(abs(br.sourceNeeded(screenLen: 4) - 6) < 0.05, String(format: "the 1×→2× ramp consumes 6 s of source (%.2f)", br.sourceNeeded(screenLen: 4)))
+        check(segs.first!.source < segs.last!.source && abs(br.speed(at: 0) - 1) < 1e-9 && abs(br.speed(at: 1) - 2) < 1e-9, "starts slow and ends fast")
         br.speedEnd = nil; br.speed = 0.5
-        check(br.speedSegments(screenLen: 4).count == 1 && abs(br.sourceNeeded(screenLen: 4) - 2) < 1e-9, "sin rampa: un solo tramo, 0,5× consume la mitad")
-        // Mecanismo real: estirar sin cambiar el tono
+        check(br.speedSegments(screenLen: 4).count == 1 && abs(br.sourceNeeded(screenLen: 4) - 2) < 1e-9, "no ramp: a single segment, 0.5× consumes half")
+        // Real mechanism: stretch without changing pitch
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vel-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -644,120 +644,120 @@ enum StudioTests {
                 return (Double(m) / f.processingFormat.sampleRate, Double(crossings) / 2 / secs)
             }
             let fast = try await stretched(2), slow = try await stretched(0.5)
-            check(abs(fast.seconds - 2) < 0.15 && abs(fast.hz - 440) < 15, String(format: "a 2×: dura %.2f s y sigue a %.0f Hz", fast.seconds, fast.hz))
-            check(abs(slow.seconds - 8) < 0.15 && abs(slow.hz - 440) < 15, String(format: "a 0,5×: dura %.2f s y sigue a %.0f Hz", slow.seconds, slow.hz))
+            check(abs(fast.seconds - 2) < 0.15 && abs(fast.hz - 440) < 15, String(format: "at 2×: lasts %.2f s and stays at %.0f Hz", fast.seconds, fast.hz))
+            check(abs(slow.seconds - 8) < 0.15 && abs(slow.hz - 440) < 15, String(format: "at 0.5×: lasts %.2f s and stays at %.0f Hz", slow.seconds, slow.hz))
         } catch { check(false, "export: \(error.localizedDescription)") }
-        print(ok ? "OK velocidad (time-stretch)" : "FAIL velocidad")
+        print(ok ? "OK speed (time-stretch)" : "FAIL speed")
         return ok
     }
 
-    /// Plantillas de título: guardar toma estilo, color, posición, tamaño, entrada y salida (no el texto ni el momento);
-    /// aplicar las pone en otra capa sin tocar su texto; el mismo nombre reemplaza; borrar quita; las de un podcast
-    /// no se mezclan con las de esta Mac; una plantilla guardada con menos campos abre con valores sanos.
+    /// Title templates: saving takes style, color, position, size, in and out (not the text or the moment);
+    /// applying puts them on another layer without touching its text; the same name replaces; deleting removes; a podcast's
+    /// don't mix with this Mac's; a template saved with fewer fields opens with sane values.
     static func titlePresetsTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         let slug = "prueba-plantillas-\(Int(Date().timeIntervalSince1970))"
         defer { UserDefaults.standard.removeObject(forKey: "estudio.titulos.\(slug)"); UserDefaults.standard.removeObject(forKey: "estudio.titulos.\(slug)-mia") }
         var a = VideoLayer(id: 1, kind: .text, start: 10)
-        a.text = "Karelia"; a.style = .box; a.color = "#FFCC00"; a.x = 0.2; a.y = 0.85; a.scale = 1.3; a.duration = 6
+        a.text = "Sam"; a.style = .box; a.color = "#FFCC00"; a.x = 0.2; a.y = 0.85; a.scale = 1.3; a.duration = 6
         a.enter = TitleMotion(kind: .rise, duration: 0.5); a.exit = TitleMotion(kind: .fade, duration: 0.3)
         TitlePresets.add(name: "Nombre abajo", from: a, podcast: slug)
         let saved = TitlePresets.all(podcast: slug)
-        check(saved.count == 1 && saved[0].name == "Nombre abajo" && saved[0].style == .box && saved[0].y == 0.85 && saved[0].enter?.kind == .rise, "se guarda con su estilo, posición y entrada")
+        check(saved.count == 1 && saved[0].name == "Nombre abajo" && saved[0].style == .box && saved[0].y == 0.85 && saved[0].enter?.kind == .rise, "saved with its style, position and in")
         var b = VideoLayer(id: 2, kind: .text, start: 40)
-        b.text = "Patricio"
+        b.text = "Alex"
         saved[0].apply(to: &b)
-        check(b.text == "Patricio" && b.start == 40, "aplicar no toca el texto ni el momento")
-        check(b.style == .box && b.color == "#FFCC00" && b.x == 0.2 && b.y == 0.85 && b.scale == 1.3 && b.duration == 6 && b.exit?.kind == .fade, "aplicar pone estilo, color, posición, tamaño, duración y salida")
+        check(b.text == "Alex" && b.start == 40, "applying doesn't touch the text or the moment")
+        check(b.style == .box && b.color == "#FFCC00" && b.x == 0.2 && b.y == 0.85 && b.scale == 1.3 && b.duration == 6 && b.exit?.kind == .fade, "applying sets style, color, position, size, duration and out")
         a.color = "#FFFFFF"
         TitlePresets.add(name: "Nombre abajo", from: a, podcast: slug)
-        check(TitlePresets.all(podcast: slug).count == 1 && TitlePresets.all(podcast: slug)[0].color == "#FFFFFF", "guardar con el mismo nombre reemplaza")
-        check(!TitlePresets.all().contains { $0.name == "Nombre abajo" }, "las del podcast no aparecen entre las de esta Mac")
+        check(TitlePresets.all(podcast: slug).count == 1 && TitlePresets.all(podcast: slug)[0].color == "#FFFFFF", "saving with the same name replaces")
+        check(!TitlePresets.all().contains { $0.name == "Nombre abajo" }, "the podcast's don't appear among this Mac's")
         TitlePresets.remove(saved[0].id, podcast: slug)
-        check(TitlePresets.all(podcast: slug).count == 1, "borrar por un id viejo no toca la reemplazada")
+        check(TitlePresets.all(podcast: slug).count == 1, "deleting by an old id doesn't touch the replaced one")
         TitlePresets.remove(TitlePresets.all(podcast: slug)[0].id, podcast: slug)
-        check(TitlePresets.all(podcast: slug).isEmpty, "borrar la deja fuera")
+        check(TitlePresets.all(podcast: slug).isEmpty, "deleting removes it")
         if let old = try? JSONDecoder().decode(TitlePresets.Item.self, from: Data(#"{"name":"Vieja","style":"label"}"#.utf8)) {
-            check(old.style == .label && old.x == 0.5 && old.scale == 1 && old.enter == nil, "una plantilla con menos campos abre con valores sanos")
-        } else { check(false, "no decodifica una plantilla con menos campos") }
-        print(ok ? "OK plantillas de título" : "FAIL plantillas de título")
+            check(old.style == .label && old.x == 0.5 && old.scale == 1 && old.enter == nil, "a template with fewer fields opens with sane values")
+        } else { check(false, "doesn't decode a template with fewer fields") }
+        print(ok ? "OK title templates" : "FAIL title templates")
         return ok
     }
 
-    /// Multicámara: cortar en vivo (tecla 1–4) crea un tramo a mano hasta el siguiente corte, recorta el que cubría ese
-    /// segundo y reemplaza uno que empiece ahí; al cambiar de cámara, el fundido mezcla y el zoom suave agranda.
+    /// Multicam: cutting live (keys 1–4) creates a manual span until the next cut, trims the one covering that
+    /// second and replaces one starting there; on camera switch, the crossfade blends and the smooth zoom enlarges.
     static func multicamTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         var v = StudioVideoSettings()
         v.liveCut(to: 2, at: 10, duration: 100)
-        check(v.cuts.count == 1 && v.cuts[0].start == 10 && v.cuts[0].end == 100 && v.cuts[0].lane == 2, "el primer corte en vivo dura hasta el final")
+        check(v.cuts.count == 1 && v.cuts[0].start == 10 && v.cuts[0].end == 100 && v.cuts[0].lane == 2, "the first live cut lasts until the end")
         v.liveCut(to: 1, at: 30, duration: 100)
-        check(v.cuts.count == 2 && v.cuts[0].end == 30 && v.cuts[1].start == 30 && v.cuts[1].lane == 1, "el siguiente recorta al anterior y sigue hasta el final")
+        check(v.cuts.count == 2 && v.cuts[0].end == 30 && v.cuts[1].start == 30 && v.cuts[1].lane == 1, "the next one trims the previous and lasts until the end")
         v.liveCut(to: 3, at: 20, duration: 100)
-        check(v.cuts.map { [$0.start, $0.end] } == [[10, 20], [20, 30], [30, 100]] && v.cuts[1].lane == 3, "cortar en el medio parte el tramo y termina en el siguiente corte (\(v.cuts.map { "\($0.start)-\($0.end)" }))")
+        check(v.cuts.map { [$0.start, $0.end] } == [[10, 20], [20, 30], [30, 100]] && v.cuts[1].lane == 3, "cutting in the middle splits the span and ends at the next cut (\(v.cuts.map { "\($0.start)-\($0.end)" }))")
         v.liveCut(to: 2, at: 20.02, duration: 100)
-        check(v.cuts.count == 3 && v.cuts[1].lane == 2 && v.cuts[1].start == 20.02, "cortar casi en el mismo segundo reemplaza en vez de apilar")
-        if let old = try? JSONDecoder().decode(StudioVideoSettings.self, from: Data(#"{"followSpeaker":true}"#.utf8)) { check(old.switchTransition == nil && old.isDefault, "un proyecto viejo abre con corte seco") }
-        else { check(false, "no decodifica ajustes viejos") }
-        // Transiciones al cambiar: dos cámaras (1 roja, 2 verde), cambio a los 5 s
+        check(v.cuts.count == 3 && v.cuts[1].lane == 2 && v.cuts[1].start == 20.02, "cutting at almost the same second replaces instead of stacking")
+        if let old = try? JSONDecoder().decode(StudioVideoSettings.self, from: Data(#"{"followSpeaker":true}"#.utf8)) { check(old.switchTransition == nil && old.isDefault, "an old project opens with a hard cut") }
+        else { check(false, "doesn't decode old settings") }
+        // Transitions on switch: two cameras (1 red, 2 green), switch at 5 s
         let size = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(1, 0, 0, size), 2: solid(0, 1, 0, size)]
         let s = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1), SpeakerSwitch(time: 5, lane: 2)])
         let box = CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2)
         let seco = mean(s.render(frames: frames, time: 5.05), box, size: size)
-        check(seco.g > 0.9 && seco.r < 0.1, "sin transición: al pasar los 5 s ya se ve la nueva cámara")
+        check(seco.g > 0.9 && seco.r < 0.1, "no transition: past 5 s the new camera is already shown")
         s.switchTransition = Transition(kind: .fade, duration: 0.4)
         let mid = mean(s.render(frames: frames, time: 5.2), box, size: size)
         let after = mean(s.render(frames: frames, time: 5.6), box, size: size)
         let before = mean(s.render(frames: frames, time: 4.9), box, size: size)
-        check(mid.r > 0.25 && mid.g > 0.25 && mid.r < 0.75 && mid.g < 0.75, String(format: "fundido: a mitad del cambio se mezclan las dos (%.2f rojo, %.2f verde)", mid.r, mid.g))
-        check(after.g > 0.9 && after.r < 0.1 && before.r > 0.9, "fundido: antes del cambio solo la vieja, después solo la nueva")
-        // Un tramo a mano que termina también es un cambio
+        check(mid.r > 0.25 && mid.g > 0.25 && mid.r < 0.75 && mid.g < 0.75, String(format: "fade: mid-switch the two are blended (%.2f red, %.2f green)", mid.r, mid.g))
+        check(after.g > 0.9 && after.r < 0.1 && before.r > 0.9, "fade: before the switch only the old one, after only the new one")
+        // A manual span that ends is also a switch
         s.cameraSpans = [RenderScene.CameraSpan(start: 6, end: 8, lane: 1, template: nil)]
         let endSpan = mean(s.render(frames: frames, time: 8.2), box, size: size)
-        check(endSpan.r > 0.25 && endSpan.g > 0.25, "al terminar un tramo a mano también se funde hacia el automático")
+        check(endSpan.r > 0.25 && endSpan.g > 0.25, "when a manual span ends it also fades to the automatic one")
         s.cameraSpans = []
         s.switchTransition = Transition(kind: .zoom, duration: 0.4)
-        // Zoom suave: la cámara 2 es verde con un borde azul de 8 px; justo al cambiar entra un 4 % más grande y el borde queda fuera del cuadro
+        // Smooth zoom: camera 2 is green with an 8 px blue border; right at the switch it comes in 4 % larger and the border is outside the frame
         let green = solid(0, 1, 0, CGSize(width: 624, height: 344)).transformed(by: .init(translationX: 8, y: 8)).composited(over: solid(0, 0, 1, size))
-        let edge = CGRect(x: 0, y: 0.45, width: 0.01, height: 0.1)   // los primeros 6 px: borde azul, salvo con el zoom (sale 12 px fuera)
+        let edge = CGRect(x: 0, y: 0.45, width: 0.01, height: 0.1)   // the first 6 px: blue border, except with the zoom (it goes 12 px outside)
         let zoomed = mean(s.render(frames: [1: frames[1]!, 2: green], time: 5.02), edge, size: size)
         let settled = mean(s.render(frames: [1: frames[1]!, 2: green], time: 6), edge, size: size)
-        check(zoomed.b < 0.5 && settled.b > 0.8, String(format: "zoom suave: al cambiar entra más grande (borde azul fuera: %.2f) y luego se asienta (%.2f)", zoomed.b, settled.b))
-        print(ok ? "OK multicámara" : "FAIL multicámara")
+        check(zoomed.b < 0.5 && settled.b > 0.8, String(format: "smooth zoom: on switching it comes in larger (blue border outside: %.2f) and then settles (%.2f)", zoomed.b, settled.b))
+        print(ok ? "OK multicam" : "FAIL multicam")
         return ok
     }
 
-    /// Color: exposición, temperatura, saturación y piel hacen lo que dicen sobre un cuadro; un .cube se importa, se
-    /// aplica y su intensidad lo mezcla; el color por cámara y el de toda la pista llegan al cuadro dibujado y al
-    /// b-roll; igualar cámaras propone exposición y ganancia; los proyectos viejos abren sin color.
+    /// Color: exposure, temperature, saturation and skin do what they say on a frame; a .cube is imported,
+    /// applied and its intensity blends it; per-camera and whole-track color reach the drawn frame and the
+    /// b-roll; matching cameras proposes exposure and gain; old projects open without color.
     static func colorTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        // `mean` devuelve valores lineales (sin espacio de color): 0,40 sRGB ≈ 0,13 lineal
+        // `mean` returns linear values (no color space): 0.40 sRGB ≈ 0.13 linear
         let size = CGSize(width: 64, height: 64)
         let box = CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
         let gray = solid(0.4, 0.4, 0.4, size)
         var g = ColorGrade(); g.exposure = 1
         let bright = mean(g.apply(to: gray), box, size: size)
-        check(bright.r > 0.22 && bright.r < 0.32, String(format: "exposición +1 EV: el gris 0,40 (0,13 lineal) pasa al doble (%.2f lineal)", bright.r))
+        check(bright.r > 0.22 && bright.r < 0.32, String(format: "exposure +1 EV: gray 0.40 (0.13 linear) doubles (%.2f linear)", bright.r))
         g = ColorGrade(); g.temperature = 60
         let warm = mean(g.apply(to: gray), box, size: size)
-        check(warm.r > warm.b + 0.02, String(format: "temperatura +60: más rojo que azul (%.2f / %.2f)", warm.r, warm.b))
+        check(warm.r > warm.b + 0.02, String(format: "temperature +60: more red than blue (%.2f / %.2f)", warm.r, warm.b))
         g.temperature = -60
         let cool = mean(g.apply(to: gray), box, size: size)
-        check(cool.b > cool.r + 0.02, String(format: "temperatura −60: más azul que rojo (%.2f / %.2f)", cool.r, cool.b))
+        check(cool.b > cool.r + 0.02, String(format: "temperature −60: more blue than red (%.2f / %.2f)", cool.r, cool.b))
         let red = solid(0.8, 0.2, 0.2, size)
         g = ColorGrade(); g.saturation = -100
         let desat = mean(g.apply(to: red), box, size: size)
-        check(abs(desat.r - desat.g) < 0.05 && abs(desat.g - desat.b) < 0.05, "saturación −100: queda gris")
+        check(abs(desat.r - desat.g) < 0.05 && abs(desat.g - desat.b) < 0.05, "saturation −100: becomes gray")
         g = ColorGrade(); g.contrast = 50
         let dark = mean(g.apply(to: solid(0.25, 0.25, 0.25, size)), box, size: size)
-        check(dark.r < 0.22, String(format: "contraste +50: los oscuros bajan (%.2f)", dark.r))
-        check(ColorGrade().isEmpty && !g.isEmpty, "un color sin tocar está vacío")
-        // .cube: un LUT de 2×2×2 que invierte los colores
+        check(dark.r < 0.22, String(format: "contrast +50: the darks go down (%.2f)", dark.r))
+        check(ColorGrade().isEmpty && !g.isEmpty, "an untouched color is empty")
+        // .cube: a 2×2×2 LUT that inverts colors
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("lut-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir); LUTLibrary.remove("prueba-invertir.cube") }
@@ -767,18 +767,18 @@ enum StudioTests {
             return "\(1 - r) \(1 - gg) \(1 - b)"
         }
         try? ("TITLE \"invertir\"\nLUT_3D_SIZE 2\n# comentario\n" + rows.joined(separator: "\n") + "\n").write(to: cube, atomically: true, encoding: .utf8)
-        check(LUTLibrary.parse(cube)?.size == 2, "el .cube se lee (tamaño 2)")
-        check(LUTLibrary.importCube(cube) == "prueba-invertir.cube" && LUTLibrary.names().contains("prueba-invertir.cube"), "importar lo copia a la biblioteca")
+        check(LUTLibrary.parse(cube)?.size == 2, "the .cube is read (size 2)")
+        check(LUTLibrary.importCube(cube) == "prueba-invertir.cube" && LUTLibrary.names().contains("prueba-invertir.cube"), "importing copies it to the library")
         g = ColorGrade(); g.lut = "prueba-invertir.cube"
         let inv = mean(g.apply(to: red), box, size: size)
-        check(inv.r < 0.1 && inv.g > 0.5, String(format: "el LUT invierte (rojo → cian: %.2f / %.2f)", inv.r, inv.g))
+        check(inv.r < 0.1 && inv.g > 0.5, String(format: "the LUT inverts (red → cyan: %.2f / %.2f)", inv.r, inv.g))
         g.amount = 0.5
         let half = mean(g.apply(to: red), box, size: size)
-        check(half.r > 0.2 && half.r < 0.45, String(format: "intensidad 50 %%: a medio camino entre 0,60 y 0,03 (%.2f)", half.r))
-        check(LUTLibrary.parse(dir.appendingPathComponent("no-existe.cube")) == nil, "un archivo que no es LUT no se importa")
+        check(half.r > 0.2 && half.r < 0.45, String(format: "intensity 50 %%: halfway between 0.60 and 0.03 (%.2f)", half.r))
+        check(LUTLibrary.parse(dir.appendingPathComponent("no-existe.cube")) == nil, "a file that isn't a LUT isn't imported")
         let bad = dir.appendingPathComponent("malo.cube"); try? "LUT_3D_SIZE 2\n0 0 0\n".write(to: bad, atomically: true, encoding: .utf8)
-        check(LUTLibrary.importCube(bad) == nil, "un .cube incompleto se rechaza")
-        // En la escena: color por cámara y de toda la pista
+        check(LUTLibrary.importCube(bad) == nil, "an incomplete .cube is rejected")
+        // In the scene: per-camera and whole-track color
         let fsize = CGSize(width: 640, height: 360)
         let frames: [Int: CIImage] = [1: solid(0.4, 0.4, 0.4, fsize), 2: solid(0.4, 0.4, 0.4, fsize)]
         let sc = scene(layout: .sideBySide, switches: [SpeakerSwitch(time: 0, lane: 1)])
@@ -786,53 +786,53 @@ enum StudioTests {
         sc.laneGrade = [1: lg]
         let f = sc.render(frames: frames, time: 1)
         let left = mean(f, CGRect(x: 0.1, y: 0.4, width: 0.2, height: 0.2), size: fsize), right = mean(f, CGRect(x: 0.7, y: 0.4, width: 0.2, height: 0.2), size: fsize)
-        check(left.r > right.r + 0.1, String(format: "color por cámara: solo la cámara 1 se aclara (%.2f vs %.2f)", left.r, right.r))
+        check(left.r > right.r + 0.1, String(format: "per-camera color: only camera 1 brightens (%.2f vs %.2f)", left.r, right.r))
         var gg = ColorGrade(); gg.saturation = -100
         sc.globalGrade = gg
         let blue = solid(0.2, 0.2, 0.9, CGSize(width: 320, height: 180))
         sc.brolls = [RenderScene.BRoll(trackID: nil, image: blue, start: 0, end: 5, fill: true, placement: "full")]
         let fb = mean(sc.render(frames: frames, time: 2), CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), size: fsize)
-        check(abs(fb.r - fb.b) < 0.08, String(format: "toda la pista: también desatura el b-roll (%.2f / %.2f)", fb.r, fb.b))
-        // Máscara: el color de la cámara solo dentro de la elipse; fuera, oscurecido si se pide; sigue keyframes
+        check(abs(fb.r - fb.b) < 0.08, String(format: "whole track: also desaturates the b-roll (%.2f / %.2f)", fb.r, fb.b))
+        // Mask: the camera's color only inside the ellipse; outside, darkened if asked; follows keyframes
         let sm = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
         sm.laneGrade = [1: lg]                       // +1 EV
         var mask = ShapeMask(); mask.shape = .ellipse; mask.x = 0.25; mask.y = 0.5; mask.w = 0.3; mask.h = 0.5; mask.feather = 0
         sm.laneMask = [1: mask]
         let fm = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1)
         let inside = mean(fm, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), outside = mean(fm, CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
-        check(inside.r > outside.r + 0.1, String(format: "máscara: dentro se aclara (%.2f), fuera no (%.2f)", inside.r, outside.r))
+        check(inside.r > outside.r + 0.1, String(format: "mask: inside brightens (%.2f), outside doesn't (%.2f)", inside.r, outside.r))
         mask.dimOutside = 1; sm.laneMask = [1: mask]
         let fd = mean(sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1), CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
-        check(fd.r < outside.r * 0.5, String(format: "oscurecer fuera: lo de afuera baja (%.2f → %.2f)", outside.r, fd.r))
+        check(fd.r < outside.r * 0.5, String(format: "darken outside: the outside goes down (%.2f → %.2f)", outside.r, fd.r))
         mask.dimOutside = 0; mask.invert = true; sm.laneMask = [1: mask]
         let fi = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 1)
         let insideI = mean(fi, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), outsideI = mean(fi, CGRect(x: 0.7, y: 0.45, width: 0.1, height: 0.1), size: fsize)
-        check(outsideI.r > insideI.r + 0.1, "invertida: el color va fuera")
+        check(outsideI.r > insideI.r + 0.1, "inverted: the color goes outside")
         mask.invert = false
         var ma = LayerAnimation(); ma.write(LayerAnimation.x, t: 0, v: 0.25, ease: .linear); ma.write(LayerAnimation.x, t: 10, v: 0.75)
         mask.animation = ma; sm.laneMask = [1: mask]
         let f9 = sm.render(frames: [1: solid(0.4, 0.4, 0.4, fsize)], time: 9.9)
         let leftLate = mean(f9, CGRect(x: 0.22, y: 0.45, width: 0.06, height: 0.1), size: fsize), rightLate = mean(f9, CGRect(x: 0.72, y: 0.45, width: 0.06, height: 0.1), size: fsize)
-        check(rightLate.r > leftLate.r + 0.1, "la máscara sigue los keyframes: al final está a la derecha")
-        if let oldLane = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(oldLane.mask == nil, "una pista vieja abre sin máscara") }
-        // Igualar cámaras
+        check(rightLate.r > leftLate.r + 0.1, "the mask follows the keyframes: at the end it's on the right")
+        if let oldLane = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(oldLane.mask == nil, "an old track opens without a mask") }
+        // Match cameras
         let fix = CameraMatch.fix(camera: [60, 60, 60], reference: [120, 120, 120])
-        check(abs(fix.exposure - 1) < 0.01 && fix.gain.allSatisfy { abs($0 - 1) < 0.02 }, "cámara a la mitad de brillo: +1 EV y sin cambio de tinte (\(fix))")
+        check(abs(fix.exposure - 1) < 0.01 && fix.gain.allSatisfy { abs($0 - 1) < 0.02 }, "camera at half brightness: +1 EV and no tint change (\(fix))")
         let tint = CameraMatch.fix(camera: [100, 100, 130], reference: [100, 100, 100])
-        check(abs(tint.exposure) < 0.1 && tint.gain[2] < 0.85 && abs(tint.gain[0] - 1) < 0.06, "cámara azulada: baja el azul, no el brillo (\(tint))")
-        // Proyectos viejos
-        if let old = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(old.grade == nil, "una pista guardada antes abre sin color") }
-        else { check(false, "no decodifica una pista vieja") }
+        check(abs(tint.exposure) < 0.1 && tint.gain[2] < 0.85 && abs(tint.gain[0] - 1) < 0.06, "bluish camera: lowers the blue, not the brightness (\(tint))")
+        // Old projects
+        if let old = try? JSONDecoder().decode(Lane.self, from: Data(#"{"id":1,"name":"Ana","clips":[]}"#.utf8)) { check(old.grade == nil, "a track saved earlier opens without color") }
+        else { check(false, "doesn't decode an old track") }
         print(ok ? "OK color" : "FAIL color")
         return ok
     }
 
-    /// Proxys: solo las grabaciones de más de 1080p lo piden; el proxy mide 960 de ancho, dura lo mismo, y la vista
-    /// previa lo usa mientras el export va al original; apagados, no se usan.
+    /// Proxies: only recordings above 1080p request one; the proxy is 960 wide, same duration, and the
+    /// preview uses it while the export goes to the original; when off, they aren't used.
     static func proxyTest() async -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        guard FFmpeg.isAvailable else { print("  (sin ffmpeg: no se prueban los proxys)"); return true }
+        guard FFmpeg.isAvailable else { print("  (no ffmpeg: proxies aren't tested)"); return true }
         let slug = "proxy-prueba-\(Int(Date().timeIntervalSince1970))"
         let folder = ProjectStore.folder(for: slug)
         try? FileManager.default.createDirectory(at: folder.appendingPathComponent("media"), withIntermediateDirectories: true)
@@ -844,22 +844,22 @@ enum StudioTests {
             _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=red:s=2560x1440:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", big.path])
             _ = try await FFmpeg.run(["-f", "lavfi", "-i", "color=c=blue:s=1280x720:d=3:r=24", "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p", small.path])
             let needBig = await ProxyStore.needsProxy(big), needSmall = await ProxyStore.needsProxy(small)
-            check(needBig && !needSmall, "pide proxy el de 1440p, no el de 720p")
+            check(needBig && !needSmall, "the 1440p one asks for a proxy, the 720p one doesn't")
             var p = Project(id: slug, name: "Proxy", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
             p.media = [SourceMedia(id: 1, originalName: "grande.mp4", file: "media/grande.mp4", kind: .video, duration: 3),
                        SourceMedia(id: 2, originalName: "chico.mp4", file: "media/chico.mp4", kind: .video, duration: 3)]
             p.lanes = [Lane(id: 1, name: "Ana", participantId: nil, clips: [LaneClip(mediaId: 1, srcIn: 0, srcOut: 3)])]
             let pend = await ProxyStore.pending(project: p)
-            check(pend.map(\.id) == [1], "pendiente solo el grande (\(pend.map(\.id)))")
+            check(pend.map(\.id) == [1], "only the large one is pending (\(pend.map(\.id)))")
             try await ProxyStore.make(p.media[0], project: slug)
-            check(ProxyStore.exists(mediaId: 1, project: slug), "el proxy queda en la caché del proyecto")
+            check(ProxyStore.exists(mediaId: 1, project: slug), "the proxy stays in the project cache")
             let pa = AVURLAsset(url: ProxyStore.url(mediaId: 1, project: slug))
             let size = try await pa.loadTracks(withMediaType: .video).first!.load(.naturalSize)
             let dur = try await pa.load(.duration).seconds
-            check(size.width <= 960 && abs(dur - 3) < 0.15, String(format: "mide %.0f px de ancho y dura %.2f s", size.width, dur))
+            check(size.width <= 960 && abs(dur - 3) < 0.15, String(format: "measures %.0f px wide and lasts %.2f s", size.width, dur))
             let left = await ProxyStore.pending(project: p)
-            check(left.isEmpty, "ya no queda nada pendiente")
-            // La vista previa usa el proxy; el export, el original
+            check(left.isEmpty, "nothing is pending anymore")
+            // The preview uses the proxy; the export, the original
             ProxyStore.enabled = true
             let prev = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
             let exp = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: false)
@@ -868,26 +868,26 @@ enum StudioTests {
                 return s.width
             }
             let wp = await width(prev), we = await width(exp)
-            check(wp <= 960 && we >= 2560, String(format: "vista previa con proxy (%.0f px), export con el original (%.0f px)", wp, we))
+            check(wp <= 960 && we >= 2560, String(format: "preview with proxy (%.0f px), export with the original (%.0f px)", wp, we))
             ProxyStore.enabled = false
             let off = try await CompositionBuilder.build(project: p, format: .landscape, energy: nil, preview: true)
             let wo = await width(off)
-            check(wo >= 2560, "con los proxys apagados la vista previa usa el original")
+            check(wo >= 2560, "with proxies off the preview uses the original")
             ProxyStore.removeAll(project: slug)
-            check(!ProxyStore.exists(mediaId: 1, project: slug), "borrar los proxys los quita")
-        } catch { check(false, "proxys: \(error.localizedDescription)") }
-        print(ok ? "OK proxys" : "FAIL proxys")
+            check(!ProxyStore.exists(mediaId: 1, project: slug), "deleting the proxies removes them")
+        } catch { check(false, "proxies: \(error.localizedDescription)") }
+        print(ok ? "OK proxies" : "FAIL proxies")
         return ok
     }
 
-    /// Pulido: la lista de atajos no repite teclas; un proyecto guardado por una versión vieja (sin nada de Studio) abre
-    /// con todo en su valor por defecto y no dice «ajustado en Studio»; lo de Studio sobrevive a guardar y volver a abrir.
+    /// Polish: the shortcut list doesn't repeat keys; a project saved by an old version (with nothing from Studio) opens
+    /// with everything at its default and doesn't say «ajustado en Studio»; Studio settings survive saving and reopening.
     static func polishTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
-        check(StudioShortcuts.duplicates.isEmpty, "los atajos no repiten teclas (\(StudioShortcuts.duplicates))")
-        check(StudioShortcuts.all.count >= 15, "la lista de atajos está completa (\(StudioShortcuts.all.count))")
-        // Un proyecto como lo guardaba 0.3x: sin cadenas, keyframes, color, máscaras, velocidad, cola ni revisión
+        check(StudioShortcuts.duplicates.isEmpty, "shortcuts don't repeat keys (\(StudioShortcuts.duplicates))")
+        check(StudioShortcuts.all.count >= 15, "the shortcut list is complete (\(StudioShortcuts.all.count))")
+        // A project as 0.3x saved it: no chains, keyframes, color, masks, speed, queue or review
         let old = #"""
         {"id":"viejo","name":"Viejo","podcastName":"P","createdAt":700000000,"importedFrom":"tracks","duration":0,
          "media":[{"id":1,"originalName":"a.mp4","file":"media/a.mp4","kind":"video","duration":60}],
@@ -898,11 +898,11 @@ enum StudioTests {
          "cuts":[],"words":[]}
         """#
         if let p = try? JSONDecoder().decode(Project.self, from: Data(old.utf8)) {
-            check(!p.videoTunedInStudio, "un proyecto viejo no está «ajustado en Studio»")
-            check(p.studioVideo.isDefault && p.grade == nil && p.lanes[0].grade == nil && p.lanes[0].mask == nil && p.lanes[0].chain == nil, "cámaras, color, máscara y cadena en su valor por defecto")
-            check(p.brolls[0].speed == 1 && p.brolls[0].speedEnd == nil && p.brolls[0].transitionIn == nil && p.audioLane[0].speed == 1, "velocidad y transiciones por defecto")
-            check(p.overlays[0].animation == nil && p.overlays[0].enter == nil && p.review == nil && !p.matchVoices && p.fix.roomTone, "capas sin keyframes, sin revisión, tono de sala encendido de serie")
-            // Ida y vuelta con cosas de Studio
+            check(!p.videoTunedInStudio, "an old project isn't «ajustado en Studio»")
+            check(p.studioVideo.isDefault && p.grade == nil && p.lanes[0].grade == nil && p.lanes[0].mask == nil && p.lanes[0].chain == nil, "cameras, color, mask and chain at their defaults")
+            check(p.brolls[0].speed == 1 && p.brolls[0].speedEnd == nil && p.brolls[0].transitionIn == nil && p.audioLane[0].speed == 1, "default speed and transitions")
+            check(p.overlays[0].animation == nil && p.overlays[0].enter == nil && p.review == nil && !p.matchVoices && p.fix.roomTone, "layers without keyframes, no review, room tone on by default")
+            // Round trip with Studio settings
             var q = p
             q.studioVideo.liveCut(to: 1, at: 10, duration: 60); q.studioVideo.switchTransition = Transition(kind: .zoom, duration: 0.3)
             var g = ColorGrade(); g.temperature = 20; q.lanes[0].grade = g
@@ -910,29 +910,29 @@ enum StudioTests {
             q.brolls[0].speed = 2; q.brolls[0].speedEnd = 0.5
             var a = LayerAnimation(); a.write(LayerAnimation.x, t: 5, v: 0.2); q.overlays[0].animation = a
             if let d = try? JSONEncoder().encode(q), let r = try? JSONDecoder().decode(Project.self, from: d) {
-                check(r == q, "lo de Studio sobrevive a guardar y volver a abrir")
-                check(r.videoTunedInStudio, "y el proyecto queda «ajustado en Studio»")
-            } else { check(false, "no se pudo guardar y volver a abrir") }
+                check(r == q, "Studio settings survive saving and reopening")
+                check(r.videoTunedInStudio, "and the project is «ajustado en Studio»")
+            } else { check(false, "couldn't save and reopen") }
         } else {
             var why = ""
             do { _ = try JSONDecoder().decode(Project.self, from: Data(old.utf8)) } catch { why = "\(error)" }
-            check(false, "no abre un proyecto de una versión vieja: \(why)")
+            check(false, "doesn't open a project from an old version: \(why)")
         }
-        print(ok ? "OK pulido: atajos y migración" : "FAIL pulido")
+        print(ok ? "OK polish: shortcuts and migration" : "FAIL polish")
         return ok
     }
 
-    /// Revisión compartida: el segundo del archivo revisado (con intro y cortes) pasa al segundo del episodio, y el
-    /// enlace con sus comentarios se guarda y se carga con el proyecto.
+    /// Shared review: the second of the reviewed file (with intro and cuts) maps to the episode second, and the
+    /// link with its comments is saved and loaded with the project.
     static func reviewTest() -> Bool {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
         var r = ReviewLink(token: "abc", url: "https://postpod.castmedia.space/r/abc", sentAt: Date(), introDuration: 4,
                            keep: [EditEngine.Span(start: 0, end: 60), EditEngine.Span(start: 90, end: 200)])
-        let c1 = ReviewComment(id: 1, t: 34, author: "Caro", text: "aquí", resolved: false)       // 30 s de contenido → 30 s del episodio
-        let c2 = ReviewComment(id: 2, t: 74, author: "", text: "allá", resolved: true)            // 70 s de contenido → 60 + 10 = 100 s del episodio
-        check(abs(r.timelineTime(c1) - 30) < 1e-9 && abs(r.timelineTime(c2) - 100) < 1e-9, "el segundo del archivo pasa al del episodio saltando intro y cortes (\(r.timelineTime(c1)), \(r.timelineTime(c2)))")
-        check(abs(ReviewLink(token: "x", url: "u", sentAt: Date()).timelineTime(c1) - 34) < 1e-9, "sin intro ni cortes, el mismo segundo")
+        let c1 = ReviewComment(id: 1, t: 34, author: "Caro", text: "aquí", resolved: false)       // 30 s of content → 30 s of the episode
+        let c2 = ReviewComment(id: 2, t: 74, author: "", text: "allá", resolved: true)            // 70 s of content → 60 + 10 = 100 s of the episode
+        check(abs(r.timelineTime(c1) - 30) < 1e-9 && abs(r.timelineTime(c2) - 100) < 1e-9, "the file second maps to the episode second skipping intro and cuts (\(r.timelineTime(c1)), \(r.timelineTime(c2)))")
+        check(abs(ReviewLink(token: "x", url: "u", sentAt: Date()).timelineTime(c1) - 34) < 1e-9, "without intro or cuts, the same second")
         r.comments = [c1, c2]
         var p = Project(id: "rev", name: "Rev", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         p.review = r
@@ -940,15 +940,15 @@ enum StudioTests {
             let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
             let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
             let back = try dec.decode(Project.self, from: try enc.encode(p))
-            check(back.review?.token == "abc" && back.review?.comments.count == 2 && back.review?.comments[1].resolved == true, "el enlace y los comentarios se guardan con el proyecto")
+            check(back.review?.token == "abc" && back.review?.comments.count == 2 && back.review?.comments[1].resolved == true, "the link and the comments are saved with the project")
             var obj = try JSONSerialization.jsonObject(with: try enc.encode(p)) as! [String: Any]
             obj["review"] = nil
             let old = try dec.decode(Project.self, from: JSONSerialization.data(withJSONObject: obj))
-            check(old.review == nil, "un proyecto sin revisión abre igual")
-        } catch { check(false, "guardar/cargar: \(error)") }
+            check(old.review == nil, "a project without review opens the same")
+        } catch { check(false, "save/load: \(error)") }
         let model = TimelineModel(project: p, energy: nil)
-        check(model.reviewMarks.map(\.t) == [30, 100] && model.reviewMarks[1].resolved, "la línea de tiempo recibe las marcas en el segundo del episodio")
-        print(ok ? "OK revisión compartida" : "FAIL revisión compartida")
+        check(model.reviewMarks.map(\.t) == [30, 100] && model.reviewMarks[1].resolved, "the timeline gets the marks at the episode second")
+        print(ok ? "OK shared review" : "FAIL shared review")
         return ok
     }
 
@@ -958,18 +958,18 @@ enum StudioTests {
         var ok = true
         func check(_ cond: Bool, _ what: String) { print((cond ? "  ok  " : "  FAIL") + " " + what); if !cond { ok = false } }
 
-        // 1) Interpolación de keyframes: lineal, suave y pausa
+        // 1) Keyframe interpolation: linear, smooth and hold
         var a = LayerAnimation()
         a.write(LayerAnimation.x, t: 0, v: 0, ease: .linear); a.write(LayerAnimation.x, t: 10, v: 1)
-        check(abs((a.value(LayerAnimation.x, at: 5) ?? -1) - 0.5) < 1e-9, "keyframe lineal: a mitad de camino vale 0,5")
+        check(abs((a.value(LayerAnimation.x, at: 5) ?? -1) - 0.5) < 1e-9, "linear keyframe: halfway it's 0.5")
         a.write(LayerAnimation.x, t: 0, v: 0, ease: .smooth)
         let sm = a.value(LayerAnimation.x, at: 2.5) ?? -1
-        check(sm > 0.1 && sm < 0.25, "keyframe suave: arranca despacio (\(String(format: "%.3f", sm)) a un cuarto)")
+        check(sm > 0.1 && sm < 0.25, "smooth keyframe: starts slowly (\(String(format: "%.3f", sm)) at a quarter)")
         a.write(LayerAnimation.x, t: 0, v: 0, ease: .hold)
-        check(abs((a.value(LayerAnimation.x, at: 9.9) ?? -1) - 0) < 1e-9 && abs((a.value(LayerAnimation.x, at: 10) ?? -1) - 1) < 1e-9, "keyframe pausa: salta justo en el siguiente")
-        check(a.value(LayerAnimation.y, at: 3) == nil, "un parámetro sin keyframes devuelve nil (usa el valor fijo)")
+        check(abs((a.value(LayerAnimation.x, at: 9.9) ?? -1) - 0) < 1e-9 && abs((a.value(LayerAnimation.x, at: 10) ?? -1) - 1) < 1e-9, "hold keyframe: jumps right at the next one")
+        check(a.value(LayerAnimation.y, at: 3) == nil, "a parameter without keyframes returns nil (uses the fixed value)")
 
-        // 2) Una capa con keyframes de posición se mueve en el cuadro dibujado
+        // 2) A layer with position keyframes moves in the drawn frame
         let s1 = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
         let blue = solid(0, 0, 1, CGSize(width: 120, height: 120))
         var anim = LayerAnimation()
@@ -982,98 +982,98 @@ enum StudioTests {
         let leftAt0 = mean(f0, CGRect(x: 0.08, y: 0.4, width: 0.14, height: 0.2), size: size)
         let leftAt9 = mean(f9, CGRect(x: 0.08, y: 0.4, width: 0.14, height: 0.2), size: size)
         let rightAt9 = mean(f9, CGRect(x: 0.78, y: 0.4, width: 0.14, height: 0.2), size: size)
-        check(leftAt0.b > 0.7 && leftAt0.r < 0.3, "capa con keyframes: al inicio está a la izquierda (azul sobre rojo)")
-        check(leftAt9.r > 0.7 && leftAt9.b < 0.3 && rightAt9.b > 0.7, "capa con keyframes: al final está a la derecha")
-        // opacidad a 0 → no se ve
+        check(leftAt0.b > 0.7 && leftAt0.r < 0.3, "layer with keyframes: at the start it's on the left (blue over red)")
+        check(leftAt9.r > 0.7 && leftAt9.b < 0.3 && rightAt9.b > 0.7, "layer with keyframes: at the end it's on the right")
+        // opacity at 0 → not visible
         anim.write(LayerAnimation.opacity, t: 0, v: 0, ease: .hold); anim.write(LayerAnimation.opacity, t: 10, v: 0)
         card.anim = anim; s1.overlays = [card]
         let fo = s1.render(frames: frames, time: 0.5)
         let hidden = mean(fo, CGRect(x: 0.08, y: 0.4, width: 0.14, height: 0.2), size: size)
-        check(hidden.r > 0.7 && hidden.b < 0.3, "keyframe de opacidad 0: la capa no se ve")
+        check(hidden.r > 0.7 && hidden.b < 0.3, "opacity keyframe 0: the layer isn't visible")
 
-        // 3) Cortes de cámara a mano ganan a quién habla, y la plantilla del tramo también
+        // 3) Manual camera cuts beat who's speaking, and so does the span's template
         let sw = [SpeakerSwitch(time: 0, lane: 1), SpeakerSwitch(time: 5, lane: 2)]
         let s2 = scene(layout: .solo, switches: sw)
         s2.cameraSpans = [RenderScene.CameraSpan(start: 6, end: 8, lane: 1, template: nil),
                           RenderScene.CameraSpan(start: 8, end: 9, lane: nil, template: .sideBySide)]
         let c5 = mean(s2.render(frames: frames, time: 5.5), CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), size: size)
         let c7 = mean(s2.render(frames: frames, time: 7), CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2), size: size)
-        check(c5.g > 0.7 && c5.r < 0.3, "sin tramo a mano: a los 5,5 s se ve a quien habla (verde)")
-        check(c7.r > 0.7 && c7.g < 0.3, "tramo a mano 6–8 s: se ve la persona fijada (roja) aunque hable la otra")
+        check(c5.g > 0.7 && c5.r < 0.3, "no manual span: at 5.5 s the speaker is shown (green)")
+        check(c7.r > 0.7 && c7.g < 0.3, "manual span 6–8 s: the pinned person (red) is shown even if the other speaks")
         let f8 = s2.render(frames: frames, time: 8.5)
         let l8 = mean(f8, CGRect(x: 0.1, y: 0.4, width: 0.2, height: 0.2), size: size), r8 = mean(f8, CGRect(x: 0.7, y: 0.4, width: 0.2, height: 0.2), size: size)
-        check(l8.r > 0.6 && r8.g > 0.6, "tramo a mano con plantilla Lado a lado: rojo a la izquierda, verde a la derecha")
-        check(s2.activeLane(at: 7).lane == 1 && s2.activeLane(at: 9.5).lane == 2, "fuera del tramo vuelve el automático")
+        check(l8.r > 0.6 && r8.g > 0.6, "manual span with Side by side template: red on the left, green on the right")
+        check(s2.activeLane(at: 7).lane == 1 && s2.activeLane(at: 9.5).lane == 2, "outside the span the automatic one returns")
 
-        // 4) Permanencia mínima: los cambios muy seguidos se posponen o se saltan; apagado «sigue a quien habla» = una cámara
+        // 4) Minimum hold: very close switches are postponed or skipped; «sigue a quien habla» off = one camera
         let rapid = [SpeakerSwitch(time: 0, lane: 1), SpeakerSwitch(time: 1, lane: 2), SpeakerSwitch(time: 1.8, lane: 1), SpeakerSwitch(time: 6, lane: 2)]
         var st = StudioVideoSettings(); st.minHold = 2.5
         let held = AudioAnalysis.cameraSwitches(rapid, settings: st)
-        check(held.count == 2 && held[1].lane == 2 && held[1].time == 6, "permanencia 2,5 s: el ida y vuelta de 1 s se salta, queda 0→1 y 6→2 (\(held.map { "\($0.time):\($0.lane)" }))")
+        check(held.count == 2 && held[1].lane == 2 && held[1].time == 6, "hold 2.5 s: the 1 s round trip is skipped, leaving 0→1 and 6→2 (\(held.map { "\($0.time):\($0.lane)" }))")
         var st2 = StudioVideoSettings(); st2.minHold = 2.5
         let late = AudioAnalysis.cameraSwitches([SpeakerSwitch(time: 0, lane: 1), SpeakerSwitch(time: 1, lane: 2)], settings: st2)
-        check(late.count == 2 && abs(late[1].time - 2.5) < 1e-9, "un cambio a 1 s se pospone a 2,5 s")
+        check(late.count == 2 && abs(late[1].time - 2.5) < 1e-9, "a switch at 1 s is postponed to 2.5 s")
         st2.followSpeaker = false
-        check(AudioAnalysis.cameraSwitches(rapid, settings: st2).count == 1, "sin seguir a quien habla: una sola cámara")
+        check(AudioAnalysis.cameraSwitches(rapid, settings: st2).count == 1, "not following the speaker: a single camera")
 
-        // 5) Transición «a negro» en un b-roll: a mitad de la transición el cuadro está oscuro; «corte» entra entero
+        // 5) «To black» transition on a b-roll: mid-transition the frame is dark; «cut» comes in whole
         let s3 = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
         let white = solid(1, 1, 1, CGSize(width: 1280, height: 720))
         s3.brolls = [RenderScene.BRoll(trackID: nil, image: white, start: 2, end: 6, fill: true, placement: "full", transition: Transition(kind: .black, duration: 1))]
         let mid = mean(s3.render(frames: frames, time: 2.5), CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4), size: size)
         let after = mean(s3.render(frames: frames, time: 3.5), CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4), size: size)
-        check(mid.r < 0.15 && mid.g < 0.15 && mid.b < 0.15, "transición a negro: a mitad está oscuro (\(String(format: "%.2f", mid.r)))")
-        check(after.r > 0.9 && after.g > 0.9, "después de la transición el b-roll se ve entero")
+        check(mid.r < 0.15 && mid.g < 0.15 && mid.b < 0.15, "to-black transition: halfway it's dark (\(String(format: "%.2f", mid.r)))")
+        check(after.r > 0.9 && after.g > 0.9, "after the transition the b-roll is fully visible")
         s3.brolls = [RenderScene.BRoll(trackID: nil, image: white, start: 2, end: 6, fill: true, placement: "full", transition: Transition(kind: .cut, duration: 1))]
         let cutIn = mean(s3.render(frames: frames, time: 2.05), CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4), size: size)
-        check(cutIn.r > 0.9, "transición corte: entra entero desde el primer cuadro")
+        check(cutIn.r > 0.9, "cut transition: comes in whole from the first frame")
         s3.brolls = [RenderScene.BRoll(trackID: nil, image: white, start: 2, end: 6, fill: true, placement: "full", transition: Transition(kind: .slide, duration: 1))]
         let slide = s3.render(frames: frames, time: 2.5)
         let sl = mean(slide, CGRect(x: 0.05, y: 0.4, width: 0.1, height: 0.2), size: size), sr = mean(slide, CGRect(x: 0.85, y: 0.4, width: 0.1, height: 0.2), size: size)
-        check(sl.r > 0.9 && sl.g > 0.9 && sr.g < 0.3, "transición deslizar: a mitad ya cubre la izquierda y aún no la derecha")
+        check(sl.r > 0.9 && sl.g > 0.9 && sr.g < 0.3, "slide transition: halfway it already covers the left and not yet the right")
 
-        // 5b) Entradas y salidas de un título: subir deja la capa más abajo a mitad de camino; escribir la revela de izquierda
-        //     a derecha; fundido al salir la apaga; sin entrada elegida, la salida simple sigue
+        // 5b) Title ins and outs: rise leaves the layer lower halfway; type reveals it left
+        //     to right; fade on out turns it off; with no in chosen, the simple out still works
         let s4 = scene(layout: .solo, switches: [SpeakerSwitch(time: 0, lane: 1)])
         let wide = solid(0, 0, 1, CGSize(width: 320, height: 60))
         var tc = RenderScene.OverlayCard(id: 9, start: 2, end: 8, image: wide, cx: 0.5, cy: 0.5, animate: true)
         tc.enter = TitleMotion(kind: .rise, duration: 1)
         s4.overlays = [tc]
-        // La capa ocupa 0,417–0,583 del alto en su sitio; a un tercio de la subida va unos 0,04 más abajo:
-        // la franja 0,42–0,45 (su borde superior) está vacía mientras sube y cubierta al llegar.
-        let risen = s4.render(frames: frames, time: 2.3)        // un tercio de la subida
+        // The layer occupies 0.417–0.583 of the height in place; a third into the rise it's about 0.04 lower:
+        // the 0.42–0.45 strip (its top edge) is empty while rising and covered on arrival.
+        let risen = s4.render(frames: frames, time: 2.3)        // a third into the rise
         let topEdgeRising = mean(risen, CGRect(x: 0.45, y: 0.42, width: 0.1, height: 0.03), size: size)
         let topEdgeSettled = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.42, width: 0.1, height: 0.03), size: size)
-        check(topEdgeRising.r > 0.6 && topEdgeSettled.b > 0.7, "entrada «subir»: a un tercio la capa está más abajo que su sitio")
+        check(topEdgeRising.r > 0.6 && topEdgeSettled.b > 0.7, "«subir» in: a third of the way the layer is lower than its place")
         let settled = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
-        check(settled.b > 0.7, "después de la entrada la capa está en su sitio y entera")
+        check(settled.b > 0.7, "after the in the layer is in its place and whole")
         tc.enter = TitleMotion(kind: .reveal, duration: 1)
         s4.overlays = [tc]
         let half = s4.render(frames: frames, time: 2.5)
         let leftHalf = mean(half, CGRect(x: 0.27, y: 0.46, width: 0.08, height: 0.08), size: size)
         let rightHalf = mean(half, CGRect(x: 0.65, y: 0.46, width: 0.08, height: 0.08), size: size)
-        check(leftHalf.b > 0.7 && rightHalf.r > 0.7, "entrada «escribir»: a mitad se ve la izquierda y aún no la derecha")
+        check(leftHalf.b > 0.7 && rightHalf.r > 0.7, "«escribir» in: halfway the left is visible and not yet the right")
         tc.enter = nil; tc.exit = TitleMotion(kind: .fade, duration: 1)
         s4.overlays = [tc]
         let fading = mean(s4.render(frames: frames, time: 7.8), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
         let shown = mean(s4.render(frames: frames, time: 5), CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1), size: size)
-        check(fading.b < shown.b - 0.3, "salida «fundido»: al final la capa se va apagando")
+        check(fading.b < shown.b - 0.3, "«fundido» out: at the end the layer is fading out")
 
-        // 5c) Crossfade: dos clips de música que se solapan se cruzan solos (fades curvos del largo del solape) y
-        //     al separarlos el cruce desaparece; la suma de potencias en el medio del cruce es ~1 (igual potencia)
+        // 5c) Crossfade: two overlapping music clips cross by themselves (curved fades the length of the overlap) and
+        //     when separated the cross disappears; the sum of powers in the middle of the cross is ~1 (equal power)
         var pm = Project(id: "x", name: "x", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         pm.audioLane = [AudioLaneClip(id: 1, mediaId: 1, tlStart: 0, srcIn: 0, srcOut: 10), AudioLaneClip(id: 2, mediaId: 1, tlStart: 8.8, srcIn: 0, srcOut: 10)]
         pm.crossfadeOverlaps(touching: 2)
         check(abs(pm.audioLane[0].fadeOut - 1.2) < 1e-9 && abs(pm.audioLane[1].fadeIn - 1.2) < 1e-9 && pm.audioLane[0].crossfade && pm.audioLane[1].crossfade,
               "dos clips solapados 1,2 s se cruzan con fades de 1,2 s")
         pm.audioLane[1].tlStart = 12; pm.crossfadeOverlaps(touching: 2)
-        check(pm.audioLane[0].fadeOut == 0 && pm.audioLane[1].fadeIn == 0, "al separarlos, el cruce se quita")
+        check(pm.audioLane[0].fadeOut == 0 && pm.audioLane[1].fadeIn == 0, "when separated, the crossfade is removed")
         pm.crossfade(1, with: 2, seconds: 2)
-        check(abs(pm.audioLane[1].tlStart - 8) < 1e-9 && abs(pm.audioLane[0].fadeOut - 2) < 1e-9, "«Cruzar con el siguiente» adelanta el segundo clip y pone los fades")
+        check(abs(pm.audioLane[1].tlStart - 8) < 1e-9 && abs(pm.audioLane[0].fadeOut - 2) < 1e-9, "«Cruzar con el siguiente» moves the second clip earlier and sets the fades")
         let eqp = sin(0.5 * Double.pi / 2)
-        check(abs(eqp * eqp + eqp * eqp - 1) < 1e-9, "fades de igual potencia: en el medio del cruce las potencias suman 1")
+        check(abs(eqp * eqp + eqp * eqp - 1) < 1e-9, "equal-power fades: in the middle of the crossfade the powers add up to 1")
 
-        // 6) Guardar y cargar: el proyecto conserva keyframes, transiciones y cortes; uno viejo (sin esos campos) abre igual
+        // 6) Save and load: the project keeps keyframes, transitions and cuts; an old one (without those fields) opens the same
         var p = Project(id: "prueba-studio", name: "Prueba", podcastName: nil, createdAt: Date(), importedFrom: "tracks")
         var layer = VideoLayer(id: 1, kind: .text, start: 3, text: "Hola")
         layer.animation = anim
@@ -1091,17 +1091,17 @@ enum StudioTests {
             let back = try dec.decode(Project.self, from: data)
             check(back.overlays.first?.animation == anim && back.overlays.first?.enter?.kind == .wipe && back.brolls.first?.transitionIn?.kind == .zoom
                   && back.studioVideo.cuts.first?.template == .pip && back.studioVideo.minHold == 3, "guardar y cargar conserva todo lo de Studio · Video")
-            check(back.videoTunedInStudio && !Project(id: "x", name: "x", podcastName: nil, createdAt: Date(), importedFrom: "tracks").videoTunedInStudio, "«ajustado en Studio» se detecta solo cuando hay algo")
-            // un proyecto sin los campos nuevos
+            check(back.videoTunedInStudio && !Project(id: "x", name: "x", podcastName: nil, createdAt: Date(), importedFrom: "tracks").videoTunedInStudio, "«ajustado en Studio» is detected only when there's something")
+            // a project without the new fields
             var obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
             obj["studioVideo"] = nil
             var ov = obj["overlays"] as! [[String: Any]]; ov[0]["animation"] = nil; ov[0]["enter"] = nil; obj["overlays"] = ov
             var bs = obj["brolls"] as! [[String: Any]]; bs[0]["transitionIn"] = nil; obj["brolls"] = bs
             let old = try dec.decode(Project.self, from: JSONSerialization.data(withJSONObject: obj))
-            check(old.overlays.first?.animation == nil && old.overlays.first?.enter == nil && old.brolls.first?.transitionIn == nil && old.studioVideo.isDefault, "un proyecto viejo abre con los valores de siempre")
-        } catch { check(false, "guardar/cargar: \(error)") }
+            check(old.overlays.first?.animation == nil && old.overlays.first?.enter == nil && old.brolls.first?.transitionIn == nil && old.studioVideo.isDefault, "an old project opens with the usual values")
+        } catch { check(false, "save/load: \(error)") }
 
-        print(ok ? "OK Studio · Video: keyframes, cortes de cámara, permanencia, transiciones, entradas de título y guardado" : "FAIL Studio · Video")
+        print(ok ? "OK Studio · Video: keyframes, camera cuts, hold, transitions, title ins and saving" : "FAIL Studio · Video")
         return ok
     }
 }

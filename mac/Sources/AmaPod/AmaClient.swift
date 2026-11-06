@@ -1,6 +1,6 @@
 import Foundation
 
-/// amaPod web: eventos de preguntas del público. Misma cuenta que el resto de thePod.
+/// amaPod web: audience Q&A events. Same account as the rest of thePod.
 actor AmaClient {
     static let shared = AmaClient()
 
@@ -53,8 +53,8 @@ actor AmaClient {
         var is_host: Int?
         var message: String
         var is_approved: Int?
-        var pending: Bool?              // espera que el anfitrión lo apruebe (chat moderado)
-        var can_block: Bool?            // es del público: se le puede no dejar escribir más
+        var pending: Bool?              // waits for the host to approve it (moderated chat)
+        var can_block: Bool?            // belongs to the audience: can be blocked from writing more
         var created_at: String?
         var isPending: Bool { pending ?? ((is_approved ?? 1) == 0) }
     }
@@ -71,7 +71,7 @@ actor AmaClient {
     }()
     private var cookies: [String: String] = [:]
     private var loggedIn = false
-    /// Olvida la sesión (al cerrar sesión o cambiar de cuenta).
+    /// Forgets the session (on logout or account switch).
     func resetSession() { loggedIn = false; cookies = [:]; wsURL = nil; }
     private var wsURL: String?
 
@@ -117,7 +117,7 @@ actor AmaClient {
         try JSONDecoder().decode(T.self, from: await send(method, path, json: json))
     }
 
-    // MARK: Eventos
+    // MARK: Events
 
     func events() async throws -> [Event] { try await decode([Event].self, "GET", "/api/events") }
     func event(_ id: Int) async throws -> Event { try await decode(Event.self, "GET", "/api/events/\(id)") }
@@ -135,7 +135,7 @@ actor AmaClient {
     func saveAsTemplate(_ id: Int) async throws { _ = try await send("POST", "/api/events/\(id)/clone-template") }
     func publicInfo(_ id: Int) async throws -> PublicInfo { try await decode(PublicInfo.self, "GET", "/api/events/\(id)/public-info") }
 
-    // MARK: Sala
+    // MARK: Room
 
     func hostToken(_ id: Int) async throws -> Token { try await decode(Token.self, "GET", "/api/events/\(id)/host-token") }
     func livekitURL() async throws -> String {
@@ -146,13 +146,13 @@ actor AmaClient {
         return u
     }
 
-    // MARK: Cola
+    // MARK: Queue
 
     func queue(_ id: Int) async throws -> [Person] { try await decode([Person].self, "GET", "/api/events/\(id)/queue") }
     func requests(_ id: Int) async throws -> [Person] { try await decode([Person].self, "GET", "/api/events/\(id)/requests") }
     func approve(_ id: Int, _ pid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/approve/\(pid)") }
     func reject(_ id: Int, _ pid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/reject/\(pid)") }
-    /// Pasa al siguiente de la cola. Devuelve quién quedó al aire (nil si la cola estaba vacía).
+    /// Moves to the next one in the queue. Returns who ended up on air (nil if the queue was empty).
     func next(_ id: Int) async throws -> Person? {
         let d = try await send("POST", "/api/events/\(id)/next")
         return try? JSONDecoder().decode(Person.self, from: d)
@@ -171,10 +171,10 @@ actor AmaClient {
     }
     func deleteMessage(_ id: Int, _ mid: Int) async throws { _ = try await send("DELETE", "/api/events/\(id)/chat/\(mid)") }
     func approveMessage(_ id: Int, _ mid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/chat/\(mid)/approve") }
-    /// No deja escribir más a quien escribió ese mensaje y borra todo lo suyo.
+    /// Blocks whoever wrote that message from writing more and deletes everything they wrote.
     func blockSender(_ id: Int, _ mid: Int) async throws { _ = try await send("POST", "/api/events/\(id)/chat/\(mid)/block") }
 
-    // MARK: Grabación (en el servidor)
+    // MARK: Recording (on the server)
 
     func startRecording(_ id: Int) async throws { _ = try await send("POST", "/api/events/\(id)/recording/start") }
     func stopRecording(_ id: Int) async throws { _ = try await send("POST", "/api/events/\(id)/recording/stop") }
@@ -184,7 +184,7 @@ actor AmaClient {
         return (o["is_recording"] as? Bool) ?? (o["recording"] as? Bool) ?? ((o["egress_id"] as? String)?.isEmpty == false)
     }
 
-    // MARK: Links públicos
+    // MARK: Public links
 
     static func joinLink(_ id: Int) -> String { baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + "/join/\(id)" }
     static func watchLink(_ id: Int) -> String { baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + "/watch/\(id)" }

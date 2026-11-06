@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Preparar → Palabras sensibles: groserías y temas que las redes bajan de alcance.
-/// Para cada una: pitido encima y/o cambiar el subtítulo por el eufemismo de redes.
+/// Prepare → Sensitive words: profanity and topics networks reduce reach for.
+/// For each: a beep on top and/or replace the subtitle with the social media euphemism.
 struct SensitiveStep: View {
     @ObservedObject var session: ProjectSession
     @State private var newWord = ""
@@ -158,7 +158,7 @@ private struct SensitiveRow: View {
     }
 }
 
-/// Píldoras que bajan de línea.
+/// Pills that wrap to the next line.
 struct FlowWrap<Item: Hashable, Content: View>: View {
     let items: [Item]
     @ViewBuilder let content: (Item) -> Content

@@ -2,7 +2,7 @@ import SwiftUI
 import LiveKit
 
 extension Color {
-    static let amaPod = Color(red: 0.078, green: 0.722, blue: 0.651)      // #14B8A6, el color de amaPod en la suite
+    static let amaPod = Color(red: 0.078, green: 0.722, blue: 0.651)      // #14B8A6, amaPod's color in the suite
 }
 
 private enum AS {
@@ -64,7 +64,7 @@ private func chatModeName(_ m: String?) -> String {
     ["free": String(localized: "Chat libre"), "moderated": String(localized: "Chat moderado"), "off": String(localized: "Sin chat")][m ?? "free"] ?? String(localized: "Chat libre")
 }
 
-// MARK: - Inicio de ama: tus eventos
+// MARK: - ama home: your events
 
 struct AmaHomeView: View {
     @EnvironmentObject var app: AppModel
@@ -324,7 +324,7 @@ struct NewAmaEventSheet: View {
     }
 }
 
-// MARK: - Estudio del host
+// MARK: - Host studio
 
 struct AmaStudioView: View {
     @EnvironmentObject var app: AppModel
@@ -364,7 +364,7 @@ struct AmaStudioView: View {
         Task { await studio.leave(); app.ama = nil }
     }
 
-    // MARK: Antes de empezar
+    // MARK: Before starting
 
     private var prejoin: some View {
         HStack(alignment: .top, spacing: 28) {
@@ -431,7 +431,7 @@ struct AmaStudioView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(AS.field))
     }
 
-    // MARK: Terminado
+    // MARK: Ended
 
     private var ended: some View {
         VStack(spacing: 14) {
@@ -446,7 +446,7 @@ struct AmaStudioView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: En vivo
+    // MARK: Live
 
     private var live: some View {
         HStack(spacing: 0) {
@@ -518,7 +518,7 @@ struct AmaStudioView: View {
         .buttonStyle(.plain)
     }
 
-    /// Quien está al aire en grande; tú en pequeño.
+    /// Whoever is on air, large; you, small.
     private var stage: some View {
         ZStack(alignment: .bottomTrailing) {
             ZStack {
@@ -567,7 +567,7 @@ struct AmaStudioView: View {
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(studio.onAirTile?.speaking == true ? Color.amaPod : AS.line,
                                                                       lineWidth: studio.onAirTile?.speaking == true ? 3 : 1))
 
-            // Tú
+            // You
             ZStack {
                 RoundedRectangle(cornerRadius: 10).fill(Color(white: 0.14))
                 if let v = studio.myVideo, studio.camOn {
@@ -588,7 +588,7 @@ struct AmaStudioView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Las preguntas de quien está al aire y los botones para seguir.
+    /// The questions of whoever is on air and the buttons to continue.
     private var onAirBar: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
@@ -625,7 +625,7 @@ struct AmaStudioView: View {
         .overlay(alignment: .top) { Rectangle().fill(AS.line).frame(height: 1) }
     }
 
-    // MARK: Panel lateral
+    // MARK: Side panel
 
     private var side: some View {
         let tabs: [(String, String, Int)] = [(String(localized: "Solicitudes"), "hand.raised.fill", studio.requests.count),

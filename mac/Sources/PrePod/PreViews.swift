@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Estado de la sección pre
+// MARK: - pre section state
 
 @MainActor
 final class PreModel: ObservableObject {
@@ -18,10 +18,10 @@ final class PreModel: ObservableObject {
     @Published var logo: NSImage?
 
     var podcast: PrePodcast? { podcasts.first { $0.slug == slug } }
-    /// Color del podcast (branding) o el azul de prePod.
+    /// The podcast's color (branding) or prePod blue.
     var accent: Color { Color.podcast(podcast?.colorPrimary) }
 
-    /// El próximo episodio por grabar: el más cercano desde hoy; si no hay, el atrasado más reciente.
+    /// The next episode to record: the nearest from today; if none, the most recent overdue one.
     var nextUp: PreEpisode? {
         let pending = episodes.filter { [.idea, .planning, .scripted].contains($0.statusValue) && $0.scheduled != nil }
         let today = Calendar.current.startOfDay(for: Date())
@@ -61,7 +61,7 @@ final class PreModel: ObservableObject {
         episodes = try await api.preEpisodes(slug)
     }
 
-    /// Crea el podcast en prePod y lo deja seleccionado.
+    /// Creates the podcast in prePod and selects it.
     func createPodcast(name: String) async throws {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !n.isEmpty else { return }
@@ -77,7 +77,7 @@ final class PreModel: ObservableObject {
         Task { do { try await loadEpisodes() } catch { self.error = error.localizedDescription } }
     }
 
-    /// templateId: nil = la plantilla por defecto del podcast; 0 = sin plantilla.
+    /// templateId: nil = the podcast's default template; 0 = no template.
     func create(title: String, templateId: Int? = nil) {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
@@ -94,7 +94,7 @@ final class PreModel: ObservableObject {
     func move(_ id: Int, to status: EpisodeStatus) {
         guard let i = episodes.firstIndex(where: { $0.id == id }), episodes[i].status != status.rawValue else { return }
         let before = episodes[i]
-        episodes[i].status = status.rawValue                     // se ve al instante; si falla, se revierte
+        episodes[i].status = status.rawValue                     // shows instantly; if it fails, it's reverted
         Task {
             do {
                 let e = try await api.updateEpisode(slug, id, ["status": status.rawValue])
@@ -125,7 +125,7 @@ final class PreModel: ObservableObject {
     }
 }
 
-/// Guarda con un pequeño retraso mientras se escribe (un pendiente por campo).
+/// Saves with a small delay while typing (one pending save per field).
 @MainActor
 final class Debouncer {
     private var tasks: [String: Task<Void, Never>] = [:]
@@ -141,10 +141,10 @@ final class Debouncer {
 
 extension Color {
     static let prePod = Color(red: 0.353, green: 0.545, blue: 1.0)
-    static let prodPod = Color(red: 1.0, green: 0.30, blue: 0.30)     // luz roja de "al aire"
+    static let prodPod = Color(red: 1.0, green: 0.30, blue: 0.30)     // red "on air" light
 }
 
-// MARK: - Selector pre · post
+// MARK: - pre · post selector
 
 struct SectionSwitcher: View {
     @EnvironmentObject var app: AppModel
@@ -179,7 +179,7 @@ struct SectionSwitcher: View {
     }
 }
 
-// MARK: - Inicio de pre: tablero de episodios
+// MARK: - pre home: episode board
 
 struct PreHomeView: View {
     @EnvironmentObject var app: AppModel
@@ -190,7 +190,7 @@ struct PreHomeView: View {
     @State private var creatingPodcast = false
     @State private var podcastBusy = false
     @State private var templates: [ShowTemplate] = []
-    @State private var templateId = -1          // -1 = la de por defecto, 0 = sin plantilla
+    @State private var templateId = -1          // -1 = the default one, 0 = no template
     @AppStorage("preVistaCalendario") private var showCalendar = false
     @State private var dropTarget: EpisodeStatus?
 
@@ -273,7 +273,7 @@ struct PreHomeView: View {
                                 do {
                                     if let url = try await PrePodClient.shared.saveDownload("/api/podcasts/\(model.slug)/calendar.ics",
                                                                                             suggestedName: "\(model.slug)-grabaciones.ics") {
-                                        NSWorkspace.shared.open(url)      // lo abre Calendario y ofrece agregarlo
+                                        NSWorkspace.shared.open(url)      // Calendar opens it and offers to add it
                                     }
                                 } catch { model.error = error.localizedDescription }
                             }
@@ -291,7 +291,7 @@ struct PreHomeView: View {
         .padding(28)
     }
 
-    // Logo, nombre (menú para cambiar de podcast) y acciones principales
+    // Logo, name (menu to switch podcast) and main actions
     private var podcastBanner: some View {
         HStack(spacing: 16) {
             ZStack {
@@ -536,7 +536,7 @@ struct EpisodeCardView: View {
     }
 }
 
-/// El próximo episodio a grabar, con lo que ya está listo y lo que falta.
+/// The next episode to record, with what's ready and what's missing.
 struct NextUpCard: View {
     @ObservedObject var model: PreModel
     let episode: PreEpisode
@@ -620,7 +620,7 @@ extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
-// MARK: - Episodio
+// MARK: - Episode
 
 struct PreEpisodeView: View {
     @ObservedObject var model: PreModel
@@ -668,7 +668,7 @@ struct PreEpisodeView: View {
         }
         .onAppear { loadDate(); if !(0..<pages.count).contains(tab) { tab = 0 } }
         .onChange(of: model.open) { _, o in
-            // Al guardar, prePod devuelve el episodio: tomar su fecha y estado sin tocar lo que se está escribiendo
+            // On save, prePod returns the episode: take its date and status without touching what's being typed
             guard let o, o.id == episode.id else { return }
             episode.scheduledAt = o.scheduledAt
             episode.scheduledDate = o.scheduledDate
@@ -763,7 +763,7 @@ struct PreEpisodeView: View {
         }
     }
 
-    /// Crea (o encuentra) la sala de prodPod del episodio y la abre en prod.
+    /// Creates (or finds) the episode's prodPod room and opens it in prod.
     private func goRecord() {
         sending = true
         Task {
@@ -781,7 +781,7 @@ struct PreEpisodeView: View {
         Task { await model.save(episode.id, ["status": s.rawValue]) }
     }
 
-    /// Resumen corto debajo de cada pestaña del lado izquierdo.
+    /// Short summary below each tab on the left side.
     private func loadCounts() async {
         let api = PrePodClient.shared
         async let s = try? api.script(model.slug, episode.id)
@@ -847,7 +847,7 @@ struct DescriptionTab: View {
     }
 }
 
-// MARK: - Guion
+// MARK: - Script
 
 struct ScriptTab: View {
     let slug: String
@@ -912,7 +912,7 @@ struct ScriptTab: View {
 
     // MARK: Teleprompter
 
-    /// Quién puede leer un teleprompter: conductores del podcast (por usuario) e invitados del episodio (por nombre).
+    /// Who can read a teleprompter: podcast hosts (by username) and episode guests (by name).
     struct TPPerson: Identifiable, Hashable { let key: String; let label: String; let isHost: Bool; var id: String { key } }
     @State private var tpPeople: [TPPerson] = []
 
@@ -991,7 +991,7 @@ struct ScriptTab: View {
         .padding(.top, 4)
     }
 
-    /// Cuánto tarda en correr (misma fórmula que prodPod): palabras / velocidad + 2,5 s.
+    /// How long it takes to scroll (same formula as prodPod): words / speed + 2.5 s.
     private func tpRunSeconds(_ sec: ScriptSection) -> Double {
         let wpm: [String: Double] = ["slow": 95, "normal": 135, "fast": 180]
         let words = max(8, sec.content.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count)
@@ -1001,7 +1001,7 @@ struct ScriptTab: View {
         for x in sections { if x.id == sec.id { return false }; if x.tpEnabled ?? false { return true } }
         return false
     }
-    /// Inicio real, resolviendo los encadenados en orden (igual que el endpoint de prePod).
+    /// Real start, resolving chained ones in order (same as the prePod endpoint).
     private func tpStart(_ sec: ScriptSection) -> Double? {
         var prevEnd: Double? = nil
         for x in sections where x.tpEnabled ?? false {
@@ -1126,7 +1126,7 @@ struct RundownTab: View {
                                 .labelsHidden().frame(width: 120)
                             TextField("Título", text: $b.title)
                                 .onChange(of: b.title) { _, v in save(b.id, ["title": v]) }
-                            TextField("min", value: $b.durationEstimate, format: .number)   // en prePod los bloques van en minutos
+                            TextField("min", value: $b.durationEstimate, format: .number)   // in prePod blocks are in minutes
                                 .frame(width: 50)
                                 .onChange(of: b.durationEstimate) { _, v in save(b.id, ["duration_estimate": v ?? NSNull()]) }
                             Text("min").font(.caption).foregroundStyle(Theme.secondary)
@@ -1159,7 +1159,7 @@ struct RundownTab: View {
 
     private var totalMinutes: Int { Int(blocks.compactMap(\.durationEstimate).reduce(0, +).rounded()) }
 
-    /// El episodio de un vistazo: cada bloque ocupa lo que dura.
+    /// The episode at a glance: each block takes as long as it lasts.
     private var proportionBar: some View {
         let total = max(1, blocks.compactMap(\.durationEstimate).reduce(0, +))
         return VStack(alignment: .leading, spacing: 6) {
@@ -1219,7 +1219,7 @@ struct RundownTab: View {
     }
 }
 
-// MARK: - Invitados
+// MARK: - Guests
 
 struct GuestsTab: View {
     let slug: String

@@ -2,14 +2,14 @@ import Foundation
 import AVFoundation
 import UniformTypeIdentifiers
 
-/// Calidad de la grabación en la Mac, decidida por la prueba inicial (igual que prodPod web).
+/// Recording quality on the Mac, decided by the initial test (same as prodPod web).
 struct RecordingQuality: Hashable {
-    var height: Int          // 1080 o 720
-    var bitrate: Int         // bits por segundo del video
+    var height: Int          // 1080 or 720
+    var bitrate: Int         // video bits per second
     var label: String { "\(height)p" }
     var width: Int { height == 1080 ? 1920 : 1280 }
 
-    /// La tabla de prodPod web: nunca menos de 720p.
+    /// prodPod web's table: never below 720p.
     static func decide(uploadMbps: Double, cameraHeight: Int) -> RecordingQuality {
         var q: RecordingQuality
         if uploadMbps >= 8 { q = .init(height: 1080, bitrate: 8_000_000) }
@@ -26,8 +26,8 @@ struct RecordingQuality: Hashable {
     var title: String { String(localized: "\(label) · \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps") }
 }
 
-/// Graba cámara y voz en un MP4 por fragmentos: cada fragmento se guarda en la Mac y
-/// se entrega para subirlo mientras se graba. Unidos, los fragmentos forman un archivo válido.
+/// Records camera and voice into a fragmented MP4: each fragment is saved on the Mac and
+/// handed over for upload while recording. Joined, the fragments form a valid file.
 final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var writer: AVAssetWriter?
@@ -40,7 +40,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
     private(set) var firstPTS: CMTime = .invalid
     private(set) var lastPTS: CMTime = .invalid
     private var finishCont: CheckedContinuation<Void, Never>?
-    /// Avisa cuando hay bytes nuevos en el archivo.
+    /// Notifies when there are new bytes in the file.
     var onBytes: (@Sendable (Int64) -> Void)?
 
     var isRecording: Bool { lock.withLock { writer != nil } }
@@ -48,7 +48,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
         lock.withLock { (firstPTS.isValid && lastPTS.isValid) ? CMTimeGetSeconds(lastPTS - firstPTS) : 0 }
     }
 
-    /// withAudio=false para la pantalla compartida (solo imagen).
+    /// withAudio=false for screen sharing (video only).
     func start(to url: URL, quality: RecordingQuality, withAudio: Bool = true, fps: Int = 30) throws {
         try? FileManager.default.removeItem(at: url)
         FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -71,7 +71,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
             ],
         ])
         v.expectsMediaDataInRealTime = true
-        v.mediaTimeScale = 90_000          // marcas de tiempo finas: ningún cuadro repite hora
+        v.mediaTimeScale = 90_000          // fine timestamps: no frame repeats a time
         let a = AVAssetWriterInput(mediaType: .audio, outputSettings: [
             AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48_000, AVNumberOfChannelsKey: 1,
             AVEncoderBitRateKey: 256_000,
@@ -86,7 +86,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
         }
     }
 
-    /// El archivo empieza en 0: se resta la hora del primer cuadro a todo.
+    /// The file starts at 0: the first frame's time is subtracted from everything.
     func appendVideo(_ sb: CMSampleBuffer) {
         lock.lock(); defer { lock.unlock() }
         guard let w = writer, let v = videoIn else { return }
@@ -124,7 +124,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
         return out
     }
 
-    /// Termina el archivo (el último fragmento llega por el delegado antes de volver).
+    /// Finishes the file (the last fragment arrives through the delegate before returning).
     func finish() async {
         let w: AVAssetWriter? = lock.withLock { writer }
         guard let w else { return }
@@ -142,7 +142,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
         }
     }
 
-    // Cada fragmento: se agrega al final del archivo local.
+    // Each fragment: appended to the end of the local file.
     func assetWriter(_ writer: AVAssetWriter, didOutputSegmentData segmentData: Data,
                      segmentType: AVAssetSegmentType, segmentReport: AVAssetSegmentReport?) {
         var total: Int64 = 0
@@ -155,10 +155,10 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
     }
 }
 
-// MARK: - Voz limpia (sin eco) a muestras para el grabador
+// MARK: - Clean voice (no echo) to samples for the recorder
 
 enum PCM {
-    /// Convierte un bloque de audio de la sala en una muestra con su hora, para grabarla.
+    /// Converts a block of room audio into a timestamped sample, to record it.
     static func sampleBuffer(_ buf: AVAudioPCMBuffer, at pts: CMTime) -> CMSampleBuffer? {
         var desc: CMAudioFormatDescription?
         guard CMAudioFormatDescriptionCreate(allocator: nil, asbd: buf.format.streamDescription, layoutSize: 0, layout: nil,
@@ -177,10 +177,10 @@ enum PCM {
     }
 }
 
-// MARK: - Subida segura por partes (reanudable, lee del archivo en la Mac)
+// MARK: - Safe chunked upload (resumable, reads from the file on the Mac)
 
-/// Sube el archivo de la grabación por partes con "offset": si una parte se repite no se duplica,
-/// si falta algo el servidor dice desde dónde seguir. Si se cierra la app, se retoma al volver.
+/// Uploads the recording file in parts with "offset": if a part repeats it isn't duplicated,
+/// if something's missing the server says where to continue from. If the app closes, it resumes on return.
 actor ChunkUploader {
     struct Job: Codable, Equatable {
         var sessionId: Int
@@ -188,13 +188,13 @@ actor ChunkUploader {
         var trackType: String? = "video"
         var takeId: String? = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         var sent: Int64 = 0
-        var recordingDone = false      // la grabación terminó (el archivo ya no crece)
+        var recordingDone = false      // the recording ended (the file no longer grows)
         var finalized = false
         var duration: Double = 0
     }
 
     static let shared = ChunkUploader()
-    private var jobs: [String: Job] = [:]          // por ruta de archivo
+    private var jobs: [String: Job] = [:]          // by file path
     private var running: Set<String> = []
     private let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
@@ -202,7 +202,7 @@ actor ChunkUploader {
         c.timeoutIntervalForRequest = 120
         return URLSession(configuration: c)
     }()
-    /// Avisos de avance: (archivo, bytes subidos, total, terminado, error)
+    /// Progress notices: (file, bytes uploaded, total, finished, error)
     var onProgress: (@Sendable (String, Int64, Int64, Bool, String?) -> Void)?
 
     init() {
@@ -239,7 +239,7 @@ actor ChunkUploader {
         kick(file.path)
     }
 
-    /// Retoma todo lo pendiente (al abrir prod).
+    /// Resumes everything pending (when opening prod).
     func resumeAll() { for k in jobs.keys { kick(k) } }
 
     private func kick(_ key: String) {
@@ -254,8 +254,8 @@ actor ChunkUploader {
         while var j = jobs[key], !j.finalized {
             let size = (try? FileManager.default.attributesOfItem(atPath: key)[.size] as? Int64) ?? 0
             if j.sent < size {
-                // Durante la grabación, partes de hasta 2 MB con una pausa corta; si se atrasó (más de 16 MB
-                // pendientes) o ya terminó, partes de 8 MB sin pausa. Nunca más lento que lo que produce el video.
+                // During recording, parts of up to 2 MB with a short pause; if it fell behind (more than 16 MB
+                // pending) or already finished, 8 MB parts without pause. Never slower than what the video produces.
                 let behind = size - j.sent > 16 << 20
                 let piece = min(size - j.sent, (j.recordingDone || behind) ? 8 << 20 : 2 << 20)
                 do {
@@ -289,7 +289,7 @@ actor ChunkUploader {
                 }
                 continue
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)     // esperando más grabación
+            try? await Task.sleep(nanoseconds: 1_000_000_000)     // waiting for more recording
         }
     }
 
@@ -300,15 +300,15 @@ actor ChunkUploader {
         return try h.read(upToCount: count) ?? Data()
     }
 
-    /// Devuelve cuántos bytes tiene el servidor.
+    /// Returns how many bytes the server has.
     private func post(_ j: Job, chunk: Data?, offset: Int64, finalize: Bool) async throws -> Int64 {
         var fields = ["track_type": j.trackType ?? "video", "ext": ".mp4", "offset": String(offset)]
-        if let t = j.takeId { fields["take_id"] = t }      // cada grabación es su propia toma
+        if let t = j.takeId { fields["take_id"] = t }      // each recording is its own take
         if finalize { fields["finalize"] = "1"; fields["duration_seconds"] = String(format: "%.2f", j.duration) }
         let (code, obj) = try await ProdPodClient.shared.multipart("/api/sessions/\(j.sessionId)/recordings/stream",
                                                                   fields: fields, fileField: chunk == nil ? nil : "chunk",
                                                                   fileName: "chunk.mp4", fileData: chunk)
-        if code == 409, let b = obj["bytes_received"] as? Int { return Int64(b) }      // seguir desde donde tiene el servidor
+        if code == 409, let b = obj["bytes_received"] as? Int { return Int64(b) }      // continue from where the server is
         guard (200..<300).contains(code) else {
             throw PrePodClient.Failure(message: (obj["error"] as? String) ?? String(localized: "prodPod respondió \(code)"))
         }

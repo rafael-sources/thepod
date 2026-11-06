@@ -12,18 +12,18 @@ struct BuiltComposition {
     let keep: [EditEngine.Span]
     let duration: Double
     let scene: RenderScene?
-    /// Segundos de intro antes del contenido (0 si no hay). El cierre va después del contenido.
+    /// Intro seconds before the content (0 if none). The outro goes after the content.
     var introDuration: Double = 0
-    /// Solo en la vista previa: lo que suena de cada persona (id de pista → medidor), para el medidor del timeline.
+    /// Preview only: what each person sounds like (lane id → meter), for the timeline meter.
     var meters: [Int: ChainTap] = [:]
-    /// Tono de sala: cuántas personas recibieron relleno de ambiente (para contarlo en la interfaz y las pruebas).
+    /// Room tone: how many people received ambience fill (to show in the UI and the tests).
     var roomToneTracks = 0
-    /// Solo en la vista previa: volumen que la mezcla le da a cada persona en cada instante del video (0…).
+    /// Preview only: volume the mix gives each person at each instant of the video (0…).
     var gains: [Int: (Double) -> Double] = [:]
-    /// Solo en la vista previa: la sonoridad de la mezcla (estimada sumando las pistas con su volumen).
+    /// Preview only: the mix loudness (estimated by summing the tracks with their volume).
     var loudness: MixLoudness?
 
-    /// Lo que suena de una persona en el instante `t` del video, en dB (nil si no está sonando ahora).
+    /// What a person sounds like at instant `t` of the video, in dB (nil if not sounding now).
     func levelDB(lane: Int, at t: Double) -> Double? {
         guard let db = meters[lane]?.recent() else { return nil }
         let g = gains[lane]?(t) ?? 1
@@ -51,7 +51,7 @@ enum CompositionBuilder {
         let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts, window: window)
         let outDuration = EditEngine.outputDuration(keep)
         guard outDuration > 0.1 else { throw Failure.empty }
-        // Intro y cierre (solo en el video completo, no en trozos ni reels)
+        // Intro and outro (only in the full video, not in chunks or reels)
         let wantVideoBumpers = format != .audio && window == nil
         let intro = wantVideoBumpers ? project.intro : nil
         let outro = wantVideoBumpers ? project.outro : nil
@@ -66,7 +66,7 @@ enum CompositionBuilder {
         func asset(_ rel: String) -> AVURLAsset {
             if let a = assets[rel] { return a }
             var url = ProjectStore.url(rel, in: project.id)
-            // Vista previa: si hay proxy (copia liviana) de esta grabación, se usa; el export siempre va al original
+            // Preview: if there's a proxy (lightweight copy) of this recording, it's used; the export always goes to the original
             if preview, ProxyStore.enabled, let m = project.media.first(where: { $0.file == rel && $0.hasVideo }),
                ProxyStore.exists(mediaId: m.id, project: project.id) {
                 url = ProxyStore.url(mediaId: m.id, project: project.id)
@@ -78,7 +78,7 @@ enum CompositionBuilder {
         func cm(_ s: Double) -> CMTime { CMTime(seconds: s, preferredTimescale: 90_000) }
 
         /// Places [tlStart, tlStart+len) of a source onto `track`, skipping whatever falls in cuts.
-        /// Devuelve el tramo [inicio, fin) en tiempo de salida que ocupó lo colocado (para los fades).
+        /// Returns the span [start, end) in output time occupied by what was placed (for the fades).
         @discardableResult
         func place(track: AVMutableCompositionTrack, source: AVAssetTrack, sourceDuration: Double,
                    tlStart: Double, srcIn: Double, length: Double, speed: Double = 1) throws -> (start: Double, end: Double)? {
@@ -88,7 +88,7 @@ enum CompositionBuilder {
             for k in keep {
                 let a = max(k.start, tlStart), b = min(k.end, tlStart + length)
                 if b - a > 0.01 {
-                    // Con velocidad ≠ 1, cada segundo del episodio consume `speed` segundos de la fuente
+                    // With speed ≠ 1, each episode second consumes `speed` seconds of source
                     let src = srcIn + (a - tlStart) * speed
                     let srcLen = min((b - a) * speed, max(0, sourceDuration - src))
                     let len = srcLen / speed
@@ -105,9 +105,9 @@ enum CompositionBuilder {
             guard let outStart, let outEnd else { return nil }
             return (outStart, outEnd)
         }
-        /// Curva de volumen de una pista: el producto de varios factores (fades, auto-silencio, bajar bajo la voz)
-        /// convertido en rampas consecutivas que no se pisan (AVFoundation ignora rampas superpuestas).
-        // Vista previa: cada pista con su curva de volumen, para estimar la sonoridad de la mezcla
+        /// A track's volume curve: the product of several factors (fades, auto-mute, ducking under the voice)
+        /// turned into consecutive non-overlapping ramps (AVFoundation ignores overlapping ramps).
+        // Preview: each track with its volume curve, to estimate the mix loudness
         var loudSources: [(p: AVMutableAudioMixInputParameters, gain: (Double) -> Double)] = []
         func applyEnvelope(_ p: AVMutableAudioMixInputParameters, base: Double, span: (start: Double, end: Double),
                            points: [Double], factor: @escaping (Double) -> Double) {
@@ -128,7 +128,7 @@ enum CompositionBuilder {
                 p.setVolumeRamp(fromStartVolume: va, toEndVolume: vb, timeRange: CMTimeRange(start: cm(a), duration: cm(b - a)))
             }
         }
-        /// `curved`: fades de igual potencia (seno), para que dos clips cruzados no bajen de volumen en el medio.
+        /// `curved`: equal-power fades (sine), so two crossed clips don't dip in volume in the middle.
         func fadeFactor(_ t: Double, span: (start: Double, end: Double), fadeIn: Double, fadeOut: Double, curved: Bool = false) -> Double {
             let len = span.end - span.start
             let fi = min(fadeIn, len / 2), fo = min(fadeOut, len / 2)
@@ -142,23 +142,23 @@ enum CompositionBuilder {
             let fi = min(fadeIn, (span.end - span.start) / 2), fo = min(fadeOut, (span.end - span.start) / 2)
             var pts = [span.start + fi, span.end - fo]
             if curved {
-                // La curva se aproxima con rampas de un cuarto
+                // The curve is approximated with quarter ramps
                 for q in 1..<4 { pts.append(span.start + fi * Double(q) / 4); pts.append(span.end - fo * Double(q) / 4) }
             }
             return pts
         }
 
-        // Quién habla (en tiempo de salida): lo usa el diseño y la puerta por persona
+        // Who's speaking (in output time): used by the layout and the per-person gate
         let switches = AudioAnalysis.speakerSwitches(project: project, energy: energy, keep: keep)
         let gate = project.fix.gateOthers && project.lanes.count > 1 && energy != nil && switches.count > 1
-        /// Quién habla en el instante `t` del video final (con intro incluido).
+        /// Who's speaking at instant `t` of the final video (intro included).
         func speaker(at t: Double) -> Int? {
             var cur = switches.first?.lane
             for sw in switches { if introDur + sw.time <= t { cur = sw.lane } else { break } }
             return cur
         }
-        // La puerta: tramos abiertos por persona; fuera de ellos baja `gateDB`. Sube en 0,1 s ANTES de que hable
-        // (no se come la primera sílaba) y baja en 0,5 s después de la espera (sin cortes bruscos).
+        // The gate: open spans per person; outside them it drops by `gateDB`. Rises 0.1 s BEFORE they speak
+        // (doesn't eat the first syllable) and drops over 0.5 s after the hold (no abrupt cuts).
         let gateAttack = 0.1, gateRelease = 0.5
         let gateLow = pow(10, -project.fix.gateDB / 20)
         let openings: [Int: [(start: Double, end: Double)]] = (gate && energy != nil)
@@ -179,15 +179,15 @@ enum CompositionBuilder {
             (openings[lane] ?? []).flatMap { [$0.start - gateAttack, $0.start, $0.end, $0.end + gateRelease] }
         }
 
-        // Pitidos (palabras sensibles): la persona se calla en ese tramo y suena un tono encima
+        // Beeps (sensitive words): the person goes silent in that span and a tone plays on top
         let bleepOut: [(lane: Int, start: Double, end: Double)] = project.bleeps.compactMap { b in
             guard let a = EditEngine.toOutput(b.start, keep: keep) else { return nil }
             let z = EditEngine.toOutput(b.end, keep: keep) ?? (a + (b.end - b.start))
             guard z > a else { return nil }
-            // Un poco más ancho que la palabra: la transcripción puede ir corrida unas décimas
+            // A bit wider than the word: the transcript may be off by a few tenths
             return (b.lane, introDur + a - 0.10, introDur + z + 0.12)
         }
-        /// Puntos de la línea de volumen de una persona, en tiempo del video final (los que caen en lo que se exporta)
+        /// Points on a person's volume line, in final video time (those within what's exported)
         func automationPoints(_ lane: Lane) -> [Double] {
             lane.volumePoints.compactMap { pt in EditEngine.toOutput(pt.t, keep: keep).map { introDur + $0 } }
                 .flatMap { [$0 - 0.001, $0, $0 + 0.001] }
@@ -197,13 +197,13 @@ enum CompositionBuilder {
             let tl = EditEngine.toTimeline(max(0, t - introDur), keep: keep)
             return pow(10, lane.automationDB(at: tl) / 20)
         }
-        // El pitido calla a TODAS las personas en ese tramo: la palabra también se cuela por el micrófono de los demás.
-        // Inclusivo en el fin: así la rampa start→end se queda en 0 y la de end→end+0.02 vuelve a subir
-        // (antes el fin valía 1 y la voz subía en rampa durante toda la palabra: se oía bajito con el pitido).
+        // The beep silences EVERYONE in that span: the word also leaks into the others' microphones.
+        // Inclusive at the end: that way the start→end ramp stays at 0 and the end→end+0.02 one rises again
+        // (previously the end was 1 and the voice ramped up during the whole word: it was heard faintly with the beep).
         func bleepPoints(_ lane: Int) -> [Double] { bleepOut.flatMap { [$0.start - 0.02, $0.start, $0.end, $0.end + 0.02] } }
         func inBleep(_ lane: Int, _ t: Double) -> Bool { bleepOut.contains { t >= $0.start && t <= $0.end } }
 
-        /// Tramos (tiempo del video final) en que alguien habla: para bajar la música bajo la voz.
+        /// Spans (final video time) where someone speaks: to duck the music under the voice.
         let speech: [(start: Double, end: Double)] = {
             guard let energy else { return [] }
             let comb = energy.combined
@@ -238,7 +238,7 @@ enum CompositionBuilder {
         let wantVideo = format != .audio
         var meters: [Int: ChainTap] = [:]
         var gains: [Int: (Double) -> Double] = [:]
-        // Tono de sala: uniones de los cortes (tiempo del video final) y cuántas pistas de ambiente se metieron
+        // Room tone: cut joins (final video time) and how many ambience tracks were added
         let roomTone = project.fix.roomTone
         var joinTimes: [Double] = []
         do { var cursor = 0.0; for k in keep.dropLast() { cursor += k.end - k.start; joinTimes.append(introDur + cursor) } }
@@ -248,7 +248,7 @@ enum CompositionBuilder {
             var aTrack: AVMutableCompositionTrack?
             var laneSpan: (start: Double, end: Double)?
             let audible = project.laneAudible(lane)
-            // Voces parejas por medición: la ganancia que iguala esta voz con las demás (fija, antes de todo lo demás)
+            // Even voices by measurement: the gain matching this voice with the others (fixed, before everything else)
             let match = project.matchVoices ? pow(10, lane.matchGain / 20) : 1
             var laneBase = audible ? lane.volume * match : 0
             for placed in lane.placed {
@@ -263,11 +263,11 @@ enum CompositionBuilder {
                 if media.hasAudio {
                     var audioRel = (project.enhanceAudio ? media.enhancedAudioFile : nil) ?? media.file
                     if !FileManager.default.fileExists(atPath: ProjectStore.url(audioRel, in: project.id).path) { audioRel = media.file }
-                    // Panorama: una grabación mono no se puede ladear en la mezcla; se usa una copia estéreo (caché)
+                    // Pan: a mono recording can't be panned in the mix; a stereo copy (cached) is used
                     if project.conversationPan, abs(lane.pan) > 0.001,
                        let st = await Self.stereoCopy(project: project, relative: audioRel) { audioRel = st }
-                    // El ecualizador, «voz pareja» y «menos siseo» ya no generan archivos: van en la cadena de
-                    // voz en tiempo real (ChainTap), igual en la vista previa que en el export.
+                    // The equalizer, «voz pareja» and «menos siseo» no longer generate files: they go in the
+                    // real-time voice chain (ChainTap), the same in the preview as in the export.
                     let audioAsset = asset(audioRel)
                     if let src = try await audioAsset.loadTracks(withMediaType: .audio).first {
                         let aDur = try await audioAsset.load(.duration).seconds
@@ -286,7 +286,7 @@ enum CompositionBuilder {
                 if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil {
                     NSLog("lane %d %@ audible=%d base=%.2f span=%.2f-%.2f track=%d", id, lane.name, audible ? 1 : 0, laneBase, span.start, span.end, aTrack.trackID)
                 }
-                // Tono de sala: las uniones de los cortes bajan a cero 6 ms antes y suben 6 ms después (sin clic)
+                // Room tone: cut joins fade to zero 6 ms before and rise 6 ms after (no click)
                 let joins: [Double] = roomTone ? joinTimes.filter { $0 > span.start + 0.02 && $0 < span.end - 0.02 } : []
                 let factor: (Double) -> Double = { t in
                     var f = fadeFactor(t, span: span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut)
@@ -300,7 +300,7 @@ enum CompositionBuilder {
                               points: fadePoints(span, fadeIn: lane.fadeIn, fadeOut: lane.fadeOut) + (gate ? gatePoints(id) : []) + bleepPoints(id) + automationPoints(lane)
                                 + joins.flatMap { [$0 - 0.006, $0, $0 + 0.006] },
                               factor: factor)
-                // Tono de sala: el ambiente de esta persona donde su pista no tiene nada (antes, después, bajo pitidos)
+                // Room tone: this person's ambience where their track has nothing (before, after, under beeps)
                 if roomTone, audible, let energy, let loopURL = RoomTone.loop(project: project, lane: lane, energy: energy) {
                     let dead = RoomTone.deadSpans(laneSpan: span, content: (introDur, contentEnd),
                                                   bleeps: bleepOut.filter { $0.lane == id }.map { ($0.start, $0.end) })
@@ -321,9 +321,9 @@ enum CompositionBuilder {
                         roomToneTracks += 1
                     }
                 }
-                // Cadena de voz de la persona (EQ, voz pareja, siseo, limitador) antes del volumen de la mezcla.
-                // En la vista previa además mide el nivel para el medidor; como escucha ANTES del volumen,
-                // se le suma la misma curva al leerlo.
+                // The person's voice chain (EQ, even voice, sibilance, limiter) before the mix volume.
+                // In the preview it also measures the level for the meter; since it listens BEFORE the volume,
+                // the same curve is added when reading it.
                 let chainTap = ChainTap(laneId: id, settings: lane.effectiveChain, keep: keep, introDuration: introDur)
                 chainTap.pan = project.conversationPan ? lane.pan : 0
                 if lane.declick { let d = DeClicker(); d.amount = Float(lane.declickAmount); chainTap.declick = d }
@@ -348,12 +348,12 @@ enum CompositionBuilder {
             guard let src = try await a.loadTracks(withMediaType: .audio).first else { continue }
             let dur = try await a.load(.duration).seconds
             let len = clip.length
-            // Cada música/efecto con su propia pista: así cada uno tiene su volumen y sus fades.
-            // Si no cae dentro de lo que se exporta (p. ej. un trozo), la pista vacía se quita: AVFoundation falla con pistas sin nada.
+            // Each music/effect clip on its own track: that way each has its own volume and fades.
+            // If it doesn't fall within what's exported (e.g. a chunk), the empty track is removed: AVFoundation fails with empty tracks.
             let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
             var span: (start: Double, end: Double)?
             if clip.loop, len > 0.5 {
-                // En bucle: se repite pegada hasta el final del episodio (los cortes se aplican igual a cada vuelta)
+                // Looped: repeated back-to-back until the end of the episode (cuts apply the same on every pass)
                 var at = clip.tlStart
                 while at < project.duration - 0.05 {
                     if let s = try place(track: track, source: src, sourceDuration: dur, tlStart: at, srcIn: clip.srcIn, length: len, speed: clip.speed) {
@@ -367,10 +367,10 @@ enum CompositionBuilder {
             guard let span else { comp.removeTrack(track); continue }
             sfxTracks.append((track, clip.tlStart + len))
             let p = AVMutableAudioMixInputParameters(track: track)
-            if clip.speed != 1 { p.audioTimePitchAlgorithm = .spectral }   // estirar o comprimir sin cambiar el tono
+            if clip.speed != 1 { p.audioTimePitchAlgorithm = .spectral }   // stretch or compress without changing pitch
             let duck = clip.ducks && !speech.isEmpty
             let low = pow(10, -clip.duckDB / 20)
-            // Si la música se corta al final del episodio (bucle o más larga que el video), que no termine de golpe
+            // If the music is cut at the end of the episode (looped or longer than the video), don't let it end abruptly
             let cutAtEnd = clip.loop || clip.tlStart + len > project.duration + 0.05
             let fadeOut = (cutAtEnd && clip.fadeOut == 0) ? 1.5 : clip.fadeOut
             applyEnvelope(p, base: clip.volume, span: span,
@@ -382,7 +382,7 @@ enum CompositionBuilder {
             mixParams.append(p)
         }
 
-        // B-roll: cada video en su pista (se ve entero aunque cruce un corte; la voz sigue debajo)
+        // B-roll: each video on its own track (shown whole even if it crosses a cut; the voice continues underneath)
         var brollScene: [RenderScene.BRoll] = []
         for var b in project.brolls where b.duration > 0.1 {
             b.duration = min(b.duration, BRollClip.maxSeconds)
@@ -396,11 +396,11 @@ enum CompositionBuilder {
                 guard let v = try? await a.loadTracks(withMediaType: .video).first else { continue }
                 let dur = (try? await a.load(.duration).seconds) ?? 0
                 let srcIn = min(max(0, b.srcIn), max(0, dur - 0.1))
-                // En pantalla ocupa `screen`; de la fuente consume lo que diga la velocidad (o la rampa) y, si no
-                // alcanza, se acorta en pantalla. Con rampa, trozos de 0,25 s cada uno con su velocidad.
+                // On screen it takes `screen`; from the source it consumes what the speed (or ramp) says and, if that's
+                // not enough, it's shortened on screen. With a ramp, 0.25 s chunks each with its own speed.
                 var screen = end - start
                 if b.sourceNeeded(screenLen: screen) > dur - srcIn {
-                    // recortar la pantalla hasta que la fuente alcance
+                    // trim the screen time until the source suffices
                     var lo = 0.0, hi = screen
                     for _ in 0..<24 { let mid = (lo + hi) / 2; if b.sourceNeeded(screenLen: mid) > dur - srcIn { hi = mid } else { lo = mid } }
                     screen = lo
@@ -433,7 +433,7 @@ enum CompositionBuilder {
                         mixParams.append(p)
                     }
                 }
-                // Videos de teléfono vienen grabados "acostados" con una rotación en los metadatos: se aplica al dibujar
+                // Phone videos come recorded "lying down" with a rotation in the metadata: it's applied when drawing
                 let xf = (try? await v.load(.preferredTransform)) ?? .identity
                 brollScene.append(RenderScene.BRoll(trackID: track.trackID, image: nil, start: start, end: start + len, fill: b.fill, placement: b.placement, transform: xf, transition: b.transitionIn, grade: b.grade))
             } else {
@@ -442,7 +442,7 @@ enum CompositionBuilder {
             }
         }
 
-        // Música del intro/cierre y relleno para que el video dure hasta el final del cierre
+        // Intro/outro music and padding so the video lasts until the end of the outro
         func bumperMusic(_ b: Bumper?, at start: Double, length: Double) async throws {
             guard let b, let rel = b.musicFile else { return }
             let a = asset(rel)
@@ -463,7 +463,7 @@ enum CompositionBuilder {
         try await bumperMusic(intro, at: 0, length: introDur)
         try await bumperMusic(outro, at: contentEnd, length: outroDur)
         if outroDur > 0 {
-            // Un hueco vacío no alarga el video: metemos silencio real bajo el cierre para que dure hasta el final.
+            // An empty gap doesn't lengthen the video: we put real silence under the outro so it lasts until the end.
             if let silence = await Self.silenceAsset(slug: project.id, seconds: outroDur + 1),
                let src = try? await silence.loadTracks(withMediaType: .audio).first {
                 let track = comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)!
@@ -474,14 +474,14 @@ enum CompositionBuilder {
             }
         }
 
-        // Cintillos: se dibujan ahora (también sirven para poner sus sonidos en la mezcla)
+        // Lower thirds: drawn now (also used to put their sounds in the mix)
         let cintilloCardsBuilt = (wantVideo && project.showCintillos)
             ? Self.cintilloCards(project: project, keep: keep, renderSize: format.renderSize, vertical: format.isVertical) : []
         if !cintilloCardsBuilt.isEmpty {
             await Self.cintilloSounds(cards: cintilloCardsBuilt, shift: introDur, comp: comp, mixParams: &mixParams)
         }
 
-        // Pitidos encima de las palabras sensibles (también en el MP3)
+        // Beeps on top of sensitive words (also in the MP3)
         if !bleepOut.isEmpty, let tone = await bleepAsset(slug: project.id), let toneTrack = try? await tone.loadTracks(withMediaType: .audio).first {
             let toneDur = (try? await tone.load(.duration).seconds) ?? 0
             for b in bleepOut {
@@ -491,7 +491,7 @@ enum CompositionBuilder {
                 do { try track.insertTimeRange(CMTimeRange(start: .zero, duration: cm(len)), of: toneTrack, at: cm(b.start)) }
                 catch { comp.removeTrack(track); continue }
                 let p = AVMutableAudioMixInputParameters(track: track)
-                p.setVolume(0.5, at: .zero)       // −6 dB: se nota bien sin lastimar
+                p.setVolume(0.5, at: .zero)       // −6 dB: clearly noticeable without hurting
                 mixParams.append(p)
             }
         }
@@ -560,7 +560,7 @@ enum CompositionBuilder {
             s.overlays = Self.overlayCards(project: project, keep: keep, renderSize: format.renderSize)
             s.fastSegmentation = preview
             s.brolls = brollScene
-            // Studio · Video: tramos de cámara a mano, en tiempo del contenido del video final
+            // Studio · Video: manual camera spans, in final video content time
             s.switchTransition = project.studioVideo.switchTransition
             s.cameraSpans = project.studioVideo.cuts.compactMap { c in
                 guard let a = Self.outputStart(c.start, keep: keep) else { return nil }
@@ -606,7 +606,7 @@ enum CompositionBuilder {
             scene = s
         }
 
-        if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("tono de sala: %d personas con ambiente · uniones %d", roomToneTracks, joinTimes.count) }
+        if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("room tone: %d people with ambience · joins %d", roomToneTracks, joinTimes.count) }
         var built = BuiltComposition(asset: comp, videoComposition: videoComposition, audioMix: mix,
                                      keep: keep, duration: contentEnd + outroDur, scene: scene, introDuration: introDur)
         built.meters = meters
@@ -616,8 +616,8 @@ enum CompositionBuilder {
         return built
     }
 
-    /// Copia estéreo (idéntica en los dos canales) de un audio mono, en la caché del proyecto; nil si ya es estéreo
-    /// o no hay ffmpeg. Devuelve la ruta relativa a la carpeta del proyecto.
+    /// Stereo copy (identical on both channels) of a mono audio, in the project cache; nil if already stereo
+    /// or there's no ffmpeg. Returns the path relative to the project folder.
     static func stereoCopy(project: Project, relative: String) async -> String? {
         let src = ProjectStore.url(relative, in: project.id)
         guard let f = try? AVAudioFile(forReading: src) else { return nil }
@@ -631,8 +631,8 @@ enum CompositionBuilder {
         return "cache/" + name
     }
 
-    /// Un archivo de silencio (lo genera ffmpeg una vez por proyecto) para alargar el video bajo el cierre.
-    /// Tono de 1 kHz (10 s) para tapar palabras; lo genera ffmpeg una vez por proyecto.
+    /// A silence file (ffmpeg generates it once per project) to lengthen the video under the outro.
+    /// 1 kHz tone (10 s) to cover words; ffmpeg generates it once per project.
     static func bleepAsset(slug: String) async -> AVURLAsset? {
         let url = ProjectStore.cacheFolder(for: slug).appendingPathComponent("pitido.m4a")
         if FileManager.default.fileExists(atPath: url.path) { return AVURLAsset(url: url) }
@@ -659,15 +659,15 @@ enum CompositionBuilder {
 
     private static let overlayContext = CIContext()
 
-    /// Dónde cae en el video final algo que empieza en `t` (tiempo del episodio): si `t` está dentro de un corte,
-    /// se corre al siguiente tramo que sí queda; si está fuera de lo que se exporta (un trozo, un reel), nil.
+    /// Where something starting at `t` (episode time) lands in the final video: if `t` is inside a cut,
+    /// it shifts to the next span that remains; if it's outside what's exported (a chunk, a reel), nil.
     static func outputStart(_ t: Double, keep: [EditEngine.Span]) -> Double? {
         if let o = EditEngine.toOutput(t, keep: keep) { return o }
         guard let first = keep.first, let last = keep.last, t >= first.start, t <= last.end else { return nil }
         return keep.firstIndex { $0.start >= t }.map { EditEngine.outputDuration(Array(keep.prefix($0))) }
     }
 
-    /// Dibuja cada capa una vez, al tamaño del video, y la ubica en el tiempo del video editado.
+    /// Draws each layer once, at video size, and places it in the edited video's time.
     static func overlayCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize) -> [RenderScene.OverlayCard] {
         let W = renderSize.width, H = renderSize.height
         let base = min(W, H)
@@ -684,8 +684,8 @@ enum CompositionBuilder {
             case .image:
                 img = o.imageFile.flatMap { CIImage(contentsOf: ProjectStore.url($0, in: project.id), options: [.applyOrientationProperty: true]) }
                     .flatMap { pic -> CIImage? in
-                        // Cabe en un cuadrado de un tercio del lado corto (× tamaño), sin salirse del cuadro.
-                        // Se dibuja una sola vez a su tamaño final para no decodificar la foto en cada cuadro.
+                        // Fits in a square one third of the short side (× size), without leaving the frame.
+                        // Drawn only once at its final size so the photo isn't decoded on every frame.
                         let e = pic.extent
                         guard e.width > 0, e.height > 0 else { return nil }
                         let sc = min(base * 0.34 * k / max(e.width, e.height), W * 0.95 / e.width, H * 0.95 / e.height)
@@ -698,7 +698,7 @@ enum CompositionBuilder {
             var card = RenderScene.OverlayCard(id: o.id, start: start, end: start + o.duration, image: img,
                                                cx: o.x, cy: o.y, animate: o.animate)
             if let a = o.animation, !a.isEmpty {
-                // Keyframes al tiempo del video final; los que caen en un corte se corren al siguiente tramo
+                // Keyframes in final video time; those falling in a cut shift to the next span
                 card.anim = a.mapped { Self.outputStart($0, keep: keep) }
                 card.baseScale = Double(k)
             }
@@ -708,12 +708,12 @@ enum CompositionBuilder {
         }
     }
 
-    /// Dibuja cada cintillo una vez, al tamaño del video, y lo ubica en el tiempo del video editado.
+    /// Draws each lower third once, at video size, and places it in the edited video's time.
     static func cintilloCards(project: Project, keep: [EditEngine.Span], renderSize: CGSize, vertical: Bool) -> [RenderScene.CintilloCard] {
         let W = renderSize.width, H = renderSize.height
         let width = vertical ? W * 0.92 : min(W * 0.6, H * 1.25)
         let height = vertical ? H * 0.075 : H * 0.12
-        // Color del podcast: el que más se repite en el logo (si hay); si no, el de cada tipo
+        // Podcast color: the most repeated one in the logo (if any); otherwise, each kind's
         let podcastColor = project.logoFile.flatMap { ImageFile.nsImage(ProjectStore.url($0, in: project.id)) }.flatMap { dominantColor($0) }
         return project.cintillos.compactMap { c -> RenderScene.CintilloCard? in
             guard let o = Self.outputStart(c.start, keep: keep) else { return nil }
@@ -727,7 +727,7 @@ enum CompositionBuilder {
                 default: return NSColor(srgbRed: 0.35, green: 0.85, blue: 0.55, alpha: 1)
                 }
             }()
-            // Color: el elegido; si no, el del logo del sponsor (estilo sponsor), el del podcast, o el del tipo
+            // Color: the chosen one; otherwise, the sponsor logo's (sponsor style), the podcast's, or the kind's
             let sponsorColor = (c.style == "sponsor") ? logoImage.flatMap { dominantColor($0) } : nil
             let accent = c.color.flatMap { TextRenderer.color($0) } ?? sponsorColor ?? (c.fromDirector ? kindColor : (podcastColor ?? kindColor))
             let art: TextRenderer.CintilloArt?
@@ -736,14 +736,14 @@ enum CompositionBuilder {
             case "sponsor": art = TextRenderer.cintilloSponsor(title: c.title, text: c.text, tag: c.tagText, accent: accent, logo: logo, width: width * 0.95, height: height * 1.3)
             default: art = TextRenderer.cintilloNews(title: c.title, text: c.text, tag: c.tagText, accent: accent, logo: logo, width: width, height: height)
             }
-            if art == nil { NSLog("cintillo \(c.id) estilo \(c.style): no se pudo dibujar") }
+            if art == nil { NSLog("lower third \(c.id) style \(c.style): couldn't be drawn") }
             guard let art else { return nil }
-            if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("cintillo \(c.id) \(c.style) o=\(o) dur=\(c.duration) size=\(art.full.extent)") }
+            if ProcessInfo.processInfo.environment["THEPOD_DEBUG"] != nil { NSLog("lower third \(c.id) \(c.style) o=\(o) dur=\(c.duration) size=\(art.full.extent)") }
             return RenderScene.CintilloCard(start: o, end: o + c.duration, image: art.full, base: art.base, logoW: art.logoW, style: c.style, sound: c.sound)
         }
     }
 
-    /// El color que domina en una imagen (saturado; evita blancos, negros y grises).
+    /// The dominant color in an image (saturated; avoids whites, blacks and grays).
     static func dominantColor(_ img: NSImage) -> NSColor? {
         guard let cg = ImageFile.cgImage(img) else { return nil }
         let w = 24, h = 24
@@ -768,7 +768,7 @@ enum CompositionBuilder {
         return NSColor(srgbRed: best.r / Double(best.n), green: best.g / Double(best.n), blue: best.b / Double(best.n), alpha: 1)
     }
 
-    /// Sonidos de los cintillos (whoosh bajo al entrar y un toque al salir), como pistas de audio.
+    /// Lower third sounds (low whoosh on entering and a tap on leaving), as audio tracks.
     static func cintilloSounds(cards: [RenderScene.CintilloCard], shift: Double, comp: AVMutableComposition, mixParams: inout [AVMutableAudioMixInputParameters]) async {
         guard let inURL = Bundle.main.url(forResource: "cintillo-in", withExtension: "wav", subdirectory: "Sounds") ?? Bundle.main.url(forResource: "cintillo-in", withExtension: "wav"),
               let outURL = Bundle.main.url(forResource: "cintillo-out", withExtension: "wav", subdirectory: "Sounds") ?? Bundle.main.url(forResource: "cintillo-out", withExtension: "wav"),

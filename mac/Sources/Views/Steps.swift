@@ -377,8 +377,8 @@ struct CutList: View {
     }
 }
 
-/// Lo que «Arreglar» no se animó a quitar solo: muletillas dudosas, frases repetidas y sonidos sin palabras.
-/// Cada una se escucha y se decide; nada se quita hasta que la persona lo marque.
+/// What «Arreglar» didn't dare remove on its own: doubtful fillers, repeated phrases and wordless sounds.
+/// Each one is listened to and decided; nothing is removed until the person marks it.
 struct SuggestionsCard: View {
     @ObservedObject var session: ProjectSession
     @State private var showAll = false
@@ -472,7 +472,7 @@ struct CaptionsStep: View {
         .onDisappear { if session.captionDragTarget == .episode { session.captionDragTarget = nil } }
     }
 
-    /// Que los subtítulos salgan cuando se escucha la voz: ajustar al audio o escribir todo de nuevo.
+    /// Make subtitles appear when the voice is heard: align to the audio or rewrite everything.
     private var syncCard: some View {
         Card {
             HStack {
@@ -528,7 +528,7 @@ struct CaptionsStep: View {
 
 }
 
-/// Estilo de subtítulos: presets, colores, tamaño y posición. Sirve para el episodio y para los reels.
+/// Subtitle style: presets, colors, size and position. Works for the episode and for reels.
 struct CaptionStyleEditor: View {
     @Binding var style: CaptionStyle
     var compact = false
@@ -601,7 +601,7 @@ struct PhraseRow: View {
     let phrase: ProjectSession.Phrase
     @Binding var editing: Int?
     @Binding var draft: String
-    var reel: Reel? = nil               // dentro de un reel: cortar/devolver solo en ese reel
+    var reel: Reel? = nil               // inside a reel: cut/restore only in that reel
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -649,7 +649,7 @@ struct PhraseRow: View {
 
 // MARK: - 4. Reels
 
-/// Título de gancho: una frase grande arriba los primeros segundos, para que quien pasa se quede.
+/// Hook title: a large phrase at the top for the first seconds, so passers-by stay.
 struct ReelHookCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -708,7 +708,7 @@ struct ReelsStep: View {
     @State private var previewing: UUID?
     @State private var publishing: Reel?
 
-    /// El reel que se está viendo (si sigue existiendo).
+    /// The reel being viewed (if it still exists).
     private var currentReel: Reel? { previewing.flatMap { id in session.project.reels.first { $0.id == id } } }
 
     var body: some View {
@@ -735,7 +735,7 @@ struct ReelsStep: View {
                         }
                         .font(.callout)
                     }
-                    // Cada tarjeta busca su reel por id: borrar uno no deja tarjetas apuntando a un índice que ya no existe (antes la app se cerraba)
+                    // Each card looks up its reel by id: deleting one doesn't leave cards pointing to an index that no longer exists (the app used to crash)
                     ForEach(session.project.reels) { reel in
                         ReelCard(reel: reelBinding(reel), isPreviewing: previewing == reel.id, duration: session.project.duration, preview: {
                             show(reel)
@@ -768,7 +768,7 @@ struct ReelsStep: View {
             VStack(spacing: 12) {
                 PreviewPane(session: session, allowedFormats: [.vertical], showInspector: false)
                     .frame(minHeight: 380)
-                // Lo del reel, por pestañas: así el panel de lo que se edita no se monta sobre el diseño
+                // The reel's things, in tabs: that way the panel of what's being edited doesn't sit on top of the design
                 Picker("", selection: $tab) {
                     ForEach(ReelTab.allCases) { t in Text(t.title).tag(t) }
                 }
@@ -780,7 +780,7 @@ struct ReelsStep: View {
                             if let reel = currentReel { ReelHookCard(session: session, reel: reel) }
                             ReelLookCard(session: session, reel: currentReel)
                         case .text:
-                            // Arriba cómo se ven los subtítulos; abajo el texto del reel para corregirlo
+                            // On top how the subtitles look; below the reel's text to correct it
                             ReelCaptionsCard(session: session, reel: currentReel)
                             if let reel = currentReel { ReelTextCard(session: session, reel: reel) } else { pickReelHint }
                         case .sound:
@@ -806,7 +806,7 @@ struct ReelsStep: View {
             .padding(.vertical, 28).padding(.trailing, 28)
         }
         .onChange(of: session.selectedTrack) { _, sel in
-            // Al elegir una música, un b-roll o un cintillo del reel, se abre su pestaña sola
+            // When choosing a reel's music, b-roll or lower third, its tab opens by itself
             switch sel {
             case .reelSound: tab = .sound
             case .reelBRoll: tab = .broll
@@ -820,7 +820,7 @@ struct ReelsStep: View {
         }
         .onDisappear { session.setPreview(format: .landscape); session.captionDragTarget = nil }
         .sheet(item: $publishing) { reel in PublishReelSheet(session: session, reel: reel) }
-        // Cambios en el diseño (de todos o del reel que se ve) → la vista previa se actualiza
+        // Changes to the design (of all reels or the one being viewed) → the preview updates
         .onChange(of: session.project.reelLook) { _, _ in refresh() }
         .onChange(of: currentReel?.look) { _, _ in refresh() }
         .onChange(of: currentReel?.cuts) { _, _ in refresh() }
@@ -858,14 +858,14 @@ struct ReelsStep: View {
         session.captionDragTarget = captionTarget
     }
 
-    /// Arrastrar los subtítulos cambia el estilo propio del reel si lo tiene; si no, el de todos los reels.
+    /// Dragging subtitles changes the reel's own style if it has one; otherwise, the one for all reels.
     private var captionTarget: ProjectSession.CaptionTarget {
         if let r = currentReel, r.look?.captionStyle != nil { return .reel(r.id) }
         return .allReels
     }
 }
 
-/// Subtítulos de los reels (pestaña aparte): si salen, y con qué estilo. Para todos o solo para el reel que se ve.
+/// Reel subtitles (separate tab): whether they show, and with what style. For all or only the reel being viewed.
 struct ReelCaptionsCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel?
@@ -924,13 +924,13 @@ struct ReelCaptionsCard: View {
     }
 }
 
-/// Diseño y marca de los reels: para todos, o solo para el reel que se está viendo.
+/// Reel design and branding: for all, or only for the reel being viewed.
 struct ReelLookCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel?
 
     private var own: Bool { reel?.look != nil }
-    /// Lo que se edita: el diseño propio del reel o el de todos.
+    /// What's being edited: the reel's own design or the one for all.
     private var look: Binding<ReelLook> {
         if let reel, let i = session.project.reels.firstIndex(where: { $0.id == reel.id }), session.project.reels[i].look != nil {
             return Binding(get: { session.project.reels[i].look ?? session.project.reelLook },
@@ -1170,7 +1170,7 @@ struct ReelCard: View {
 // MARK: - 5. Export
 
 
-// MARK: - Patrocinios y marcas
+// MARK: - Sponsorships and brands
 
 struct BrandsStep: View {
     @ObservedObject var session: ProjectSession
@@ -1257,7 +1257,7 @@ struct BrandsStep: View {
     }
 }
 
-// MARK: - Aspecto
+// MARK: - Look
 
 struct LookStep: View {
     @ObservedObject var session: ProjectSession
@@ -1513,7 +1513,7 @@ struct LookStep: View {
         }
     }
 
-    /// Ajustes del diseño elegido. Cambiar el proyecto ya refresca la vista previa (dirty → schedulePreview).
+    /// Settings for the chosen layout. Changing the project already refreshes the preview (dirty → schedulePreview).
     @ViewBuilder
     private func layoutOptionsView(onePerson: Bool) -> some View {
         let l = session.project.layout
@@ -1720,7 +1720,7 @@ struct SettingsView: View {
 }
 
 
-/// Texto del reel: las frases que caen en él, para corregirlas o quitarlas solo en este reel.
+/// Reel text: the phrases within it, to correct or remove them only in this reel.
 struct ReelTextCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -1783,7 +1783,7 @@ struct ReelTextCard: View {
     }
 }
 
-/// Sonido del reel: limpieza (si falta), silencios solo del reel y silenciar a quien no habla.
+/// Reel sound: cleanup (if missing), reel-only silences and muting whoever isn't speaking.
 struct ReelSoundCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -1826,7 +1826,7 @@ struct ReelSoundCard: View {
 }
 
 
-/// B-roll solo de este reel: video o foto corta (máximo 10 s y siempre más corta que el reel), entera o en ventanita.
+/// B-roll for this reel only: short video or photo (max 10 s and always shorter than the reel), full or PiP.
 struct ReelBRollCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -1869,7 +1869,7 @@ struct ReelBRollCard: View {
 }
 
 
-/// Cintillos solo de este reel (además de los del episodio que caigan en su tramo).
+/// Lower thirds for this reel only (in addition to the episode's that fall within its span).
 struct ReelCintilloCard: View {
     @ObservedObject var session: ProjectSession
     let reel: Reel
@@ -1916,7 +1916,7 @@ struct ReelCintilloCard: View {
 }
 
 
-/// Revisión rápida antes de exportar: lo que conviene mirar, cada cosa con su botón para arreglarla ahí mismo.
+/// Quick review before exporting: what's worth checking, each with its button to fix it right there.
 struct ExportReviewCard: View {
     @ObservedObject var session: ProjectSession
 
@@ -1986,8 +1986,8 @@ struct ExportReviewCard: View {
 }
 
 
-/// Notas y momentos con la IA de thePod. Se hace una sola vez por episodio (ahorra: si se vuelve a tocar,
-/// trae lo mismo sin volver a gastar). La primera vez pide permiso para mandar la transcripción.
+/// Notes and moments with thePod's AI. Done only once per episode (saves money: if touched again,
+/// it brings the same without spending again). The first time it asks permission to send the transcript.
 struct AIMomentsCard: View {
     @ObservedObject var session: ProjectSession
     @State private var showNotes = false
@@ -2034,7 +2034,7 @@ struct AIMomentsCard: View {
     }
 }
 
-/// «Voces parejas por medición»: mide la sonoridad de cada persona y aplica la ganancia que las iguala.
+/// «Voces parejas por medición»: measures each person's loudness and applies the gain that matches them.
 struct VoicesMatchRow: View {
     @ObservedObject var session: ProjectSession
     @State private var measuring = false
@@ -2092,8 +2092,8 @@ struct VoicesMatchRow: View {
 }
 
 
-/// «Reducir ruido por huella»: toma el espectro del segundo más quieto de cada persona y resta lo que no supere
-/// esa huella. Sin IA; vale para ruido constante (aire, ventilador, zumbido).
+/// «Reducir ruido por huella»: takes the spectrum of each person's quietest second and subtracts what doesn't exceed
+/// that print. No AI; works for constant noise (air, fan, hum).
 struct NoiseProfileRow: View {
     @ObservedObject var session: ProjectSession
     @State private var working = false
@@ -2159,8 +2159,8 @@ struct NoiseProfileRow: View {
 }
 
 
-/// «Quitar clics y chasquidos»: saltos bruscos de menos de 2,5 ms (chasquidos de boca, clics de cable) se
-/// sustituyen por una línea entre las muestras sanas. Sin IA; la voz no se toca.
+/// «Quitar clics y chasquidos»: abrupt jumps under 2.5 ms (mouth smacks, cable clicks) are
+/// replaced by a line between the healthy samples. No AI; the voice isn't touched.
 struct DeclickRow: View {
     @ObservedObject var session: ProjectSession
     private var anyOn: Bool { session.project.lanes.contains { $0.declick } }
@@ -2192,8 +2192,8 @@ struct DeclickRow: View {
 }
 
 
-/// Revisión compartida: un enlace para que el invitado o el cliente escuche y deje comentarios en un segundo
-/// exacto; los comentarios llegan como marcas naranjas a la línea de tiempo.
+/// Shared review: a link so the guest or client listens and leaves comments at an exact
+/// second; the comments arrive as orange marks on the timeline.
 struct SharedReviewCard: View {
     @ObservedObject var session: ProjectSession
     @State private var confirmRevoke = false
@@ -2254,7 +2254,7 @@ struct SharedReviewCard: View {
 }
 
 
-/// Cola de exportación: lo que espera, lo que corre y lo que ya salió. No bloquea nada.
+/// Export queue: what's waiting, what's running and what's already out. Doesn't block anything.
 struct ExportQueueCard: View {
     @ObservedObject var session: ProjectSession
     var body: some View {

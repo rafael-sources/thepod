@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tiempo en horas:minutos:segundos, siempre con el mismo formato (0:04:51.3).
+/// Time in hours:minutes:seconds, always in the same format (0:04:51.3).
 enum Timecode {
     static func string(_ t: Double, tenths: Bool = true) -> String {
         let total = max(0, t)
@@ -9,7 +9,7 @@ enum Timecode {
         return tenths ? String(format: "%d:%02d:%02d.%d", h, m, s, d) : String(format: "%d:%02d:%02d", h, m, s)
     }
 
-    /// Acepta "1:02:03", "2:03", "123", "2:03.5", "1h2m3s". Devuelve segundos o nil si no se entiende.
+    /// Accepts "1:02:03", "2:03", "123", "2:03.5", "1h2m3s". Returns seconds or nil if not understood.
     static func parse(_ text: String) -> Double? {
         var s = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
         guard !s.isEmpty else { return nil }
@@ -34,7 +34,7 @@ enum Timecode {
     }
 }
 
-/// Campo para escribir un tiempo exacto (h:mm:ss o mm:ss). Se aplica al dar Enter o al salir del campo.
+/// Field for typing an exact time (h:mm:ss or mm:ss). Applied on Enter or leaving the field.
 struct TimecodeField: View {
     @Binding var seconds: Double
     var range: ClosedRange<Double> = 0...(24 * 3600)
@@ -68,7 +68,7 @@ struct TimecodeField: View {
     }
 }
 
-/// Reloj grande del video: dónde está parado y corriendo cuando reproduce. Clic para escribir un tiempo e ir ahí.
+/// The video's big clock: where it's paused and running when playing. Click to type a time and go there.
 struct BigClock: View {
     @ObservedObject var session: ProjectSession
     @State private var editing = false

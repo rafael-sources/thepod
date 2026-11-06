@@ -3,8 +3,8 @@ import AVFoundation
 import AppKit
 import LiveKit
 
-/// El director desde la Mac: ve y oye a todos, controla la grabación, manda avisos,
-/// habla al oído, silencia, pone cintillos (sponsors y podcast) y envía a post.
+/// The director from the Mac: sees and hears everyone, controls the recording, sends notices,
+/// talks in the ear, mutes, places lower thirds (sponsors and podcast) and sends to post.
 @MainActor
 final class DirectorStudio: NSObject, ObservableObject {
     struct Feed: Identifiable {
@@ -26,7 +26,7 @@ final class DirectorStudio: NSObject, ObservableObject {
     @Published var feeds: [Feed] = []
     @Published var participants: [ProdPodClient.Person] = []
     @Published var readyMap: [String: Bool] = [:]
-    @Published var uploads: [String: String] = [:]         // identity → estado
+    @Published var uploads: [String: String] = [:]         // identity → state
     @Published var uploadBytes: [String: Int64] = [:]
     @Published var practice = false
     @Published var countdown: Int?
@@ -38,19 +38,19 @@ final class DirectorStudio: NSObject, ObservableObject {
     @Published var overlays: [Overlay] = []
     @Published var chat: [(id: Int, author: String, text: String)] = []
     @Published var sounds: [ProdStudio.Pad] = []
-    @Published var ifbTarget: String?                      // "all_hosts" o identity mientras se habla
+    @Published var ifbTarget: String?                      // "all_hosts" or identity while talking
     @Published var sponsors: [SponsorInfo] = []
     @Published var podcastName = ""
     @Published var podcastLogo: NSImage?
 
     private(set) var room: Room?
     private var ifbTrack: LocalAudioTrack?
-    private var ifbWork: Task<Void, Never>?                 // publicar/silenciar el audio al oído (se espera antes de salir)
+    private var ifbWork: Task<Void, Never>?                 // publish/mute the in-ear audio (awaited before leaving)
     private var leaving = false
     private var recStart = Date()
     private var timer: Timer?
     private var myIdentity = ""
-    private var assetPaths: [String: String] = [:]         // logo → file_path en el servidor
+    private var assetPaths: [String: String] = [:]         // logo → file_path on the server
     private var sponsorLogos: [Int: Data] = [:]
     private var podcastLogoData: Data?
     private var joined = false
@@ -62,7 +62,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         Self.current = self
     }
 
-    // MARK: Entrar / salir
+    // MARK: Join / leave
 
     func join() {
         guard !joining, !connected else { return }
@@ -82,7 +82,7 @@ final class DirectorStudio: NSObject, ObservableObject {
                 refresh()
                 await loadParticipants()
                 try? await Task.sleep(nanoseconds: 800_000_000)
-                send(["type": "ready_request"])              // que todos digan si están preparados
+                send(["type": "ready_request"])              // everyone says whether they're ready
                 timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
                     Task { @MainActor in self?.tick() }
                 }
@@ -102,7 +102,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         defer { leaving = false }
         timer?.invalidate(); timer = nil
         ifbTarget = nil
-        // Nunca cortar la conexión con una publicación a medias: eso tumbaba la app.
+        // Never drop the connection with a half-done publish: that used to crash the app.
         await ifbWork?.value
         ifbWork = nil
         if let t = ifbTrack, let room {
@@ -122,7 +122,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         participants = (try? await ProdPodClient.shared.participants(session.id)) ?? participants
     }
 
-    // MARK: Mensajes
+    // MARK: Messages
 
     func send(_ msg: [String: Any]) {
         guard let room, let data = try? JSONSerialization.data(withJSONObject: msg) else { return }
@@ -153,9 +153,9 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Grabar
+    // MARK: Record
 
-    /// Conductores conectados ahora (los que no están en la sala no bloquean).
+    /// Hosts connected now (those not in the room don't block).
     var hostsInRoom: [ProdPodClient.Person] {
         let live = Set(feeds.map(\.id))
         return participants.filter { ["host", "co-host"].contains($0.role) && live.contains("participant_\($0.id)") }
@@ -222,7 +222,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         if !overlays.isEmpty { overlays.removeAll { ($0.expires ?? .distantFuture) < Date() } }
     }
 
-    // MARK: Avisos privados
+    // MARK: Private notices
 
     static let cues = [String(localized: "CERRAR TEMA"), String(localized: "SIGUIENTE TEMA"), String(localized: "PAUSA"), String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
 
@@ -239,8 +239,8 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     var tpLastId: String?
 
-    /// Manda el teleprompter a una persona o a todos. Con `countdown` > 0 todos ven primero el aviso
-    /// ("Viene X en 3 s · ATENTO …") y el texto solo le aparece a quien le toca.
+    /// Sends the teleprompter to one person or everyone. With `countdown` > 0 everyone first sees the notice
+    /// ("Viene X en 3 s · ATENTO …") and the text only appears for whoever it's for.
     func sendTeleprompter(target: String, title: String, text: String, speed: String, size: String, countdown: Int) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { error = String(localized: "Escribe el texto del teleprompter"); return }
@@ -266,7 +266,7 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     func setGuestCues(_ show: Bool) { send(["type": "cue_visibility", "show": show]) }
 
-    // MARK: Hablar al oído (mantener presionado)
+    // MARK: Talk in the ear (press and hold)
 
     func ifbPress(_ target: String) {
         guard ifbTarget == nil, connected, !leaving, let room else { return }
@@ -296,7 +296,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Silenciar y sacar
+    // MARK: Mute and remove
 
     func forceMute(_ p: ProdPodClient.Person) {
         Task {
@@ -319,9 +319,9 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Cintillos
+    // MARK: Lower thirds
 
-    /// Logos del podcast y de sus sponsors (desde prePod).
+    /// Logos of the podcast and its sponsors (from prePod).
     func loadBranding() async {
         guard let slug = session.source_slug, !slug.isEmpty else { await applyEpisodeBranding(); return }
         let pre = PrePodClient.shared
@@ -341,7 +341,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         await applyEpisodeBranding()
     }
 
-    /// Los sponsors de ESTE episodio (los que prodPod guardó al crear la sala) van primero.
+    /// THIS episode's sponsors (the ones prodPod saved when creating the room) go first.
     private func applyEpisodeBranding() async {
         guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/director/branding"),
               let b = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return }
@@ -365,7 +365,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         if let p = assetPaths[key] { return p }
         guard let data else { return nil }
         let ext = NSImage(data: data).flatMap { _ in "png" } ?? "png"
-        // Normalizar a PNG para que cualquier navegador lo muestre
+        // Normalize to PNG so any browser shows it
         let png = NSImage(data: data).flatMap { img -> Data? in
             guard let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
             return rep.representation(using: .png, properties: [:])
@@ -375,7 +375,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         return p
     }
 
-    /// Cintillo de sponsor: su logo y su texto.
+    /// Sponsor lower third: its logo and its text.
     func showSponsor(_ s: SponsorInfo, text: String, seconds: Double) {
         Task {
             let path = await assetPath(key: "sponsor\(s.id)", data: sponsorLogos[s.id])
@@ -384,7 +384,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
-    /// Cintillo del podcast: su logo y un texto del momento.
+    /// Podcast lower third: its logo and a text for the moment.
     func showPodcast(title: String, text: String, seconds: Double) {
         Task {
             let path = await assetPath(key: "podcast", data: podcastLogoData)
@@ -418,7 +418,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         }
     }
 
-    // MARK: Chat de dirección
+    // MARK: Direction chat
 
     func loadChat() async {
         guard let d = try? await ProdPodClient.shared.get("/api/sessions/\(session.id)/chat?channel=director"),
@@ -468,7 +468,7 @@ final class DirectorStudio: NSObject, ObservableObject {
         send(m)
     }
 
-    // MARK: Personas
+    // MARK: People
 
     func refresh() {
         guard let room else { feeds = []; return }

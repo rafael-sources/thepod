@@ -1,16 +1,16 @@
 import Foundation
 import SwiftUI
 
-// Teleprompter en la sala (0.11.0). Mismo contrato que la web:
+// Teleprompter in the room (0.11.0). Same contract as the web:
 // {"type":"teleprompter","action":"show"|"hide","target":"all"|identity,"title","text",
 //  "speed":"slow|normal|fast","size":"quarter|half|full","countdown":3,"event_id"}
-// Todos ven el aviso ("Viene X en 3 s · ATENTO PATRICIO"); el texto solo le aparece a quien le toca.
-// Quien lee avisa cuando el texto terminó de correr (pausas incluidas) o lo cerró:
-// {"type":"teleprompter_done","event_id"}. Quien creó la sala suelta ahí el siguiente encadenado.
+// Everyone sees the notice ("Viene X en 3 s · ATENTO ALEX"); the text only appears for whoever it's for.
+// The reader notifies when the text has finished scrolling (pauses included) or was closed:
+// {"type":"teleprompter_done","event_id"}. The room creator then releases the next chained one.
 
 struct TPNotice: Equatable {
     var title: String
-    var who: String          // nombre en mayúsculas, vacío si es para todos
+    var who: String          // name in uppercase, empty if it's for everyone
     var remaining: Int
 }
 
@@ -33,7 +33,7 @@ struct TPActive: Equatable {
         return Double(words) / (wpm[speed] ?? 135) * 60 + 2.5
     }
 
-    /// 0…1: cuánto del texto ya corrió.
+    /// 0…1: how much of the text has scrolled.
     func progress(at now: Date) -> Double {
         let end = pausedAt ?? now
         let e = end.timeIntervalSince(startedAt) - pausedAccum
@@ -41,23 +41,23 @@ struct TPActive: Equatable {
     }
 }
 
-/// Sección del guion de prePod marcada para teleprompter.
+/// prePod script section marked for teleprompter.
 struct TPSection {
     let id: Int
-    let speaker: String          // etiqueta para mostrar
-    let speakerKey: String       // usuario del conductor o nombre del invitado (para elegir a quién va)
+    let speaker: String          // label to display
+    let speakerKey: String       // host username or guest name (to choose who it goes to)
     let content: String
     let offset: Double
     let speed: String
     let size: String
-    var afterPrev = false        // «después del anterior»: sale cuando el anterior termina de verdad
+    var afterPrev = false        // «después del anterior»: goes out when the previous one has truly finished
     var gap = 0.5
-    var run: Double = 0          // lo que dura corriendo (calculado), para el plan B
+    var run: Double = 0          // how long it takes to scroll (computed), for plan B
 }
 
 extension ProdStudio {
 
-    // MARK: Recibir
+    // MARK: Receive
 
     func handleTeleprompter(_ m: [String: Any]) {
         let action = m["action"] as? String ?? "show"
@@ -105,14 +105,14 @@ extension ProdStudio {
         tpActive = TPActive(id: id, title: m["title"] as? String ?? "", text: text, speed: speed,
                             size: m["size"] as? String ?? "half",
                             duration: TPActive.duration(text: text, speed: speed))
-        // Se va solo cuando termina de correr (más 4 s), salvo que lo cierren antes.
+        // It goes away by itself when it finishes scrolling (plus 4 s), unless closed earlier.
         let d = tpActive!.duration + 4
         tpHideTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(d * 1_000_000_000))
             guard !Task.isCancelled, let self, self.tpActive?.id == id, self.tpActive?.paused == false else { return }
             self.tpActive = nil
         }
-        // Avisa cuando el texto terminó de correr (la pausa y «desde el inicio» lo corren).
+        // Notifies when the text finished scrolling (pause and «desde el inicio» shift it).
         tpDoneTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 250_000_000)
@@ -126,10 +126,10 @@ extension ProdStudio {
         guard !tpReported.contains(id) else { return }
         tpReported.insert(id)
         send(["type": "teleprompter_done", "event_id": id])
-        tpDoneReceived(id)          // por si quien lee es quien creó la sala
+        tpDoneReceived(id)          // in case the reader is the room creator
     }
 
-    /// Alguien terminó de leer un teleprompter del guion: suelta el encadenado que venga.
+    /// Someone finished reading a script teleprompter: releases the next chained one.
     func tpDoneReceived(_ eid: String?) {
         guard let eid, eid.hasPrefix("s"), let n = Int(eid.dropFirst()) else { return }
         tpDone.insert(n)
@@ -159,7 +159,7 @@ extension ProdStudio {
         tpHideTask?.cancel(); tpDoneTask?.cancel()
     }
 
-    // MARK: Guion (solo quien creó la sala dispara los del guion)
+    // MARK: Script (only the room creator fires the script ones)
 
     func loadTeleprompterScript() async {
         tpScript = []; tpFired = [:]; tpDone = []; tpPeople = [:]
@@ -187,7 +187,7 @@ extension ProdStudio {
         if !tpScript.isEmpty { flash(String(localized: "\(tpScript.count) teleprompter del guion listos")) }
     }
 
-    /// Igual que la web: primero usuario o nombre exacto (lo que eligió prePod en «lo lee»), luego parecido por nombre.
+    /// Same as the web: first exact username or name (what prePod chose in «lo lee»), then a fuzzy name match.
     func tpIdentity(for speaker: String) -> String {
         let sp = speaker.trimmingCharacters(in: .whitespaces).lowercased()
         guard !sp.isEmpty else { return "all" }
@@ -200,19 +200,19 @@ extension ProdStudio {
         return "all"
     }
 
-    /// Llamado cada décima mientras se graba, con el segundo actual de la grabación.
+    /// Called every tenth of a second while recording, with the current recording second.
     func tickTeleprompter(_ t: Double) {
         guard isOwner, !tpScript.isEmpty else { return }
         for (i, s) in tpScript.enumerated() where tpFired[s.id] == nil {
             var countdown = 3
             if s.afterPrev, i > 0, let prevAt = tpFired[tpScript[i - 1].id] {
-                // «Después del anterior»: sale cuando quien lo lee avisa que terminó.
-                // Si nadie avisa (versión vieja, se cayó), sale 15 s después de lo calculado.
+                // «Después del anterior»: goes out when the reader notifies they finished.
+                // If nobody notifies (old version, dropped), it goes out 15 s after the computed time.
                 let prev = tpScript[i - 1]
                 guard tpDone.contains(prev.id) || t >= prevAt + 3 + prev.run + 15 else { continue }
                 countdown = max(3, Int(s.gap.rounded()))
             } else {
-                let at = s.offset - 3            // 3 s de aviso antes
+                let at = s.offset - 3            // 3 s notice beforehand
                 guard t >= at, t <= at + 2 else { continue }
             }
             tpFired[s.id] = t
@@ -220,12 +220,12 @@ extension ProdStudio {
                                       "target": tpIdentity(for: s.speakerKey), "title": String(localized: "Guion · \(s.speaker)"),
                                       "text": s.content, "speed": s.speed, "size": s.size, "countdown": countdown]
             send(msg)
-            handleTeleprompter(msg)      // también para mí
+            handleTeleprompter(msg)      // for me too
         }
     }
 }
 
-// MARK: Capa visual (host e invitado)
+// MARK: Visual layer (host and guest)
 
 struct TeleprompterLayer: View {
     @ObservedObject var studio: ProdStudio
@@ -295,7 +295,7 @@ struct TeleprompterLayer: View {
     }
 }
 
-/// El texto sube de abajo hacia arriba según el progreso (0: todavía fuera por abajo; 1: ya salió por arriba).
+/// The text scrolls from bottom to top with progress (0: still out below; 1: already out the top).
 private struct ScrollingText: View {
     let text: String
     let fontSize: CGFloat

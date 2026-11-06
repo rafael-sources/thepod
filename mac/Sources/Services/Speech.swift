@@ -1,16 +1,16 @@
 import AVFoundation
 import Foundation
 
-/// Texto a voz con las voces de la Mac (sin internet). Escribe un archivo de audio listo para ponerlo en el episodio.
+/// Text to speech with the Mac's voices (offline). Writes an audio file ready to put into the episode.
 enum Speech {
     struct Voice: Identifiable, Hashable {
-        let id: String          // identificador de AVSpeechSynthesisVoice
+        let id: String          // AVSpeechSynthesisVoice identifier
         let name: String
         let language: String
         let quality: String     // "mejorada" | "premium" | ""
     }
 
-    /// Voces en español primero (la Mac trae varias; las mejoradas se bajan en Ajustes del Sistema → Accesibilidad → Contenido hablado).
+    /// Spanish voices first (the Mac has several; enhanced ones are downloaded in System Settings → Accessibility → Spoken Content).
     static func voices() -> [Voice] {
         let all = AVSpeechSynthesisVoice.speechVoices()
         func q(_ v: AVSpeechSynthesisVoice) -> String {
@@ -21,10 +21,10 @@ enum Speech {
         return (es + rest).map { Voice(id: $0.identifier, name: $0.name, language: $0.language, quality: q($0)) }
     }
 
-    /// Voz por defecto: la mejor en español que haya.
+    /// Default voice: the best Spanish one available.
     static func defaultVoice() -> Voice? {
         let v = voices()
-        // Primero la mejor calidad; a igual calidad, español de América (es-MX) antes que es-ES
+        // Best quality first; at equal quality, Latin American Spanish (es-MX) before es-ES
         let es = v.filter { $0.language.hasPrefix("es") }
         for q in ["premium", "mejorada", ""] {
             if let m = es.first(where: { $0.quality == q && $0.language == "es-MX" }) ?? es.first(where: { $0.quality == q }) { return m }
@@ -32,7 +32,7 @@ enum Speech {
         return v.first
     }
 
-    /// Genera `text` con `voice` en un .caf (PCM) en `url`. `rate` 0.3…0.7 (0.5 = normal).
+    /// Generates `text` with `voice` into a .caf (PCM) at `url`. `rate` 0.3…0.7 (0.5 = normal).
     static func synthesize(_ text: String, voice: Voice?, rate: Float = 0.5, to url: URL) async throws {
         try? FileManager.default.removeItem(at: url)
         let job = Job()
@@ -42,7 +42,7 @@ enum Speech {
         }
     }
 
-    /// Mantiene vivo el sintetizador hasta que avisa que terminó (el callback de `write` no siempre manda el búfer vacío final).
+    /// Keeps the synthesizer alive until it reports it finished (`write`'s callback doesn't always send the final empty buffer).
     private final class Job: NSObject, AVSpeechSynthesizerDelegate {
         private let synth = AVSpeechSynthesizer()
         private var file: AVAudioFile?
@@ -71,7 +71,7 @@ enum Speech {
                         try self.file?.write(from: pcm)
                     } catch { self.failure = error }
                 }
-                // Por si la voz nunca avisa que terminó: 2 s por cada 10 palabras, mínimo 20 s
+                // In case the voice never reports finishing: 2 s per 10 words, minimum 20 s
                 let words = max(1, text.split(separator: " ").count)
                 DispatchQueue.main.asyncAfter(deadline: .now() + max(20, Double(words) * 0.2 + 5)) { [weak self] in
                     self?.finish(timeout: true)

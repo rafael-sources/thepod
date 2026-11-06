@@ -18,8 +18,8 @@ enum FFmpeg {
     }
 
     static var executableURL: URL? {
-        // La copia que viene dentro de la app (Contents/MacOS/ffmpeg) manda: es la versión con la que se prueba.
-        // Homebrew queda solo como respaldo para compilaciones de desarrollo sin Vendor/ffmpeg.
+        // The copy bundled inside the app (Contents/MacOS/ffmpeg) takes precedence: it's the version tested against.
+        // Homebrew is only a fallback for development builds without Vendor/ffmpeg.
         if let bundled = Bundle.main.url(forAuxiliaryExecutable: "ffmpeg"),
            FileManager.default.isExecutableFile(atPath: bundled.path) {
             return bundled
@@ -36,12 +36,12 @@ enum FFmpeg {
     /// Speech chain identical to postPod web (exporter.py §3.13).
     static let speechChain = "highpass=f=80,afftdn=nr=12,equalizer=f=4000:t=q:w=1:g=3,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11"
 
-    /// Modelo RNNoise que viene con la app (reducción de ruido con red neuronal: perro, teclas, calle).
+    /// RNNoise model bundled with the app (neural-network noise reduction: dog, keys, street).
     static var rnnoiseModel: URL? {
         Bundle.main.url(forResource: "sh", withExtension: "rnnn", subdirectory: "Models")
             ?? Bundle.main.url(forResource: "sh", withExtension: "rnnn")
     }
-    /// Cadena "fuerte": la red neuronal separa la voz del ruido antes del resto del procesado.
+    /// "Strong" chain: the neural network separates the voice from the noise before the rest of the processing.
     static var strongSpeechChain: String? {
         guard let m = rnnoiseModel else { return nil }
         let path = m.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ":", with: "\\:").replacingOccurrences(of: "'", with: "\\'")

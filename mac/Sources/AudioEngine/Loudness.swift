@@ -2,17 +2,17 @@ import AVFoundation
 import MediaToolbox
 import QuartzCore
 
-/// Filtro K (ITU-R BS.1770): estante alto de +4 dB alrededor de 1,7 kHz y paso alto a 38 Hz. Lo que pesa el
-/// oído, para medir sonoridad (LUFS). Coeficientes de la norma para 48 kHz; para otra frecuencia se
-/// recalculan con las fórmulas del Anexo.
+/// K filter (ITU-R BS.1770): +4 dB high shelf around 1.7 kHz and high-pass at 38 Hz. What the
+/// ear weighs, to measure loudness (LUFS). Standard coefficients for 48 kHz; for another rate they're
+/// recomputed with the Annex formulas.
 struct KWeight {
-    private var b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0   // estante
-    private var c0 = 1.0, c1 = 0.0, c2 = 0.0, d1 = 0.0, d2 = 0.0   // paso alto
+    private var b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0   // shelf
+    private var c0 = 1.0, c1 = 0.0, c2 = 0.0, d1 = 0.0, d2 = 0.0   // high-pass
     private var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0
     private var u1 = 0.0, u2 = 0.0, w1 = 0.0, w2 = 0.0
 
     init(sampleRate fs: Double) {
-        // Estante alto (pre-filtro)
+        // High shelf (pre-filter)
         do {
             let f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196
             let K = tan(Double.pi * f0 / fs), Vh = pow(10, G / 20), Vb = pow(Vh, 0.4996667741545416)
@@ -23,7 +23,7 @@ struct KWeight {
             a1 = 2 * (K * K - 1) / a0
             a2 = (1 - K / Q + K * K) / a0
         }
-        // Paso alto (RLB)
+        // High-pass (RLB)
         do {
             let f0 = 38.13547087602444, Q = 0.5003270373238773
             let K = tan(Double.pi * f0 / fs)
@@ -34,7 +34,7 @@ struct KWeight {
         }
     }
 
-    /// Potencia media (cuadrado) del bloque ya filtrado.
+    /// Mean power (square) of the already filtered block.
     mutating func meanSquare(_ x: UnsafePointer<Float>, _ n: Int) -> Double {
         var sum = 0.0
         for i in 0..<n {
@@ -49,17 +49,17 @@ struct KWeight {
     }
 }
 
-/// Lo que mide una fuente de la mezcla: potencia K de los últimos 400 ms y en qué segundo del video va.
+/// What a mix source measures: K power of the last 400 ms and at which video second it is.
 protocol LoudnessSource: AnyObject {
-    /// (potencia K media de los últimos 400 ms, segundo del video del último bloque, cuándo se midió)
+    /// (mean K power of the last 400 ms, video second of the last block, when it was measured)
     func recentPower() -> (power: Double, mediaTime: Double, stamp: CFTimeInterval)?
 }
 
-/// Acumula bloques por canal para una fuente; lo usan el tap de voz y el tap de solo medir.
+/// Accumulates blocks per channel for a source; used by the voice tap and the measure-only tap.
 final class LoudnessAccumulator: @unchecked Sendable {
     private var lock = os_unfair_lock()
     private var filters: [KWeight] = []
-    private var ring: [(power: Double, frames: Int)] = []   // bloques recientes
+    private var ring: [(power: Double, frames: Int)] = []   // recent blocks
     private var ringFrames = 0
     private var sampleRate = 48_000.0
     private var mediaTime = 0.0
@@ -97,7 +97,7 @@ final class LoudnessAccumulator: @unchecked Sendable {
     }
 }
 
-/// Tap que solo mide (música, efectos, cortinas): no toca el audio.
+/// Measure-only tap (music, effects, stingers): doesn't touch the audio.
 final class MeterTap: @unchecked Sendable, LoudnessSource {
     let acc = LoudnessAccumulator()
     func recentPower() -> (power: Double, mediaTime: Double, stamp: CFTimeInterval)? { acc.recent() }
@@ -126,16 +126,16 @@ final class MeterTap: @unchecked Sendable, LoudnessSource {
     }
 }
 
-/// La sonoridad de la mezcla en la vista previa: suma las potencias K de cada pista (cada una con el
-/// volumen que la mezcla le da en ese segundo) y la convierte a LUFS. Es una estimación —las pistas
-/// se suman como señales independientes, que para voces y música es lo normal—; la medida exacta
-/// (EBU R128 sobre el archivo) se hace al exportar.
+/// The mix loudness in the preview: sums the K powers of each track (each with the
+/// volume the mix gives it at that second) and converts it to LUFS. It's an estimate —tracks
+/// are summed as independent signals, which is normal for voices and music—; the exact measurement
+/// (EBU R128 on the file) is done on export.
 final class MixLoudness: @unchecked Sendable {
     struct Source { let tap: LoudnessSource; let gain: (Double) -> Double }
     private var lock = os_unfair_lock()
     private var sources: [Source] = []
-    // Integrado con compuerta (desde que se empezó a reproducir / último reinicio)
-    private var blocks: [Double] = []          // potencias de bloques de 400 ms cada 100 ms
+    // Gated integrated (since playback started / last reset)
+    private var blocks: [Double] = []          // powers of 400 ms blocks every 100 ms
     private var lastBlockStamp: CFTimeInterval = 0
     private var lastMediaTime: Double = -1
 
@@ -145,7 +145,7 @@ final class MixLoudness: @unchecked Sendable {
 
     func reset() { os_unfair_lock_lock(&lock); blocks = []; lastMediaTime = -1; os_unfair_lock_unlock(&lock) }
 
-    /// Potencia K total ahora (solo fuentes que han sonado en los últimos 0,5 s).
+    /// Total K power now (only sources that sounded in the last 0.5 s).
     private func totalPower(now: CFTimeInterval) -> (power: Double, mediaTime: Double)? {
         var total = 0.0, any = false, mt = 0.0
         for s in sources {
@@ -159,17 +159,17 @@ final class MixLoudness: @unchecked Sendable {
 
     static func lufs(_ power: Double) -> Double { power > 0 ? -0.691 + 10 * log10(power) : -120 }
 
-    /// (momentánea, integrada) en LUFS; nil si no está sonando nada.
+    /// (momentary, integrated) in LUFS; nil if nothing is playing.
     func read() -> (momentary: Double, integrated: Double?)? {
         os_unfair_lock_lock(&lock); defer { os_unfair_lock_unlock(&lock) }
         let now = CACurrentMediaTime()
         guard let (p, mt) = totalPower(now: now) else { return nil }
-        // Un salto hacia atrás o grande en el tiempo del video = seek: se empieza de nuevo
+        // A backward or large jump in video time = seek: start over
         if lastMediaTime >= 0, (mt < lastMediaTime - 0.5 || mt > lastMediaTime + 2) { blocks = [] }
         lastMediaTime = mt
         if now - lastBlockStamp >= 0.1 { blocks.append(p); lastBlockStamp = now }
         let m = Self.lufs(p)
-        // Integrado: compuerta absoluta −70 LUFS y relativa −10 LU (BS.1770-4)
+        // Integrated: absolute gate −70 LUFS and relative −10 LU (BS.1770-4)
         let abs = blocks.filter { Self.lufs($0) > -70 }
         var integrated: Double?
         if abs.count >= 3 {
@@ -182,9 +182,9 @@ final class MixLoudness: @unchecked Sendable {
     }
 }
 
-/// Presets de cadena de voz. Viven en el podcast (prePod, `voice_presets`) para que viajen a cualquier Mac;
-/// aquí se guarda una copia por podcast para trabajar sin conexión, y los que no son de ningún podcast
-/// («míos») solo en esta Mac.
+/// Voice chain presets. They live in the podcast (prePod, `voice_presets`) so they travel to any Mac;
+/// a copy per podcast is kept here to work offline, and those that belong to no podcast
+/// («míos») only on this Mac.
 enum ChainPresets {
     struct Item: Codable, Identifiable, Equatable {
         var id = UUID()
@@ -204,14 +204,14 @@ enum ChainPresets {
         }
     }
     static func add(name: String, chain: ChainSettings, podcast slug: String? = nil) {
-        var c = chain; c.automation = [:]            // el preset es la cadena, no su automatización
+        var c = chain; c.automation = [:]            // the preset is the chain, not its automation
         var items = all(podcast: slug).filter { $0.name != name }
         items.append(Item(name: name, chain: c))
         save(items, podcast: slug)
     }
     static func remove(_ id: UUID, podcast slug: String? = nil) { save(all(podcast: slug).filter { $0.id != id }, podcast: slug) }
 
-    /// Trae los del podcast desde prePod y actualiza la copia local (si prePod no responde, queda la copia).
+    /// Fetches the podcast's presets from prePod and updates the local copy (if prePod doesn't respond, the copy stays).
     static func refresh(podcast slug: String) async {
         guard PrePodClient.isConfigured, let items = try? await PrePodClient.shared.voicePresets(slug) else { return }
         if let d = try? JSONEncoder().encode(items) { UserDefaults.standard.set(d, forKey: key(slug)) }

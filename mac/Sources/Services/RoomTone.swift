@@ -1,16 +1,16 @@
 import AVFoundation
 
-/// Tono de sala: el ambiente propio de cada persona (aire, ventilador, la sala) para rellenar los huecos donde su
-/// pista no tiene nada —antes de que empiece su grabación, después de que termine, bajo un pitido— y que el
-/// corte no suene «muerto». Se toma del segundo más quieto de su grabación que no sea silencio digital.
+/// Room tone: each person's own ambience (air, fan, the room) to fill the gaps where their
+/// track has nothing —before their recording starts, after it ends, under a beep— so the
+/// cut doesn't sound «dead». Taken from the quietest second of their recording that isn't digital silence.
 enum RoomTone {
-    /// Cuánto puede durar la muestra y qué tan quieta debe ser para fiarse de ella.
-    static let window = 1.0                       // s de ambiente que se toman
-    static let minDB: Float = -78                 // por debajo es silencio digital (no hay ambiente que copiar)
-    static let maxDB: Float = -38                 // por encima no es ambiente: hay voz o ruido fuerte
-    static let loopSeconds = 4.0                  // largo del bucle que se escribe en caché
+    /// How long the sample can be and how quiet it must be to trust it.
+    static let window = 1.0                       // s of ambience taken
+    static let minDB: Float = -78                 // below this is digital silence (no ambience to copy)
+    static let maxDB: Float = -38                 // above this it isn't ambience: there's voice or loud noise
+    static let loopSeconds = 4.0                  // length of the loop written to cache
 
-    /// El segundo más quieto y estable de la persona, en tiempo del episodio. Nil si no hay ambiente usable.
+    /// The person's quietest, most stable second, in episode time. Nil if there's no usable ambience.
     static func quietestWindow(energy: [Float], hop: Double = EnergyMap.hop) -> (start: Double, db: Float)? {
         let n = Int(window / hop)
         guard energy.count >= n, n > 0 else { return nil }
@@ -18,7 +18,7 @@ enum RoomTone {
         for i in 0...(energy.count - n) {
             let slice = energy[i..<(i + n)]
             let mx = slice.max() ?? -120, mn = slice.min() ?? -120
-            // estable: menos de 6 dB entre el punto más alto y el más bajo del segundo
+            // stable: less than 6 dB between the highest and lowest point of the second
             guard mn > minDB, mx < maxDB, mx - mn < 6 else { continue }
             let mean = slice.reduce(0, +) / Float(n)
             if best == nil || mean < best!.1 { best = (i, mean) }
@@ -26,13 +26,13 @@ enum RoomTone {
         return best.map { (Double($0.0) * hop, $0.1) }
     }
 
-    /// Escribe (o devuelve de caché) el bucle de ambiente de una persona: `loopSeconds` de su segundo más quieto,
-    /// repetido con cruces de 50 ms para que no se note la costura.
+    /// Writes (or returns from cache) a person's ambience loop: `loopSeconds` of their quietest second,
+    /// repeated with 50 ms crossfades so the seam isn't noticeable.
     static func loop(project: Project, lane: Lane, energy: EnergyMap) -> URL? {
         guard let arr = energy.lanes[lane.id], let q = quietestWindow(energy: arr) else { return nil }
         let url = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("tono-sala-\(lane.id)-\(Int(q.start * 10)).caf")
         if FileManager.default.fileExists(atPath: url.path) { return url }
-        // Del tiempo del episodio al archivo fuente de esa persona
+        // From episode time to that person's source file
         guard let placed = lane.placed.first(where: { q.start >= $0.tlStart && q.start + window <= $0.tlEnd }),
               let media = project.mediaItem(placed.clip.mediaId) else { return nil }
         let srcT = placed.clip.srcIn + (q.start - placed.tlStart)
@@ -48,7 +48,7 @@ enum RoomTone {
         return writeLoop(from: buf, to: url)
     }
 
-    /// Repite la muestra hasta `loopSeconds` cruzando 50 ms entre copias (igual potencia).
+    /// Repeats the sample up to `loopSeconds` crossfading 50 ms between copies (equal power).
     static func writeLoop(from buf: AVAudioPCMBuffer, to url: URL) -> URL? {
         let fmt = buf.format
         let sr = fmt.sampleRate
@@ -68,7 +68,7 @@ enum RoomTone {
                 guard j < total else { break }
                 for c in 0..<ch {
                     var v = data[c][i]
-                    if copy > 0, i < x {                       // cruce con la copia anterior
+                    if copy > 0, i < x {                       // crossfade with the previous copy
                         let f = Float(i) / Float(x)
                         v = v * sin(f * .pi / 2) + o[c][j] * cos(f * .pi / 2)
                     }
@@ -83,7 +83,7 @@ enum RoomTone {
         return url
     }
 
-    /// Huella de ruido de una persona (para la reducción por huella): el espectro del segundo más quieto.
+    /// A person's noise print (for print-based reduction): the spectrum of the quietest second.
     static func noiseProfile(project: Project, lane: Lane, energy: EnergyMap) -> (profile: [Float], at: Double)? {
         guard let arr = energy.lanes[lane.id], let q = quietestWindow(energy: arr),
               let placed = lane.placed.first(where: { q.start >= $0.tlStart && q.start + window <= $0.tlEnd }),
@@ -95,8 +95,8 @@ enum RoomTone {
         return (p, q.start)
     }
 
-    /// Dónde una persona no tiene nada que suene (tiempo del video final): antes de su primer tramo, después del
-    /// último y bajo cada pitido. Los huecos de menos de 150 ms no valen la pena.
+    /// Where a person has nothing sounding (final video time): before their first span, after the
+    /// last and under each beep. Gaps under 150 ms aren't worth it.
     static func deadSpans(laneSpan: (start: Double, end: Double)?, content: (start: Double, end: Double),
                          bleeps: [(start: Double, end: Double)]) -> [(start: Double, end: Double)] {
         var out: [(Double, Double)] = []
@@ -110,7 +110,7 @@ enum RoomTone {
         return out.sorted { $0.0 < $1.0 }
     }
 
-    /// Factor de volumen que suaviza una unión de corte: baja a cero en `w` segundos antes y sube en `w` después.
+    /// Volume factor that smooths a cut join: drops to zero over `w` seconds before and rises over `w` after.
     static func joinDip(_ t: Double, joins: [Double], w: Double = 0.006) -> Double {
         var f = 1.0
         for j in joins { let d = abs(t - j); if d < w { f = min(f, d / w) } }

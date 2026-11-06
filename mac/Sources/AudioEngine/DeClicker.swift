@@ -1,25 +1,25 @@
 import AVFoundation
 
-/// Quitar clics y chasquidos de boca (sin IA): un clic es un salto brusco de muy corta duración (menos de 2,5 ms).
-/// Se vigila la segunda diferencia de la señal frente a su nivel típico reciente; cuando se dispara, ese trocito
-/// se sustituye por una línea entre la muestra anterior y la siguiente sanas. La voz no se toca.
+/// Remove clicks and mouth smacks (no AI): a click is an abrupt jump of very short duration (under 2.5 ms).
+/// The signal's second difference is watched against its recent typical level; when it spikes, that bit
+/// is replaced by a line between the previous and next healthy samples. The voice isn't touched.
 ///
-/// Trabaja con un adelanto de 256 muestras (5 ms a 48 kHz) para ver el final del clic antes de decidir.
+/// Works with a 256-sample lookahead (5 ms at 48 kHz) to see the end of the click before deciding.
 final class DeClicker {
     static let lookahead = 256
-    static let maxClick = 120            // muestras: 2,5 ms a 48 kHz
-    /// Sensibilidad 0…1: cuántas veces por encima del nivel típico tiene que ir el salto (de 14× a 6×).
+    static let maxClick = 120            // samples: 2.5 ms at 48 kHz
+    /// Sensitivity 0…1: how many times above the typical level the jump must go (from 14× to 6×).
     var amount: Float = 0.5
     private var threshold: Float { 14 - 8 * amount }
 
     private final class Channel {
         var ring = [Float](repeating: 0, count: lookahead + maxClick + 8)
-        var w = 0                         // escritura
+        var w = 0                         // write
         var filled = 0
-        var ema: Float = 1e-4             // nivel típico de |d2|
+        var ema: Float = 1e-4             // typical level of |d2|
         var prev1: Float = 0, prev2: Float = 0
-        var inClick = -1                  // posición (en muestras absolutas) donde empezó el clic, o −1
-        var count = 0                     // muestras totales entradas
+        var inClick = -1                  // position (in absolute samples) where the click started, or −1
+        var count = 0                     // total samples in
     }
     private var channels: [Channel] = []
     private(set) var clicks = 0
@@ -27,7 +27,7 @@ final class DeClicker {
     func prepare(channels n: Int) { channels = (0..<max(1, n)).map { _ in Channel() }; clicks = 0 }
     var latency: Int { Self.lookahead }
 
-    /// Procesa en sitio (salida retardada `latency` muestras).
+    /// Processes in place (output delayed `latency` samples).
     func process(_ list: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         let thr = threshold
         var ci = 0
@@ -39,10 +39,10 @@ final class DeClicker {
             let size = c.ring.count
             for i in 0..<cnt {
                 let x = p[i]
-                // detección sobre la muestra que entra
+                // detection on the incoming sample
                 let d2 = abs(x - 2 * c.prev1 + c.prev2)
-                // Los primeros 50 ms solo aprenden el nivel típico; después, un clic es lo que lo supera muchas veces.
-                // Durante un pico se aprende despacio (un cambio sostenido no es un clic y hay que absorberlo).
+                // The first 50 ms only learn the typical level; after that, a click is what exceeds it many times over.
+                // During a peak learning is slow (a sustained change isn't a click and must be absorbed).
                 let warm = c.count < 2400
                 let isSpike = !warm && d2 > thr * c.ema && d2 > 1e-3
                 c.ema += (warm ? 0.01 : isSpike ? 0.0003 : 0.002) * (d2 - c.ema)
@@ -51,8 +51,8 @@ final class DeClicker {
                 if isSpike {
                     if c.inClick < 0 { c.inClick = c.count }
                 } else if c.inClick >= 0 {
-                    // terminó el clic: de inClick−2 hasta la muestra actual (sana), si es corto, se interpola en el anillo
-                    let start = max(0, c.inClick - 2), end = c.count          // [start, end) se sustituye
+                    // click ended: from inClick−2 to the current (healthy) sample, if short, it's interpolated in the ring
+                    let start = max(0, c.inClick - 2), end = c.count          // [start, end) is replaced
                     if end - start <= Self.maxClick, start >= 1, end - start < Self.lookahead - 2 {
                         let a = Self.idx(c.w, c.count, start - 1, size), b = Self.idx(c.w, c.count, end, size)
                         let va = c.ring[a], vb = c.ring[b]
@@ -65,9 +65,9 @@ final class DeClicker {
                     }
                     c.inClick = -1
                 } else if c.inClick >= 0, c.count - c.inClick > Self.maxClick {
-                    c.inClick = -1                                        // demasiado largo: no era un clic
+                    c.inClick = -1                                        // too long: it wasn't a click
                 }
-                // salida: la muestra de hace `lookahead`
+                // output: the sample from `lookahead` ago
                 let outIdx = (c.w - Self.lookahead + size) % size
                 p[i] = c.filled >= Self.lookahead ? c.ring[outIdx] : 0
                 c.w = (c.w + 1) % size
@@ -78,7 +78,7 @@ final class DeClicker {
         }
     }
 
-    /// Índice en el anillo de la muestra absoluta `abs` (la última escrita es `count` en la posición `w`).
+    /// Ring index of absolute sample `abs` (the last written is `count` at position `w`).
     private static func idx(_ w: Int, _ count: Int, _ abs: Int, _ size: Int) -> Int {
         let back = count - abs
         return ((w - back) % size + size) % size
