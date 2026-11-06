@@ -424,11 +424,6 @@ Sponsored by:
         <target>%lld %%</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="%lld %@" xml:space="preserve">
-        <source>%lld %@</source>
-        <target>%lld %@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="%lld %@ en este reel" xml:space="preserve">
         <source>%lld %@ en este reel</source>
         <target>%lld %@ in this reel</target>
@@ -821,11 +816,16 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="AHORA" xml:space="preserve">
         <source>AHORA</source>
+        <target>NOW</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="AL AIRE" xml:space="preserve">
         <source>AL AIRE</source>
         <target>ON AIR</target>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="ARMAR" xml:space="preserve">
+        <source>ARMAR</source>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="ATENTO %@" xml:space="preserve">
@@ -910,6 +910,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Acento" xml:space="preserve">
         <source>Acento</source>
+        <target>Accent</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Aceptada" xml:space="preserve">
@@ -919,6 +920,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Aceptar" xml:space="preserve">
         <source>Aceptar</source>
+        <target>Accept</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Acercamiento al hablar" xml:space="preserve">
@@ -973,6 +975,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Agendado" xml:space="preserve">
         <source>Agendado</source>
+        <target>Scheduled</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Agrega a los conductores e invitados abajo. Con su correo puedes invitarlos y mandarles la preparación." xml:space="preserve">
@@ -1067,6 +1070,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Agudos" xml:space="preserve">
         <source>Agudos</source>
+        <target>Treble</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Ahora" xml:space="preserve">
@@ -1171,6 +1175,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Alguien" xml:space="preserve">
         <source>Alguien</source>
+        <target>Someone</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Alta · 720p" xml:space="preserve">
@@ -1180,6 +1185,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Alto" xml:space="preserve">
         <source>Alto</source>
+        <target>Height</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Analizando el sonido" xml:space="preserve">
@@ -1199,6 +1205,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Ancho" xml:space="preserve">
         <source>Ancho</source>
+        <target>Width</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Antes de entrar" xml:space="preserve">
@@ -1303,6 +1310,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Archivado" xml:space="preserve">
         <source>Archivado</source>
+        <target>Archived</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Archivo" xml:space="preserve">
@@ -1382,6 +1390,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Aspecto" xml:space="preserve">
         <source>Aspecto</source>
+        <target>Look</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Aspecto: %@%@%@%@%@" xml:space="preserve">
@@ -1401,10 +1410,12 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Ataque" xml:space="preserve">
         <source>Ataque</source>
+        <target>Attack</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Atrasado" xml:space="preserve">
         <source>Atrasado</source>
+        <target>Overdue</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Audio" xml:space="preserve">
@@ -1422,11 +1433,6 @@ Sponsored by:
         <target>Audio: console and voice chain</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Auto-silencio" xml:space="preserve">
-        <source>Auto-silencio</source>
-        <target>Auto-mute</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Automatización" xml:space="preserve">
         <source>Automatización</source>
         <target>Automation</target>
@@ -1434,6 +1440,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Automático" xml:space="preserve">
         <source>Automático</source>
+        <target>Automatic</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Aviso enviado: %@" xml:space="preserve">
@@ -1453,6 +1460,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Avisos" xml:space="preserve">
         <source>Avisos</source>
+        <target>Notices</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Avisos rápidos" xml:space="preserve">
@@ -1532,6 +1540,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Barrido" xml:space="preserve">
         <source>Barrido</source>
+        <target>Wipe</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Biblioteca de sonidos" xml:space="preserve">
@@ -1689,20 +1698,9 @@ Sponsored by:
         <target>WRAP UP</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="CFBundleShortVersionString" xml:space="preserve">
-        <source>CFBundleShortVersionString</source>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="CFBundleVersion" xml:space="preserve">
-        <source>CFBundleVersion</source>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="COMENTARIO" xml:space="preserve">
         <source>COMENTARIO</source>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="CUSTOM" xml:space="preserve">
-        <source>CUSTOM</source>
+        <target>COMMENT</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cada capa aparece unos segundos y se va sola. Al tocarla se edita debajo del video: texto, estilo, color, posición, tamaño y cuánto dura." xml:space="preserve">
@@ -1732,10 +1730,12 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Caer" xml:space="preserve">
         <source>Caer</source>
+        <target>Drop</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Caja" xml:space="preserve">
         <source>Caja</source>
+        <target>Box</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Caja negra" xml:space="preserve">
@@ -1820,6 +1820,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Campana" xml:space="preserve">
         <source>Campana</source>
+        <target>Bell</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Canal: %@" xml:space="preserve">
@@ -1829,6 +1830,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cancelado" xml:space="preserve">
         <source>Cancelado</source>
+        <target>Cancelled</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cancelar" xml:space="preserve">
@@ -1843,6 +1845,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cantidad" xml:space="preserve">
         <source>Cantidad</source>
+        <target>Amount</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Capítulos&#10;" xml:space="preserve">
@@ -1859,6 +1862,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Capturando" xml:space="preserve">
         <source>Capturando</source>
+        <target>Capturing</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Capturar aquí · %@" xml:space="preserve">
@@ -1898,6 +1902,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cálido" xml:space="preserve">
         <source>Cálido</source>
+        <target>Warm</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cálido Studio" xml:space="preserve">
@@ -1937,6 +1942,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cámaras" xml:space="preserve">
         <source>Cámaras</source>
+        <target>Cameras</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Centro" xml:space="preserve">
@@ -2026,6 +2032,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cierre" xml:space="preserve">
         <source>Cierre</source>
+        <target>Outro</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cinco segundos atrás / adelante" xml:space="preserve">
@@ -2035,6 +2042,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cine" xml:space="preserve">
         <source>Cine</source>
+        <target>Cinema</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cintillo del reel · " xml:space="preserve">
@@ -2049,6 +2057,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cintillos" xml:space="preserve">
         <source>Cintillos</source>
+        <target>Lower thirds</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cintillos de este reel" xml:space="preserve">
@@ -2123,6 +2132,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Clip" xml:space="preserve">
         <source>Clip</source>
+        <target>Clip</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Co-conductor" xml:space="preserve">
@@ -2132,6 +2142,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cola" xml:space="preserve">
         <source>Cola</source>
+        <target>Queue</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cola de exportación" xml:space="preserve">
@@ -2171,6 +2182,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Compartir" xml:space="preserve">
         <source>Compartir</source>
+        <target>Share</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Compartir pantalla" xml:space="preserve">
@@ -2190,10 +2202,12 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Compensación" xml:space="preserve">
         <source>Compensación</source>
+        <target>Makeup</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Compresor" xml:space="preserve">
         <source>Compresor</source>
+        <target>Compressor</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Compresor suave: lo que dice bajito sube y lo que grita no pega" xml:space="preserve">
@@ -2413,10 +2427,12 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Contraste" xml:space="preserve">
         <source>Contraste</source>
+        <target>Contrast</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Convirtiendo" xml:space="preserve">
         <source>Convirtiendo</source>
+        <target>Converting</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Copia del podcast" xml:space="preserve">
@@ -2426,6 +2442,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Copiando" xml:space="preserve">
         <source>Copiando</source>
+        <target>Copying</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Copiar" xml:space="preserve">
@@ -2535,6 +2552,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cómic" xml:space="preserve">
         <source>Cómic</source>
+        <target>Comic</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo." xml:space="preserve">
@@ -2584,6 +2602,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Crecer" xml:space="preserve">
         <source>Crecer</source>
+        <target>Grow</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cruzado con el siguiente: %.1f s" xml:space="preserve">
@@ -2608,6 +2627,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Cuadrícula" xml:space="preserve">
         <source>Cuadrícula</source>
+        <target>Grid</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Cualquiera del equipo puede proponer. Las más votadas suben arriba." xml:space="preserve">
@@ -2682,6 +2702,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="DATO" xml:space="preserve">
         <source>DATO</source>
+        <target>FACT</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="DIRECTOR" xml:space="preserve">
@@ -2876,10 +2897,12 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Deshecho" xml:space="preserve">
         <source>Deshecho</source>
+        <target>Undone</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Deslizar" xml:space="preserve">
         <source>Deslizar</source>
+        <target>Slide</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Después lo empiezas cuando quieras y compartes el link." xml:space="preserve">
@@ -2924,6 +2947,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Difuminado" xml:space="preserve">
         <source>Difuminado</source>
+        <target>Blurred</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Dinámico" xml:space="preserve">
@@ -2948,6 +2972,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Director" xml:space="preserve">
         <source>Director</source>
+        <target>Director</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Director: %@" xml:space="preserve">
@@ -2967,6 +2992,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Discreto" xml:space="preserve">
         <source>Discreto</source>
+        <target>Discreet</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Diseño" xml:space="preserve">
@@ -3011,6 +3037,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Documental" xml:space="preserve">
         <source>Documental</source>
+        <target>Documentary</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Donde está el video ahora" xml:space="preserve">
@@ -3040,6 +3067,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Dueño" xml:space="preserve">
         <source>Dueño</source>
+        <target>Owner</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Duplicar donde está el video" xml:space="preserve">
@@ -3094,6 +3122,11 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="ENSAYO" xml:space="preserve">
         <source>ENSAYO</source>
+        <target>REHEARSAL</target>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="ENTREGAR" xml:space="preserve">
+        <source>ENTREGAR</source>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="EP %lld" xml:space="preserve">
@@ -3143,6 +3176,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Efecto" xml:space="preserve">
         <source>Efecto</source>
+        <target>Effect</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Efectos" xml:space="preserve">
@@ -3512,6 +3546,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Elipse" xml:space="preserve">
         <source>Elipse</source>
+        <target>Ellipse</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Empezar desde una plantilla" xml:space="preserve">
@@ -3706,6 +3741,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Entrada" xml:space="preserve">
         <source>Entrada</source>
+        <target>Entrance</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Entrando a la sala…" xml:space="preserve">
@@ -3750,6 +3786,7 @@ Sponsored by:
       </trans-unit>
       <trans-unit id="Entrevista" xml:space="preserve">
         <source>Entrevista</source>
+        <target>Interview</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Entró %@" xml:space="preserve">
@@ -3882,6 +3919,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Error" xml:space="preserve">
         <source>Error</source>
+        <target>Error</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Error opening input" xml:space="preserve">
@@ -4266,6 +4304,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Estudio" xml:space="preserve">
         <source>Estudio</source>
+        <target>Studio</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Etiqueta" xml:space="preserve">
@@ -4300,6 +4339,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Exportando" xml:space="preserve">
         <source>Exportando</source>
+        <target>Exporting</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Exportando %@" xml:space="preserve">
@@ -4339,6 +4379,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Exportar" xml:space="preserve">
         <source>Exportar</source>
+        <target>Export</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Exportar " xml:space="preserve">
@@ -4388,6 +4429,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Exposición" xml:space="preserve">
         <source>Exposición</source>
+        <target>Exposure</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="F" xml:space="preserve">
@@ -4522,6 +4564,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Frío" xml:space="preserve">
         <source>Frío</source>
+        <target>Cold</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Frío noche" xml:space="preserve">
@@ -4551,6 +4594,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="GRABANDO" xml:space="preserve">
         <source>GRABANDO</source>
+        <target>RECORDING</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Gan" xml:space="preserve">
@@ -4570,6 +4614,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Giro" xml:space="preserve">
         <source>Giro</source>
+        <target>Rotation</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Grabación" xml:space="preserve">
@@ -4654,10 +4699,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Gratis" xml:space="preserve">
         <source>Gratis</source>
+        <target>Free</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Graves" xml:space="preserve">
         <source>Graves</source>
+        <target>Bass</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Groserías" xml:space="preserve">
@@ -4787,6 +4834,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Guion" xml:space="preserve">
         <source>Guion</source>
+        <target>Script</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Guion base" xml:space="preserve">
@@ -4881,6 +4929,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Host" xml:space="preserve">
         <source>Host</source>
+        <target>Host</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Hoy" xml:space="preserve">
@@ -4895,10 +4944,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Idea" xml:space="preserve">
         <source>Idea</source>
+        <target>Idea</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Ideas" xml:space="preserve">
         <source>Ideas</source>
+        <target>Ideas</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Idioma" xml:space="preserve">
@@ -4983,6 +5034,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Inicio" xml:space="preserve">
         <source>Inicio</source>
+        <target>Start</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Inicio marcado en %@ · pulsa O al final" xml:space="preserve">
@@ -5002,10 +5054,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Intensidad" xml:space="preserve">
         <source>Intensidad</source>
+        <target>Intensity</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Intro" xml:space="preserve">
         <source>Intro</source>
+        <target>Intro</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Intro y cierre" xml:space="preserve">
@@ -5330,6 +5384,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Lenta" xml:space="preserve">
         <source>Lenta</source>
+        <target>Slow</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Levantar la mano" xml:space="preserve">
@@ -5379,6 +5434,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Lineal" xml:space="preserve">
         <source>Lineal</source>
+        <target>Linear</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Link" xml:space="preserve">
@@ -5808,6 +5864,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Medios" xml:space="preserve">
         <source>Medios</source>
+        <target>Mids</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Medir de nuevo" xml:space="preserve">
@@ -5857,6 +5914,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Midiendo" xml:space="preserve">
         <source>Midiendo</source>
+        <target>Measuring</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Midiendo tu conexión…" xml:space="preserve">
@@ -5921,6 +5979,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Momento" xml:space="preserve">
         <source>Momento</source>
+        <target>Moment</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Momento %lld" xml:space="preserve">
@@ -6013,6 +6072,10 @@ Transcript:
         <target>Move it; with snap to beat, it snaps to the beats</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
+      <trans-unit id="Movies" xml:space="preserve">
+        <source>Movies</source>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
       <trans-unit id="Mudo" xml:space="preserve">
         <source>Mudo</source>
         <target>Mute</target>
@@ -6060,6 +6123,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Música" xml:space="preserve">
         <source>Música</source>
+        <target>Music</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Música de este reel" xml:space="preserve">
@@ -6589,6 +6653,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Opacidad" xml:space="preserve">
         <source>Opacidad</source>
+        <target>Opacity</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Orden en pantalla" xml:space="preserve">
@@ -6638,6 +6703,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="PATROCINA" xml:space="preserve">
         <source>PATROCINA</source>
+        <target>SPONSORED BY</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="PATROCINA&#10;" xml:space="preserve">
@@ -6649,6 +6715,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="PAUSA" xml:space="preserve">
         <source>PAUSA</source>
+        <target>PAUSE</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="PREPARADO" xml:space="preserve">
@@ -6658,6 +6725,11 @@ Transcript:
       </trans-unit>
       <trans-unit id="PREPARADOS" xml:space="preserve">
         <source>PREPARADOS</source>
+        <target>READY</target>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="PREPARAR" xml:space="preserve">
+        <source>PREPARAR</source>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="PUBLICACIONES" xml:space="preserve">
@@ -6692,6 +6764,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Para" xml:space="preserve">
         <source>Para</source>
+        <target>For</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Para Spotify, Apple Podcasts…" xml:space="preserve">
@@ -6801,6 +6874,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Personas" xml:space="preserve">
         <source>Personas</source>
+        <target>People</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Personas en la grabación" xml:space="preserve">
@@ -6825,6 +6899,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Piel" xml:space="preserve">
         <source>Piel</source>
+        <target>Skin</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Pista %lld" xml:space="preserve">
@@ -6884,10 +6959,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Planificado" xml:space="preserve">
         <source>Planificado</source>
+        <target>Planned</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Planificando" xml:space="preserve">
         <source>Planificando</source>
+        <target>Planning</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Plano" xml:space="preserve">
@@ -7022,6 +7099,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Portada" xml:space="preserve">
         <source>Portada</source>
+        <target>Cover</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Portada elegida" xml:space="preserve">
@@ -7166,6 +7244,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Principal" xml:space="preserve">
         <source>Principal</source>
+        <target>Main</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Privacidad" xml:space="preserve">
@@ -7190,6 +7269,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Programado" xml:space="preserve">
         <source>Programado</source>
+        <target>Scheduled</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Programando…" xml:space="preserve">
@@ -7209,6 +7289,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Prompter" xml:space="preserve">
         <source>Prompter</source>
+        <target>Prompter</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Propio" xml:space="preserve">
@@ -7228,6 +7309,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Protagonista" xml:space="preserve">
         <source>Protagonista</source>
+        <target>Lead</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Proxys" xml:space="preserve">
@@ -7262,10 +7344,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Publicación" xml:space="preserve">
         <source>Publicación</source>
+        <target>Post</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Publicado" xml:space="preserve">
         <source>Publicado</source>
+        <target>Published</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Publicado: %@" xml:space="preserve">
@@ -7340,6 +7424,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Puerta" xml:space="preserve">
         <source>Puerta</source>
+        <target>Gate</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Puerta · umbral" xml:space="preserve">
@@ -7644,6 +7729,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Rápida" xml:space="preserve">
         <source>Rápida</source>
+        <target>Fast</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Rápido (ocupa menos y termina antes)" xml:space="preserve">
@@ -7658,6 +7744,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Rechazar" xml:space="preserve">
         <source>Rechazar</source>
+        <target>Reject</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Recorre el episodio y propone los segundos donde todas las personas salen sonriendo, con los ojos abiertos y la imagen nítida. Tarda alrededor de un minuto por cada media hora de episodio." xml:space="preserve">
@@ -7667,6 +7754,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Rectángulo" xml:space="preserve">
         <source>Rectángulo</source>
+        <target>Rectangle</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Redes" xml:space="preserve">
@@ -7681,6 +7769,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Reel" xml:space="preserve">
         <source>Reel</source>
+        <target>Reel</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Reel %@ → %@ · lo ves en Reels" xml:space="preserve">
@@ -7700,6 +7789,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Reels" xml:space="preserve">
         <source>Reels</source>
+        <target>Reels</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Reels creados" xml:space="preserve">
@@ -7724,6 +7814,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Rehecho" xml:space="preserve">
         <source>Rehecho</source>
+        <target>Redone</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Reiniciar ahora" xml:space="preserve">
@@ -7743,10 +7834,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Relación" xml:space="preserve">
         <source>Relación</source>
+        <target>Ratio</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Reparando" xml:space="preserve">
         <source>Reparando</source>
+        <target>Repairing</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Repetir" xml:space="preserve">
@@ -7856,6 +7949,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="SEGMENTO" xml:space="preserve">
         <source>SEGMENTO</source>
+        <target>SEGMENT</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="SIEMPRE AL FINAL" xml:space="preserve">
@@ -7940,6 +8034,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Salida" xml:space="preserve">
         <source>Salida</source>
+        <target>Exit</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Salió %@" xml:space="preserve">
@@ -7974,6 +8069,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Saturación" xml:space="preserve">
         <source>Saturación</source>
+        <target>Saturation</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Se agrega a las notas de cada episodio." xml:space="preserve">
@@ -8078,10 +8174,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Secundario" xml:space="preserve">
         <source>Secundario</source>
+        <target>Secondary</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Segmento" xml:space="preserve">
         <source>Segmento</source>
+        <target>Segment</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Seguir" xml:space="preserve">
@@ -8161,6 +8259,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Siguiente" xml:space="preserve">
         <source>Siguiente</source>
+        <target>Next</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Siguiente tema" xml:space="preserve">
@@ -8465,6 +8564,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Sonidos" xml:space="preserve">
         <source>Sonidos</source>
+        <target>Sounds</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Sonoridad al exportar" xml:space="preserve">
@@ -8519,6 +8619,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Spotify" xml:space="preserve">
         <source>Spotify</source>
+        <target>Spotify</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Spotify y Apple Podcasts" xml:space="preserve">
@@ -8558,6 +8659,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Studio · Audio" xml:space="preserve">
         <source>Studio · Audio</source>
+        <target>Studio · Audio</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Studio · Video" xml:space="preserve">
@@ -8582,6 +8684,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Suavizado" xml:space="preserve">
         <source>Suavizado</source>
+        <target>Feather</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Sube el episodio (MP3) a postPod y comparte un enlace: quien lo abra escucha, marca un segundo y deja su comentario, sin cuenta. Los comentarios aparecen aquí y en la línea de tiempo." xml:space="preserve">
@@ -8666,6 +8769,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Subtítulo" xml:space="preserve">
         <source>Subtítulo</source>
+        <target>Subtitle</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Subtítulos" xml:space="preserve">
@@ -8765,10 +8869,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Temperatura" xml:space="preserve">
         <source>Temperatura</source>
+        <target>Temperature</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Termina" xml:space="preserve">
         <source>Termina</source>
+        <target>Ends</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Termina en el navegador…" xml:space="preserve">
@@ -8778,10 +8884,12 @@ Transcript:
       </trans-unit>
       <trans-unit id="Terminada" xml:space="preserve">
         <source>Terminada</source>
+        <target>Finished</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Terminado" xml:space="preserve">
         <source>Terminado</source>
+        <target>Finished</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Terminados (%lld)" xml:space="preserve">
@@ -8891,6 +8999,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="TikTok" xml:space="preserve">
         <source>TikTok</source>
+        <target>TikTok</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="TikTok: el reel llega a tu bandeja y lo terminas de publicar desde el teléfono, pegando el texto." xml:space="preserve">
@@ -8940,6 +9049,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Títulos" xml:space="preserve">
         <source>Títulos</source>
+        <target>Titles</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Toca para editar esta pista (volumen, fades, desfase)" xml:space="preserve">
@@ -8979,6 +9089,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Toda" xml:space="preserve">
         <source>Toda</source>
+        <target>All</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Toda la pantalla" xml:space="preserve">
@@ -9093,6 +9204,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Todos" xml:space="preserve">
         <source>Todos</source>
+        <target>All</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Todos a la vez, uno al lado del otro" xml:space="preserve">
@@ -9337,6 +9449,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Umbral" xml:space="preserve">
         <source>Umbral</source>
+        <target>Threshold</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Un .zip con todo el podcast (datos, episodios, guiones, branding y sonidos) para guardarlo o pasarlo a otra cuenta." xml:space="preserve">
@@ -9471,6 +9584,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Vacío" xml:space="preserve">
         <source>Vacío</source>
+        <target>Empty</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Valen cuando no estás escribiendo en un campo de texto." xml:space="preserve">
@@ -9490,6 +9604,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Ventanita" xml:space="preserve">
         <source>Ventanita</source>
+        <target>Picture-in-picture</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Ventanita derecha" xml:space="preserve">
@@ -9624,6 +9739,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Vivo" xml:space="preserve">
         <source>Vivo</source>
+        <target>Live</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Voces parejas por medición" xml:space="preserve">
@@ -9867,6 +9983,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="Zoom" xml:space="preserve">
         <source>Zoom</source>
+        <target>Zoom</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Zoom suave" xml:space="preserve">
@@ -9966,6 +10083,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="audífono" xml:space="preserve">
         <source>audífono</source>
+        <target>headphone</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="buscando la huella…" xml:space="preserve">
@@ -10200,6 +10318,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="mañana" xml:space="preserve">
         <source>mañana</source>
+        <target>tomorrow</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="midiendo…" xml:space="preserve">
@@ -10409,6 +10528,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="sección" xml:space="preserve">
         <source>sección</source>
+        <target>section</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="seg" xml:space="preserve">
@@ -10563,6 +10683,7 @@ Transcript:
       </trans-unit>
       <trans-unit id="vacío" xml:space="preserve">
         <source>vacío</source>
+        <target>empty</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="velocidad" xml:space="preserve">
