@@ -5,6 +5,7 @@
    cualquier trozo (nombres, números) y lo vuelven a poner en el mismo orden.
    El idioma vive en la cookie pod_lang (compartida por el dominio, la lee también Flask) y en localStorage. */
 (function () {
+  var ME = document.currentScript;   // hay que leerlo ahora: después del arranque ya no está
   var ATTRS = ["placeholder", "title", "aria-label", "alt"];
   function readCookie(n) { var m = document.cookie.match("(?:^|; )" + n + "=([^;]*)"); return m ? decodeURIComponent(m[1]) : null; }
   function writeCookie(n, v) {
@@ -119,7 +120,10 @@
     if (LANG !== "en") return;
     document.documentElement.setAttribute("lang", "en");
     var base = window.POD_BASE || "";
-    fetch(base + "/static/i18n/en.json", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+    // La versión viaja en la dirección del script (?v=…): así el diccionario nuevo no queda tapado por la caché
+    var me = ME || document.querySelector('script[src*="pod-i18n.js"]');
+    var v = me && me.src.indexOf("?v=") > 0 ? me.src.split("?v=")[1] : "";
+    fetch(base + "/static/i18n/en.json" + (v ? "?v=" + v : ""), { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
       compile(d); translateAll(); observe();
     }).catch(function () {});
   }
