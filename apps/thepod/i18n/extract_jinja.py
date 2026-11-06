@@ -16,17 +16,17 @@ def add(t, where):
 for path in sys.argv[1:]:
     src = open(path, encoding='utf-8').read()
     scripts = re.findall(r'<script[^>]*>([\s\S]*?)</script>', src)
-    tpl = re.sub(r'<script[^>]*>[\s\S]*?</script>', '\n', src)
-    tpl = re.sub(r'<style[^>]*>[\s\S]*?</style>', '\n', tpl)
+    tpl = re.sub(r'<script[^>]*>[\s\S]*?</script>', '\x00', src)
+    tpl = re.sub(r'<style[^>]*>[\s\S]*?</style>', '\x00', tpl)
     tpl = re.sub(r'\{#[\s\S]*?#\}', '', tpl)
     tpl = re.sub(r'\{\{[^}]*\}\}', '*', tpl)
-    tpl = re.sub(r'\{%[^%]*%\}', '\n', tpl)
+    tpl = re.sub(r'\{%[^%]*%\}', '\x00', tpl)
     for a in re.finditer(r'(?<![:@\w])(?:placeholder|title|aria-label|alt|content)="([^"]*)"', tpl):
         v = a.group(1)
         if 'content=' in a.group(0) and not re.search(r'name="description"', tpl[max(0, a.start() - 60):a.start()]): continue
         add(v, 'attr')
-    body = re.sub(r'<[^>]*>', '\n', tpl)
-    for line in body.split('\n'): add(line, 'text')
+    body = re.sub(r'<[^>]*>', '\x00', tpl)
+    for line in body.split('\x00'): add(line, 'text')
     for js in scripts:
         for m in re.finditer(r'`((?:[^`\\]|\\.)*)`|"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\'', js):
             s = next(g for g in m.groups() if g is not None)
