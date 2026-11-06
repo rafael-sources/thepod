@@ -2,6 +2,7 @@ name: PostPodApp
 options:
   bundleIdPrefix: space.aitism
   developmentLanguage: es
+  knownRegions: [es, en]
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -46,6 +47,8 @@ targets:
         ARCHS: arm64
         ONLY_ACTIVE_ARCH: YES
         GENERATE_INFOPLIST_FILE: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        INFOPLIST_KEY_CFBundleAllowMixedLocalizations: YES
         INFOPLIST_KEY_CFBundleDisplayName: thePod
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
         INFOPLIST_KEY_NSCameraUsageDescription: "thePod usa la cámara para grabarte y mostrarte en la sala de prodPod."

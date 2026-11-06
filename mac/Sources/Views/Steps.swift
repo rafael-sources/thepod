@@ -1689,6 +1689,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            LanguageSettingsSection()
             PrePodSettingsSection()
             UpdateSettingsSection()
             Section("Al abrir y cerrar") {

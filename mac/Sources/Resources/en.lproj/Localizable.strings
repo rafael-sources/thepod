@@ -1,0 +1,9 @@
+/* thePod in English. Keys are the Spanish text from the code; this file is generated from en.xliff (macos/scripts/l10n). */
+"Igual que el sistema" = "Same as the system";
+"Idioma" = "Language";
+"Idioma de thePod" = "thePod language";
+"Al cambiar de idioma la app se cierra y vuelve a abrir sola; tu trabajo queda guardado." = "Changing the language closes and reopens the app by itself; your work is saved.";
+"Cambiar de idioma" = "Change language";
+"Reiniciar ahora" = "Restart now";
+"Más tarde" = "Later";
+"thePod se cierra y vuelve a abrir en el idioma elegido." = "thePod closes and reopens in the chosen language.";
