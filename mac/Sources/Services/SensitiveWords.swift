@@ -37,7 +37,7 @@ enum SensitiveWords {
         .init(stem: "webon", prefix: true, category: .groseria, replacement: "flojo"),
         .init(stem: "weon", prefix: true, category: .groseria, replacement: "amigo"),
         .init(stem: "hijueput", prefix: true, category: .groseria, replacement: "h***"),
-        .init(stem: String(localized: "hijo de put"), prefix: true, category: .groseria, replacement: "h***"),
+        .init(stem: "hijo de put", prefix: true, category: .groseria, replacement: "h***"),
         .init(stem: "gonorrea", prefix: false, category: .groseria, replacement: "g***"),
         .init(stem: "malparid", prefix: true, category: .groseria, replacement: "m***"),
         .init(stem: "bolud", prefix: true, category: .groseria, replacement: "tonto"),
@@ -71,8 +71,8 @@ enum SensitiveWords {
         // Temas sensibles (las redes bajan el alcance): no se pitan por defecto; se cambia el subtítulo
         // por la palabra que se usa en redes para decir lo mismo.
         .init(stem: "suicid", prefix: true, category: .sensible, replacement: "desvivirse"),
-        .init(stem: "matar", prefix: true, category: .sensible, replacement: String(localized: "quitar la vida")),
-        .init(stem: "mato", prefix: false, category: .sensible, replacement: String(localized: "le quitó la vida")),
+        .init(stem: "matar", prefix: true, category: .sensible, replacement: "quitar la vida"),
+        .init(stem: "mato", prefix: false, category: .sensible, replacement: "le quitó la vida"),
         .init(stem: "mata", prefix: false, category: .sensible, replacement: "desvive"),
         .init(stem: "mataron", prefix: false, category: .sensible, replacement: "desvivieron"),
         .init(stem: "asesin", prefix: true, category: .sensible, replacement: "desvivir"),
@@ -80,13 +80,13 @@ enum SensitiveWords {
         .init(stem: "muerto", prefix: true, category: .sensible, replacement: "desvivido"),
         .init(stem: "muert", prefix: true, category: .sensible, replacement: "desvivido"),
         .init(stem: "morir", prefix: true, category: .sensible, replacement: "desvivir"),
-        .init(stem: "murio", prefix: false, category: .sensible, replacement: String(localized: "se desvivió")),
+        .init(stem: "murio", prefix: false, category: .sensible, replacement: "se desvivió"),
         .init(stem: "violacion", prefix: true, category: .sensible, replacement: "abuso"),
         .init(stem: "violar", prefix: false, category: .sensible, replacement: "abusar"),
         .init(stem: "violad", prefix: true, category: .sensible, replacement: "abusado"),
         .init(stem: "sexo", prefix: false, category: .sensible, replacement: "intimidad"),
         .init(stem: "sexual", prefix: true, category: .sensible, replacement: "íntimo"),
-        .init(stem: "porno", prefix: true, category: .sensible, replacement: String(localized: "contenido adulto")),
+        .init(stem: "porno", prefix: true, category: .sensible, replacement: "contenido adulto"),
         .init(stem: "droga", prefix: true, category: .sensible, replacement: "sustancias"),
         .init(stem: "cocaina", prefix: false, category: .sensible, replacement: "sustancia"),
         .init(stem: "marihuana", prefix: false, category: .sensible, replacement: "hierba"),
@@ -98,17 +98,17 @@ enum SensitiveWords {
         .init(stem: "terroris", prefix: true, category: .sensible, replacement: "extremista"),
         .init(stem: "nazi", prefix: true, category: .sensible, replacement: "n*zi"),
         .init(stem: "abuso", prefix: true, category: .sensible, replacement: "maltrato"),
-        .init(stem: "pedofil", prefix: true, category: .sensible, replacement: String(localized: "p*dófilo")),
+        .init(stem: "pedofil", prefix: true, category: .sensible, replacement: "p*dófilo"),
         .init(stem: "secuestr", prefix: true, category: .sensible, replacement: "retención"),
-        .init(stem: "sangre", prefix: false, category: .sensible, replacement: String(localized: "s*ngre")),
-        .init(stem: "covid", prefix: false, category: .sensible, replacement: String(localized: "la pandemia")),
-        .init(stem: "coronavirus", prefix: false, category: .sensible, replacement: String(localized: "la pandemia")),
+        .init(stem: "sangre", prefix: false, category: .sensible, replacement: "s*ngre"),
+        .init(stem: "covid", prefix: false, category: .sensible, replacement: "la pandemia"),
+        .init(stem: "coronavirus", prefix: false, category: .sensible, replacement: "la pandemia"),
         .init(stem: "depresion", prefix: false, category: .sensible, replacement: "bajón"),
         .init(stem: "ansiedad", prefix: false, category: .sensible, replacement: "nervios"),
         .init(stem: "alcohol", prefix: true, category: .sensible, replacement: "bebida"),
         .init(stem: "borrach", prefix: true, category: .sensible, replacement: "tomado"),
         .init(stem: "cigarr", prefix: true, category: .sensible, replacement: "tabaco"),
-        .init(stem: "fumar", prefix: false, category: .sensible, replacement: String(localized: "f*mar")),
+        .init(stem: "fumar", prefix: false, category: .sensible, replacement: "f*mar"),
     ]
 
     /// Minúsculas, sin acentos ni signos.
@@ -163,7 +163,7 @@ struct SensitiveMark: Codable, Identifiable, Equatable, Hashable {
     var replace: Bool               // si se cambia el subtítulo
     var ignored: Bool = false       // el usuario dijo que esta está bien
 
-    static func makeId(lane: Int, s: Double) -> String { String(localized: "\(lane)-\(Int((s * 100).rounded()))") }
+    static func makeId(lane: Int, s: Double) -> String { "\(lane)-\(Int((s * 100).rounded()))" }
 
     init(id: String, word: String, lane: Int, s: Double, e: Double, category: SensitiveWords.Category,
          bleep: Bool, replacement: String, replace: Bool) {

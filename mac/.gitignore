@@ -3,3 +3,4 @@ build/
 build.log
 Vendor/
 build.noindex/
+l10n/missing.json

@@ -120,7 +120,7 @@ actor ProdPodClient {
         for (k, v) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n") }
         if let fileField, let fileData {
             add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(fileName)\"\r\n")
-            add(String(localized: "Content-Type: application/octet-stream\r\n\r\n"))
+            add("Content-Type: application/octet-stream\r\n\r\n")
             body.append(fileData)
             add("\r\n")
         }

@@ -327,15 +327,15 @@ enum AudioAnalysis {
             cleanedInput = ProjectStore.url(media.file, in: slug)
         }
         // Claridad suave y volumen parejo entre personas (−19 LUFS por voz), con una ganancia fija
-        var af = String(localized: "highpass=f=70,equalizer=f=4000:t=q:w=1:g=2")
+        var af = "highpass=f=70,equalizer=f=4000:t=q:w=1:g=2"
         if let lufs = await loudness(cleanedInput) {
-            af += String(format: String(localized: ",volume=%.2fdB"), max(-15, min(15, -19 - lufs)))
+            af += String(format: ",volume=%.2fdB", max(-15, min(15, -19 - lufs)))
         }
         // Entre palabras, lo poco que deja el aislador (una tecla suelta) se baja: más en Máximo, nada en Natural
         if level >= 2 {
             af += String(localized: ",agate=threshold=0.006:ratio=3:attack=10:release=250:range=\(level >= 3 ? "0.06" : "0.18")")
         }
-        af += String(localized: ",alimiter=limit=0.89:level=0")
+        af += ",alimiter=limit=0.89:level=0"
         try await FFmpeg.run(["-i", cleanedInput.path, "-vn", "-af", af, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", tmp.path],
                              duration: media.duration) { progress(0.8 + $0 * 0.2) }
         if !FileManager.default.fileExists(atPath: dest.path) {

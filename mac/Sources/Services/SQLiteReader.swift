@@ -18,11 +18,11 @@ final class SQLiteReader {
     deinit { sqlite3_close(db) }
 
     func tableExists(_ name: String) -> Bool {
-        !((try? query(String(localized: "SELECT name FROM sqlite_master WHERE type='table' AND name=?"), [name])) ?? []).isEmpty
+        !((try? query("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [name])) ?? []).isEmpty
     }
 
     func columns(of table: String) -> Set<String> {
-        let rows = (try? query(String(localized: "PRAGMA table_info(\(table))"))) ?? []
+        let rows = (try? query("PRAGMA table_info(\(table))")) ?? []
         return Set(rows.compactMap { $0["name"] as? String })
     }
 

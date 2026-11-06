@@ -107,7 +107,7 @@ actor PrePodClient {
         }
         let name = file.lastPathComponent.replacingOccurrences(of: "\"", with: "")
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(field)\"; filename=\"\(name)\"\r\n")
-        add(String(localized: "Content-Type: application/octet-stream\r\n\r\n"))
+        add("Content-Type: application/octet-stream\r\n\r\n")
         body.append(try Data(contentsOf: file))
         add("\r\n--\(boundary)--\r\n")
         return try await send(method, path, body: body, contentType: String(localized: "multipart/form-data; boundary=\(boundary)"))

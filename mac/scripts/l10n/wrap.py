@@ -8,7 +8,7 @@ ns = {'x': 'urn:oasis:names:tc:xliff:document:1.2'}
 keys = {u.find('x:source', ns).text for u in ET.parse(root/'l10n/en.xliff').getroot().findall('.//x:trans-unit', ns)}
 interp = re.compile(r'\\\((?:[^()]|\([^()]*\))*\)')
 spanish = re.compile(r'[a-záéíóúñ]{3,}', re.I)
-skip_prefix = ('http', '/', '-', '#', 'com.', 'space.', 'cache/', 'media/', 'broll/', 'exports', 'estudio.', 'proxy', 'application/', 'ritmo-', 'capas/', 'sfx/', 'musica/', 'fondos/', 'looks/', 'pistas_')
+skip_prefix = ('SELECT ', 'PRAGMA ', 'INSERT ', 'UPDATE ', 'CREATE ', 'DELETE ', ';FFMETADATA', 'Content-Type', '+faststart', '+genpts', ',agate', ',alimiter', ',volume=', 'highpass=', '[CHAPTER]', 'http', '/', '-', '#', 'com.', 'space.', 'cache/', 'media/', 'broll/', 'exports', 'estudio.', 'proxy', 'application/', 'ritmo-', 'capas/', 'sfx/', 'musica/', 'fondos/', 'looks/', 'pistas_')
 skip_ctx = re.compile(r'(?<![\w])(case|==|!=|\.contains|\.hasPrefix|\.hasSuffix|forKey|key|rel|\.appendingPathComponent|dateFormat|NSLog|print|\.query|keys|track|URL|string:|withExtension|fileURLWithPath|localized:|verbatim:|Keychain|UserDefaults|\.set\(|object\(|\.range|replacingOccurrences|split|components|separator:|identifier|rawValue|name:|\.name ==|systemImage|systemName|AVAudioUnit|AudioComponent|fileName|filename|baseName|\.path|slug|command|\[|tag\(|forHTTPHeaderField|setValue|arguments|executableURL|lastPathComponent|regularExpression|pattern|withName|extension|ext|\.joined|domain)\s*[:(=]?\s*$')
 def key_of(s): return interp.sub('%@', s).replace('\\"', '"')
 def wrappable(s, before):
@@ -26,7 +26,7 @@ def wrappable(s, before):
     return True
 total = 0
 for f in sorted((root/'Sources').rglob('*.swift')):
-    if f.name in ('StudioTests.swift', 'SelfTest.swift', 'Language.swift'): continue
+    if f.name in ('StudioTests.swift', 'SelfTest.swift', 'Language.swift', 'SensitiveWords.swift'): continue   # el diccionario de palabras sensibles es del idioma de la transcripción, no de la interfaz
     src = f.read_text(); out = []; changed = 0
     for line in src.splitlines(keepends=True):
         pos = 0; new = ''

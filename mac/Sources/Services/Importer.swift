@@ -144,7 +144,7 @@ enum Importer {
         try FileManager.default.copyItem(at: root.appendingPathComponent("proyecto.sqlite"), to: dbCopy)
         defer { try? FileManager.default.removeItem(at: dbCopy) }
         let db = try SQLiteReader(url: dbCopy)
-        let mediaRows = try db.query(String(localized: "SELECT * FROM media_files ORDER BY id"))
+        let mediaRows = try db.query("SELECT * FROM media_files ORDER BY id")
         struct MF { var id: Int; var filename: String; var original: String; var type: String; var duration: Double }
         let mfs: [MF] = mediaRows.compactMap { r in
             guard let id = r.int("id"), let fn = r.string("filename") else { return nil }
@@ -157,7 +157,7 @@ enum Importer {
 
         // Timeline clips → lanes
         struct TC { var mediaId: Int; var start: Double; var end: Double?; var track: Int; var volume: Double; var position: Int }
-        let tcs: [TC] = db.tableExists("timeline_clips") ? try db.query(String(localized: "SELECT * FROM timeline_clips ORDER BY position, id")).compactMap { r in
+        let tcs: [TC] = db.tableExists("timeline_clips") ? try db.query("SELECT * FROM timeline_clips ORDER BY position, id").compactMap { r in
             guard let mid = r.int("media_file_id") else { return nil }
             return TC(mediaId: mid, start: r.double("start_offset") ?? 0, end: r.double("end_offset"),
                       track: r.int("track") ?? 1, volume: r.double("volume") ?? 1, position: r.int("position") ?? 0)
@@ -180,7 +180,7 @@ enum Importer {
         // Audio lane
         var laneAudio: [(id: Int, mediaId: Int, tl: Double, s: Double, e: Double?, vol: Double)] = []
         if db.tableExists("audio_lane_clips") {
-            for r in try db.query(String(localized: "SELECT * FROM audio_lane_clips ORDER BY tl_start, id")) {
+            for r in try db.query("SELECT * FROM audio_lane_clips ORDER BY tl_start, id") {
                 guard let id = r.int("id"), let mid = r.int("media_file_id") else { continue }
                 laneAudio.append((id, mid, r.double("tl_start") ?? 0, r.double("start_offset") ?? 0, r.double("end_offset"), r.double("volume") ?? 0.7))
             }
@@ -223,7 +223,7 @@ enum Importer {
 
         // Participants
         if db.tableExists("project_participants") {
-            for r in try db.query(String(localized: "SELECT * FROM project_participants ORDER BY id")) {
+            for r in try db.query("SELECT * FROM project_participants ORDER BY id") {
                 guard let id = r.int("id"), let n = r.string("name") else { continue }
                 var photo: String?
                 if let f = r.string("photo_filename"), !f.isEmpty {
@@ -275,7 +275,7 @@ enum Importer {
 
         // Cuts made in the web transcript editor / silence tool.
         if db.tableExists("transcript_cuts") {
-            project.cuts = try db.query(String(localized: "SELECT * FROM transcript_cuts ORDER BY start_seconds")).compactMap { r in
+            project.cuts = try db.query("SELECT * FROM transcript_cuts ORDER BY start_seconds").compactMap { r in
                 guard let s = r.double("start_seconds"), let e = r.double("end_seconds"), e > s else { return nil }
                 return Cut(start: s, end: e, kind: .imported, label: r.string("label") ?? String(localized: "Corte de postPod web"))
             }
@@ -313,7 +313,7 @@ enum Importer {
 
         // Sponsors + script blocks (prePod)
         if db.tableExists("project_sponsors") {
-            project.sponsors = try db.query(String(localized: "SELECT * FROM project_sponsors ORDER BY position, id")).compactMap { r in
+            project.sponsors = try db.query("SELECT * FROM project_sponsors ORDER BY position, id").compactMap { r in
                 guard let id = r.int("id"), let n = r.string("name") else { return nil }
                 var logoRel: String?
                 if let logo = r.string("logo_filename") {
@@ -334,7 +334,7 @@ enum Importer {
             }
         }
         if db.tableExists("project_segments") {
-            project.segments = try db.query(String(localized: "SELECT * FROM project_segments ORDER BY position, id")).compactMap { r in
+            project.segments = try db.query("SELECT * FROM project_segments ORDER BY position, id").compactMap { r in
                 guard let id = r.int("id") else { return nil }
                 return Segment(id: id, position: r.int("position") ?? 0, kind: r.string("kind") ?? "segment",
                                title: r.string("title") ?? "", durationEstimate: r.double("duration_estimate"),
@@ -351,7 +351,7 @@ enum Importer {
                 guard let s else { return nil }
                 return iso.date(from: s) ?? iso.date(from: s.replacingOccurrences(of: " ", with: "T") + "Z")
             }
-            project.cintillos = try db.query(String(localized: "SELECT * FROM director_events WHERE recording_offset_seconds IS NOT NULL ORDER BY recording_offset_seconds")).compactMap { r in
+            project.cintillos = try db.query("SELECT * FROM director_events WHERE recording_offset_seconds IS NOT NULL ORDER BY recording_offset_seconds").compactMap { r in
                 guard let id = r.int("id"), let kind = r.string("event_type"), ["sponsor", "banner", "segment", "comment"].contains(kind),
                       let t0 = r.double("recording_offset_seconds") else { return nil }
                 let p = (r.string("payload").flatMap { $0.data(using: .utf8) }
@@ -386,7 +386,7 @@ enum Importer {
 
         // Moments (marked in postPod / prodPod chapters) → reels
         if db.tableExists("moments") {
-            project.moments = try db.query(String(localized: "SELECT * FROM moments ORDER BY timeline_seconds, id")).compactMap { r in
+            project.moments = try db.query("SELECT * FROM moments ORDER BY timeline_seconds, id").compactMap { r in
                 guard let id = r.int("id"), let t = r.double("timeline_seconds") else { return nil }
                 return Moment(id: id, time: t, duration: r.double("duration_seconds"), label: r.string("label") ?? "")
             }
@@ -394,7 +394,7 @@ enum Importer {
         }
 
         // Subtitle style
-        if db.tableExists("subtitle_styles"), let r = try db.query(String(localized: "SELECT * FROM subtitle_styles ORDER BY id LIMIT 1")).first {
+        if db.tableExists("subtitle_styles"), let r = try db.query("SELECT * FROM subtitle_styles ORDER BY id LIMIT 1").first {
             var st = CaptionStyle()
             st.preset = "postpod"
             switch r.string("font_family") ?? "" {
@@ -569,7 +569,7 @@ enum Importer {
         let base = hasVideo ? min(vS, starts.audio == nil ? vS : aS) : aS
         let startOffset = base > 0.5 ? base : 0
         let dest = mediaDir.appendingPathComponent("\(stem).\(hasVideo ? "mp4" : "m4a")")
-        var args = ["-fflags", String(localized: "+genpts+discardcorrupt"), "-err_detect", "ignore_err", "-i", input.path]
+        var args = ["-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", input.path]
         if hasVideo {
             let vStart = max(0, vS - startOffset)
             var vf = startOffset > 0 ? String(localized: "setpts=PTS-STARTPTS,format=yuv420p") : String(localized: "format=yuv420p")
@@ -586,7 +586,7 @@ enum Importer {
         let af = aStart > 0.1
             ? String(localized: "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1")
             : (startOffset > 0 ? String(localized: "asetpts=PTS-STARTPTS,aresample=async=1") : String(localized: "aresample=async=1:first_pts=0"))
-        args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", String(localized: "+faststart"), dest.path]
+        args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", "+faststart", dest.path]
         try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress("Convirtiendo", f) }
         var media = try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
         media.startOffset = startOffset

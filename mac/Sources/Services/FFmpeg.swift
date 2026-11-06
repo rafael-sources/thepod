@@ -34,7 +34,7 @@ enum FFmpeg {
     static var isAvailable: Bool { executableURL != nil }
 
     /// Speech chain identical to postPod web (exporter.py §3.13).
-    static let speechChain = String(localized: "highpass=f=80,afftdn=nr=12,equalizer=f=4000:t=q:w=1:g=3,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11")
+    static let speechChain = "highpass=f=80,afftdn=nr=12,equalizer=f=4000:t=q:w=1:g=3,acompressor=threshold=-18dB:ratio=3:attack=5:release=100,loudnorm=I=-16:TP=-1.5:LRA=11"
 
     /// Modelo RNNoise que viene con la app (reducción de ruido con red neuronal: perro, teclas, calle).
     static var rnnoiseModel: URL? {

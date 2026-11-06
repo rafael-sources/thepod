@@ -98,7 +98,7 @@ enum Exporter {
             do {
                 try await FFmpeg.run(["-i", url.path, "-map", "0", "-c:v", "copy",
                                       "-af", String(format: String(localized: "volume=%.2fdB,alimiter=limit=0.89:level=0"), target - lufs),
-                                      "-c:a", "aac", "-b:a", "192k", "-movflags", String(localized: "+faststart"), fixed.path])
+                                      "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", fixed.path])
                 try FileManager.default.removeItem(at: url)
                 try FileManager.default.moveItem(at: fixed, to: url)
             } catch { try? FileManager.default.removeItem(at: fixed) }
@@ -124,7 +124,7 @@ enum Exporter {
                 args += ["-map", "0", "-map_metadata", "0"]
                 if chapIdx >= 0 { args += ["-map_chapters", "\(chapIdx)"] }
                 if subIdx >= 0 { args += ["-map", "\(subIdx)", "-c:s", "mov_text", "-metadata:s:s:0", String(localized: "language=\(project.language == "en" ? "eng" : "spa")")] }
-                args += ["-c:v", "copy", "-c:a", "copy", "-movflags", String(localized: "+faststart"), with.path]
+                args += ["-c:v", "copy", "-c:a", "copy", "-movflags", "+faststart", with.path]
                 do {
                     try await FFmpeg.run(args)
                     try FileManager.default.removeItem(at: url)
@@ -199,7 +199,7 @@ extension Exporter {
             }
             return o
         }
-        var txt = String(localized: ";FFMETADATA1\n")
+        var txt = ";FFMETADATA1\n"
         for (i, c) in chapters.enumerated() {
             let end = i + 1 < chapters.count ? chapters[i + 1].time : total
             txt += "[CHAPTER]\nTIMEBASE=1/1000\nSTART=\(Int(c.time * 1000))\nEND=\(Int(end * 1000))\ntitle=\(esc(c.title))\n"
