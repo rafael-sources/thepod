@@ -36,7 +36,9 @@ def create_app():
 
     @app.context_processor
     def _lang():
-        return {"lang": current_lang(), "cookie_domain": app.config.get("SESSION_COOKIE_DOMAIN") or ""}
+        st = Path(app.static_folder)
+        v = int(max((st / "i18n/en.json").stat().st_mtime, (st / "js/pod-i18n.js").stat().st_mtime))
+        return {"lang": current_lang(), "cookie_domain": app.config.get("SESSION_COOKIE_DOMAIN") or "", "i18n_v": v}
 
     def tpl(name):
         """La plantilla en el idioma actual: templates/en/<name> si existe y el idioma es inglés; si no, la española."""

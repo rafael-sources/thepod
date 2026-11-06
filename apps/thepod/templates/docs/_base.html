@@ -15,7 +15,7 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/' ~ (app_key ~ '.svg' if app_key else 'thepod-compact.svg')) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>window.POD_COOKIE_DOMAIN = {{ cookie_domain|tojson }};</script>
-  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}?v={{ i18n_v }}"></script>
 </head>
 <body class="docs theme-{{ theme | default('hub') }}">
 

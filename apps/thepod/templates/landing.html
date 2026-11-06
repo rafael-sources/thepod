@@ -639,7 +639,7 @@
   @keyframes fcL15{0%,91%{opacity:0;transform:translateY(6px)}93%,97%{opacity:1;transform:translateY(0)}99%,100%{opacity:0;transform:translateY(-6px)}}
 </style>
   <script>window.POD_COOKIE_DOMAIN = {{ cookie_domain|tojson }};</script>
-  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pod-i18n.js') }}?v={{ i18n_v }}"></script>
 </head>
 <body>
   <div class="shell">
