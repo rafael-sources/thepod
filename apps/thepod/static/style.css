@@ -816,9 +816,9 @@ kbd {
 
 
 /* ============================================================
-   Docs en el celular: la barra en una línea, las secciones en
-   una tira horizontal, el contenido primero, las otras apps al
-   final. (Diseño aprobado el 13 oct 2026.)
+   Docs on mobile: the bar on one line, the sections in a
+   horizontal strip, the content first, the other apps at the
+   end. (Design approved on 13 Oct 2026.)
    ============================================================ */
 .docs-start {
   display: flex; align-items: center; gap: 14px;

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Deja la última versión de thePod para Mac donde la sirve /descargas.
-# Fuentes, por orden: 1) ~/.podpod/incoming/ (copiada a mano por scp cuando GitHub no recibe el .dmg),
-# 2) la rama "releases" del repo. Nunca se degrada: solo se instala una versión mayor que la servida.
+# Puts the latest thePod for Mac version where /descargas serves it.
+# Sources, in order: 1) ~/.podpod/incoming/ (copied by hand via scp when GitHub does not accept the .dmg),
+# 2) the repo's "releases" branch. Never downgrades: only a version newer than the served one is installed.
 #   bash scripts/publish-thepod-mac.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -13,11 +13,11 @@ ver() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("ver
 newer() { python3 -c 'import sys
 def k(v): return tuple(int(x) for x in v.split(".") if x.isdigit())
 sys.exit(0 if k(sys.argv[1]) > k(sys.argv[2]) else 1)' "$1" "$2"; }
-install() {  # $1 dmg  $2 json  $3 origen
+install() {  # $1 dmg  $2 json  $3 source
   local expected actual
   expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$2")
   actual=$(sha256sum "$1" | cut -d' ' -f1)
-  [ "$expected" = "$actual" ] || { echo "$3: el .dmg no coincide con su ficha"; return 1; }
+  [ "$expected" = "$actual" ] || { echo "$3: the .dmg does not match its metadata"; return 1; }
   mv "$1" "$DEST/thePod.dmg"
   mv "$2" "$DEST/thePod.json"
   echo "OK ($3): $(cat "$DEST/thePod.json")"
@@ -25,7 +25,7 @@ install() {  # $1 dmg  $2 json  $3 origen
 
 CURRENT=$(ver "$DEST/thePod.json")
 
-# 1) Copia local completa (los .tmp son transferencias a medias: no se tocan)
+# 1) Complete local copy (.tmp files are partial transfers: left alone)
 if [ -f "$INCOMING/thePod.dmg" ] && [ -f "$INCOMING/thePod.json" ]; then
   V=$(ver "$INCOMING/thePod.json")
   if newer "$V" "$CURRENT"; then
@@ -35,7 +35,7 @@ if [ -f "$INCOMING/thePod.dmg" ] && [ -f "$INCOMING/thePod.json" ]; then
   fi
 fi
 
-# 2) GitHub, rama releases
+# 2) GitHub, releases branch
 git fetch -q origin releases
 git show origin/releases:thePod.json > "$DEST/thePod.json.tmp"
 V=$(ver "$DEST/thePod.json.tmp")

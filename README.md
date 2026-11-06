@@ -1,18 +1,18 @@
 # thePod
 
-Todo el ecosistema thePod en un solo repositorio, con la historia completa de cada parte.
+The entire thePod ecosystem in a single repository, with the full history of each part.
 
-| Carpeta | Qué es |
+| Folder | What it is |
 |---|---|
-| `apps/pre` | prePod — preproducción (podcast, episodios, guion, invitados, calendario) |
-| `apps/prod` | prodPod — estudio en vivo (grabación remota, soundboard, director) |
-| `apps/ama` | amaPod — preguntas en vivo con la audiencia |
-| `apps/post` | postPod — edición y publicación (web) |
-| `apps/thepod` | thePod — landing, cuenta, planes, descargas y el manual |
-| `mac` | thePod para Mac — la app nativa (Swift, Apple silicon) |
+| `apps/pre` | prePod — pre-production (podcast, episodes, script, guests, calendar) |
+| `apps/prod` | prodPod — live studio (remote recording, soundboard, director) |
+| `apps/ama` | amaPod — live Q&A with the audience |
+| `apps/post` | postPod — editing and publishing (web) |
+| `apps/thepod` | thePod — landing page, account, plans, downloads and the manual |
+| `mac` | thePod for Mac — the native app (Swift, Apple silicon) |
 
-Cada app es un servicio Flask independiente con su `requirements.txt` y sus `tests/`;
-la app de Mac se genera con `xcodegen` desde `mac/project.yml`. Historia: este repo nació el 5 de
-noviembre de 2026 uniendo los cinco repos originales (`postpod`, `prepod`, `prodpod`, `amapod`, `thepod`)
-con todos sus commits; las ramas de cada uno siguen aquí con el prefijo de su app (`prod/teleprompter`,
+Each app is an independent Flask service with its own `requirements.txt` and `tests/`;
+the Mac app is generated with `xcodegen` from `mac/project.yml`. History: this repo was born on
+November 5, 2026 by merging the five original repos (`postpod`, `prepod`, `prodpod`, `amapod`, `thepod`)
+with all their commits; each one's branches are still here prefixed with their app (`prod/teleprompter`,
 `post/feat/macos-app`…).

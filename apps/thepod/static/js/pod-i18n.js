@@ -1,11 +1,11 @@
-/* thePod · idioma de la interfaz (es / en), compartido por las cuatro apps y la landing.
-   Las apps están escritas en español; el inglés sale de un diccionario (/static/i18n/en.json) que se aplica
-   sobre lo que se dibuja: nodos de texto, placeholder, title, aria-label y el título de la pestaña. Un observador
-   traduce también lo que aparece después (Vue, SweetAlert2, toasts). Las claves con * son patrones: casan con
-   cualquier trozo (nombres, números) y lo vuelven a poner en el mismo orden.
-   El idioma vive en la cookie pod_lang (compartida por el dominio, la lee también Flask) y en localStorage. */
+/* thePod · interface language (es / en), shared by the four apps and the landing page.
+   The apps are written in Spanish; English comes from a dictionary (/static/i18n/en.json) applied
+   to whatever is rendered: text nodes, placeholder, title, aria-label and the tab title. An observer
+   also translates what appears later (Vue, SweetAlert2, toasts). Keys with * are patterns: they match
+   any fragment (names, numbers) and put it back in the same order.
+   The language lives in the pod_lang cookie (shared across the domain, also read by Flask) and in localStorage. */
 (function () {
-  var ME = document.currentScript;   // hay que leerlo ahora: después del arranque ya no está
+  var ME = document.currentScript;   // must be read now: after startup it is gone
   var ATTRS = ["placeholder", "title", "aria-label", "alt"];
   function readCookie(n) { var m = document.cookie.match("(?:^|; )" + n + "=([^;]*)"); return m ? decodeURIComponent(m[1]) : null; }
   function writeCookie(n, v) {
@@ -109,9 +109,9 @@
     if (l !== "en" && l !== "es") return;
     writeCookie("pod_lang", l);
     try { localStorage.setItem("pod_lang", l); } catch (_) {}
-    location.reload();      // volver al español es volver a dibujar; al inglés, se aplica al cargar
+    location.reload();      // going back to Spanish means re-rendering; English is applied on load
   };
-  /* t('texto en español') para el código que arma frases a mano */
+  /* t('Spanish text') for code that builds sentences by hand */
   window.t = function (s) { var r = translate(String(s)); return r === null ? s : r; };
 
   function start() {
@@ -120,7 +120,7 @@
     if (LANG !== "en") return;
     document.documentElement.setAttribute("lang", "en");
     var base = window.POD_BASE || "";
-    // La versión viaja en la dirección del script (?v=…): así el diccionario nuevo no queda tapado por la caché
+    // The version travels in the script URL (?v=…): so the cache does not hide the new dictionary
     var me = ME || document.querySelector('script[src*="pod-i18n.js"]');
     var v = me && me.src.indexOf("?v=") > 0 ? me.src.split("?v=")[1] : "";
     fetch(base + "/static/i18n/en.json" + (v ? "?v=" + v : ""), { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {

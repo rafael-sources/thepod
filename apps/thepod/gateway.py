@@ -1,20 +1,20 @@
 """
-thePod · una sola app.
+thePod · a single app.
 
-El host manda thepod.castmedia.space a este proceso. Además de la landing, los docs y la cuenta,
-aquí se reparten las otras apps bajo un camino, para que todo viva en un solo dominio (y la PWA
-los abarque):
+The host routes thepod.castmedia.space to this process. Besides the landing page, the docs and the account,
+the other apps are dispatched here under a path, so everything lives on a single domain (and the PWA
+covers them all):
 
     /pre/…   → prePod   (5001)
     /prod/…  → prodPod  (5002)
     /ama/…   → amaPod   (5004)
     /post/…  → postPod  (5000)
 
-Cada petición se reenvía tal cual (método, cabeceras, cuerpo en streaming) con X-Forwarded-Prefix,
-y cada app, con ProxyFix(x_prefix=1), arma sus URLs con ese prefijo. La respuesta vuelve también en
-streaming, sin guardarla entera en memoria. Los subdominios siguen vivos: esto no los reemplaza.
+Each request is forwarded as-is (method, headers, streamed body) with X-Forwarded-Prefix,
+and each app, with ProxyFix(x_prefix=1), builds its URLs with that prefix. The response also comes back
+streamed, without holding it all in memory. The subdomains are still live: this does not replace them.
 
-Los puertos se leen de la configuración compartida (gateway_ports) y, si no están, son los de siempre.
+Ports are read from the shared config (gateway_ports) and, if absent, are the usual ones.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from flask import Flask, Response, request, stream_with_context
 
 DEFAULT_PORTS = {"pre": 5001, "prod": 5002, "ama": 5004, "post": 5000}
 
-# Cabeceras que no se reenvían entre saltos
+# Hop-by-hop headers that are not forwarded
 _HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailers",
         "transfer-encoding", "upgrade", "content-length", "host"}
 
@@ -38,7 +38,7 @@ def _ports(cfg: dict) -> dict:
             out[k] = int(v)
         except (TypeError, ValueError):
             pass
-    # Para probar en local: THEPOD_GATEWAY_PORTS="pre=5091,ama=5094"
+    # For local testing: THEPOD_GATEWAY_PORTS="pre=5091,ama=5094"
     for part in (os.environ.get("THEPOD_GATEWAY_PORTS") or "").split(","):
         if "=" in part:
             k, v = part.split("=", 1)
@@ -50,7 +50,7 @@ def _ports(cfg: dict) -> dict:
 
 
 def _forward(port: int, prefix: str, tail: str):
-    """Reenvía la petición actual a 127.0.0.1:<port>/<tail> y devuelve la respuesta en streaming."""
+    """Forwards the current request to 127.0.0.1:<port>/<tail> and returns the response streamed."""
     path = "/" + quote(tail, safe="/%:@&=+$,;~!*'()") if tail else "/"
     if request.query_string:
         path += "?" + request.query_string.decode("latin-1")
@@ -86,7 +86,7 @@ def _forward(port: int, prefix: str, tail: str):
         finally:
             conn.close()
 
-    # Sin cuerpo (304, 204, HEAD): cerrar ya
+    # No body (304, 204, HEAD): close now
     if upstream.status in (204, 304) or request.method == "HEAD":
         conn.close()
         return Response(b"", status=upstream.status, headers=resp_headers)
@@ -100,7 +100,7 @@ def install(app: Flask, cfg: dict) -> None:
     for key, port in ports.items():
         prefix = "/" + key
 
-        # /pre → /pre/ (el service worker y las rutas relativas quedan bien)
+        # /pre → /pre/ (so the service worker and relative paths work)
         def _root(key=key):
             qs = ("?" + request.query_string.decode("latin-1")) if request.query_string else ""
             return Response(status=301, headers={"Location": f"/{key}/{qs}"})

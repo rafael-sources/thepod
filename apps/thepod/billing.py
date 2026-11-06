@@ -1,27 +1,27 @@
 """
-Cobro de thePod con Lemon Squeezy: planes Web (9 USD/mes) y Mac (19 USD/mes).
+thePod billing with Lemon Squeezy: Web (9 USD/month) and Mac (19 USD/month) plans.
 
-Configuración en ~/.podpod/config.json (la crea el dueño de la cuenta de Lemon Squeezy):
+Configuration in ~/.podpod/config.json (created by the Lemon Squeezy account owner):
 
     "lemonsqueezy": {
         "api_key": "…",              # Settings → API
         "store_id": "12345",
-        "webhook_secret": "…",       # el «signing secret» del webhook
-        "test_mode": true            # mientras se prueba; false = cobros reales
+        "webhook_secret": "…",       # the webhook "signing secret"
+        "test_mode": true            # while testing; false = real charges
     }
-    Las variantes de cada plan se buscan solas en la tienda y se guardan aparte para cada modo
-    ("variants_test" / "variants_live"), porque los productos de prueba y los reales tienen otro número.
+    Each plan's variants are looked up automatically in the store and stored separately per mode
+    ("variants_test" / "variants_live"), because test and live products have different numbers.
     }
 
-Flujo:
-- POST /api/billing/checkout {plan}: crea un pago en Lemon Squeezy con el usuario adentro y
-  devuelve la página de pago. Al pagar, Lemon Squeezy avisa al webhook.
-- POST /api/billing/webhook: verifica la firma y, según el estado de la suscripción, deja la
-  cuenta en el plan pagado o la devuelve a Gratis. Guarda el enlace al portal del cliente
-  (cambiar de plan, tarjeta, facturas, cancelar).
-- GET /api/billing/me: plan actual, renovación y enlace al portal. Si la suscripción ya venció y el
-  aviso de Lemon Squeezy no llegó, la baja aquí.
-- Quien tenía plan Completo (cuentas de antes) y paga, al cancelar vuelve a Completo, no a Gratis.
+Flow:
+- POST /api/billing/checkout {plan}: creates a Lemon Squeezy checkout with the user embedded and
+  returns the payment page. On payment, Lemon Squeezy notifies the webhook.
+- POST /api/billing/webhook: verifies the signature and, depending on the subscription status, puts the
+  account on the paid plan or returns it to Gratis. Stores the customer portal link
+  (change plan, card, invoices, cancel).
+- GET /api/billing/me: current plan, renewal and portal link. If the subscription has already expired and
+  the Lemon Squeezy notification never arrived, it downgrades here.
+- Anyone who had the Completo plan (older accounts) and pays goes back to Completo on cancel, not to Gratis.
 """
 
 import hashlib
@@ -40,8 +40,8 @@ bp = Blueprint("billing", __name__)
 
 DB = Path.home() / ".podpod" / "users.db"
 API = "https://api.lemonsqueezy.com/v1"
-PRICES = {"web": 9, "mac": 19}          # USD por mes (lo que se muestra; el cobro real lo define Lemon Squeezy)
-ACTIVE = {"active", "on_trial", "past_due"}   # past_due: se le da tiempo a que pague antes de bajar el plan
+PRICES = {"web": 9, "mac": 19}          # USD per month (what is displayed; the actual charge is defined by Lemon Squeezy)
+ACTIVE = {"active", "on_trial", "past_due"}   # past_due: give them time to pay before downgrading the plan
 
 
 def _cfg() -> dict:
@@ -58,11 +58,11 @@ def _mode() -> str:
 
 
 def _variants() -> dict:
-    """Las variantes de cada plan en el modo actual. Si no están guardadas, se buscan una vez en la tienda: la
-    suscripción mensual de 9 USD es Web y la de 19 USD es Mac (o productos llamados «Web» / «Mac»)."""
+    """Each plan's variants in the current mode. If not stored, they are looked up once in the store: the
+    9 USD monthly subscription is Web and the 19 USD one is Mac (or products named "Web" / "Mac")."""
     c = _cfg()
     key = "variants_" + _mode()
-    v = c.get(key) or (c.get("variants") if _mode() == "test" else None) or {}   # "variants" = las de prueba de antes
+    v = c.get(key) or (c.get("variants") if _mode() == "test" else None) or {}   # "variants" = the older test ones
     if v.get("web") and v.get("mac") or not c.get("api_key"):
         return v
     try:
@@ -98,7 +98,7 @@ def _db():
         username TEXT PRIMARY KEY, plan TEXT, status TEXT, ls_subscription_id TEXT, ls_customer_id TEXT,
         portal_url TEXT, renews_at TEXT, ends_at TEXT, updated_at TEXT NOT NULL DEFAULT (datetime('now')))""")
     cols = {r["name"] for r in c.execute("PRAGMA table_info(subscriptions)")}
-    if "prev_plan" not in cols:      # el plan que tenía antes de pagar, para devolvérselo al cancelar
+    if "prev_plan" not in cols:      # the plan they had before paying, to restore it on cancel
         try:
             c.execute("ALTER TABLE subscriptions ADD COLUMN prev_plan TEXT")
         except sqlite3.OperationalError:
@@ -107,14 +107,14 @@ def _db():
 
 
 def _plan_after_paid(username: str) -> str:
-    """A qué plan vuelve al dejar de pagar: Completo si lo tenía antes de pagar; si no, Gratis."""
+    """Which plan they return to when they stop paying: Completo if they had it before paying; otherwise Gratis."""
     with _db() as c:
         row = c.execute("SELECT prev_plan FROM subscriptions WHERE username = ?", (username,)).fetchone()
     return "completo" if row and row["prev_plan"] == "completo" else "gratis"
 
 
 def _reconcile(username: str) -> None:
-    """Por si se perdió el aviso de Lemon Squeezy: una suscripción cancelada cuyo mes pagado ya pasó, baja."""
+    """In case the Lemon Squeezy notification was lost: a cancelled subscription whose paid month has passed is downgraded."""
     with _db() as c:
         row = c.execute("SELECT * FROM subscriptions WHERE username = ?", (username,)).fetchone()
     if not row or row["status"] != "cancelled" or not _past(row["ends_at"]):
@@ -203,7 +203,7 @@ def billing_webhook():
     if not name.startswith("subscription_"):
         return jsonify({"ok": True, "ignored": name})
     if "test_mode" in meta and bool(meta["test_mode"]) != bool(_cfg().get("test_mode")):
-        # Un pago de prueba no cambia planes cuando ya se cobra de verdad (ni al revés)
+        # A test payment does not change plans when charging for real (nor vice versa)
         return jsonify({"ok": True, "ignored": "otro modo"})
     username = (meta.get("custom_data") or {}).get("username")
     data = ev.get("data") or {}
@@ -212,15 +212,15 @@ def billing_webhook():
     sub_id = a.get("subscription_id") if payment else data.get("id")
     if not sub_id:
         return jsonify({"ok": True, "ignored": "sin suscripción"})
-    # Los avisos pueden llegar desordenados: manda cómo está la suscripción AHORA, no lo que dice el aviso.
+    # Notifications may arrive out of order: what counts is the subscription state NOW, not what the notification says.
     try:
         data = _api("GET", f"/subscriptions/{sub_id}").get("data") or data
         a = data.get("attributes") or a
     except Exception:
-        if payment:      # la factura sola no dice el estado
+        if payment:      # the invoice alone does not tell the status
             return jsonify({"ok": True, "ignored": "no se pudo leer la suscripción"})
     if not username:
-        # Renovaciones y cambios: se busca por la suscripción guardada
+        # Renewals and changes: look up by the stored subscription
         with _db() as c:
             row = c.execute("SELECT username FROM subscriptions WHERE ls_subscription_id = ?", (str(data.get("id")),)).fetchone()
         username = row["username"] if row else None
@@ -241,7 +241,7 @@ def billing_webhook():
                   (username, plan, status, str(data.get("id")), str(a.get("customer_id") or ""),
                    ((a.get("urls") or {}).get("customer_portal") or ""), a.get("renews_at"), a.get("ends_at"),
                    before if before not in PRICES else None))
-    # Activa (o cancelada pero todavía dentro del mes pagado): plan pagado. Vencida o pausada: vuelve a Gratis.
+    # Active (or cancelled but still within the paid month): paid plan. Expired or paused: back to Gratis.
     if plan in PLANS and (status in ACTIVE or (status == "cancelled" and a.get("ends_at"))):
         if status == "cancelled" and _past(a.get("ends_at")):
             set_plan(username, _plan_after_paid(username))

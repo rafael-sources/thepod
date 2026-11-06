@@ -31,7 +31,7 @@ def create_app():
         app.config["SESSION_COOKIE_DOMAIN"] = cfg["cookie_domain"]
     app.permanent_session_lifetime = timedelta(days=7)
 
-    # Idioma de la interfaz (es/en): cookie pod_lang compartida por el dominio, o el navegador.
+    # Interface language (es/en): pod_lang cookie shared across the domain, or the browser.
     from pod_lang import current_lang
 
     @app.context_processor
@@ -41,7 +41,7 @@ def create_app():
         return {"lang": current_lang(), "cookie_domain": app.config.get("SESSION_COOKIE_DOMAIN") or "", "i18n_v": v}
 
     def tpl(name):
-        """La plantilla en el idioma actual: templates/en/<name> si existe y el idioma es inglés; si no, la española."""
+        """The template in the current language: templates/en/<name> if it exists and the language is English; otherwise the Spanish one."""
         return [f"en/{name}", name] if current_lang() == "en" else name
 
     @app.get("/")
@@ -62,7 +62,7 @@ def create_app():
         data = request.get_json(silent=True) or {}
         username = (data.get("username") or "").strip().lower()
         password = data.get("password") or ""
-        if "@" in username:   # también se puede entrar con el correo
+        if "@" in username:   # logging in with the email also works
             from shared_users import list_user_rows
             username = next((r["username"] for r in list_user_rows()
                              if (r.get("email") or "").strip().lower() == username), username)
@@ -217,13 +217,13 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
-    # ----- Una sola app: /pre, /prod, /ama y /post se reenvían a cada app (gateway.py) -----
+    # ----- Single app: /pre, /prod, /ama and /post are forwarded to each app (gateway.py) -----
     import gateway
     import push
     gateway.install(app, cfg)
     push.install(app, cfg)
 
-    # ----- PWA: manifiesto y service worker en la raíz (abarcan /pre, /prod, /ama, /post) -----
+    # ----- PWA: manifest and service worker at the root (they cover /pre, /prod, /ama, /post) -----
     @app.get("/manifest.webmanifest")
     def pwa_manifest():
         r = send_file(Path(app.static_folder) / "pwa" / "manifest.webmanifest", mimetype="application/manifest+json")
@@ -247,7 +247,7 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
-    # Comprobación de dominio para TikTok (pubPod): el archivo que su portal pide ver en la raíz del sitio.
+    # Domain verification for TikTok (pubPod): the file its portal expects to find at the site root.
     @app.get("/tiktoklpMHvlWrFRFcAi0P0OydreIGEFoQkj3B.txt")
     def tiktok_site_verification():
         return Response("tiktok-developers-site-verification=lpMHvlWrFRFcAi0P0OydreIGEFoQkj3B", mimetype="text/plain")
@@ -258,9 +258,9 @@ def create_app():
                                app_key=None, app_cfg=None, section=None, section_labels=None,
                                prev_section=None, next_section=None, app_urls={})
 
-    # ----- Descargas (solo con sesión) -----
-    # El .dmg y su ficha viven fuera del repo: ~/.podpod/downloads/thePod.dmg y thePod.json
-    # (o "downloads_dir" en ~/.podpod/config.json). scripts/publish-thepod-mac.sh los deja ahí.
+    # ----- Downloads (logged-in only) -----
+    # The .dmg and its metadata live outside the repo: ~/.podpod/downloads/thePod.dmg and thePod.json
+    # (or "downloads_dir" in ~/.podpod/config.json). scripts/publish-thepod-mac.sh puts them there.
 
     def _downloads_dir() -> Path:
         cfg2 = load_shared_config()
@@ -286,7 +286,7 @@ def create_app():
                                mac_app=_mac_info())
 
     @app.get("/api/descargas/thepod-mac")
-    @app.get("/api/descargas/postpod-mac")  # alias del nombre anterior
+    @app.get("/api/descargas/postpod-mac")  # alias for the previous name
     def descargas_mac_info():
         if not session.get("username"):
             return jsonify({"error": "no autenticado"}), 401

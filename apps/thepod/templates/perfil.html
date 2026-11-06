@@ -142,7 +142,7 @@
       b.disabled = false;
     });
 
-    // Foto: se recorta cuadrada y se achica a 256 px en el navegador antes de subirla.
+    // Photo: cropped square and shrunk to 256 px in the browser before uploading.
     $("pf-pick").addEventListener("click", function () { $("pf-file").click(); });
     $("pf-file").addEventListener("change", function () {
       var f = this.files && this.files[0]; this.value = "";

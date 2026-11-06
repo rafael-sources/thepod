@@ -1,21 +1,21 @@
 """
-thePod · avisos (web push) para la PWA.
+thePod · notifications (web push) for the PWA.
 
-Un solo origen (thepod.castmedia.space) guarda una suscripción por teléfono y por usuario.
-Las otras apps no hablan con el navegador: le piden a thePod que avise, con el secreto
-compartido:
+A single origin (thepod.castmedia.space) stores one subscription per phone and per user.
+The other apps do not talk to the browser: they ask thePod to notify, with the shared
+secret:
 
     POST /api/push/send   X-PodPod-Secret: …
     {"usernames": ["admin"], "title": "amaPod", "body": "Ana pide la palabra", "url": "/ama/"}
 
-Lo que ve el usuario:
-    GET  /api/push/key          → la clave pública (VAPID) para suscribirse
-    POST /api/push/subscribe    → guarda la suscripción del navegador (sesión)
-    POST /api/push/unsubscribe  → la borra
-    POST /api/push/test         → se manda un aviso a sí mismo, para comprobar
+What the user sees:
+    GET  /api/push/key          → the public key (VAPID) to subscribe
+    POST /api/push/subscribe    → stores the browser subscription (session)
+    POST /api/push/unsubscribe  → deletes it
+    POST /api/push/test         → sends a notification to yourself, to check
 
-Las claves VAPID se crean una sola vez y viven en ~/.podpod/vapid.json. Las suscripciones
-en ~/.podpod/push.db. Si pywebpush no está instalado, todo responde "no disponible" sin romper.
+VAPID keys are created only once and live in ~/.podpod/vapid.json. Subscriptions
+in ~/.podpod/push.db. If pywebpush is not installed, everything answers "not available" without breaking.
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def _db() -> sqlite3.Connection:
 
 def send_to(usernames: list[str], title: str, body: str = "", url: str = "/", tag: str | None = None,
             icon: str = "/static/pwa/icon-192.png") -> dict:
-    """Manda el aviso a todos los teléfonos de esos usuarios. Devuelve cuántos salieron y cuántos se dieron de baja."""
+    """Sends the notification to all those users' phones. Returns how many went out and how many were unsubscribed."""
     if not HAVE_PUSH:
         return {"sent": 0, "dropped": 0, "error": "pywebpush no instalado"}
     keys = _vapid()
@@ -105,7 +105,7 @@ def send_to(usernames: list[str], title: str, body: str = "", url: str = "/", ta
                 conn.execute("UPDATE subscriptions SET last_ok=? WHERE id=?", (int(time.time()), r["id"]))
             except WebPushException as e:
                 code = getattr(getattr(e, "response", None), "status_code", None)
-                if code in (404, 410):   # el teléfono se dio de baja
+                if code in (404, 410):   # the phone unsubscribed
                     conn.execute("DELETE FROM subscriptions WHERE id=?", (r["id"],))
                     dropped += 1
             except Exception:

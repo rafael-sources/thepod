@@ -1,12 +1,12 @@
 /*
- * Entrada de thePod en la web: la misma animación y el mismo sonido que la app de Mac al abrirse.
- * El sonido oficial (el cuatro) y los cuatro íconos que se encienden con su nota; con cada nota salen dos de
- * las ocho estrellas, en arco, y al final se encienden todos y aparece «thePod».
- * Tiempos copiados de la app (IntroView.swift).
+ * thePod web intro: the same animation and sound as the Mac app on launch.
+ * The official sound (the four) and the four icons that light up with their note; with each note two of
+ * the eight stars come out, in an arc, and at the end they all light up and «thePod» appears.
+ * Timings copied from the app (IntroView.swift).
  *
- * Uso:
- *   ThePodIntro.unlock();                 // dentro del clic o del envío del formulario (habilita el sonido)
- *   ThePodIntro.play(function () { ... }); // cuando el login salió bien; llama al callback al terminar
+ * Usage:
+ *   ThePodIntro.unlock();                 // inside the click or form submit (enables sound)
+ *   ThePodIntro.play(function () { ... }); // when login succeeded; calls the callback when finished
  */
 (function () {
   var BASE = (document.currentScript && document.currentScript.src.replace(/[^/]*$/, "")) || "/static/intro/";
@@ -23,8 +23,8 @@
     return audio;
   }
 
-  // Los navegadores solo dejan sonar audio iniciado por un gesto. Esto se llama en el clic de «Entrar»:
-  // reproduce en silencio un instante para que después, cuando el login responda, pueda sonar de verdad.
+  // Browsers only allow audio started by a gesture. This is called on the «Entrar» click:
+  // it plays silently for an instant so that later, when login responds, it can really play.
   function unlock() {
     var a = makeAudio();
     try {
@@ -68,11 +68,11 @@
     root.setAttribute("role", "img");
     root.setAttribute("aria-label", "thePod");
     var tiles = { pre: "prepod", prod: "prodpod", post: "postpod", ama: "amapod" };
-    // Misma grilla que la app: pre · prod arriba, post · ama abajo
+    // Same grid as the app: pre · prod on top, post · ama below
     var grid = '<div class="tpi-grid">' + ["pre", "prod", "post", "ama"].map(function (k) {
       return '<img data-k="' + k + '" src="' + BASE + "tile-" + tiles[k] + '.png" alt="">';
     }).join("") + "</div>";
-    // Ocho estrellas en arco (162° a 18°), centrado un poco arriba del disco
+    // Eight stars in an arc (162° to 18°), centered slightly above the disc
     var stars = "";
     for (var i = 0; i < 8; i++) {
       var ang = (162 - i * (144 / 7)) * Math.PI / 180;
@@ -82,7 +82,7 @@
     root.innerHTML = '<div class="tpi-box">' + grid + stars + '</div><div class="tpi-name">thePod</div>';
     document.body.appendChild(root);
 
-    var order = [0, 7, 1, 6, 2, 5, 3, 4];   // de las puntas del arco hacia el centro
+    var order = [0, 7, 1, 6, 2, 5, 3, 4];   // from the ends of the arc toward the center
     var shown = 0;
     function showStars(n) {
       for (; shown < Math.min(8, n); shown++) {

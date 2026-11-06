@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Saca los textos visibles de plantillas Jinja/HTML (landing, docs/_base, planes…): nodos de texto,
-placeholder/title/aria-label/alt, <title> y las cadenas de los <script> inline que ven los usuarios.
-Las expresiones {{ x }} quedan como * (patrón para pod-i18n.js); los {% tags %} parten el texto.
-Uso: extract_jinja.py plantilla.html [...] > textos.json"""
+"""Extracts the visible texts from Jinja/HTML templates (landing, docs/_base, planes…): text nodes,
+placeholder/title/aria-label/alt, <title> and the strings in inline <script>s that users see.
+{{ x }} expressions become * (pattern for pod-i18n.js); {% tags %} split the text.
+Usage: extract_jinja.py template.html [...] > texts.json"""
 import re, sys, json, html
 out = {}
 def add(t, where):
@@ -37,4 +37,4 @@ for path in sys.argv[1:]:
             add(s, 'js')
 json.dump(out, sys.stdout, ensure_ascii=False, indent=0)
 print(file=sys.stderr)
-print(len(out), 'textos', file=sys.stderr)
+print(len(out), 'texts', file=sys.stderr)

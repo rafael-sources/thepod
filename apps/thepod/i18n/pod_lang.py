@@ -1,5 +1,5 @@
-"""Idioma de la interfaz para las apps de thePod (copia idéntica en cada app como pod_lang.py).
-La cookie pod_lang la pone el switch de pod-i18n.js y la comparte el dominio; si no está, decide el navegador."""
+"""Interface language for the thePod apps (identical copy in each app as pod_lang.py).
+The pod_lang cookie is set by the pod-i18n.js switch and shared across the domain; if missing, the browser decides."""
 from flask import request
 
 

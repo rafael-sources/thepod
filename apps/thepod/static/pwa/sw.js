@@ -1,6 +1,6 @@
 /* thePod · service worker.
-   Solo guarda la cáscara (iconos, fuentes, vendors) y responde con ella sin red.
-   Todo lo de /api/ y todo lo que no sea GET va siempre a la red: nada de datos viejos. */
+   Only caches the shell (icons, fonts, vendors) and serves it when offline.
+   Everything under /api/ and anything that is not GET always goes to the network: no stale data. */
 const VERSION = "thepod-sw-2";
 const SHELL = ["/static/pwa/icon-192.png", "/static/pwa/icon-512.png", "/offline.html"];
 
@@ -25,7 +25,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.pathname.includes("/api/") || url.pathname.includes("/media/") || url.pathname.includes("/pub/m/")) return;
 
-  // Estáticos: caché primero, red después (y se guarda lo nuevo)
+  // Static files: cache first, network after (and new ones are stored)
   if (isStatic(url) || url.hostname === "fonts.gstatic.com" || url.hostname === "fonts.googleapis.com") {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
@@ -36,13 +36,13 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Páginas: red primero; sin red, la página de "sin conexión"
+  // Pages: network first; when offline, the "offline" page
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
   }
 });
 
-/* Avisos: el servidor manda {title, body, url, tag, icon}; al tocar, se abre (o se enfoca) esa pantalla */
+/* Notifications: the server sends {title, body, url, tag, icon}; on tap, that screen opens (or is focused) */
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { title: "thePod", body: e.data ? e.data.text() : "" }; }

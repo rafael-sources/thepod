@@ -137,7 +137,7 @@
     });
     h.appendChild(a);
   });
-  // En el celular, la sección activa de la tira queda a la vista
+  // On mobile, keep the active section of the strip in view
   const activePill = document.querySelector(".docs-sidebar nav a.active");
   if (activePill && window.innerWidth <= 760) activePill.scrollIntoView({ inline: "center", block: "nearest" });
   // Keep right-rail anchor highlighted while scrolling

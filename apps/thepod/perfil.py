@@ -1,12 +1,12 @@
 """
-Mi perfil: nombre, correo, contraseña y foto de cada usuario.
+My profile: each user's name, email, password and photo.
 
-La foto se guarda en ~/.podpod/avatars/<usuario>.jpg (fuera del repo) y la
-ven todas las apps de la suite en /avatar/<usuario>.jpg. El navegador la
-recorta y achica a 256x256 antes de subirla, así el servidor no necesita
-librerías de imágenes: solo valida que sea un JPEG razonable.
+The photo is stored in ~/.podpod/avatars/<user>.jpg (outside the repo) and
+every app in the suite sees it at /avatar/<user>.jpg. The browser crops
+and shrinks it to 256x256 before uploading, so the server needs no
+image libraries: it only checks that it is a reasonable JPEG.
 
-Cambiar el correo o la contraseña pide la contraseña actual.
+Changing the email or the password requires the current password.
 """
 
 import os
@@ -33,7 +33,7 @@ def _avatar_path(username: str) -> Path | None:
 
 
 def avatar_url(username: str) -> str | None:
-    """URL relativa de la foto (con versión para que el navegador no use una vieja)."""
+    """Relative URL of the photo (versioned so the browser does not use a stale one)."""
     p = _avatar_path(username)
     if not p or not p.exists():
         return None
@@ -79,7 +79,7 @@ def perfil_get():
 
 @bp.post("/api/perfil")
 def perfil_update():
-    """Cambia el nombre (libre) y/o el correo (pide la contraseña actual)."""
+    """Changes the name (free) and/or the email (requires the current password)."""
     user, err = _me()
     if err:
         return err
