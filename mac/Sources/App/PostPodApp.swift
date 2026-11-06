@@ -32,8 +32,8 @@ struct PostPodApp: App {
                 OpenProbeButton()
             }
             CommandMenu("Studio") {
-                OpenStudioButton(label: "Audio: consola y cadena de voz", tab: .audio)
-                OpenStudioButton(label: "Video: pistas, keyframes y cámaras", tab: .video)
+                OpenStudioButton(label: String(localized: "Audio: consola y cadena de voz"), tab: .audio)
+                OpenStudioButton(label: String(localized: "Video: pistas, keyframes y cámaras"), tab: .video)
             }
             CommandGroup(replacing: .help) {
                 Button("Manual de thePod") { Links.open("/docs/postpodapp") }
@@ -130,8 +130,8 @@ enum Theme {
 enum Panels {
     static func chooseImport(_ done: @escaping ([URL]) -> Void) {
         let panel = NSOpenPanel()
-        panel.title = "Elige tu grabación"
-        panel.message = "El paquete de postPod, la carpeta con las pistas, o los videos y audios sueltos"
+        panel.title = String(localized: "Elige tu grabación")
+        panel.message = String(localized: "El paquete de postPod, la carpeta con las pistas, o los videos y audios sueltos")
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
         panel.canChooseFiles = true

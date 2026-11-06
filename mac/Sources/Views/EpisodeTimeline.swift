@@ -67,7 +67,7 @@ struct EpisodeTimeline: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.panelStrong))
                     } else {
-                        Text(dragDB.map { String(format: "Volumen %+.0f dB", $0) } ?? "Clic: ir ahí · arrastra: marcar un trozo · doble clic en una persona: punto de volumen").font(.caption2).foregroundStyle(Theme.secondary)
+                        Text(dragDB.map { String(format: String(localized: "Volumen %+.0f dB"), $0) } ?? String(localized: "Clic: ir ahí · arrastra: marcar un trozo · doble clic en una persona: punto de volumen")).font(.caption2).foregroundStyle(Theme.secondary)
                     }
                     Image(systemName: "minus.magnifyingglass").foregroundStyle(Theme.secondary)
                     Slider(value: $zoom, in: 1...30).frame(width: 140)
@@ -97,10 +97,10 @@ struct EpisodeTimeline: View {
                                     }
                                     .buttonStyle(.plain)
                                     .help("Toca para editar esta pista (volumen, fades, desfase)")
-                                    LaneToggle(letter: "S", on: lane.solo, onColor: Theme.accent, help: "Solo: se oye solo esta persona") {
+                                    LaneToggle(letter: "S", on: lane.solo, onColor: Theme.accent, help: String(localized: "Solo: se oye solo esta persona")) {
                                         session.toggleSolo(lane.id)
                                     }
-                                    LaneToggle(letter: "M", on: lane.muted, onColor: .red, help: "Mudo: esta persona no suena") {
+                                    LaneToggle(letter: "M", on: lane.muted, onColor: .red, help: String(localized: "Mudo: esta persona no suena")) {
                                         session.toggleMute(lane.id)
                                     }
                                 }
@@ -207,7 +207,7 @@ struct EpisodeTimeline: View {
 
     private var legend: some View {
         HStack(spacing: 12) {
-            legendItem(Color.red.opacity(0.55), "Se corta")
+            legendItem(Color.red.opacity(0.55), String(localized: "Se corta"))
             legendItem(Theme.accent, "Reel")
             legendItem(Color.purple.opacity(0.8), "Sponsor")
             legendItem(Color.white.opacity(0.8), "Efecto")

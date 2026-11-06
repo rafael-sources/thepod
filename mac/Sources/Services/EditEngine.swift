@@ -77,14 +77,14 @@ enum EditEngine {
             if gap >= minGap {
                 let a = prevEnd + lead, b = s.start - pad
                 if b - a > 0.15 {
-                    cuts.append(Cut(start: a, end: b, kind: .silence, label: String(format: "Silencio de %.1f s", gap)))
+                    cuts.append(Cut(start: a, end: b, kind: .silence, label: String(format: String(localized: "Silencio de %.1f s"), gap)))
                 }
             }
             prevEnd = max(prevEnd, s.end)
             first = false
         }
         if duration - prevEnd >= minGap {
-            cuts.append(Cut(start: prevEnd + pad, end: duration, kind: .silence, label: "Silencio final"))
+            cuts.append(Cut(start: prevEnd + pad, end: duration, kind: .silence, label: String(localized: "Silencio final")))
         }
         return cuts
     }
@@ -97,7 +97,7 @@ enum EditEngine {
             guard let s = runStart else { return }
             let a = Double(s) * hop + pad, b = Double(end) * hop - pad
             if Double(end - s) * hop >= minGap, b - a > 0.15 {
-                cuts.append(Cut(start: a, end: b, kind: .silence, label: String(format: "Silencio de %.1f s", Double(end - s) * hop)))
+                cuts.append(Cut(start: a, end: b, kind: .silence, label: String(format: String(localized: "Silencio de %.1f s"), Double(end - s) * hop)))
             }
             runStart = nil
         }
@@ -149,7 +149,7 @@ enum EditEngine {
 
     static let soundFillers: Set<String> = ["eh", "ehh", "ehhh", "ehm", "em", "emm", "mm", "mmm", "mmmm", "hmm", "hm",
                                             "um", "umm", "uh", "uhm", "ah", "ahh", "aah", "eeh", "eee", "ee", "mmh"]
-    static let wordFillers: Set<String> = ["este", "o sea", "osea", "pues", "bueno", "digamos", "tipo", "o_sea"]
+    static let wordFillers: Set<String> = ["este", String(localized: "o sea"), "osea", "pues", "bueno", "digamos", "tipo", "o_sea"]
 
     static func normalize(_ w: String) -> String {
         w.lowercased()
@@ -220,7 +220,7 @@ enum EditEngine {
                     if n == "o", nn == "sea", let nx = next {
                         key = "o sea"; end = nx.e; skipNext = true
                         after = k + 2 < idx.count ? all[idx[k + 2]] : nil
-                        rawLast = nx.w; shown = "o sea"
+                        rawLast = nx.w; shown = String(localized: "o sea")
                     }
                     let an = after.map { normalize($0.w) } ?? ""
                     let gapAfter = after.map { $0.s - end } ?? 9
@@ -253,7 +253,7 @@ enum EditEngine {
                     cuts.append(Cut(start: a, end: b, kind: .filler, label: "“\(shown)”"))
                 } else {
                     cuts.append(Cut(start: a, end: b, kind: .filler, enabled: false,
-                                    label: "¿Muletilla? «\(shown.trimmingCharacters(in: CharacterSet(charactersIn: ",.;:?!…")))»",
+                                    label: String(localized: "¿Muletilla? «\(shown.trimmingCharacters(in: CharacterSet(charactersIn: ",.;:?!…")))»"),
                                     suggested: true))
                 }
             }
@@ -299,7 +299,7 @@ enum EditEngine {
                 if end - start >= 0.12, !all.contains(where: { $0.lane != lane && $0.s < end - 0.05 && $0.e > start + 0.05 }) {
                     let phrase = lw[i..<(i + f.n)].map { $0.w.trimmingCharacters(in: CharacterSet.alphanumerics.inverted) }.joined(separator: " ")
                     cuts.append(Cut(start: start, end: end, kind: .repeated, enabled: false,
-                                    label: "¿Repetido? «\(phrase)»", suggested: true))
+                                    label: String(localized: "¿Repetido? «\(phrase)»"), suggested: true))
                 }
                 i = f.j
             }
@@ -342,7 +342,7 @@ enum EditEngine {
                     let louder = (k..<e).allSatisfy { i in energy.lanes.allSatisfy { $0.key == lane || i >= $0.value.count || $0.value[i] < env[i] - 6 } }
                     if dur >= 0.3, dur <= 1.2, louder {
                         cuts.append(Cut(start: Double(k) * hop - 0.05, end: Double(e) * hop + 0.05, kind: .filler, enabled: false,
-                                        label: "¿Sonido sin palabras?", suggested: true))
+                                        label: String(localized: "¿Sonido sin palabras?"), suggested: true))
                     }
                     k = e + 1
                 }

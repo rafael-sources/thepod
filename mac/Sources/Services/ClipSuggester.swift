@@ -28,10 +28,10 @@ enum ClipSuggester {
 
     Devuelve ÚNICAMENTE este JSON:
     {
-      "summary": "<resumen del episodio en 2 frases>",
+      "summary": String(localized: "<resumen del episodio en 2 frases>"),
       "clips": [
-        {"start": "MM:SS", "end": "MM:SS", "title": "<título corto y llamativo, máx 8 palabras>",
-         "reason": "<por qué funciona en redes, 1 frase>"}
+        {"start": "MM:SS", "end": "MM:SS", "title": String(localized: "<título corto y llamativo, máx 8 palabras>"),
+         "reason": String(localized: "<por qué funciona en redes, 1 frase>")}
       ]
     }
     Entre 3 y 8 clips, ordenados del mejor al peor. Sin texto fuera del JSON.
@@ -50,22 +50,22 @@ enum ClipSuggester {
             "model": model,
             "max_tokens": 3000,
             "system": systemPrompt,
-            "messages": [["role": "user", "content": "Episodio: \(project.name)\nIdioma: \(project.language)\n\nTranscripción:\n\(transcript)"]],
+            "messages": [["role": "user", "content": String(localized: "Episodio: \(project.name)\nIdioma: \(project.language)\n\nTranscripción:\n\(transcript)")]],
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw msg("Sin respuesta de Claude") }
+        guard let http = response as? HTTPURLResponse else { throw msg(String(localized: "Sin respuesta de Claude")) }
         guard http.statusCode == 200 else {
             let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
-                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String } ?? "HTTP \(http.statusCode)"
-            throw msg("Claude respondió con un error: \(detail)")
+                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String } ?? String(localized: "HTTP \(http.statusCode)")
+            throw msg(String(localized: "Claude respondió con un error: \(detail)"))
         }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = obj["content"] as? [[String: Any]] else { throw msg("Respuesta de Claude inesperada") }
+              let content = obj["content"] as? [[String: Any]] else { throw msg(String(localized: "Respuesta de Claude inesperada")) }
         let text = content.compactMap { $0["text"] as? String }.joined()
         guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"),
               let json = try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8)) as? [String: Any] else {
-            throw msg("Claude no devolvió un JSON válido")
+            throw msg(String(localized: "Claude no devolvió un JSON válido"))
         }
         let clips = (json["clips"] as? [[String: Any]] ?? []).compactMap { c -> Suggestion? in
             guard let s = (c["start"] as? String).flatMap(parseClock), let e = (c["end"] as? String).flatMap(parseClock), e > s + 5 else { return nil }
@@ -125,7 +125,7 @@ enum ClipSuggester {
         return chosen.enumerated().map { (i, c) in
             let firstWords = words[c.a...min(c.b, c.a + 7)].map(\.w).joined(separator: " ")
             let s = snap(Suggestion(title: firstWords.prefix(1).uppercased() + firstWords.dropFirst() + "…",
-                                    reason: "Momento \(i + 1): mucha conversación y ritmo alto",
+                                    reason: String(localized: "Momento \(i + 1): mucha conversación y ritmo alto"),
                                     start: words[c.a].s, end: words[c.b].e),
                          words: words, duration: project.duration)
             return s
@@ -179,7 +179,7 @@ enum Keychain {
         return base.appendingPathComponent("cuenta.dat")
     }
 
-    private static let mask = Array("postPod·thePod·aitism".utf8)
+    private static let mask = Array(String(localized: "postPod·thePod·aitism").utf8)
     private static func scramble(_ d: Data) -> Data {
         Data(d.enumerated().map { $0.element ^ mask[$0.offset % mask.count] })
     }

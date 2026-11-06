@@ -75,7 +75,7 @@ private struct GeneralTab: View {
             ErrorLine(text: error)
             if let _ = cfg {
                 field("Nombre", text: binding(\.name, key: "name"))
-                field("Frase corta", text: binding(\.tagline, key: "tagline"))
+                field(String(localized: "Frase corta"), text: binding(\.tagline, key: "tagline"))
                 Text("Descripción").font(.headline)
                 Text("Sale en tu página y en Spotify / Apple Podcasts.").font(.caption).foregroundStyle(Theme.secondary)
                 TextEditor(text: binding(\.description, key: "description"))
@@ -149,9 +149,9 @@ private struct BrandingTab: View {
             if cfg != nil {
                 Text("Imágenes").font(.headline)
                 HStack(alignment: .top, spacing: 18) {
-                    imageSlot("Logo", kind: "logo", hint: "Cuadrado, hasta 500 px")
-                    imageSlot("Portada", kind: "cover", hint: "La del podcast en las plataformas")
-                    imageSlot("Fondo", kind: "background", hint: "Para videos y tu página")
+                    imageSlot("Logo", kind: "logo", hint: String(localized: "Cuadrado, hasta 500 px"))
+                    imageSlot("Portada", kind: "cover", hint: String(localized: "La del podcast en las plataformas"))
+                    imageSlot("Fondo", kind: "background", hint: String(localized: "Para videos y tu página"))
                 }
                 Text("Colores").font(.headline)
                 HStack(spacing: 18) {
@@ -180,7 +180,7 @@ private struct BrandingTab: View {
         let bg = Color(hex: cfg?.colorBg ?? cfg?.colorSecondary ?? "#1e2a54")
         return VStack(alignment: .leading, spacing: 6) {
             Text(cfg?.name ?? "").font(.custom(cfg?.fontHeading ?? "", size: 26)).foregroundStyle(Color(hex: cfg?.colorPrimary ?? "#5a8bff"))
-            Text(cfg?.tagline ?? "Así se ve tu marca").font(.custom(cfg?.fontBody ?? "", size: 14)).foregroundStyle(Color(hex: cfg?.colorText ?? "#ffffff"))
+            Text(cfg?.tagline ?? String(localized: "Así se ve tu marca")).font(.custom(cfg?.fontBody ?? "", size: 14)).foregroundStyle(Color(hex: cfg?.colorText ?? "#ffffff"))
             Capsule().fill(Color(hex: cfg?.colorAccent ?? "#f4c770")).frame(width: 80, height: 6)
         }
         .padding(18)
@@ -274,7 +274,7 @@ private struct TeamTab: View {
                     Text("Pueden ver y editar todo el podcast en thePod.").font(.caption).foregroundStyle(Theme.secondary)
                     if let o = h.owner { row(o, badge: "Dueño", removable: false) {} }
                     ForEach(h.extraHosts, id: \.self) { u in
-                        row(u, badge: h.invitations?[u]?.status == "pendiente" ? "Invitación pendiente" : nil, removable: true) {
+                        row(u, badge: h.invitations?[u]?.status == "pendiente" ? String(localized: "Invitación pendiente") : nil, removable: true) {
                             change { try await api.setHosts(slug, h.extraHosts.filter { $0 != u }) }
                         }
                     }
@@ -298,7 +298,7 @@ private struct TeamTab: View {
                             Spacer()
                             Button("Invitar como conductor") {
                                 change { try await api.inviteHost(slug, u.username) }
-                                note = "Invitación enviada a \(u.username)"
+                                note = String(localized: "Invitación enviada a \(u.username)")
                             }
                             Button("Agregar como director") { change { try await api.addDirector(slug, u.username) } }
                         }
@@ -609,7 +609,7 @@ private struct SponsorReportSheet: View {
                 HStack(spacing: 22) {
                     stat("\(totals["episodes"] as? Int ?? 0)", "episodios")
                     stat("\(totals["blocks"] as? Int ?? 0)", "menciones")
-                    stat(String(format: "%.1f", (totals["duration_minutes_estimated"] as? Double) ?? 0), "minutos al aire (aprox.)")
+                    stat(String(format: "%.1f", (totals["duration_minutes_estimated"] as? Double) ?? 0), String(localized: "minutos al aire (aprox.)"))
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
@@ -655,6 +655,6 @@ private struct SponsorReportSheet: View {
     }
     private func statusName(_ s: String?) -> String {
         ["idea": "Idea", "planned": "Planificado", "scheduled": "Agendado", "recorded": "Grabado",
-         "editing": "En edición", "published": "Publicado", "archived": "Archivado"][s ?? ""] ?? (s ?? "")
+         "editing": String(localized: "En edición"), "published": "Publicado", "archived": "Archivado"][s ?? ""] ?? (s ?? "")
     }
 }

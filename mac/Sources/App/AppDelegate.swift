@@ -22,8 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let a = NSAlert()
                 a.messageText = "Estás grabando"
                 a.informativeText = "Si cierras thePod se detiene tu grabación. Lo grabado queda en tu Mac y se termina de subir la próxima vez que abras prod."
-                a.addButton(withTitle: "Cerrar igual")
-                a.addButton(withTitle: "Seguir grabando")
+                a.addButton(withTitle: String(localized: "Cerrar igual"))
+                a.addButton(withTitle: String(localized: "Seguir grabando"))
                 if a.runModal() != .alertFirstButtonReturn { return .terminateCancel }
             }
             leavingRoom = true

@@ -51,7 +51,7 @@ final class Updater: ObservableObject {
 
     private func request(_ method: String, _ path: String, json: [String: Any]? = nil) throws -> URLRequest {
         guard let url = URL(string: Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + path) else {
-            throw PrePodClient.Failure(message: "La dirección de thePod no es válida")
+            throw PrePodClient.Failure(message: String(localized: "La dirección de thePod no es válida"))
         }
         var r = URLRequest(url: url)
         r.httpMethod = method
@@ -71,12 +71,12 @@ final class Updater: ObservableObject {
 
     private func login() async throws {
         guard let pw = Keychain.get("prepod-password"), !PrePodClient.username.isEmpty else {
-            throw PrePodClient.Failure(message: "Configura tu cuenta en Ajustes para buscar actualizaciones.")
+            throw PrePodClient.Failure(message: String(localized: "Configura tu cuenta en Ajustes para buscar actualizaciones."))
         }
         let (_, resp) = try await session.data(for: try request("POST", "/api/login", json: ["username": PrePodClient.username, "password": pw]))
         absorb(resp)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
-            throw PrePodClient.Failure(message: "thePod no aceptó tu usuario o contraseña")
+            throw PrePodClient.Failure(message: String(localized: "thePod no aceptó tu usuario o contraseña"))
         }
     }
 
@@ -95,8 +95,8 @@ final class Updater: ObservableObject {
                 guard code == 200 else {
                     // 404 = el servidor todavía no publica la app de Mac: no es lo mismo que "estás al día".
                     if quiet { state = .idle } else {
-                        state = .failed(code == 404 ? "El servidor de thePod todavía no tiene publicada la versión para Mac."
-                                                    : "thePod respondió \(code)")
+                        state = .failed(code == 404 ? String(localized: "El servidor de thePod todavía no tiene publicada la versión para Mac.")
+                                                    : String(localized: "thePod respondió \(code)"))
                     }
                     return
                 }
@@ -147,7 +147,7 @@ final class Updater: ObservableObject {
         let file = tmp
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             try? FileManager.default.removeItem(at: file)
-            throw PrePodClient.Failure(message: "No se pudo bajar la actualización")
+            throw PrePodClient.Failure(message: String(localized: "No se pudo bajar la actualización"))
         }
         let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-update-\(UUID().uuidString).dmg")
         try FileManager.default.moveItem(at: file, to: dest)
@@ -160,7 +160,7 @@ final class Updater: ObservableObject {
             let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
             guard digest == expected.lowercased() else {
                 try? FileManager.default.removeItem(at: dest)
-                throw PrePodClient.Failure(message: "La actualización llegó incompleta. Intenta de nuevo.")
+                throw PrePodClient.Failure(message: String(localized: "La actualización llegó incompleta. Intenta de nuevo."))
             }
         }
         return dest
@@ -175,7 +175,7 @@ final class Updater: ObservableObject {
             defer { _ = try? run("/usr/bin/hdiutil", ["detach", mount.path, "-force"]) }
             let src = mount.appendingPathComponent("thePod.app")
             guard FileManager.default.fileExists(atPath: src.path) else {
-                throw PrePodClient.Failure(message: "El instalador no trae thePod.app")
+                throw PrePodClient.Failure(message: String(localized: "El instalador no trae thePod.app"))
             }
             let dest = FileManager.default.temporaryDirectory.appendingPathComponent("thePod-new-\(UUID().uuidString)/thePod.app")
             try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -193,7 +193,7 @@ final class Updater: ObservableObject {
         p.standardOutput = out; p.standardError = out
         try p.run(); p.waitUntilExit()
         let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        guard p.terminationStatus == 0 else { throw PrePodClient.Failure(message: "\(tool) falló: \(text)") }
+        guard p.terminationStatus == 0 else { throw PrePodClient.Failure(message: String(localized: "\(tool) falló: \(text)")) }
         return text
     }
 
@@ -208,7 +208,7 @@ final class Updater: ObservableObject {
         let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/thePod-actualizacion.log").path
         let script = """
         exec >>'\(log)' 2>&1
-        echo "== $(date) actualizando"
+        echo String(localized: "== $(date) actualizando")
         while kill -0 \(pid) 2>/dev/null; do sleep 0.3; done
         rm -rf '\(n)' '\(o)'
         if /usr/bin/ditto '\(newApp.path)' '\(n)' && [ -x '\(n)/Contents/MacOS/thePod' ]; then
@@ -216,12 +216,12 @@ final class Updater: ObservableObject {
           if mv '\(t)' '\(o)' && mv '\(n)' '\(t)'; then
             rm -rf '\(o)'; echo "ok"
           else
-            echo "no se pudo reemplazar; se deja la anterior"
+            echo String(localized: "no se pudo reemplazar; se deja la anterior")
             [ -d '\(t)' ] || mv '\(o)' '\(t)'
             rm -rf '\(n)'
           fi
         else
-          echo "no se pudo copiar la nueva; se deja la anterior"
+          echo String(localized: "no se pudo copiar la nueva; se deja la anterior")
           rm -rf '\(n)'
         fi
         rm -rf '\(newApp.deletingLastPathComponent().path)'
@@ -229,7 +229,7 @@ final class Updater: ObservableObject {
         """
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        p.arguments = ["-c", "nohup /bin/sh -c \"$0\" >/dev/null 2>&1 &", script]
+        p.arguments = ["-c", String(localized: "nohup /bin/sh -c \"$0\" >/dev/null 2>&1 &"), script]
         try? p.run()
         p.waitUntilExit()
         NSApp.terminate(nil)
@@ -275,7 +275,7 @@ private final class UpdateProgress: NSObject, URLSessionDownloadDelegate, @unche
         defer { cont = nil }
         if let error { cont?.resume(throwing: error); return }
         guard let file, let resp = task.response else {
-            cont?.resume(throwing: PrePodClient.Failure(message: "No se pudo bajar la actualización"))
+            cont?.resume(throwing: PrePodClient.Failure(message: String(localized: "No se pudo bajar la actualización")))
             return
         }
         report(1)

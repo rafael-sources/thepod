@@ -57,7 +57,7 @@ struct ProdHomeView: View {
                 let open = sessions.filter { $0.status != "finished" }
                 let done = sessions.filter { $0.status == "finished" }
                 if open.isEmpty && !loading && error == nil {
-                    EmptyHint(symbol: "record.circle", title: "No hay salas por grabar",
+                    EmptyHint(symbol: "record.circle", title: String(localized: "No hay salas por grabar"),
                               text: "En pre, abre un episodio y toca “Ir a grabar”. La sala aparece aquí.")
                 }
                 if !open.isEmpty {
@@ -96,7 +96,7 @@ struct ProdHomeView: View {
                     if let s = sessions.first(where: { $0.id == want }) { enter(s) }
                 }
             } catch {
-                self.error = PrePodClient.isConfigured ? error.localizedDescription : "Conecta tu cuenta en Ajustes para ver tus salas."
+                self.error = PrePodClient.isConfigured ? error.localizedDescription : String(localized: "Conecta tu cuenta en Ajustes para ver tus salas.")
             }
         }
     }
@@ -135,8 +135,8 @@ private struct SessionCard: View {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { result = e; return }
                 let n = r["exported"] as? Int ?? 0
-                result = n > 0 ? "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post: “En postPod web” → Traer a la Mac."
-                               : "Ya estaba en postPod."
+                result = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post: “En postPod web” → Traer a la Mac.")
+                               : String(localized: "Ya estaba en postPod.")
             } catch { result = error.localizedDescription }
         }
     }
@@ -147,7 +147,7 @@ private struct SessionCard: View {
             case "recording": return ("Grabando", .prodPod)
             case "finished": return ("Terminada", Theme.good)
             case "live": return ("En vivo", .prodPod)
-            default: return ("Lista para grabar", .orange)
+            default: return (String(localized: "Lista para grabar"), .orange)
             }
         }()
         VStack(alignment: .leading, spacing: 10) {
@@ -378,7 +378,7 @@ struct StudioView: View {
                         Text("Se graba en tu Mac y se sube mientras hablan. Puedes bajarla, no subirla por encima de lo que dio la prueba.")
                             .font(.caption).foregroundStyle(Theme.secondary)
                     }
-                    peopleCard(title: "Quién está invitado")
+                    peopleCard(title: String(localized: "Quién está invitado"))
                     Button { studio.join() } label: {
                         Label(studio.phase == .joining ? "Entrando…" : "Entrar a la sala", systemImage: "record.circle")
                             .font(.title3.bold()).frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -448,9 +448,9 @@ struct StudioView: View {
     }
 
     private var levelHint: String {
-        if studio.micLevel < -55 { return "No te oigo. Habla para probar el micrófono." }
-        if studio.micLevel > -8 { return "Muy fuerte: aléjate un poco del micrófono." }
-        return "Se te oye bien."
+        if studio.micLevel < -55 { return String(localized: "No te oigo. Habla para probar el micrófono.") }
+        if studio.micLevel > -8 { return String(localized: "Muy fuerte: aléjate un poco del micrófono.") }
+        return String(localized: "Se te oye bien.")
     }
     private var levelHintColor: Color {
         if studio.micLevel < -55 || studio.micLevel > -8 { return .orange }
@@ -574,8 +574,8 @@ struct StudioView: View {
         let (text, color): (String, Color) = {
             if studio.recording { return (studio.practice ? "ENSAYO" : "GRABANDO", studio.practice ? .yellow : .prodPod) }
             if studio.countdown != nil { return ("PREPARADOS", .orange) }
-            if studio.sessionEnded { return ("GRABACIÓN TERMINADA", Theme.good) }
-            return ("EN LA SALA", Theme.secondary)
+            if studio.sessionEnded { return (String(localized: "GRABACIÓN TERMINADA"), Theme.good) }
+            return (String(localized: "EN LA SALA"), Theme.secondary)
         }()
         return HStack(spacing: 6) {
             Circle().fill(color).frame(width: 9, height: 9)
@@ -639,8 +639,8 @@ struct StudioView: View {
     /// «faltan 120 MB · unos 3 minutos»
     static func pendingText(_ u: ProdStudio.UploadState) -> String? {
         guard let p = u.pending, p > 0 else { return nil }
-        var t = "faltan \(max(1, p / 1_048_576)) MB"
-        if let e = u.eta, e > 0 { t += e < 90 ? " · menos de 2 minutos" : " · unos \(Int((Double(e) / 60).rounded())) minutos" }
+        var t = String(localized: "faltan \(max(1, p / 1_048_576)) MB")
+        if let e = u.eta, e > 0 { t += e < 90 ? String(localized: " · menos de 2 minutos") : String(localized: " · unos \(Int((Double(e) / 60).rounded())) minutos") }
         return t
     }
 
@@ -678,8 +678,8 @@ struct StudioView: View {
                         Label("Tu pista ya está en prodPod (\(String(format: "%.0f", mb)) MB)", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(Theme.good)
                     } else {
-                        Text(u.message ?? (studio.recording ? "Subiendo mientras grabas · \(String(format: "%.0f", mb)) MB"
-                                                            : "Subiendo… " + (Self.pendingText(u) ?? "falta \(String(format: "%.0f", max(0, total - mb))) MB")))
+                        Text(u.message ?? (studio.recording ? String(localized: "Subiendo mientras grabas · \(String(format: "%.0f", mb)) MB")
+                                                            : String(localized: "Subiendo… ") + (Self.pendingText(u) ?? String(localized: "falta \(String(format: "%.0f", max(0, total - mb))) MB"))))
                             .foregroundStyle(u.message == nil ? Theme.secondary : .orange)
                         if total > 0 { ProgressView(value: min(1, mb / total)) }
                     }
@@ -687,7 +687,7 @@ struct StudioView: View {
                 .font(.caption)
             }
             ForEach(studio.remoteUploads.sorted(by: { $0.key < $1.key }), id: \.key) { id, u in
-                let name = studio.people.first(where: { $0.id == id })?.name ?? "Otra persona"
+                let name = studio.people.first(where: { $0.id == id })?.name ?? String(localized: "Otra persona")
                 Text("\(name): \(u.state == "done" ? "✓ Listo" : (u.state == "error" ? "problema al subir, reintentando" : "subiendo… " + (Self.pendingText(u) ?? "\(u.bytes / 1_048_576) MB enviados")))")
                     .font(.caption2).foregroundStyle(u.state == "done" ? Theme.good : Theme.secondary)
             }
@@ -859,8 +859,8 @@ struct StudioView: View {
                     Avatar(name: p.display_name, size: 26)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(p.display_name).font(.callout.weight(.semibold))
-                        Text(p.roleTitle + (live.contains(p.display_name) ? " · en la sala" : "")
-                             + (studio.readyMap["participant_\(p.id)"] == true ? " · preparado" : "")
+                        Text(p.roleTitle + (live.contains(p.display_name) ? String(localized: " · en la sala") : "")
+                             + (studio.readyMap["participant_\(p.id)"] == true ? String(localized: " · preparado") : "")
                              + (p.recording_quality.map { " · \($0)" } ?? "")).font(.caption)
                             .foregroundStyle(live.contains(p.display_name) ? Theme.good : Theme.secondary)
                     }

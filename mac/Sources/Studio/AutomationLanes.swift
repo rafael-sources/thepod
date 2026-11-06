@@ -68,7 +68,7 @@ struct AutomationStrip: View {
         default:
             let parts = param.split(separator: ".")
             if parts.count == 3, let id = UUID(uuidString: String(parts[1])), let i = chain.bands.firstIndex(where: { $0.id == id }) {
-                return "EQ · banda \(i + 1) · \(parts[2] == "gain" ? "ganancia" : "frecuencia")"
+                return String(localized: "EQ · banda \(i + 1) · \(parts[2] == "gain" ? "ganancia" : "frecuencia")")
             }
             return param
         }

@@ -86,7 +86,7 @@ extension ProjectSession {
                 setQueueStatus(next.id, .running)
                 let runner = exportQueueRunner ?? { [self] kind in try await self.runQueuedExport(kind) }
                 let t = Task<[URL], Error> { try await runner(next.kind) }
-                startQueueJob(title: "En cola: \(next.title)", task: t)
+                startQueueJob(title: String(localized: "En cola: \(next.title)"), task: t)
                 do {
                     let urls = try await t.value
                     produced += urls
@@ -115,19 +115,19 @@ extension ProjectSession {
             try await ensureEnergy()
             player.pause()
             let folder = try await Exporter.exportStems(project: project, energy: energy) { [weak self] f in
-                self?.queueProgress("Pistas por separado", f)
+                self?.queueProgress(String(localized: "Pistas por separado"), f)
             }
             return [folder]
         }
     }
 
     nonisolated func queueProgress(_ title: String, _ f: Double) {
-        Task { @MainActor in self.job = JobState(title: "En cola: \(title)", detail: self.queueDetail, fraction: f) }
+        Task { @MainActor in self.job = JobState(title: String(localized: "En cola: \(title)"), detail: self.queueDetail, fraction: f) }
     }
 
     var queueDetail: String {
         let left = exportQueue.filter { $0.status == .waiting }.count
-        return left == 0 ? "" : (left == 1 ? "1 más esperando" : "\(left) más esperando")
+        return left == 0 ? "" : (left == 1 ? String(localized: "1 más esperando") : String(localized: "\(left) más esperando"))
     }
 
     // MARK: Aviso al terminar
@@ -138,8 +138,8 @@ extension ProjectSession {
         center.requestAuthorization(options: [.alert, .sound]) { ok, _ in
             guard ok else { return }
             let c = UNMutableNotificationContent()
-            c.title = failures == 0 ? "Exportación lista" : "Exportación terminada con problemas"
-            c.body = files == 1 ? "1 archivo listo." : "\(files) archivos listos." + (failures > 0 ? " \(failures) no se pudieron exportar." : "")
+            c.title = failures == 0 ? String(localized: "Exportación lista") : String(localized: "Exportación terminada con problemas")
+            c.body = files == 1 ? String(localized: "1 archivo listo.") : String(localized: "\(files) archivos listos.") + (failures > 0 ? String(localized: " \(failures) no se pudieron exportar.") : "")
             c.sound = .default
             center.add(UNNotificationRequest(identifier: "export-queue-\(Date().timeIntervalSince1970)", content: c, trigger: nil))
         }

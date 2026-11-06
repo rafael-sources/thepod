@@ -73,7 +73,7 @@ actor ProdPodClient {
     private func send(_ method: String, _ path: String, json: [String: Any]? = nil, retry: Bool = true) async throws -> Data {
         if !loggedIn && path != "/api/auth/login" { try await login() }
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: "La dirección de prodPod no es válida") }
+        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: String(localized: "La dirección de prodPod no es válida")) }
         var req = URLRequest(url: url)
         req.httpMethod = method
         if let json {
@@ -95,14 +95,14 @@ actor ProdPodClient {
         }
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw PrePodClient.Failure(message: msg ?? "prodPod respondió \(code)")
+            throw PrePodClient.Failure(message: msg ?? String(localized: "prodPod respondió \(code)"))
         }
         return data
     }
 
     func login() async throws {
         guard let pw = Keychain.get("prepod-password"), !PrePodClient.username.isEmpty else {
-            throw PrePodClient.Failure(message: "Conecta tu cuenta en Ajustes.")
+            throw PrePodClient.Failure(message: String(localized: "Conecta tu cuenta en Ajustes."))
         }
         _ = try await send("POST", "/api/auth/login", json: ["username": PrePodClient.username, "password": pw], retry: false)
         loggedIn = true
@@ -113,14 +113,14 @@ actor ProdPodClient {
                    retry: Bool = true) async throws -> (Int, [String: Any]) {
         if !loggedIn { try await login() }
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: "La dirección de prodPod no es válida") }
+        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: String(localized: "La dirección de prodPod no es válida")) }
         let boundary = "thepod-\(UUID().uuidString)"
         var body = Data()
         func add(_ s: String) { body.append(Data(s.utf8)) }
         for (k, v) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n") }
         if let fileField, let fileData {
             add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(fileName)\"\r\n")
-            add("Content-Type: application/octet-stream\r\n\r\n")
+            add(String(localized: "Content-Type: application/octet-stream\r\n\r\n"))
             body.append(fileData)
             add("\r\n")
         }
@@ -168,7 +168,7 @@ actor ProdPodClient {
         let t0 = Date()
         let (_, resp) = try await session.upload(for: req, from: blob)
         let secs = Date().timeIntervalSince(t0)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200, secs > 0 else { throw PrePodClient.Failure(message: "No se pudo medir la subida") }
+        guard (resp as? HTTPURLResponse)?.statusCode == 200, secs > 0 else { throw PrePodClient.Failure(message: String(localized: "No se pudo medir la subida")) }
         return Double(blob.count * 8) / secs / 1_000_000
     }
 
@@ -213,7 +213,7 @@ actor ProdPodClient {
         let (code, obj) = try await multipart("/api/sessions/\(sid)/director/assets", fields: [:], fileField: "file",
                                               fileName: name, fileData: data)
         guard (200..<300).contains(code), let fp = obj["file_path"] as? String else {
-            throw PrePodClient.Failure(message: obj["error"] as? String ?? "No se pudo subir la imagen (\(code))")
+            throw PrePodClient.Failure(message: obj["error"] as? String ?? String(localized: "No se pudo subir la imagen (\(code))"))
         }
         return fp
     }

@@ -42,7 +42,7 @@ actor PostPodWebClient {
 
     private func url(_ path: String) throws -> URL {
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let u = URL(string: base + path) else { throw Failure(message: "La dirección de postPod no es válida") }
+        guard let u = URL(string: base + path) else { throw Failure(message: String(localized: "La dirección de postPod no es válida")) }
         return u
     }
 
@@ -67,7 +67,7 @@ actor PostPodWebClient {
 
     private static func errorMessage(_ data: Data, code: Int) -> String {
         let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-        return msg ?? "postPod respondió \(code)"
+        return msg ?? String(localized: "postPod respondió \(code)")
     }
 
     private func send(_ method: String, _ path: String, json: [String: Any]? = nil, retry: Bool = true) async throws -> Data {
@@ -85,7 +85,7 @@ actor PostPodWebClient {
 
     func login() async throws {
         guard let password = Keychain.get("prepod-password"), !PrePodClient.username.isEmpty else {
-            throw Failure(message: "Configura tu usuario y contraseña en Ajustes.")
+            throw Failure(message: String(localized: "Configura tu usuario y contraseña en Ajustes."))
         }
         _ = try await send("POST", "/api/auth/login", json: ["username": PrePodClient.username, "password": password], retry: false)
         loggedIn = true
@@ -108,14 +108,14 @@ actor PostPodWebClient {
             case "done":
                 return (o["result"] as? [String: Any]) ?? [:]
             case "error":
-                throw Failure(message: "La IA no pudo leer el episodio. Prueba de nuevo en un rato.")
+                throw Failure(message: String(localized: "La IA no pudo leer el episodio. Prueba de nuevo en un rato."))
             default:
                 try await Task.sleep(nanoseconds: 4_000_000_000)
                 let r = try await send("GET", path)
                 o = (try? JSONSerialization.jsonObject(with: r) as? [String: Any]) ?? [:]
             }
         }
-        throw Failure(message: "La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo.")
+        throw Failure(message: String(localized: "La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo."))
     }
 
     // MARK: Revisión compartida
@@ -141,7 +141,7 @@ actor PostPodWebClient {
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else { throw Failure(message: Self.errorMessage(data, code: code)) }
         guard let j = try JSONSerialization.jsonObject(with: data) as? [String: Any], let token = j["token"] as? String, let url = j["url"] as? String else {
-            throw Failure(message: "postPod no devolvió el enlace")
+            throw Failure(message: String(localized: "postPod no devolvió el enlace"))
         }
         return (token, url)
     }
@@ -166,7 +166,7 @@ actor PostPodWebClient {
     func projects() async throws -> [WebProject] {
         let data = try await send("GET", "/api/projects")
         guard let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw Failure(message: "postPod devolvió una lista inesperada")
+            throw Failure(message: String(localized: "postPod devolvió una lista inesperada"))
         }
         let iso = ISO8601DateFormatter()
         return arr.compactMap { m in
@@ -259,7 +259,7 @@ actor PostPodWebClient {
             if (code == 404 || code == 405), obj?["error"] == nil { throw LegacyServer() }   // postPod sin la API nueva
             throw Failure(message: Self.errorMessage(data, code: code))
         }
-        throw Failure(message: "postPod no aceptó la sesión")
+        throw Failure(message: String(localized: "postPod no aceptó la sesión"))
     }
 
     /// Pide a postPod el paquete del proyecto, informa cuánto lleva armado, y lo descarga
@@ -272,7 +272,7 @@ actor PostPodWebClient {
             return try await legacyDownload(slug: slug, progress: progress)
         }
         while info.state != "ready" {
-            if info.state == "error" { throw Failure(message: info.error ?? "postPod no pudo preparar el paquete") }
+            if info.state == "error" { throw Failure(message: info.error ?? String(localized: "postPod no pudo preparar el paquete")) }
             progress(.preparing(info.progress))
             try await Task.sleep(nanoseconds: 1_000_000_000)
             info = try await bundleCall("GET", slug)
@@ -354,7 +354,7 @@ actor PostPodWebClient {
             try FileManager.default.moveItem(at: tmp, to: dest)
             return dest
         }
-        throw Failure(message: "postPod no aceptó la sesión")
+        throw Failure(message: String(localized: "postPod no aceptó la sesión"))
     }
 }
 

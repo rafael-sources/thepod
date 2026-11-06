@@ -66,10 +66,10 @@ final class RoomProbe: NSObject, ObservableObject {
         Task {
             defer { busy = false }
             do {
-                let s = try await ProdPodClient.shared.createSession(title: "Prueba de sala (Mac)")
+                let s = try await ProdPodClient.shared.createSession(title: String(localized: "Prueba de sala (Mac)"))
                 sessions.insert(s, at: 0)
                 sessionId = s.id
-                note("Sala de prueba creada")
+                note(String(localized: "Sala de prueba creada"))
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -82,7 +82,7 @@ final class RoomProbe: NSObject, ObservableObject {
                 inviteURL = inv.invite_url
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(inv.invite_url, forType: .string)
-                note("Link de invitado copiado")
+                note(String(localized: "Link de invitado copiado"))
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -97,33 +97,33 @@ final class RoomProbe: NSObject, ObservableObject {
 
     func join() {
         guard let sid = sessionId, let device = cameras.first(where: { $0.uniqueID == cameraId }) ?? cameras.first else {
-            error = cameras.isEmpty ? "No encontré ninguna cámara." : "Elige una sala."
+            error = cameras.isEmpty ? String(localized: "No encontré ninguna cámara.") : String(localized: "Elige una sala.")
             return
         }
         phase = .connecting
         Task {
             let perms = await Self.askPermissions()
             guard perms.camera, perms.mic else {
-                phase = .failed("Sin permiso de cámara o micrófono")
-                error = "macOS no dio permiso de cámara o micrófono. Actívalo en Ajustes del Sistema → Privacidad y seguridad."
+                phase = .failed(String(localized: "Sin permiso de cámara o micrófono"))
+                error = String(localized: "macOS no dio permiso de cámara o micrófono. Actívalo en Ajustes del Sistema → Privacidad y seguridad.")
                 return
             }
             do {
                 // 1. Cámara en 1080p (o lo máximo que dé)
                 let size = try pipe.start(device: device)
                 captureSize = "\(size.width)×\(size.height)"
-                note("Cámara: \(device.localizedName) a \(captureSize)")
+                note(String(localized: "Cámara: \(device.localizedName) a \(captureSize)"))
 
                 // 2. Permiso para entrar a la sala
                 let info = try await ProdPodClient.shared.join(sid)
                 joinedSession = sid
-                note("prodPod te dejó entrar como \(info.display_name) (\(info.role))")
+                note(String(localized: "prodPod te dejó entrar como \(info.display_name) (\(info.role))"))
 
                 // 3. Conectar a la sala
                 let room = Room(delegate: self)
                 self.room = room
                 try await room.connect(url: info.livekit_ws_url, token: info.livekit_token)
-                note("Conectado a la sala")
+                note(String(localized: "Conectado a la sala"))
 
                 // 4. Mandar la cámara en 720p (la misma que se graba en 1080p)
                 let track = await LocalVideoTrack.createBufferTrack(
@@ -136,7 +136,7 @@ final class RoomProbe: NSObject, ObservableObject {
                     options: VideoPublishOptions(encoding: VideoEncoding(maxBitrate: 2_500_000, maxFps: 30),
                                                  simulcast: true, preferredCodec: .vp8))
                 localTrack = track
-                note("Tu cámara ya se ve en la sala")
+                note(String(localized: "Tu cámara ya se ve en la sala"))
 
                 // 5. Micrófono (con cancelación de eco) y copia de la voz que sale a la sala
                 let pub = try await room.localParticipant.setMicrophone(enabled: true)
@@ -145,7 +145,7 @@ final class RoomProbe: NSObject, ObservableObject {
                     voice = tap
                     mic.add(audioRenderer: tap)
                 }
-                note("Tu micrófono ya se oye en la sala")
+                note(String(localized: "Tu micrófono ya se oye en la sala"))
                 phase = .connected
                 startedAt = Date()
                 refreshRemotes()
@@ -153,7 +153,7 @@ final class RoomProbe: NSObject, ObservableObject {
             } catch {
                 phase = .failed(error.localizedDescription)
                 self.error = error.localizedDescription
-                note("Falló: \(error.localizedDescription)")
+                note(String(localized: "Falló: \(error.localizedDescription)"))
                 await leave()
             }
         }
@@ -185,7 +185,7 @@ final class RoomProbe: NSObject, ObservableObject {
             folder = dir
             recording = true
             recordSeconds = 0
-            note("Grabando en la Mac…")
+            note(String(localized: "Grabando en la Mac…"))
         } catch { self.error = error.localizedDescription }
     }
 
@@ -193,7 +193,7 @@ final class RoomProbe: NSObject, ObservableObject {
         pipe.stopRecording()
         voice?.stop()
         recording = false
-        note("Grabación guardada (\(recordSeconds) s)")
+        note(String(localized: "Grabación guardada (\(recordSeconds) s)"))
         writeLog()
     }
 
@@ -227,7 +227,7 @@ final class RoomProbe: NSObject, ObservableObject {
 
     private func note(_ s: String) {
         let f = DateFormatter(); f.dateFormat = "HH:mm:ss"
-        notes.append("\(f.string(from: Date()))  \(s)")
+        notes.append(String(localized: "\(f.string(from: Date()))  \(s)"))
     }
 
     private func writeLog() {
@@ -256,10 +256,10 @@ final class RoomProbe: NSObject, ObservableObject {
 
 extension RoomProbe: RoomDelegate {
     nonisolated func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        Task { @MainActor in self.note("Entró \(participant.name ?? "alguien")"); self.refreshRemotes() }
+        Task { @MainActor in self.note(String(localized: "Entró \(participant.name ?? "alguien")")); self.refreshRemotes() }
     }
     nonisolated func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        Task { @MainActor in self.note("Salió \(participant.name ?? "alguien")"); self.refreshRemotes() }
+        Task { @MainActor in self.note(String(localized: "Salió \(participant.name ?? "alguien")")); self.refreshRemotes() }
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         Task { @MainActor in self.refreshRemotes() }
@@ -272,11 +272,11 @@ extension RoomProbe: RoomDelegate {
     }
     nonisolated func room(_ room: Room, participant: RemoteParticipant?, didReceiveData data: Data, forTopic topic: String, encryptionType: EncryptionType) {
         let type = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["type"] as? String ?? "?"
-        Task { @MainActor in self.dataMessages += 1; self.note("Mensaje de la sala: \(type)") }
+        Task { @MainActor in self.dataMessages += 1; self.note(String(localized: "Mensaje de la sala: \(type)")) }
     }
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in
-            if let error { self.note("Se cortó la sala: \(error.localizedDescription)") }
+            if let error { self.note(String(localized: "Se cortó la sala: \(error.localizedDescription)")) }
         }
     }
 }

@@ -184,7 +184,7 @@ extension ProdStudio {
             sec.run = max(0, (num("ends_seconds") ?? off) - off)
             return sec
         }
-        if !tpScript.isEmpty { flash("\(tpScript.count) teleprompter del guion listos") }
+        if !tpScript.isEmpty { flash(String(localized: "\(tpScript.count) teleprompter del guion listos")) }
     }
 
     /// Igual que la web: primero usuario o nombre exacto (lo que eligió prePod en «lo lee»), luego parecido por nombre.
@@ -217,7 +217,7 @@ extension ProdStudio {
             }
             tpFired[s.id] = t
             let msg: [String: Any] = ["type": "teleprompter", "action": "show", "event_id": "s\(s.id)",
-                                      "target": tpIdentity(for: s.speakerKey), "title": "Guion · \(s.speaker)",
+                                      "target": tpIdentity(for: s.speakerKey), "title": String(localized: "Guion · \(s.speaker)"),
                                       "text": s.content, "speed": s.speed, "size": s.size, "countdown": countdown]
             send(msg)
             handleTeleprompter(msg)      // también para mí

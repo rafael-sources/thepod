@@ -23,7 +23,7 @@ struct RecordingQuality: Hashable {
         .init(height: 1080, bitrate: 8_000_000), .init(height: 1080, bitrate: 5_000_000),
         .init(height: 720, bitrate: 2_500_000), .init(height: 720, bitrate: 1_500_000),
     ]
-    var title: String { "\(label) · \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps" }
+    var title: String { String(localized: "\(label) · \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps") }
 }
 
 /// Graba cámara y voz en un MP4 por fragmentos: cada fragmento se guarda en la Mac y
@@ -77,7 +77,7 @@ final class FragmentRecorder: NSObject, AVAssetWriterDelegate, @unchecked Sendab
             AVEncoderBitRateKey: 256_000,
         ])
         a.expectsMediaDataInRealTime = true
-        guard w.canAdd(v), !withAudio || w.canAdd(a) else { throw PrePodClient.Failure(message: "No se pudo preparar la grabación") }
+        guard w.canAdd(v), !withAudio || w.canAdd(a) else { throw PrePodClient.Failure(message: String(localized: "No se pudo preparar la grabación")) }
         w.add(v)
         if withAudio { w.add(a) }
         lock.withLock {
@@ -268,7 +268,7 @@ actor ChunkUploader {
                     onProgress?(key, j.sent, size, false, nil)
                 } catch {
                     failures += 1
-                    onProgress?(key, j.sent, size, false, failures >= 3 ? "Sin conexión, reintentando…" : nil)
+                    onProgress?(key, j.sent, size, false, failures >= 3 ? String(localized: "Sin conexión, reintentando…") : nil)
                     try? await Task.sleep(nanoseconds: UInt64(min(30, 2 * failures)) * 1_000_000_000)
                     continue
                 }
@@ -284,7 +284,7 @@ actor ChunkUploader {
                     onProgress?(key, size, size, true, nil)
                 } catch {
                     failures += 1
-                    onProgress?(key, j.sent, size, false, "No se pudo cerrar la subida, reintentando…")
+                    onProgress?(key, j.sent, size, false, String(localized: "No se pudo cerrar la subida, reintentando…"))
                     try? await Task.sleep(nanoseconds: UInt64(min(30, 2 * failures)) * 1_000_000_000)
                 }
                 continue
@@ -310,7 +310,7 @@ actor ChunkUploader {
                                                                   fileName: "chunk.mp4", fileData: chunk)
         if code == 409, let b = obj["bytes_received"] as? Int { return Int64(b) }      // seguir desde donde tiene el servidor
         guard (200..<300).contains(code) else {
-            throw PrePodClient.Failure(message: (obj["error"] as? String) ?? "prodPod respondió \(code)")
+            throw PrePodClient.Failure(message: (obj["error"] as? String) ?? String(localized: "prodPod respondió \(code)"))
         }
         if finalize { return offset }
         if let b = obj["bytes_received"] as? Int { return Int64(b) }

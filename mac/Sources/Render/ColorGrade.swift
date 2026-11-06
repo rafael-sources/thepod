@@ -34,8 +34,8 @@ struct ColorGrade: Codable, Equatable {
 
     /// Looks de serie (paramétricos, sin archivos): sirven como punto de partida.
     static let builtIn: [(name: String, grade: ColorGrade)] = [
-        ("Cálido Studio", { var g = ColorGrade(); g.temperature = 12; g.contrast = 10; g.saturation = 8; g.exposure = 0.1; g.look = "Cálido Studio"; return g }()),
-        ("Frío noche", { var g = ColorGrade(); g.temperature = -18; g.contrast = 12; g.saturation = -10; g.look = "Frío noche"; return g }()),
+        (String(localized: "Cálido Studio"), { var g = ColorGrade(); g.temperature = 12; g.contrast = 10; g.saturation = 8; g.exposure = 0.1; g.look = String(localized: "Cálido Studio"); return g }()),
+        (String(localized: "Frío noche"), { var g = ColorGrade(); g.temperature = -18; g.contrast = 12; g.saturation = -10; g.look = String(localized: "Frío noche"); return g }()),
         ("Documental", { var g = ColorGrade(); g.saturation = -22; g.contrast = 8; g.exposure = -0.05; g.look = "Documental"; return g }()),
     ]
 

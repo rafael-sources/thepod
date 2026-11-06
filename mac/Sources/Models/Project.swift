@@ -108,7 +108,7 @@ struct Project: Codable, Identifiable, Equatable {
             }
             return lane.name
         }
-        return "Pista \(laneId)"
+        return String(localized: "Pista \(laneId)")
     }
 
     func participant(forLane laneId: Int) -> Participant? {
@@ -249,13 +249,13 @@ struct VoiceEQ: Codable, Equatable {
     var key: String { String(format: "l%+.1fm%+.1fh%+.1f%@%@%@", low, mid, high, rumbleCut ? "r" : "", compress ? "c" : "", deess ? "d" : "") }
     var ffmpegFilter: String {
         var f: [String] = []
-        if rumbleCut { f += ["highpass=f=120", "equalizer=f=250:t=q:w=1:g=-3"] }
-        if abs(low) >= 0.1 { f.append(String(format: "equalizer=f=120:t=q:w=0.8:g=%.1f", low)) }
-        if abs(mid) >= 0.1 { f.append(String(format: "equalizer=f=1000:t=q:w=1:g=%.1f", mid)) }
-        if abs(high) >= 0.1 { f.append(String(format: "equalizer=f=6000:t=q:w=0.8:g=%.1f", high)) }
-        if deess { f.append("deesser=i=0.5:m=0.5:f=0.5") }
-        if compress { f.append("acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4") }
-        f.append("alimiter=limit=0.95:level=0")
+        if rumbleCut { f += ["highpass=f=120", String(localized: "equalizer=f=250:t=q:w=1:g=-3")] }
+        if abs(low) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=120:t=q:w=0.8:g=%.1f"), low)) }
+        if abs(mid) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=1000:t=q:w=1:g=%.1f"), mid)) }
+        if abs(high) >= 0.1 { f.append(String(format: String(localized: "equalizer=f=6000:t=q:w=0.8:g=%.1f"), high)) }
+        if deess { f.append(String(localized: "deesser=i=0.5:m=0.5:f=0.5")) }
+        if compress { f.append(String(localized: "acompressor=threshold=-20dB:ratio=3:attack=8:release=140:makeup=4dB:knee=4")) }
+        f.append(String(localized: "alimiter=limit=0.95:level=0"))
         return f.joined(separator: ",")
     }
 }
@@ -895,7 +895,7 @@ enum ExportFormat: String, Codable, CaseIterable, Identifiable {
         }
     }
     /// Tamaño del video. Con el plan Gratis el lado corto es 720 (1280×720, 720×1280, 720×720).
-    private var planNote: String { (Plan.maxHeight ?? 1080) < 1080 ? " (plan \(Plan.name))" : "" }
+    private var planNote: String { (Plan.maxHeight ?? 1080) < 1080 ? String(localized: " (plan \(Plan.name))") : "" }
 
     /// 4K para YouTube: solo mientras se exporta (la vista previa sigue en 1080) y solo con un plan
     /// que incluye la app. Se activa con `ExportFormat.$uhd.withValue(true) { … }`.
@@ -1568,8 +1568,8 @@ extension Project {
             end = min(end, duration)
             guard end > start + 1 else { return nil }
             let title = m.label.trimmingCharacters(in: .whitespacesAndNewlines)
-            return Reel(title: title.isEmpty ? "Momento \(i + 1)" : title,
-                        reason: "Momento marcado en postPod", start: start, end: end)
+            return Reel(title: title.isEmpty ? String(localized: "Momento \(i + 1)") : title,
+                        reason: String(localized: "Momento marcado en postPod"), start: start, end: end)
         }
     }
 }
@@ -1628,7 +1628,7 @@ struct CaptionStyle: Codable, Equatable {
         return [("clasico", "Clásico", clasico),
                 ("tiktok", "TikTok", tiktok),
                 ("comic", "Cómic", comic),
-                ("caja", "Caja negra", caja),
+                ("caja", String(localized: "Caja negra"), caja),
                 ("minimal", "Discreto", minimal)]
     }()
 }

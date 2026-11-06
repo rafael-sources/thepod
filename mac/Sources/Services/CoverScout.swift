@@ -57,7 +57,7 @@ enum CoverScout {
             try Task.checkCancellation()
             let name = project.laneName(src.laneId)
             let scores = try await scoreLane(src, times: times) { f in
-                progress((Double(i) + f) / Double(sources.count), "Mirando a \(name)…")
+                progress((Double(i) + f) / Double(sources.count), String(localized: "Mirando a \(name)…"))
             }
             perLane.append(scores)
         }

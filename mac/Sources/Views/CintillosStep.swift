@@ -10,17 +10,17 @@ struct CintillosStep: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     StepHeader(title: "Cintillos",
-                               subtitle: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar.", step: .cintillos)
+                               subtitle: String(localized: "Los textos tipo noticiero que entran abajo, con animación y un sonido bajo. Los del director llegan solos de prodPod; aquí agregas los que faltaron al grabar."), step: .cintillos)
                     Card {
                         Text("Agregar donde está el video").font(.headline)
                         HStack(spacing: 10) {
-                            styleButton("Noticiero", help: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.") {
+                            styleButton("Noticiero", help: String(localized: "Dos barras: color con etiqueta y título, blanco con el texto. Logo a la izquierda.")) {
                                 _ = session.addCintillo(style: "news", kind: "banner", logoFile: session.project.logoFile, tag: "AHORA")
                             } preview: { newsPreview }
-                            styleButton("Limpio", help: "Una línea de color, título grande y texto chico. Sin cajas.") {
+                            styleButton("Limpio", help: String(localized: "Una línea de color, título grande y texto chico. Sin cajas.")) {
                                 _ = session.addCintillo(style: "clean", kind: "comment")
                             } preview: { cleanPreview }
-                            styleButton("Sponsor", help: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.") {
+                            styleButton("Sponsor", help: String(localized: "Tarjeta con el logo del sponsor grande, PATROCINA y la frase.")) {
                                 _ = session.addCintillo(style: "sponsor", kind: "sponsor", tag: "PATROCINA")
                             } preview: { sponsorPreview }
                         }
@@ -135,7 +135,7 @@ struct CintilloEditor: View {
     let sel: ProjectSession.TrackSel
 
     static let colors = ["#D64545", "#6B8FE6", "#E8B85A", "#2E9E6B", "#7C2D3D", "#111111"]
-    static let tags = ["AHORA", "SEGMENTO", "PATROCINA", "EN VIVO", "DATO", ""]
+    static let tags = ["AHORA", "SEGMENTO", "PATROCINA", String(localized: "EN VIVO"), "DATO", ""]
 
     private var reel: Reel? { if case .reelCintillo(let rid, _) = sel { return session.project.reels.first { $0.id == rid } }; return nil }
     private var c: Binding<DirectorCintillo> {
@@ -151,7 +151,7 @@ struct CintilloEditor: View {
         let lo = reel?.start ?? 0
         let hi = reel?.end ?? session.project.duration
         HStack {
-            Label((reel != nil ? "Cintillo del reel · " : "Cintillo · ") + (cin.style == "clean" ? "Limpio" : cin.style == "sponsor" ? "Sponsor" : "Noticiero"), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
+            Label((reel != nil ? String(localized: "Cintillo del reel · ") : String(localized: "Cintillo · ")) + (cin.style == "clean" ? "Limpio" : cin.style == "sponsor" ? "Sponsor" : "Noticiero"), systemImage: "rectangle.bottomthird.inset.filled").font(.headline)
             if cin.fromDirector { Text("del director").font(.caption).foregroundStyle(Theme.secondary) }
             Spacer()
             if reel == nil {
@@ -182,7 +182,7 @@ struct CintilloEditor: View {
             HStack(spacing: 6) {
                 Text("Etiqueta").frame(width: 72, alignment: .leading)
                 ForEach(Self.tags, id: \.self) { t in
-                    Button(t.isEmpty ? "Sin etiqueta" : t) { c.wrappedValue.tag = t }
+                    Button(t.isEmpty ? String(localized: "Sin etiqueta") : t) { c.wrappedValue.tag = t }
                         .buttonStyle(.bordered).controlSize(.mini)
                         .tint(cin.tagText == t ? Theme.accent : nil)
                 }
@@ -246,7 +246,7 @@ struct CintilloEditor: View {
             Spacer()
             Button { session.seek(timeline: max(0, cin.start - 0.5), play: true) } label: { Label("Ver", systemImage: "play.fill") }.controlSize(.small)
         }
-        Text((reel != nil ? "Solo en este reel. " : "") + "Abajo a la izquierda, encima del video y debajo de los subtítulos. Entra con el logo, se despliegan las barras y aparece el texto; sale a la izquierda. Si hay dos a la vez, el segundo sube.")
+        Text((reel != nil ? String(localized: "Solo en este reel. ") : "") + String(localized: "Abajo a la izquierda, encima del video y debajo de los subtítulos. Entra con el logo, se despliegan las barras y aparece el texto; sale a la izquierda. Si hay dos a la vez, el segundo sube."))
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }

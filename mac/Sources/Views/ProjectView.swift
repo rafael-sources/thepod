@@ -160,10 +160,10 @@ struct ProjectView: View {
     private var readiness: some View {
         let p = session.project
         let items: [(Bool, String, Bool)] = [   // (hecho, texto, opcional)
-            (p.fix.lastRun != nil, "Sonido limpio", false),
+            (p.fix.lastRun != nil, String(localized: "Sonido limpio"), false),
             (p.isTranscribed, "Subtítulos", true),
-            (p.backgroundFile != nil && p.logoFile != nil, "Fondo y logo del podcast", true),
-            (p.coverTime != nil, "Portada elegida", true),
+            (p.backgroundFile != nil && p.logoFile != nil, String(localized: "Fondo y logo del podcast"), true),
+            (p.coverTime != nil, String(localized: "Portada elegida"), true),
         ]
         return VStack(alignment: .leading, spacing: 5) {
             Text("LISTO PARA EXPORTAR").font(.system(size: 10, weight: .semibold)).tracking(1).foregroundStyle(Theme.secondary)
@@ -171,7 +171,7 @@ struct ProjectView: View {
                 HStack(spacing: 6) {
                     Image(systemName: it.0 ? "checkmark" : "circle").font(.system(size: 10, weight: .bold))
                         .foregroundStyle(it.0 ? Theme.good : Theme.secondary)
-                    Text(it.1 + (it.2 && !it.0 ? " (opcional)" : "")).font(.caption)
+                    Text(it.1 + (it.2 && !it.0 ? String(localized: " (opcional)") : "")).font(.caption)
                         .foregroundStyle(it.0 || !it.2 ? .white : Theme.secondary)
                 }
             }
@@ -338,8 +338,8 @@ struct TrackInspector: View {
             Toggle("Mudo", isOn: Binding(get: { lane.muted }, set: { _ in session.toggleMute(lane.id) })).toggleStyle(.checkbox)
         }
         .font(.callout).controlSize(.small)
-        fadeRow(label: "Fade entrada", value: $session.project.lanes[i].fadeIn)
-        fadeRow(label: "Fade salida", value: $session.project.lanes[i].fadeOut)
+        fadeRow(label: String(localized: "Fade entrada"), value: $session.project.lanes[i].fadeIn)
+        fadeRow(label: String(localized: "Fade salida"), value: $session.project.lanes[i].fadeOut)
         HStack(spacing: 6) {
             Text("Desfase").frame(width: 72, alignment: .leading)
             Button("−1 s") { session.setLaneOffset(lane.id, lane.offset - 1) }.help("Que suene un segundo antes")
@@ -426,7 +426,7 @@ struct TrackInspector: View {
         let hi = reel?.end ?? session.project.duration
         let len = clip.length
         return Group {
-        header((reel != nil ? "Música del reel · " : "") + "\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
+        header((reel != nil ? String(localized: "Música del reel · ") : "") + "\(name) · \(EditEngine.clock(clip.tlStart))", "music.note")
         volumeRow(value: b.volume, max: 1.5)
         Toggle("Bajar sola cuando alguien habla", isOn: Binding(get: { clip.ducks }, set: { b.wrappedValue.duck = $0 }))
             .font(.callout)
@@ -440,8 +440,8 @@ struct TrackInspector: View {
         }
         Toggle(reel != nil ? "Repetir en bucle hasta el final del reel" : "Repetir en bucle hasta el final del episodio", isOn: b.loop)
             .font(.callout)
-        fadeRow(label: "Fade entrada", value: b.fadeIn)
-        fadeRow(label: "Fade salida", value: b.fadeOut)
+        fadeRow(label: String(localized: "Fade entrada"), value: b.fadeIn)
+        fadeRow(label: String(localized: "Fade salida"), value: b.fadeOut)
         HStack(spacing: 6) {
             Text("Empieza").frame(width: 72, alignment: .leading)
             TimecodeField(seconds: b.tlStart, range: lo...max(lo, hi - 0.5))
@@ -456,10 +456,10 @@ struct TrackInspector: View {
         }
         .font(.callout).controlSize(.small)
         let over = clip.tlStart + len - hi
-        Text(String(format: "Dura %.0f s.", len)
-             + (clip.loop ? " Se repite hasta el final y hace fade al terminar." : (over > 0.5 ? String(format: " Se corta al final (sobran %.0f s).", over) : ""))
-             + (reel != nil ? " Solo suena en este reel." : " Los cortes del episodio también se aplican a la música.")
-             + (reel == nil && (session.project.intro != nil || session.project.outro != nil) ? " Nunca suena dentro del intro ni del cierre: «Al inicio» es justo después del intro y «Al final» justo antes del cierre." : ""))
+        Text(String(format: String(localized: "Dura %.0f s."), len)
+             + (clip.loop ? String(localized: " Se repite hasta el final y hace fade al terminar.") : (over > 0.5 ? String(format: String(localized: " Se corta al final (sobran %.0f s)."), over) : ""))
+             + (reel != nil ? String(localized: " Solo suena en este reel.") : String(localized: " Los cortes del episodio también se aplican a la música."))
+             + (reel == nil && (session.project.intro != nil || session.project.outro != nil) ? String(localized: " Nunca suena dentro del intro ni del cierre: «Al inicio» es justo después del intro y «Al final» justo antes del cierre.") : ""))
             .font(.caption2).foregroundStyle(Theme.secondary)
         }
     }

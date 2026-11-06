@@ -38,7 +38,7 @@ enum Speech {
         let job = Job()
         try await job.run(text: text, voiceId: voice?.id, rate: rate, url: url)
         guard FileManager.default.fileExists(atPath: url.path) else {
-            throw NSError(domain: "thePod.speech", code: 1, userInfo: [NSLocalizedDescriptionKey: "La Mac no generó audio para ese texto. Prueba otra voz."])
+            throw NSError(domain: "thePod.speech", code: 1, userInfo: [NSLocalizedDescriptionKey: String(localized: "La Mac no generó audio para ese texto. Prueba otra voz.")])
         }
     }
 
@@ -85,7 +85,7 @@ enum Speech {
             file = nil
             synth.delegate = nil
             if timeout && failure == nil {
-                failure = NSError(domain: "thePod.speech", code: 2, userInfo: [NSLocalizedDescriptionKey: "La voz tardó demasiado. Prueba con un texto más corto u otra voz."])
+                failure = NSError(domain: "thePod.speech", code: 2, userInfo: [NSLocalizedDescriptionKey: String(localized: "La voz tardó demasiado. Prueba con un texto más corto u otra voz.")])
             }
             if let failure { cont?.resume(throwing: failure) } else { cont?.resume() }
             cont = nil

@@ -18,7 +18,7 @@ struct CoverStep: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 StepHeader(title: "Portada",
-                           subtitle: "La imagen del episodio: va a Instagram como portada y sirve de miniatura para YouTube.",
+                           subtitle: String(localized: "La imagen del episodio: va a Instagram como portada y sirve de miniatura para YouTube."),
                            step: .cover)
 
                 Card {

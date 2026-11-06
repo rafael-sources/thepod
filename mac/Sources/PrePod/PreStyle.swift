@@ -169,7 +169,7 @@ extension PreEpisode {
         case 1: return "mañana"
         case -1: return "ayer"
         case 2...: return "en \(days) días"
-        default: return "hace \(-days) días"
+        default: return String(localized: "hace \(-days) días")
         }
     }
 

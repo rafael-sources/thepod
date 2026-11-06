@@ -223,7 +223,7 @@ struct PublishReelSheet: View {
                     }
                 }
                 connecting = nil
-                failure = "No vimos la conexión. Si ya diste el permiso, cierra y vuelve a abrir esta ventana."
+                failure = String(localized: "No vimos la conexión. Si ya diste el permiso, cierra y vuelve a abrir esta ventana.")
             } catch is CancellationError {
             } catch {
                 connecting = nil
@@ -234,7 +234,7 @@ struct PublishReelSheet: View {
 
     private func send() {
         failure = nil
-        if later && when < Date() { failure = "Esa fecha ya pasó."; return }
+        if later && when < Date() { failure = String(localized: "Esa fecha ya pasó."); return }
         let targets = chosen.map { (platform: $0.id, caption: captions[$0.id] ?? "") }
         sent = true
         session.publishReel(reel, targets: targets, at: later ? when : nil)

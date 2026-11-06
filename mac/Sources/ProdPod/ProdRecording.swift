@@ -26,7 +26,7 @@ extension ProdStudio {
     // MARK: Prueba inicial (igual que la web)
 
     func runPreflight() async {
-        preflight = "Midiendo tu conexión…"
+        preflight = String(localized: "Midiendo tu conexión…")
         let camHeight = Int(captureSize.split(separator: "×").last ?? "1080") ?? 1080
         do {
             let mbps = try await ProdPodClient.shared.uploadTest()
@@ -35,11 +35,11 @@ extension ProdStudio {
             if let mh = session.limits?.max_height, q.height > mh { q = RecordingQuality(height: 720, bitrate: 2_500_000) }
             recMax = q
             recQuality = q
-            preflight = "Tu grabación irá en \(q.label) · subida \(String(format: "%.1f", mbps)) Mbps"
+            preflight = String(localized: "Tu grabación irá en \(q.label) · subida \(String(format: "%.1f", mbps)) Mbps")
         } catch {
             let q = RecordingQuality(height: 720, bitrate: 2_500_000)
             recMax = q; recQuality = q
-            preflight = "No pude medir tu conexión: grabaré en 720p para ir seguro."
+            preflight = String(localized: "No pude medir tu conexión: grabaré en 720p para ir seguro.")
         }
     }
 
@@ -106,12 +106,12 @@ extension ProdStudio {
         case "overlay_remove":
             if let id = m["event_id"] as? Int { overlays.removeAll { $0.id == id } }
         case "director_chat":
-            if let t = m["text"] as? String, !t.isEmpty { flash("Director: \(t)") }
+            if let t = m["text"] as? String, !t.isEmpty { flash(String(localized: "Director: \(t)")) }
         case "hand_raise":
             if let id = m["identity"] as? String {
                 let up = (m["up"] as? Bool) ?? false
                 hands[id] = up
-                if up { flash("\(people.first(where: { $0.id == id })?.name ?? "Alguien") levantó la mano") }
+                if up { flash(String(localized: "\(people.first(where: { $0.id == id })?.name ?? "Alguien") levantó la mano")) }
             }
         case "upload_status":
             if let id = m["identity"] as? String {
@@ -140,10 +140,10 @@ extension ProdStudio {
             ifbOn = false
             applyIFB()
         case "force_mute":
-            if (m["target"] as? String) == myIdentity, micOn { toggleMic(); flash("El director silenció tu micrófono") }
+            if (m["target"] as? String) == myIdentity, micOn { toggleMic(); flash(String(localized: "El director silenció tu micrófono")) }
         case "kick":
             if (m["target_identity"] as? String) == myIdentity {
-                error = "Te sacaron de la sala."
+                error = String(localized: "Te sacaron de la sala.")
                 Task { await leave() }
             }
         default: break
@@ -156,7 +156,7 @@ extension ProdStudio {
         for p in room.remoteParticipants.values where p.identity?.stringValue.hasPrefix("director_") ?? false {
             for pub in p.audioTracks { (pub.track as? RemoteAudioTrack)?.volume = ifbOn ? 1 : 0 }
         }
-        if ifbOn { flash("El director te está hablando") }
+        if ifbOn { flash(String(localized: "El director te está hablando")) }
     }
 
     // MARK: Preparado y cuenta regresiva
@@ -249,7 +249,7 @@ extension ProdStudio {
             let sid = session.id
             Task { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(sid)/backup/start") }
         }
-        flash(practice ? "Ensayo: se graba solo en tu Mac" : "Grabando")
+        flash(practice ? String(localized: "Ensayo: se graba solo en tu Mac") : "Grabando")
     }
 
     /// Botón Detener (solo quien creó la sala, como en la web).
@@ -280,7 +280,7 @@ extension ProdStudio {
         }
         ownReady = false
         readyMap = [:]
-        flash(wasPractice ? "Ensayo terminado" : "Grabación terminada: subiendo tu pista")
+        flash(wasPractice ? String(localized: "Ensayo terminado") : String(localized: "Grabación terminada: subiendo tu pista"))
         // Como en la web: la grabación ya se detuvo (las pistas quedan sincronizadas); recién después de
         // avisar con una cuenta 3-2-1 se apagan cámara y micrófono, en vez de cortarlos de golpe.
         for n in [3, 2, 1] {
@@ -316,7 +316,7 @@ extension ProdStudio {
         myUpload = UploadState(state: state, bytes: sent, total: total, message: message, pending: done ? 0 : pending, eta: done ? 0 : eta)
         send(["type": "upload_status", "identity": myIdentity, "state": done ? "done" : (message != nil ? "error" : "streaming"),
               "bytes": sent, "pending": done ? 0 : pending, "eta": done ? 0 : (eta.map { $0 as Any } ?? NSNull())])
-        if done { flash("Tu pista ya está en prodPod") }
+        if done { flash(String(localized: "Tu pista ya está en prodPod")) }
     }
 
     var canExport: Bool {
@@ -331,8 +331,8 @@ extension ProdStudio {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { exportState = e; return }
                 let n = r["exported"] as? Int ?? 0
-                exportState = n > 0 ? "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post, tócalo en “En postPod web” → Traer a la Mac."
-                                    : "Ya estaba en postPod (se envía solo cuando terminan de subir todas las pistas)."
+                exportState = n > 0 ? String(localized: "Enviado a postPod (\(n) \(n == 1 ? "pista" : "pistas")). En post, tócalo en “En postPod web” → Traer a la Mac.")
+                                    : String(localized: "Ya estaba en postPod (se envía solo cuando terminan de subir todas las pistas).")
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -345,7 +345,7 @@ extension ProdStudio {
         Task {
             _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/chapter-markers",
                                                          ["tl_offset_seconds": off, "label": ""])
-            flash("Momento marcado en \(clock(Int(off)))")
+            flash(String(localized: "Momento marcado en \(clock(Int(off)))"))
         }
     }
 
@@ -435,11 +435,11 @@ extension ProdStudio {
             let name = session.limits?.plan_name ?? "Gratis"
             if !planWarned, t >= Double(maxS - 60) {
                 planWarned = true
-                flash("Queda 1 minuto: el plan \(name) graba hasta \(maxS / 60) minutos")
+                flash(String(localized: "Queda 1 minuto: el plan \(name) graba hasta \(maxS / 60) minutos"))
             }
             if isOwner, t >= Double(maxS), !planStopped {
                 planStopped = true
-                flash("Llegaste a los \(maxS / 60) minutos del plan \(name): la grabación se detuvo")
+                flash(String(localized: "Llegaste a los \(maxS / 60) minutos del plan \(name): la grabación se detuvo"))
                 stopRecording()
             }
         }
@@ -452,7 +452,7 @@ extension ProdStudio {
                 sponsorAlert = s
                 if !practice {
                     Task { _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/chapter-markers",
-                                                                        ["tl_offset_seconds": t, "label": "SPONSOR: \(s.name)"]) }
+                                                                        ["tl_offset_seconds": t, "label": String(localized: "SPONSOR: \(s.name)")]) }
                 }
                 let id = s.id
                 Task { try? await Task.sleep(nanoseconds: 15_000_000_000); if sponsorAlert?.id == id { sponsorAlert = nil } }

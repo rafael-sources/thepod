@@ -15,7 +15,7 @@ enum Importer {
     enum Failure: LocalizedError {
         case nothingToImport
         var errorDescription: String? {
-            "No encontramos videos ni audios para importar. Arrastra el paquete .zip de postPod o los archivos de tu grabación."
+            String(localized: "No encontramos videos ni audios para importar. Arrastra el paquete .zip de postPod o los archivos de tu grabación.")
         }
     }
 
@@ -29,7 +29,7 @@ enum Importer {
         var suggestedName: String?
         for url in urls {
             if url.pathExtension.lowercased() == "zip" {
-                progress("Abriendo el paquete…", 0.02)
+                progress(String(localized: "Abriendo el paquete…"), 0.02)
                 let dest = temp.appendingPathComponent(url.deletingPathExtension().lastPathComponent)
                 try await unzip(url, to: dest)
                 roots.append(descend(dest))
@@ -98,7 +98,7 @@ enum Importer {
 
     // MARK: - postPod bundle
 
-    static let compositeMarker = "[composite_podcast_hstack]"
+    static let compositeMarker = String(localized: "[composite_podcast_hstack]")
 
     static func importBundle(root: URL, progress: @escaping Progress) async throws -> Project {
         let fm = FileManager.default
@@ -252,7 +252,7 @@ enum Importer {
         }
 
         // Transcripts: words.json sidecars are in source time of each media file.
-        progress("Leyendo transcripciones…", 0.92)
+        progress(String(localized: "Leyendo transcripciones…"), 0.92)
         var words: [Word] = []
         for lane in project.lanes {
             for placed in lane.placed {
@@ -277,7 +277,7 @@ enum Importer {
         if db.tableExists("transcript_cuts") {
             project.cuts = try db.query("SELECT * FROM transcript_cuts ORDER BY start_seconds").compactMap { r in
                 guard let s = r.double("start_seconds"), let e = r.double("end_seconds"), e > s else { return nil }
-                return Cut(start: s, end: e, kind: .imported, label: r.string("label") ?? "Corte de postPod web")
+                return Cut(start: s, end: e, kind: .imported, label: r.string("label") ?? String(localized: "Corte de postPod web"))
             }
         }
 
@@ -554,7 +554,7 @@ enum Importer {
             let temp = ProjectStore.cacheFolder(for: slug).appendingPathComponent("repaired_\(id).webm")
             guard let fixed = WebMRepair.repair(src, donors: donors, to: temp), await canOpen(fixed) else {
                 throw NSError(domain: "import", code: 3, userInfo: [NSLocalizedDescriptionKey:
-                    "El archivo \(src.lastPathComponent) está dañado (le falta el encabezado) y no pudimos repararlo. Impórtalo junto a otra pista de la misma grabación para intentarlo."])
+                    String(localized: "El archivo \(src.lastPathComponent) está dañado (le falta el encabezado) y no pudimos repararlo. Impórtalo junto a otra pista de la misma grabación para intentarlo.")])
             }
             input = fixed
             repairedTemp = fixed
@@ -569,12 +569,12 @@ enum Importer {
         let base = hasVideo ? min(vS, starts.audio == nil ? vS : aS) : aS
         let startOffset = base > 0.5 ? base : 0
         let dest = mediaDir.appendingPathComponent("\(stem).\(hasVideo ? "mp4" : "m4a")")
-        var args = ["-fflags", "+genpts+discardcorrupt", "-err_detect", "ignore_err", "-i", input.path]
+        var args = ["-fflags", String(localized: "+genpts+discardcorrupt"), "-err_detect", "ignore_err", "-i", input.path]
         if hasVideo {
             let vStart = max(0, vS - startOffset)
-            var vf = startOffset > 0 ? "setpts=PTS-STARTPTS,format=yuv420p" : "format=yuv420p"
+            var vf = startOffset > 0 ? String(localized: "setpts=PTS-STARTPTS,format=yuv420p") : String(localized: "format=yuv420p")
             if vStart > 0.1 {
-                vf = "setpts=PTS-STARTPTS,tpad=start_duration=\(String(format: "%.3f", vStart)):color=black,format=yuv420p"
+                vf = String(localized: "setpts=PTS-STARTPTS,tpad=start_duration=\(String(format: "%.3f", vStart)):color=black,format=yuv420p")
             }
             args += ["-map", "0:v:0", "-map", "0:a:0?", "-vf", vf,
                      "-c:v", "h264_videotoolbox", "-b:v", "8M", "-maxrate", "12M", "-bufsize", "16M",
@@ -584,9 +584,9 @@ enum Importer {
         }
         let aStart = max(0, aS - startOffset)
         let af = aStart > 0.1
-            ? "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1"
-            : (startOffset > 0 ? "asetpts=PTS-STARTPTS,aresample=async=1" : "aresample=async=1:first_pts=0")
-        args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", "+faststart", dest.path]
+            ? String(localized: "asetpts=PTS-STARTPTS,adelay=delays=\(Int(aStart * 1000)):all=1,aresample=async=1")
+            : (startOffset > 0 ? String(localized: "asetpts=PTS-STARTPTS,aresample=async=1") : String(localized: "aresample=async=1:first_pts=0"))
+        args += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-af", af, "-movflags", String(localized: "+faststart"), dest.path]
         try await FFmpeg.run(args, duration: max(1, duration - startOffset)) { f in progress("Convirtiendo", f) }
         var media = try await describe(dest, id: id, original: src.lastPathComponent, slug: slug)
         media.startOffset = startOffset
@@ -628,7 +628,7 @@ enum Importer {
             p.terminationHandler = { proc in
                 if proc.terminationStatus == 0 { c.resume() }
                 else { c.resume(throwing: NSError(domain: "unzip", code: Int(proc.terminationStatus),
-                                                  userInfo: [NSLocalizedDescriptionKey: "No se pudo descomprimir \(zip.lastPathComponent)"])) }
+                                                  userInfo: [NSLocalizedDescriptionKey: String(localized: "No se pudo descomprimir \(zip.lastPathComponent)")])) }
             }
             do { try p.run() } catch { c.resume(throwing: error) }
         }

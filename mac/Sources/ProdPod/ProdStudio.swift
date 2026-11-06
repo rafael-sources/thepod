@@ -7,7 +7,7 @@ import LiveKit
 enum RoomQuality: String, CaseIterable, Identifiable {
     case low, med, high
     var id: String { rawValue }
-    var title: String { ["low": "Baja · 360p", "med": "Media · 480p", "high": "Alta · 720p"][rawValue]! }
+    var title: String { ["low": String(localized: "Baja · 360p"), "med": String(localized: "Media · 480p"), "high": String(localized: "Alta · 720p")][rawValue]! }
     var size: (width: Int, height: Int) {
         switch self { case .low: return (640, 360); case .med: return (854, 480); case .high: return (1280, 720) }
     }
@@ -218,7 +218,7 @@ final class ProdStudio: NSObject, ObservableObject {
 
     func restartCapture() {
         guard let cam = cameras.first(where: { $0.uniqueID == cameraId }) ?? cameras.first else {
-            error = "No encontré ninguna cámara conectada."
+            error = String(localized: "No encontré ninguna cámara conectada.")
             return
         }
         let mic = mics.first(where: { $0.uniqueID == micId })
@@ -284,7 +284,7 @@ final class ProdStudio: NSObject, ObservableObject {
                 await loadParticipants()
             } catch {
                 phase = .failed(error.localizedDescription)
-                self.error = "No se pudo entrar a la sala: \(error.localizedDescription)"
+                self.error = String(localized: "No se pudo entrar a la sala: \(error.localizedDescription)")
                 await disconnect()
                 phase = .prejoin
             }
@@ -306,7 +306,7 @@ final class ProdStudio: NSObject, ObservableObject {
     func copyInvite(_ url: String, name: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url, forType: .string)
-        flash("Link de \(name) copiado")
+        flash(String(localized: "Link de \(name) copiado"))
     }
 
     func invite(name: String) {
@@ -353,7 +353,7 @@ final class ProdStudio: NSObject, ObservableObject {
     }
 
     func runMicCheck() {
-        guard pipe.micLevel != nil else { error = "No hay micrófono activo."; return }
+        guard pipe.micLevel != nil else { error = String(localized: "No hay micrófono activo."); return }
         micCheck = nil
         micCheckPower = []
         micCheckPeak = -160
@@ -472,10 +472,10 @@ extension ProdStudio: RoomDelegate {
         Task { @MainActor in
             if id.hasPrefix("director_") {
                 self.directorPresent = true
-                self.flash("El director está conectado")
+                self.flash(String(localized: "El director está conectado"))
                 if self.ownReady { self.send(["type": "ready_toggle", "identity": self.myIdentity, "ready": true]) }
             } else {
-                self.flash("\(n) entró")
+                self.flash(String(localized: "\(n) entró"))
             }
             self.refresh(); await self.loadParticipants()
         }
@@ -484,7 +484,7 @@ extension ProdStudio: RoomDelegate {
         let n = participant.name ?? "Alguien"
         let id = participant.identity?.stringValue ?? ""
         Task { @MainActor in
-            if id.hasPrefix("director_") { self.updateDirectorPresence() } else { self.flash("\(n) salió") }
+            if id.hasPrefix("director_") { self.updateDirectorPresence() } else { self.flash(String(localized: "\(n) salió")) }
             self.readyMap[id] = nil
             self.refresh()
         }
@@ -510,14 +510,14 @@ extension ProdStudio: RoomDelegate {
     }
     nonisolated func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldConnectionState: ConnectionState) {
         Task { @MainActor in
-            if connectionState == .reconnecting { self.flash("Se cortó la conexión, reconectando…") }
-            if connectionState == .connected, oldConnectionState == .reconnecting { self.flash("Conexión recuperada") }
+            if connectionState == .reconnecting { self.flash(String(localized: "Se cortó la conexión, reconectando…")) }
+            if connectionState == .connected, oldConnectionState == .reconnecting { self.flash(String(localized: "Conexión recuperada")) }
         }
     }
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in
             guard self.phase == .inRoom else { return }
-            self.error = "Saliste de la sala" + (error.map { ": \($0.localizedDescription)" } ?? ".")
+            self.error = String(localized: "Saliste de la sala") + (error.map { ": \($0.localizedDescription)" } ?? ".")
             await self.disconnect()
             self.phase = .prejoin
         }

@@ -11,18 +11,18 @@ final class SQLiteReader {
         if sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) != SQLITE_OK {
             let msg = db.map { String(cString: sqlite3_errmsg($0)) } ?? "desconocido"
             sqlite3_close(db)
-            throw NSError(domain: "SQLite", code: 1, userInfo: [NSLocalizedDescriptionKey: "No se pudo abrir la base del proyecto: \(msg)"])
+            throw NSError(domain: "SQLite", code: 1, userInfo: [NSLocalizedDescriptionKey: String(localized: "No se pudo abrir la base del proyecto: \(msg)")])
         }
     }
 
     deinit { sqlite3_close(db) }
 
     func tableExists(_ name: String) -> Bool {
-        !((try? query("SELECT name FROM sqlite_master WHERE type='table' AND name=?", [name])) ?? []).isEmpty
+        !((try? query(String(localized: "SELECT name FROM sqlite_master WHERE type='table' AND name=?"), [name])) ?? []).isEmpty
     }
 
     func columns(of table: String) -> Set<String> {
-        let rows = (try? query("PRAGMA table_info(\(table))")) ?? []
+        let rows = (try? query(String(localized: "PRAGMA table_info(\(table))"))) ?? []
         return Set(rows.compactMap { $0["name"] as? String })
     }
 

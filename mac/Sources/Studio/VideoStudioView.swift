@@ -108,9 +108,9 @@ struct VideoInspector: View {
         let t = session.playheadTimeline
         return VStack(alignment: .leading, spacing: 10) {
             header(o.title, "\(o.kind == .text ? "Texto" : o.kind == .sticker ? "Sticker" : "Imagen") · \(EditEngine.clock(o.start)) → \(EditEngine.clock(o.end))", color: VideoTracks.textColor)
-            KeyParamRow(session: session, index: i, param: LayerAnimation.x, label: "Posición X", range: -0.5...1.5, format: { String(format: "%.2f", $0) },
+            KeyParamRow(session: session, index: i, param: LayerAnimation.x, label: String(localized: "Posición X"), range: -0.5...1.5, format: { String(format: "%.2f", $0) },
                         staticValue: Binding(get: { session.project.overlays[i].x }, set: { session.project.overlays[i].x = $0 }))
-            KeyParamRow(session: session, index: i, param: LayerAnimation.y, label: "Posición Y", range: -0.5...1.5, format: { String(format: "%.2f", $0) },
+            KeyParamRow(session: session, index: i, param: LayerAnimation.y, label: String(localized: "Posición Y"), range: -0.5...1.5, format: { String(format: "%.2f", $0) },
                         staticValue: Binding(get: { session.project.overlays[i].y }, set: { session.project.overlays[i].y = $0 }))
             KeyParamRow(session: session, index: i, param: LayerAnimation.scale, label: "Tamaño", range: 0.2...4, format: { String(format: "%.0f %%", $0 * 100) },
                         staticValue: Binding(get: { session.project.overlays[i].scale }, set: { session.project.overlays[i].scale = $0 }))
@@ -160,8 +160,8 @@ struct VideoInspector: View {
                 if !ofPodcast.isEmpty || !mine.isEmpty {
                     Divider()
                     Menu("Borrar una plantilla") {
-                        ForEach(ofPodcast) { t in Button(t.name + " (podcast)", role: .destructive) { TitlePresets.remove(t.id, podcast: slug); templatesTick += 1 } }
-                        ForEach(mine) { t in Button(t.name + " (esta Mac)", role: .destructive) { TitlePresets.remove(t.id); templatesTick += 1 } }
+                        ForEach(ofPodcast) { t in Button(t.name + String(localized: " (podcast)"), role: .destructive) { TitlePresets.remove(t.id, podcast: slug); templatesTick += 1 } }
+                        ForEach(mine) { t in Button(t.name + String(localized: " (esta Mac)"), role: .destructive) { TitlePresets.remove(t.id); templatesTick += 1 } }
                     }
                 }
             } label: { Label("Plantillas de título", systemImage: "square.stack").font(.caption) }
@@ -221,7 +221,7 @@ struct VideoInspector: View {
     private func brollInspector(_ i: Int) -> some View {
         let b = session.project.brolls[i]
         return VStack(alignment: .leading, spacing: 10) {
-            header(b.title, "B-roll · \(EditEngine.clock(b.start)) → \(EditEngine.clock(b.end))", color: VideoTracks.brollColor)
+            header(b.title, String(localized: "B-roll · \(EditEngine.clock(b.start)) → \(EditEngine.clock(b.end))"), color: VideoTracks.brollColor)
             HStack {
                 Text("Entra con").font(.caption)
                 Spacer()
@@ -247,8 +247,8 @@ struct VideoInspector: View {
             if b.isVideo {
                 HStack { Text("Sonido").font(.caption); Slider(value: $session.project.brolls[i].volume, in: 0...1); Text(b.volume < 0.01 ? "mudo" : String(format: "%.0f %%", b.volume * 100)).font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing) }
                 SpeedRow(speed: $session.project.brolls[i].speed, range: 0.25...4, note: b.speedEnd == nil
-                         ? "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono."
-                         : "Velocidad al empezar el clip; abajo, al terminar. Entre las dos, una rampa suave.")
+                         ? String(localized: "Cámara lenta a la izquierda, acelerado a la derecha. Ocupa los mismos segundos en pantalla; el sonido mantiene su tono.")
+                         : String(localized: "Velocidad al empezar el clip; abajo, al terminar. Entre las dos, una rampa suave."))
                 HStack {
                     Toggle("Rampa", isOn: Binding(get: { b.speedEnd != nil }, set: { on in session.project.brolls[i].speedEnd = on ? (b.speed == 1 ? 2 : 1) : nil })).font(.caption).toggleStyle(.checkbox)
                     if b.speedEnd != nil {
@@ -257,7 +257,7 @@ struct VideoInspector: View {
                 }
             }
             Divider()
-            ColorPanel(grade: $session.project.brolls[i].grade, title: "Color de este clip")
+            ColorPanel(grade: $session.project.brolls[i].grade, title: String(localized: "Color de este clip"))
             Spacer(minLength: 8)
             Text("La transición actúa sobre este clip al entrar; lo de abajo (cámaras o el b-roll anterior) sigue hasta que este lo tapa.")
                 .font(.caption2).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
@@ -275,12 +275,12 @@ struct VideoInspector: View {
             HStack { Text("Sale en").font(.caption); Slider(value: $session.project.audioLane[i].fadeOut, in: 0...5); Text(String(format: "%.1f s", c.fadeOut)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
             Toggle("Fades de igual potencia (para cruzar)", isOn: $session.project.audioLane[i].crossfade).font(.caption)
             HStack { Text("Volumen").font(.caption); Slider(value: $session.project.audioLane[i].volume, in: 0...1); Text(String(format: "%.0f %%", c.volume * 100)).font(.caption.monospacedDigit()).frame(width: 36, alignment: .trailing) }
-            SpeedRow(speed: $session.project.audioLane[i].speed, range: 0.5...2, note: "Estira o comprime la música sin cambiar el tono: a 0,5× dura el doble, a 2× la mitad.")
+            SpeedRow(speed: $session.project.audioLane[i].speed, range: 0.5...2, note: String(localized: "Estira o comprime la música sin cambiar el tono: a 0,5× dura el doble, a 2× la mitad."))
             Divider()
             if let n = next {
                 let overlap = c.tlEnd - n.tlStart
                 if overlap > 0.05 {
-                    Label(String(format: "Cruzado con el siguiente: %.1f s", overlap), systemImage: "arrow.left.arrow.right").font(.caption).foregroundStyle(Theme.accent)
+                    Label(String(format: String(localized: "Cruzado con el siguiente: %.1f s"), overlap), systemImage: "arrow.left.arrow.right").font(.caption).foregroundStyle(Theme.accent)
                 } else {
                     Button("Cruzar con el siguiente (1,2 s)") { session.project.crossfade(c.id, with: n.id, seconds: 1.2) }.controlSize(.small)
                         .help("Adelanta el siguiente clip para que se solapen 1,2 s y pone fades curvos en los dos")
@@ -296,7 +296,7 @@ struct VideoInspector: View {
     private func cutInspector(_ i: Int) -> some View {
         let c = session.project.studioVideo.cuts[i]
         return VStack(alignment: .leading, spacing: 10) {
-            header("Cámara a mano", "\(EditEngine.clock(c.start)) → \(EditEngine.clock(c.end)) · gana sobre quien habla", color: Theme.accent)
+            header(String(localized: "Cámara a mano"), String(localized: "\(EditEngine.clock(c.start)) → \(EditEngine.clock(c.end)) · gana sobre quien habla"), color: Theme.accent)
             Picker("En grande", selection: Binding<Int?>(get: { c.lane }, set: { session.project.studioVideo.cuts[i].lane = $0 })) {
                 Text("Todas (según la plantilla)").tag(Int?.none)
                 ForEach(session.project.lanes) { l in Text(session.project.laneName(l.id)).tag(Int?.some(l.id)) }
@@ -335,9 +335,9 @@ struct VideoInspector: View {
                 }.labelsHidden().frame(width: 150)
             }
             if colorScope == 0 {
-                ColorPanel(grade: $session.project.grade, title: "Toda la pista (todas las cámaras y el b-roll)")
+                ColorPanel(grade: $session.project.grade, title: String(localized: "Toda la pista (todas las cámaras y el b-roll)"))
             } else if let li = session.project.lanes.firstIndex(where: { $0.id == colorScope }) {
-                ColorPanel(grade: $session.project.lanes[li].grade, title: "Cámara · \(session.project.laneName(colorScope))")
+                ColorPanel(grade: $session.project.lanes[li].grade, title: String(localized: "Cámara · \(session.project.laneName(colorScope))"))
                 MaskPanel(session: session, laneIndex: li)
             }
             if cams.count > 1 {
@@ -361,7 +361,7 @@ struct VideoInspector: View {
     // Nada seleccionado: cómo decide las cámaras
     private var camerasInspector: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header("Cámaras", "cómo se decide qué se ve", color: EpisodeTimeline.palette[0])
+            header("Cámaras", String(localized: "cómo se decide qué se ve"), color: EpisodeTimeline.palette[0])
             Toggle("Seguir a quien habla", isOn: $session.project.studioVideo.followSpeaker).font(.caption)
             HStack {
                 Text("Permanencia mínima").font(.caption)
@@ -474,9 +474,9 @@ struct VideoTracks: View {
                     ruler
                     track("Textos y stickers", color: Self.textColor, height: 56) { w in overlaysRow(w) }
                     track("B-roll e imágenes", color: Self.brollColor, height: 56) { w in brollsRow(w) }
-                    track("Cámaras", color: EpisodeTimeline.palette[0], height: 56, sub: session.project.studioVideo.followSpeaker ? "sigue a quien habla" : "plantilla fija") { w in camerasRow(w) }
+                    track("Cámaras", color: EpisodeTimeline.palette[0], height: 56, sub: session.project.studioVideo.followSpeaker ? String(localized: "sigue a quien habla") : String(localized: "plantilla fija")) { w in camerasRow(w) }
                     track("Cintillos y marcas", color: Self.cintilloColor, height: 40) { w in cintillosRow(w) }
-                    track("Voces", color: EpisodeTimeline.palette[0], height: 36, sub: "\(session.project.lanes.count) · pestaña Audio") { w in vocesRow(w) }
+                    track("Voces", color: EpisodeTimeline.palette[0], height: 36, sub: String(localized: "\(session.project.lanes.count) · pestaña Audio")) { w in vocesRow(w) }
                     track("Música y efectos", color: Self.musicColor, height: 44) { w in musicRow(w) }
                     if case .overlay(let id) = session.selectedTrack, let i = session.project.overlays.firstIndex(where: { $0.id == id }),
                        let a = session.project.overlays[i].animation, !a.isEmpty {
@@ -729,7 +729,7 @@ struct VideoTracks: View {
         ForEach(session.project.audioLane) { c in
             let name = session.project.mediaItem(c.mediaId)?.originalName ?? "Música"
             let sel: Bool = { if case .sound(let id) = session.selectedTrack { return id == c.id }; return false }()
-            clip(name + (c.speed != 1 ? String(format: " · %.2g×", c.speed) : "") + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? " · fades" : ""), start: c.tlStart, dur: c.length, color: Self.musicColor, selected: sel, w: w, height: 28,
+            clip(name + (c.speed != 1 ? String(format: " · %.2g×", c.speed) : "") + (c.crossfade ? " · ✕" : c.fadeIn > 0 || c.fadeOut > 0 ? String(localized: " · fades") : ""), start: c.tlStart, dur: c.length, color: Self.musicColor, selected: sel, w: w, height: 28,
                  onSelect: { session.selectedTrack = .sound(c.id); selectedCut = nil },
                  onMove: { t in
                      if let i = session.project.audioLane.firstIndex(where: { $0.id == c.id }) {
@@ -854,13 +854,13 @@ struct MaskPanel: View {
                 }
             }
             if session.project.lanes[laneIndex].mask != nil {
-                keyRow("Centro X", LayerAnimation.x, value: m.x, range: 0...1) { v in set { $0.x = v } }
-                keyRow("Centro Y", LayerAnimation.y, value: m.y, range: 0...1) { v in set { $0.y = v } }
+                keyRow(String(localized: "Centro X"), LayerAnimation.x, value: m.x, range: 0...1) { v in set { $0.x = v } }
+                keyRow(String(localized: "Centro Y"), LayerAnimation.y, value: m.y, range: 0...1) { v in set { $0.y = v } }
                 keyRow("Tamaño", LayerAnimation.scale, value: 1, range: 0.3...2.5, fixed: true) { _ in }
                 row("Ancho", value: Binding(get: { m.w }, set: { v in set { $0.w = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 row("Alto", value: Binding(get: { m.h }, set: { v in set { $0.h = v } }), range: 0.1...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 row("Suavizado", value: Binding(get: { m.feather }, set: { v in set { $0.feather = v } }), range: 0...120, fmt: { String(format: "%.0f px", $0) })
-                row("Oscurecer fuera", value: Binding(get: { m.dimOutside }, set: { v in set { $0.dimOutside = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
+                row(String(localized: "Oscurecer fuera"), value: Binding(get: { m.dimOutside }, set: { v in set { $0.dimOutside = v } }), range: 0...1, fmt: { String(format: "%.0f %%", $0 * 100) })
                 Toggle("Invertir (el color va fuera)", isOn: Binding(get: { m.invert }, set: { v in set { $0.invert = v } })).font(.caption)
                 if let a = m.animation, !a.isEmpty {
                     Button("Quitar el seguimiento (keyframes)") { set { $0.animation = nil } }.controlSize(.mini)

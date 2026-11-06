@@ -77,7 +77,7 @@ final class MIDIControl: ObservableObject {
             MIDIPortConnectSource(port, src, nil)
             var cf: Unmanaged<CFString>?
             MIDIObjectGetStringProperty(src, kMIDIPropertyDisplayName, &cf)
-            names.append(cf?.takeRetainedValue() as String? ?? "MIDI \(i + 1)")
+            names.append(cf?.takeRetainedValue() as String? ?? String(localized: "MIDI \(i + 1)"))
         }
         sources = names
         connected = n > 0

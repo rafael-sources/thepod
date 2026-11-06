@@ -16,8 +16,8 @@ struct SoundsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 14) {
-                StepHeader(title: "Efectos y música",
-                           subtitle: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras.", step: .sounds)
+                StepHeader(title: String(localized: "Efectos y música"),
+                           subtitle: String(localized: "Los efectos que ya están en postPod suenan en su momento exacto. Aquí los revisas, agregas música de intro o cierre, una voz leída por la Mac, y lo mueves donde quieras."), step: .sounds)
                     .sheet(isPresented: $session.voiceSheet) { VoiceSheet(session: session) }
                 HStack {
                     Text("En tu episodio").font(.headline)
@@ -153,7 +153,7 @@ struct PublishStep: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                StepHeader(title: "Publicar", subtitle: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube.", step: .publish)
+                StepHeader(title: "Publicar", subtitle: String(localized: "Usa lo que ya tienes configurado en prePod: el feed para Spotify y Apple Podcasts, y tu canal de YouTube."), step: .publish)
                 if !PrePodClient.isConfigured {
                     Card {
                         Label("Conecta la app con prePod", systemImage: "person.badge.key").font(.headline)
@@ -305,10 +305,10 @@ struct PublishStep: View {
     }
 
     private func platformName(_ p: String) -> String {
-        ["spotify": "Spotify", "apple": "Apple Podcasts", "youtube": "YouTube"][p] ?? p.capitalized
+        ["spotify": "Spotify", "apple": String(localized: "Apple Podcasts"), "youtube": "YouTube"][p] ?? p.capitalized
     }
     private func statusName(_ s: String) -> String {
-        ["connected": "conectado", "pending": "en revisión", "not_configured": "sin configurar"][s] ?? s
+        ["connected": "conectado", "pending": String(localized: "en revisión"), "not_configured": String(localized: "sin configurar")][s] ?? s
     }
 
     private func loadPodcasts() {
@@ -408,7 +408,7 @@ struct PrePodSettingsSection: View {
                 let web = try await PostPodWebClient.shared.projects()
                 AccountRole.shared.refresh()
                 ok = true
-                result = "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod"
+                result = String(localized: "Conectado: \(list.count) podcast\(list.count == 1 ? "" : "s") · \(web.count) proyecto\(web.count == 1 ? "" : "s") en postPod")
             } catch {
                 ok = false
                 result = error.localizedDescription
@@ -422,7 +422,7 @@ struct PrePodSettingsSection: View {
         user = ""
         password = ""
         ok = true
-        result = "Sesión cerrada en esta Mac."
+        result = String(localized: "Sesión cerrada en esta Mac.")
         AccountRole.shared.clear()
         Task { await resetAll() }
     }
@@ -464,7 +464,7 @@ struct VoiceSheet: View {
                 .labelsHidden().frame(maxWidth: 320)
                 Button {
                     tester.stopSpeaking(at: .immediate)
-                    let u = AVSpeechUtterance(string: text.isEmpty ? "Hola, soy la voz de thePod." : String(text.prefix(120)))
+                    let u = AVSpeechUtterance(string: text.isEmpty ? String(localized: "Hola, soy la voz de thePod.") : String(text.prefix(120)))
                     if let voice { u.voice = AVSpeechSynthesisVoice(identifier: voice.id) }
                     u.rate = rate
                     tester.speak(u)

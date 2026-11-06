@@ -42,7 +42,7 @@ final class PreModel: ObservableObject {
     private let api = PrePodClient.shared
 
     func load() {
-        guard PrePodClient.isConfigured else { error = "Conecta tu cuenta en Ajustes para ver tus podcasts."; return }
+        guard PrePodClient.isConfigured else { error = String(localized: "Conecta tu cuenta en Ajustes para ver tus podcasts."); return }
         loading = true
         Task {
             defer { loading = false }
@@ -234,7 +234,7 @@ struct PreHomeView: View {
             if model.podcasts.isEmpty {
                 Card {
                     if !PrePodClient.isConfigured {
-                        Label(model.error ?? "Conecta tu cuenta en Ajustes para ver tus podcasts.", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Label(model.error ?? String(localized: "Conecta tu cuenta en Ajustes para ver tus podcasts."), systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                         SettingsLink { Text("Abrir Ajustes") }
                     } else if model.loading {
                         ProgressView("Cargando tus podcasts…")
@@ -316,7 +316,7 @@ struct PreHomeView: View {
                     Button { newPodcastName = ""; creatingPodcast = true } label: { Label("Nuevo podcast…", systemImage: "plus") }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(model.podcast?.name ?? "Elige un podcast").font(.system(size: 26, weight: .bold, design: .rounded))
+                        Text(model.podcast?.name ?? String(localized: "Elige un podcast")).font(.system(size: 26, weight: .bold, design: .rounded))
                         if model.podcasts.count > 1 {
                             Image(systemName: "chevron.down").font(.callout.bold()).foregroundStyle(Theme.secondary)
                         }
@@ -363,7 +363,7 @@ struct PreHomeView: View {
     private var summary: String {
         let active = model.episodes.filter { ![.published, .archived].contains($0.statusValue) }.count
         let published = model.episodes.filter { $0.statusValue == .published }.count
-        var parts = ["\(active) en preparación", "\(published) publicados"]
+        var parts = ["\(active) en preparación", String(localized: "\(published) publicados")]
         if let t = model.podcast?.tagline, !t.isEmpty, t.count <= 90 { parts.insert(t, at: 0) }
         return parts.joined(separator: " · ")
     }
@@ -391,7 +391,7 @@ struct PreHomeView: View {
                 .onSubmit(createNow)
             if !templates.isEmpty {
                 Picker("Plantilla", selection: $templateId) {
-                    ForEach(templates) { t in Text(t.name + (t.isDefault ? " (por defecto)" : "")).tag(t.id) }
+                    ForEach(templates) { t in Text(t.name + (t.isDefault ? String(localized: " (por defecto)") : "")).tag(t.id) }
                     Text("Sin plantilla").tag(0)
                 }
                 .frame(width: 320)
@@ -550,7 +550,7 @@ struct NextUpCard: View {
         HStack(alignment: .center, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Chip(text: episode.isLate ? "Atrasado" : "Próxima grabación",
+                    Chip(text: episode.isLate ? "Atrasado" : String(localized: "Próxima grabación"),
                          symbol: episode.isLate ? "exclamationmark.triangle.fill" : "mic.fill",
                          color: episode.isLate ? .red : model.accent, filled: true)
                     if let r = episode.relativeWhen { Text(r.capitalizedFirst).font(.headline).foregroundStyle(episode.isLate ? .red : .white) }
@@ -570,7 +570,7 @@ struct NextUpCard: View {
             Spacer()
             HStack(spacing: 10) {
                 check("Guion", sections.map { $0 == 0 ? "vacío" : plural($0, "sección", "secciones") }, ok: (sections ?? 0) > 0, symbol: "text.page")
-                check("Rundown", blocks.map { $0 == 0 ? "vacío" : plural($0, "bloque", "bloques") + (minutes > 0 ? " · \(minutes) min" : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
+                check("Rundown", blocks.map { $0 == 0 ? "vacío" : plural($0, "bloque", "bloques") + (minutes > 0 ? String(localized: " · \(minutes) min") : "") }, ok: (blocks ?? 0) > 0, symbol: "list.bullet.rectangle")
                 check("Invitados", guestsText, ok: !guests.isEmpty && confirmed == guests.count, symbol: "person.2")
             }
             Button { model.open = episode } label: {
@@ -586,7 +586,7 @@ struct NextUpCard: View {
 
     private var confirmed: Int { guests.filter { $0.rsvpStatus == "yes" }.count }
     private var guestsText: String? {
-        guests.isEmpty ? (sections == nil ? nil : "nadie aún") : "\(confirmed) de \(guests.count) confirmados"
+        guests.isEmpty ? (sections == nil ? nil : String(localized: "nadie aún")) : String(localized: "\(confirmed) de \(guests.count) confirmados")
     }
 
     private func check(_ title: String, _ detail: String?, ok: Bool, symbol: String) -> some View {
@@ -636,11 +636,11 @@ struct PreEpisodeView: View {
 
     private struct Page { let title: String; let symbol: String; let help: String }
     private let pages = [
-        Page(title: "Guion", symbol: "text.page", help: "Lo que se va a decir, por partes. Escribe libre: se guarda solo."),
-        Page(title: "Rundown", symbol: "list.bullet.rectangle", help: "El orden del episodio, bloque por bloque, con sus minutos."),
-        Page(title: "Invitados", symbol: "person.2", help: "Quién participa. Invítalos y mándales el correo de preparación."),
-        Page(title: "Ideas", symbol: "lightbulb", help: "Temas y preguntas propuestos por el equipo. Vota las mejores."),
-        Page(title: "Publicación", symbol: "paperplane", help: "Descripción, notas y links que salen al publicar."),
+        Page(title: "Guion", symbol: "text.page", help: String(localized: "Lo que se va a decir, por partes. Escribe libre: se guarda solo.")),
+        Page(title: "Rundown", symbol: "list.bullet.rectangle", help: String(localized: "El orden del episodio, bloque por bloque, con sus minutos.")),
+        Page(title: "Invitados", symbol: "person.2", help: String(localized: "Quién participa. Invítalos y mándales el correo de preparación.")),
+        Page(title: "Ideas", symbol: "lightbulb", help: String(localized: "Temas y preguntas propuestos por el equipo. Vota las mejores.")),
+        Page(title: "Publicación", symbol: "paperplane", help: String(localized: "Descripción, notas y links que salen al publicar.")),
     ]
 
     var body: some View {
@@ -687,7 +687,7 @@ struct PreEpisodeView: View {
                 if let n = episode.episodeNumber { Text("EP \(n)").font(.headline.weight(.heavy)).foregroundStyle(model.accent) }
                 Chip(text: st.title, symbol: st.symbol, color: st.color)
             }
-            Text(episode.title.isEmpty ? "Sin título" : episode.title).font(.headline).lineLimit(3)
+            Text(episode.title.isEmpty ? String(localized: "Sin título") : episode.title).font(.headline).lineLimit(3)
             if let w = episode.whenText {
                 HStack(spacing: 6) {
                     Label(w, systemImage: "calendar")
@@ -793,12 +793,12 @@ struct PreEpisodeView: View {
         if let ss { c[0] = ss.isEmpty ? "Vacío" : plural(ss.count, "sección", "secciones"); if ss.contains(where: { !$0.content.isEmpty }) { d.insert(0) } }
         if let bb {
             let m = Int(bb.compactMap(\.durationEstimate).reduce(0, +).rounded())
-            c[1] = bb.isEmpty ? "Vacío" : plural(bb.count, "bloque", "bloques") + (m > 0 ? " · \(m) min" : "")
+            c[1] = bb.isEmpty ? "Vacío" : plural(bb.count, "bloque", "bloques") + (m > 0 ? String(localized: " · \(m) min") : "")
             if !bb.isEmpty { d.insert(1) }
         }
         if let gg {
             let ok = gg.filter { $0.rsvpStatus == "yes" }.count
-            c[2] = gg.isEmpty ? "Nadie todavía" : "\(ok) de \(gg.count) confirmados"
+            c[2] = gg.isEmpty ? "Nadie todavía" : String(localized: "\(ok) de \(gg.count) confirmados")
             if !gg.isEmpty && ok == gg.count { d.insert(2) }
         }
         if !(episode.description ?? "").isEmpty { d.insert(4) }
@@ -860,7 +860,7 @@ struct ScriptTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(plural(sections.count, "sección", "secciones") + (totalMinutes > 0 ? " · ~\(totalMinutes) min" : "")).font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(sections.count, "sección", "secciones") + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
                 Button { add() } label: { Label("Agregar sección", systemImage: "plus") }.buttonStyle(.borderedProminent)
             }
@@ -899,7 +899,7 @@ struct ScriptTab: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.stroke))
                     }
                     if sections.isEmpty {
-                        EmptyHint(symbol: "text.page", title: "El guion está vacío",
+                        EmptyHint(symbol: "text.page", title: String(localized: "El guion está vacío"),
                                   text: "Toca “Agregar sección” y escribe qué se dice en cada parte. No hace falta que sea perfecto.")
                     }
                 }
@@ -1095,7 +1095,7 @@ struct RundownTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(plural(blocks.count, "bloque", "bloques") + (totalMinutes > 0 ? " · ~\(totalMinutes) min" : "")).font(.caption).foregroundStyle(Theme.secondary)
+                Text(plural(blocks.count, "bloque", "bloques") + (totalMinutes > 0 ? String(localized: " · ~\(totalMinutes) min") : "")).font(.caption).foregroundStyle(Theme.secondary)
                 Spacer()
                 Menu {
                     ForEach(BlockKind.allCases) { k in Button { add(k) } label: { Label(k.title, systemImage: k.symbol) } }
@@ -1106,7 +1106,7 @@ struct RundownTab: View {
             if let error { Text(error).foregroundStyle(.orange).font(.caption) }
             if totalMinutes > 0 { proportionBar }
             if blocks.isEmpty {
-                EmptyHint(symbol: "list.bullet.rectangle", title: "El rundown está vacío",
+                EmptyHint(symbol: "list.bullet.rectangle", title: String(localized: "El rundown está vacío"),
                           text: "Toca “Agregar bloque” y arma el orden: intro, segmentos, entrevista, sponsor, cierre.")
             }
             ScrollView {
@@ -1173,7 +1173,7 @@ struct RundownTab: View {
                             .overlay {
                                 if w > 60 { Text(b.title).font(.caption2.bold()).foregroundStyle(.black.opacity(0.75)).lineLimit(1).padding(.horizontal, 4) }
                             }
-                            .help("\(b.title) · \(Int(b.durationEstimate ?? 0)) min")
+                            .help(String(localized: "\(b.title) · \(Int(b.durationEstimate ?? 0)) min"))
                     }
                 }
             }
@@ -1284,7 +1284,7 @@ struct GuestsTab: View {
                         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.panel))
                     }
                     if guests.isEmpty {
-                        EmptyHint(symbol: "person.2", title: "Todavía no hay nadie",
+                        EmptyHint(symbol: "person.2", title: String(localized: "Todavía no hay nadie"),
                                   text: "Agrega a los conductores e invitados abajo. Con su correo puedes invitarlos y mandarles la preparación.")
                     }
                 }
@@ -1331,7 +1331,7 @@ struct GuestsTab: View {
         Task {
             do {
                 let (sent, total, extra) = try await api.sendPreRecording(slug, episodeId)
-                note = "Correo de preparación: \(sent) de \(total) enviados. \(extra)"
+                note = String(localized: "Correo de preparación: \(sent) de \(total) enviados. \(extra)")
             } catch { self.error = error.localizedDescription }
         }
     }

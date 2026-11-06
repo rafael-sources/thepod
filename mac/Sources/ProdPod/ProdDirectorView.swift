@@ -332,7 +332,7 @@ struct DirectorView: View {
             .padding(.trailing, 6)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    HoldButton(title: "Todos los conductores", active: dir.ifbTarget == "all_hosts") { down in
+                    HoldButton(title: String(localized: "Todos los conductores"), active: dir.ifbTarget == "all_hosts") { down in
                         down ? dir.ifbPress("all_hosts") : dir.ifbRelease()
                     }
                     ForEach(dir.hostsInRoom) { p in
@@ -443,14 +443,14 @@ struct DirectorView: View {
                 }
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.display_name).font(.callout.weight(.semibold)).lineLimit(1)
-                Text([p.roleTitle, inRoom ? (ready ? "preparado" : "en la sala") : "fuera",
-                      p.recording_quality.map { "graba en \($0)" }].compactMap { $0 }.joined(separator: " · "))
+                Text([p.roleTitle, inRoom ? (ready ? "preparado" : String(localized: "en la sala")) : "fuera",
+                      p.recording_quality.map { String(localized: "graba en \($0)") }].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(ready ? Theme.good : Theme.secondary).lineLimit(1)
             }
             Spacer()
             if inRoom {
-                iconAction("mic.slash.fill", help: "Silenciar a \(p.display_name)") { dir.forceMute(p) }
-                iconAction("person.fill.xmark", color: .red, help: "Sacar a \(p.display_name)") { dir.kick(p) }
+                iconAction("mic.slash.fill", help: String(localized: "Silenciar a \(p.display_name)")) { dir.forceMute(p) }
+                iconAction("person.fill.xmark", color: .red, help: String(localized: "Sacar a \(p.display_name)")) { dir.kick(p) }
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
@@ -467,7 +467,7 @@ struct DirectorView: View {
 
     private var soundsPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "Soundboard", trailing: "suena en la sala")
+            SectionTitle(text: "Soundboard", trailing: String(localized: "suena en la sala"))
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                 ForEach(dir.sounds) { pad in
                     let c = pad.color.map { Color(hex: $0) } ?? .gray
@@ -555,14 +555,14 @@ struct CintillosPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionTitle(text: "Tiempo en pantalla")
                     HStack(spacing: 6) {
-                        ForEach([(8.0, "8 s"), (15.0, "15 s"), (30.0, "30 s"), (0.0, "Hasta quitarlo")], id: \.0) { v, l in
+                        ForEach([(8.0, "8 s"), (15.0, "15 s"), (30.0, "30 s"), (0.0, String(localized: "Hasta quitarlo"))], id: \.0) { v, l in
                             Pill(text: l, selected: seconds == v, color: accent) { seconds = v }
                         }
                     }
                 }
             }
 
-            CRButton(title: "Poner al aire", symbol: "play.fill", color: accent, enabled: dir.connected && canLaunch) { launch() }
+            CRButton(title: String(localized: "Poner al aire"), symbol: "play.fill", color: accent, enabled: dir.connected && canLaunch) { launch() }
         }
         .onAppear { if podTitle.isEmpty { podTitle = dir.podcastName } }
         .onChange(of: dir.podcastName) { _, v in if podTitle.isEmpty { podTitle = v } }
@@ -590,9 +590,9 @@ struct CintillosPanel: View {
                            image: s.flatMap { dir.sponsorLogo($0) }, expires: nil)
         case 1:
             return Overlay(id: -2, kind: "banner", title: podTitle.isEmpty ? dir.podcastName : podTitle,
-                           text: podText.isEmpty ? "Lo que quieras decir ahora" : podText, filePath: nil, image: dir.podcastLogo, expires: nil)
+                           text: podText.isEmpty ? String(localized: "Lo que quieras decir ahora") : podText, filePath: nil, image: dir.podcastLogo, expires: nil)
         default:
-            return Overlay(id: -3, kind: "segment", title: segTitle.isEmpty ? "Título del segmento" : segTitle,
+            return Overlay(id: -3, kind: "segment", title: segTitle.isEmpty ? String(localized: "Título del segmento") : segTitle,
                            text: segSub, filePath: nil, image: nil, expires: nil)
         }
     }
@@ -640,7 +640,7 @@ struct CintillosPanel: View {
             .onAppear { if sponsorText.isEmpty { sponsorText = sponsor?.copy ?? "" } }
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Texto")
-                CRField(placeholder: "Texto del cintillo", text: $sponsorText, lines: 2...3)
+                CRField(placeholder: String(localized: "Texto del cintillo"), text: $sponsorText, lines: 2...3)
             }
         }
     }
@@ -652,18 +652,18 @@ struct CintillosPanel: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: "Qué decir ahora")
-            CRField(placeholder: "Ej.: Síguenos en todas las plataformas", text: $podText, lines: 2...3)
+            CRField(placeholder: String(localized: "Ej.: Síguenos en todas las plataformas"), text: $podText, lines: 2...3)
         }
     }
 
     @ViewBuilder private var segmentForm: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: "Título del segmento")
-            CRField(placeholder: "Ej.: La pregunta de la semana", text: $segTitle)
+            CRField(placeholder: String(localized: "Ej.: La pregunta de la semana"), text: $segTitle)
         }
         VStack(alignment: .leading, spacing: 8) {
             SectionTitle(text: "Subtítulo", trailing: "opcional")
-            CRField(placeholder: "Una línea que lo explique", text: $segSub)
+            CRField(placeholder: String(localized: "Una línea que lo explique"), text: $segSub)
         }
         Text("El segmento se queda en pantalla 12 segundos.").font(.caption).foregroundStyle(Theme.secondary)
     }
@@ -687,12 +687,12 @@ struct CuesPanel: View {
     @State private var sent: String?
 
     static let look: [String: (String, String, Color)] = [
-        "CERRAR TEMA": ("Cerrar tema", "flag.checkered", Color.orange),
-        "SIGUIENTE TEMA": ("Siguiente tema", "forward.end.fill", CR.segment),
+        String(localized: "CERRAR TEMA"): (String(localized: "Cerrar tema"), "flag.checkered", Color.orange),
+        String(localized: "SIGUIENTE TEMA"): (String(localized: "Siguiente tema"), "forward.end.fill", CR.segment),
         "PAUSA": ("Pausa", "pause.fill", Color.yellow),
-        "MÁS RÁPIDO": ("Más rápido", "hare.fill", Theme.good),
-        "MÁS LENTO": ("Más lento", "tortoise.fill", Color.teal),
-        "LEER ANUNCIO": ("Leer anuncio", "megaphone.fill", CR.sponsor),
+        String(localized: "MÁS RÁPIDO"): (String(localized: "Más rápido"), "hare.fill", Theme.good),
+        String(localized: "MÁS LENTO"): (String(localized: "Más lento"), "tortoise.fill", Color.teal),
+        String(localized: "LEER ANUNCIO"): (String(localized: "Leer anuncio"), "megaphone.fill", CR.sponsor),
     ]
 
     var body: some View {
@@ -703,7 +703,7 @@ struct CuesPanel: View {
                           selected: $target)
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Avisos rápidos", trailing: "salen en su pantalla")
+                SectionTitle(text: "Avisos rápidos", trailing: String(localized: "salen en su pantalla"))
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())], spacing: 8) {
                     ForEach(DirectorStudio.cues, id: \.self) { c in cueTile(c) }
                 }
@@ -711,7 +711,7 @@ struct CuesPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Aviso escrito")
                 HStack(spacing: 8) {
-                    CRField(placeholder: "Ej.: Faltan 5 minutos", text: $custom) { sendCustom() }
+                    CRField(placeholder: String(localized: "Ej.: Faltan 5 minutos"), text: $custom) { sendCustom() }
                     Button { sendCustom() } label: {
                         Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold))
                             .frame(width: 40, height: 40)
@@ -776,7 +776,7 @@ struct TeleprompterPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                SectionTitle(text: "Para", trailing: "todos ven el aviso; el texto solo quien lo lee")
+                SectionTitle(text: "Para", trailing: String(localized: "todos ven el aviso; el texto solo quien lo lee"))
                 FlowPills(items: [("all", "Todos")] + dir.hostsInRoom.map { ("participant_\($0.id)", $0.display_name) },
                           selected: $target)
             }
@@ -788,7 +788,7 @@ struct TeleprompterPanel: View {
                                                 set: { v in
                                                     sponsorId = Int(v)
                                                     if let s = dir.sponsors.first(where: { "\($0.id)" == v }) {
-                                                        title = "Publicidad de \(s.name)"
+                                                        title = String(localized: "Publicidad de \(s.name)")
                                                         text = s.copy.isEmpty ? "Sponsor: \(s.name)" : s.copy
                                                     }
                                                 }))
@@ -796,9 +796,9 @@ struct TeleprompterPanel: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Título del aviso")
-                CRField(placeholder: "Ej.: Publicidad de Café Loma Verde", text: $title)
+                CRField(placeholder: String(localized: "Ej.: Publicidad de Café Loma Verde"), text: $title)
                 SectionTitle(text: "Texto que va a leer")
-                CRField(placeholder: "Escribe o pega el texto…", text: $text, lines: 4...10)
+                CRField(placeholder: String(localized: "Escribe o pega el texto…"), text: $text, lines: 4...10)
             }
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -821,13 +821,13 @@ struct TeleprompterPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionTitle(text: "Aviso previo")
                 HStack(spacing: 6) {
-                    ForEach([(0, "Sin aviso"), (3, "3 s"), (5, "5 s"), (10, "10 s")], id: \.0) { v, l in
+                    ForEach([(0, String(localized: "Sin aviso")), (3, "3 s"), (5, "5 s"), (10, "10 s")], id: \.0) { v, l in
                         Pill(text: l, selected: countdown == v) { countdown = v }
                     }
                 }
             }
             HStack(spacing: 8) {
-                CRButton(title: sent ? "Enviado" : "Lanzar teleprompter", symbol: sent ? "checkmark" : "text.viewfinder",
+                CRButton(title: sent ? "Enviado" : String(localized: "Lanzar teleprompter"), symbol: sent ? "checkmark" : "text.viewfinder",
                          enabled: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                     dir.sendTeleprompter(target: target, title: title, text: text, speed: speed, size: size, countdown: countdown)
                     sent = true
@@ -891,7 +891,7 @@ struct DirectorChatPanel: View {
     @State private var text = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(text: "Chat de dirección", trailing: "los conductores lo ven como aviso")
+            SectionTitle(text: "Chat de dirección", trailing: String(localized: "los conductores lo ven como aviso"))
             VStack(alignment: .leading, spacing: 8) {
                 if dir.chat.isEmpty {
                     Text("Todavía no hay mensajes.").font(.callout).foregroundStyle(Theme.secondary)

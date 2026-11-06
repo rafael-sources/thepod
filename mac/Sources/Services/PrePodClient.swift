@@ -61,7 +61,7 @@ actor PrePodClient {
 
     private func url(_ path: String) throws -> URL {
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let u = URL(string: base + path) else { throw Failure(message: "La URL de prePod no es válida") }
+        guard let u = URL(string: base + path) else { throw Failure(message: String(localized: "La URL de prePod no es válida")) }
         return u
     }
 
@@ -92,7 +92,7 @@ actor PrePodClient {
         }
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw Failure(message: msg ?? "prePod respondió \(code)")
+            throw Failure(message: msg ?? String(localized: "prePod respondió \(code)"))
         }
         return data
     }
@@ -107,15 +107,15 @@ actor PrePodClient {
         }
         let name = file.lastPathComponent.replacingOccurrences(of: "\"", with: "")
         add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(field)\"; filename=\"\(name)\"\r\n")
-        add("Content-Type: application/octet-stream\r\n\r\n")
+        add(String(localized: "Content-Type: application/octet-stream\r\n\r\n"))
         body.append(try Data(contentsOf: file))
         add("\r\n--\(boundary)--\r\n")
-        return try await send(method, path, body: body, contentType: "multipart/form-data; boundary=\(boundary)")
+        return try await send(method, path, body: body, contentType: String(localized: "multipart/form-data; boundary=\(boundary)"))
     }
 
     func login() async throws {
         guard let password = Keychain.get("prepod-password"), !Self.username.isEmpty else {
-            throw Failure(message: "Configura tu usuario y contraseña de prePod en Ajustes.")
+            throw Failure(message: String(localized: "Configura tu usuario y contraseña de prePod en Ajustes."))
         }
         _ = try await send("POST", "/api/auth/login", json: ["username": Self.username, "password": password], retry: false)
         loggedIn = true
@@ -167,7 +167,7 @@ actor PrePodClient {
         let d = try await send("POST", "/api/podcasts/\(slug)/episodes/\(episodeId)/send-to-prodpod", json: [:])
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any],
               let sid = (o["prodpod_session_id"] as? Int) ?? Int("\(o["prodpod_session_id"] ?? "")") else {
-            throw Failure(message: "prodPod no devolvió la sala del episodio")
+            throw Failure(message: String(localized: "prodPod no devolvió la sala del episodio"))
         }
         return sid
     }
@@ -192,10 +192,10 @@ actor PrePodClient {
     /// Chunked upload (8 MB parts). Returns the upload_id to publish with.
     func upload(file: URL, progress: @Sendable (Double) -> Void) async throws -> String {
         let size = (try FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.int64Value ?? 0
-        guard size > 0 else { throw Failure(message: "El archivo exportado está vacío") }
+        guard size > 0 else { throw Failure(message: String(localized: "El archivo exportado está vacío")) }
         let created = try await send("POST", "/api/mac/uploads", json: ["filename": file.lastPathComponent, "size": size])
         guard let id = (try JSONSerialization.jsonObject(with: created) as? [String: Any])?["upload_id"] as? String else {
-            throw Failure(message: "prePod no devolvió upload_id")
+            throw Failure(message: String(localized: "prePod no devolvió upload_id"))
         }
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
@@ -289,7 +289,7 @@ actor PrePodClient {
         let path = network == "youtube" ? "/api/youtube/auth-url?slug=\(slug)" : "/api/pubpod/\(network)/auth-url?slug=\(slug)"
         let obj = try JSONSerialization.jsonObject(with: await send("GET", path)) as? [String: Any]
         guard let s = obj?["auth_url"] as? String, let u = URL(string: s) else {
-            throw Failure(message: "No se pudo abrir la conexión con esa red")
+            throw Failure(message: String(localized: "No se pudo abrir la conexión con esa red"))
         }
         return u
     }
@@ -330,7 +330,7 @@ actor PrePodClient {
 
     private func jobId(_ data: Data) throws -> String {
         guard let id = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["job_id"] as? String else {
-            throw Failure(message: "prePod no devolvió job_id")
+            throw Failure(message: String(localized: "prePod no devolvió job_id"))
         }
         return id
     }

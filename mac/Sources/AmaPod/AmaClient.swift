@@ -78,7 +78,7 @@ actor AmaClient {
     private func send(_ method: String, _ path: String, json: Any? = nil, retry: Bool = true) async throws -> Data {
         if !loggedIn && path != "/api/auth/login" { try await login() }
         let base = Self.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: "La dirección de amaPod no es válida") }
+        guard let url = URL(string: base + path) else { throw PrePodClient.Failure(message: String(localized: "La dirección de amaPod no es válida")) }
         var req = URLRequest(url: url)
         req.httpMethod = method
         if let json {
@@ -100,14 +100,14 @@ actor AmaClient {
         }
         guard (200..<300).contains(code) else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw PrePodClient.Failure(message: msg ?? "amaPod respondió \(code)")
+            throw PrePodClient.Failure(message: msg ?? String(localized: "amaPod respondió \(code)"))
         }
         return data
     }
 
     func login() async throws {
         guard let pw = Keychain.get("prepod-password"), !PrePodClient.username.isEmpty else {
-            throw PrePodClient.Failure(message: "Conecta tu cuenta en Ajustes.")
+            throw PrePodClient.Failure(message: String(localized: "Conecta tu cuenta en Ajustes."))
         }
         _ = try await send("POST", "/api/auth/login", json: ["username": PrePodClient.username, "password": pw], retry: false)
         loggedIn = true
@@ -141,7 +141,7 @@ actor AmaClient {
     func livekitURL() async throws -> String {
         if let wsURL { return wsURL }
         let obj = try JSONSerialization.jsonObject(with: await send("GET", "/api/config/livekit")) as? [String: Any]
-        guard let u = obj?["ws_url"] as? String, !u.isEmpty else { throw PrePodClient.Failure(message: "amaPod no dijo dónde está la sala") }
+        guard let u = obj?["ws_url"] as? String, !u.isEmpty else { throw PrePodClient.Failure(message: String(localized: "amaPod no dijo dónde está la sala")) }
         wsURL = u
         return u
     }

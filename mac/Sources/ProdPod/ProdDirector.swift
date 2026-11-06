@@ -90,7 +90,7 @@ final class DirectorStudio: NSObject, ObservableObject {
                 await loadChat()
                 await loadBranding()
             } catch {
-                self.error = "No se pudo entrar como director: \(error.localizedDescription)"
+                self.error = String(localized: "No se pudo entrar como director: \(error.localizedDescription)")
                 await leave()
             }
         }
@@ -212,7 +212,7 @@ final class DirectorStudio: NSObject, ObservableObject {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/recordings/export-to-postpod")
                 if let e = r["error"] as? String { exportResult = e; return }
                 let n = r["exported"] as? Int ?? 0, f = r["failed"] as? Int ?? 0
-                exportResult = n == 0 && f == 0 ? "Ya estaba en postPod." : "Enviado a postPod: \(n) \(n == 1 ? "pista" : "pistas")" + (f > 0 ? " · \(f) fallaron" : "")
+                exportResult = n == 0 && f == 0 ? String(localized: "Ya estaba en postPod.") : String(localized: "Enviado a postPod: \(n) \(n == 1 ? "pista" : "pistas")") + (f > 0 ? String(localized: " · \(f) fallaron") : "")
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -224,14 +224,14 @@ final class DirectorStudio: NSObject, ObservableObject {
 
     // MARK: Avisos privados
 
-    static let cues = ["CERRAR TEMA", "SIGUIENTE TEMA", "PAUSA", "MÁS RÁPIDO", "MÁS LENTO", "LEER ANUNCIO"]
+    static let cues = ["CERRAR TEMA", String(localized: "SIGUIENTE TEMA"), "PAUSA", String(localized: "MÁS RÁPIDO"), String(localized: "MÁS LENTO"), String(localized: "LEER ANUNCIO")]
 
     func sendCue(_ cue: String, text: String = "", target: String = "all") {
         Task {
             _ = try? await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/director/cue",
                                                          ["cue": cue, "text": text, "target": target])
             send(["type": "director_cue", "cue": cue, "target": target, "text": text])
-            flash("Aviso enviado: \(text.isEmpty ? cue : text)")
+            flash(String(localized: "Aviso enviado: \(text.isEmpty ? cue : text)"))
         }
     }
 
@@ -243,8 +243,8 @@ final class DirectorStudio: NSObject, ObservableObject {
     /// ("Viene X en 3 s · ATENTO …") y el texto solo le aparece a quien le toca.
     func sendTeleprompter(target: String, title: String, text: String, speed: String, size: String, countdown: Int) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { error = "Escribe el texto del teleprompter"; return }
-        let eid = "d\(Int(Date().timeIntervalSince1970 * 1000))"
+        guard !t.isEmpty else { error = String(localized: "Escribe el texto del teleprompter"); return }
+        let eid = String(localized: "d\(Int(Date().timeIntervalSince1970 * 1000))")
         let ttl = title.isEmpty ? "Teleprompter" : title
         send(["type": "teleprompter", "action": "show", "event_id": eid, "target": target,
               "title": ttl, "text": t, "speed": speed, "size": size, "countdown": max(0, countdown)])
@@ -254,14 +254,14 @@ final class DirectorStudio: NSObject, ObservableObject {
                 ["event_type": "teleprompter",
                  "payload": ["target": target, "title": ttl, "text": t, "speed": speed, "size": size]])
         }
-        flash("Teleprompter enviado" + (countdown > 0 ? " (aviso de \(countdown) s)" : ""))
+        flash(String(localized: "Teleprompter enviado") + (countdown > 0 ? String(localized: " (aviso de \(countdown) s)") : ""))
     }
 
     func hideTeleprompter() {
         var m: [String: Any] = ["type": "teleprompter", "action": "hide", "target": "all"]
         if let tpLastId { m["event_id"] = tpLastId }
         send(m)
-        flash("Teleprompter quitado")
+        flash(String(localized: "Teleprompter quitado"))
     }
 
     func setGuestCues(_ show: Bool) { send(["type": "cue_visibility", "show": show]) }
@@ -303,7 +303,7 @@ final class DirectorStudio: NSObject, ObservableObject {
             do {
                 _ = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/participants/\(p.id)/force-mute")
                 send(["type": "force_mute", "target": "participant_\(p.id)"])
-                flash("Silenciaste a \(p.display_name)")
+                flash(String(localized: "Silenciaste a \(p.display_name)"))
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -313,7 +313,7 @@ final class DirectorStudio: NSObject, ObservableObject {
             do {
                 try await ProdPodClient.shared.send(method: "DELETE", path: "/api/sessions/\(session.id)/participants/\(p.id)")
                 send(["type": "kick", "target_identity": "participant_\(p.id)"])
-                flash("Sacaste a \(p.display_name)")
+                flash(String(localized: "Sacaste a \(p.display_name)"))
                 await loadParticipants()
             } catch { self.error = error.localizedDescription }
         }
@@ -402,12 +402,12 @@ final class DirectorStudio: NSObject, ObservableObject {
         if let filePath { body["file_path"] = filePath }
         do {
             let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/director/inject", body)
-            guard let id = r["event_id"] as? Int else { throw PrePodClient.Failure(message: "El servidor no confirmó el cintillo") }
+            guard let id = r["event_id"] as? Int else { throw PrePodClient.Failure(message: String(localized: "El servidor no confirmó el cintillo")) }
             var msg: [String: Any] = ["type": "overlay_inject", "event_type": kind, "payload": payload, "event_id": id, "duration_seconds": seconds]
             if let filePath { msg["file_path"] = filePath }
             send(msg)
             if var o = Overlay.from(msg) { o.image = image; overlays.append(o) }
-        } catch { self.error = "No se pudo poner el cintillo: \(error.localizedDescription)" }
+        } catch { self.error = String(localized: "No se pudo poner el cintillo: \(error.localizedDescription)") }
     }
 
     func removeOverlay(_ o: Overlay) {
@@ -517,7 +517,7 @@ extension DirectorStudio: RoomDelegate {
         Task { @MainActor in
             guard self.connected else { return }
             self.connected = false
-            self.error = "Se cortó la conexión con la sala" + (error.map { ": \($0.localizedDescription)" } ?? ".")
+            self.error = String(localized: "Se cortó la conexión con la sala") + (error.map { ": \($0.localizedDescription)" } ?? ".")
         }
     }
 }

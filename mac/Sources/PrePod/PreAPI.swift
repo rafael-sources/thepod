@@ -136,7 +136,7 @@ extension PrePodClient {
     func createPrePodcast(name: String) async throws -> String {
         let d = try await send("POST", "/api/podcasts", json: ["name": name])
         guard let o = try JSONSerialization.jsonObject(with: d) as? [String: Any], let slug = o["slug"] as? String else {
-            throw NSError(domain: "prePod", code: 1, userInfo: [NSLocalizedDescriptionKey: "prePod no devolvió el podcast creado"])
+            throw NSError(domain: "prePod", code: 1, userInfo: [NSLocalizedDescriptionKey: String(localized: "prePod no devolvió el podcast creado")])
         }
         return slug
     }
@@ -206,9 +206,9 @@ extension PrePodClient {
     func sendRSVP(_ slug: String, _ id: Int) async throws -> (Bool, String) {
         let data = try await send("POST", ep(slug) + "/guests/\(id)/send-rsvp")
         let obj = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
-        if obj["ok"] as? Bool == true { return (true, "Invitación enviada") }
-        if obj["reason"] as? String == "no_smtp" { return (false, "prePod no tiene correo configurado; copia el link de confirmación") }
-        return (false, (obj["error"] as? String) ?? "No se pudo enviar")
+        if obj["ok"] as? Bool == true { return (true, String(localized: "Invitación enviada")) }
+        if obj["reason"] as? String == "no_smtp" { return (false, String(localized: "prePod no tiene correo configurado; copia el link de confirmación")) }
+        return (false, (obj["error"] as? String) ?? String(localized: "No se pudo enviar"))
     }
 }
 
@@ -365,7 +365,7 @@ extension PrePodClient {
         let results = (o["results"] as? [[String: Any]]) ?? []
         let noSMTP = results.contains { ($0["reason"] as? String) == "no_smtp" }
         return ((o["sent"] as? Int) ?? 0, (o["total"] as? Int) ?? results.count,
-                noSMTP ? "prePod no tiene configurado el envío de correos." : "")
+                noSMTP ? String(localized: "prePod no tiene configurado el envío de correos.") : "")
     }
 
     // Landing y equipo

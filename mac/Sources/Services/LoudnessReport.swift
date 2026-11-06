@@ -28,7 +28,7 @@ enum LoudnessReport {
 
     /// Mide el archivo con ffmpeg (ebur128 con pico real). Nil si no hay ffmpeg o no se pudo leer.
     static func measure(_ url: URL) async -> Measure? {
-        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-"], allowFailure: true) else { return nil }
+        guard let out = try? await FFmpeg.run(["-i", url.path, "-vn", "-af", String(localized: "ebur128=peak=true:framelog=quiet"), "-f", "null", "-"], allowFailure: true) else { return nil }
         return parse(out, duration: (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 0)
     }
 
@@ -47,7 +47,7 @@ enum LoudnessReport {
     }
 
     static func line(_ m: Measure, target: Double) -> String {
-        String(format: "%.1f LUFS integrados · pico real %.1f dBTP · rango %.1f LU · objetivo %.0f", m.integrated, m.truePeak, m.range, target)
+        String(format: String(localized: "%.1f LUFS integrados · pico real %.1f dBTP · rango %.1f LU · objetivo %.0f"), m.integrated, m.truePeak, m.range, target)
     }
 
     /// El PDF de una página junto al archivo exportado. Devuelve su ruta, o nil si no se pudo escribir.
@@ -78,12 +78,12 @@ enum LoudnessReport {
             text(value, size: 26, bold: true, at: y, x: x)
             text(label, size: 9, color: NSColor(white: 0.45, alpha: 1), at: y - 14, x: x)
         }
-        big(String(format: "%.1f LUFS", m.integrated), "sonoridad integrada (BS.1770-4)", x: 56)
-        big(String(format: "%.1f dBTP", m.truePeak), "pico real", x: 236)
-        big(String(format: "%.1f LU", m.range), "rango de sonoridad (LRA)", x: 416)
+        big(String(format: String(localized: "%.1f LUFS"), m.integrated), String(localized: "sonoridad integrada (BS.1770-4)"), x: 56)
+        big(String(format: String(localized: "%.1f dBTP"), m.truePeak), String(localized: "pico real"), x: 236)
+        big(String(format: "%.1f LU", m.range), String(localized: "rango de sonoridad (LRA)"), x: 416)
         y -= 50
         let mins = Int(m.duration / 60), secs = Int(m.duration) % 60
-        text(String(format: "Duración %d:%02d · objetivo del export %.0f LUFS · medido con EBU R128 sobre el archivo final", mins, secs, target), size: 10, color: NSColor(white: 0.35, alpha: 1), at: y); y -= 28
+        text(String(format: String(localized: "Duración %d:%02d · objetivo del export %.0f LUFS · medido con EBU R128 sobre el archivo final"), mins, secs, target), size: 10, color: NSColor(white: 0.35, alpha: 1), at: y); y -= 28
         rule(y); y -= 24
         text("Cumplimiento por destino", size: 12, bold: true, at: y); y -= 22
         for t in targets {
@@ -92,16 +92,16 @@ enum LoudnessReport {
             ctx.fillEllipse(in: CGRect(x: 58, y: y + 3, width: 8, height: 8))
             text(t.name, size: 11, at: y, x: 74)
             let diff = m.integrated - t.lufs
-            let why = ok ? "cumple" : (abs(diff) > t.tolerance ? String(format: "%@%.1f dB respecto a %.0f LUFS", diff > 0 ? "+" : "", diff, t.lufs) : String(format: "pico real %.1f dBTP (máximo %.0f)", m.truePeak, t.maxPeak))
+            let why = ok ? "cumple" : (abs(diff) > t.tolerance ? String(format: String(localized: "%@%.1f dB respecto a %.0f LUFS"), diff > 0 ? "+" : "", diff, t.lufs) : String(format: String(localized: "pico real %.1f dBTP (máximo %.0f)"), m.truePeak, t.maxPeak))
             text(why, size: 11, color: ok ? NSColor(white: 0.35, alpha: 1) : NSColor(red: 0.6, green: 0.2, blue: 0.15, alpha: 1), at: y, x: 300)
             y -= 20
         }
         y -= 10; rule(y); y -= 24
         text("Qué significa", size: 12, bold: true, at: y); y -= 18
         let notes = [
-            "Sonoridad integrada: el volumen percibido de todo el episodio, como lo miden las plataformas. Cada una lo lleva a su objetivo al reproducir; entregar ya en el objetivo evita que lo suban (más ruido) o lo bajen.",
-            "Pico real: el nivel máximo de la señal tras convertirla a analógico. Por encima de −1 dBTP los códecs (MP3, AAC) pueden distorsionar.",
-            "Rango de sonoridad: cuánto varía el volumen a lo largo del episodio. Para voz, entre 5 y 10 LU se escucha cómodo en el coche o la calle.",
+            String(localized: "Sonoridad integrada: el volumen percibido de todo el episodio, como lo miden las plataformas. Cada una lo lleva a su objetivo al reproducir; entregar ya en el objetivo evita que lo suban (más ruido) o lo bajen."),
+            String(localized: "Pico real: el nivel máximo de la señal tras convertirla a analógico. Por encima de −1 dBTP los códecs (MP3, AAC) pueden distorsionar."),
+            String(localized: "Rango de sonoridad: cuánto varía el volumen a lo largo del episodio. Para voz, entre 5 y 10 LU se escucha cómodo en el coche o la calle."),
         ]
         for n in notes {
             let para = NSMutableParagraphStyle(); para.lineBreakMode = .byWordWrapping

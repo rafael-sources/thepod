@@ -149,7 +149,7 @@ enum PluginHost {
         private func show(_ vc: NSViewController?, title: String) {
             let content: NSViewController
             if let vc { content = vc } else {
-                let v = NSTextField(labelWithString: "Este plugin no trae interfaz propia: usa sus presets o sus parámetros desde la consola.")
+                let v = NSTextField(labelWithString: String(localized: "Este plugin no trae interfaz propia: usa sus presets o sus parámetros desde la consola."))
                 v.frame = NSRect(x: 0, y: 0, width: 420, height: 60)
                 let c = NSViewController(); c.view = v; content = c
             }

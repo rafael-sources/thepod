@@ -63,6 +63,6 @@ enum ProxyStore {
 
     enum Failure: LocalizedError {
         case noExporter
-        var errorDescription: String? { "No se pudo preparar el proxy de este video." }
+        var errorDescription: String? { String(localized: "No se pudo preparar el proxy de este video.") }
     }
 }

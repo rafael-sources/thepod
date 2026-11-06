@@ -61,7 +61,7 @@ private struct AmaField: View {
 }
 
 private func chatModeName(_ m: String?) -> String {
-    ["free": "Chat libre", "moderated": "Chat moderado", "off": "Sin chat"][m ?? "free"] ?? "Chat libre"
+    ["free": String(localized: "Chat libre"), "moderated": String(localized: "Chat moderado"), "off": String(localized: "Sin chat")][m ?? "free"] ?? String(localized: "Chat libre")
 }
 
 // MARK: - Inicio de ama: tus eventos
@@ -112,11 +112,11 @@ struct AmaHomeView: View {
                 let upcoming = events.filter { $0.status == "created" }
                 let done = events.filter { $0.status == "finished" }
                 if live.isEmpty && upcoming.isEmpty && !loading && error == nil {
-                    EmptyHint(symbol: "questionmark.bubble", title: "No tienes eventos de preguntas",
+                    EmptyHint(symbol: "questionmark.bubble", title: String(localized: "No tienes eventos de preguntas"),
                               text: "Toca “Nuevo evento”. Cuando lo empieces, comparte el link y la gente se anota para preguntar.")
                 }
-                if !live.isEmpty { section("En vivo", live) }
-                if !upcoming.isEmpty { section("Por empezar", upcoming) }
+                if !live.isEmpty { section(String(localized: "En vivo"), live) }
+                if !upcoming.isEmpty { section(String(localized: "Por empezar"), upcoming) }
                 if !done.isEmpty {
                     DisclosureGroup(isExpanded: $showFinished) {
                         grid(done).padding(.top, 8)
@@ -167,7 +167,7 @@ struct AmaHomeView: View {
                 templates = (try? await AmaClient.shared.templates()) ?? []
                 error = nil
             } catch {
-                self.error = PrePodClient.isConfigured ? "No se pudo leer amaPod: \(error.localizedDescription)" : "Conecta tu cuenta en Ajustes para ver tus eventos."
+                self.error = PrePodClient.isConfigured ? String(localized: "No se pudo leer amaPod: \(error.localizedDescription)") : String(localized: "Conecta tu cuenta en Ajustes para ver tus eventos.")
             }
         }
     }
@@ -185,7 +185,7 @@ private struct AmaEventCard: View {
             switch event.status {
             case "active": return ("En vivo", .amaPod)
             case "finished": return ("Terminado", Theme.secondary)
-            default: return ("Por empezar", .orange)
+            default: return (String(localized: "Por empezar"), .orange)
             }
         }()
         VStack(alignment: .leading, spacing: 10) {
@@ -250,8 +250,8 @@ struct NewAmaEventSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            PreHeader(symbol: "questionmark.bubble.fill", title: "Nuevo evento de preguntas",
-                      subtitle: "Después lo empiezas cuando quieras y compartes el link.", color: .amaPod)
+            PreHeader(symbol: "questionmark.bubble.fill", title: String(localized: "Nuevo evento de preguntas"),
+                      subtitle: String(localized: "Después lo empiezas cuando quieras y compartes el link."), color: .amaPod)
             if !templates.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     AmaTitle(text: "Empezar desde una plantilla")
@@ -271,11 +271,11 @@ struct NewAmaEventSheet: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 AmaTitle(text: "Título")
-                AmaField(placeholder: "Ej.: Pregúntanos lo que quieras — Lee La Letra Chica", text: $title)
+                AmaField(placeholder: String(localized: "Ej.: Pregúntanos lo que quieras — Lee La Letra Chica"), text: $title)
             }
             VStack(alignment: .leading, spacing: 8) {
                 AmaTitle(text: "Descripción", trailing: "opcional")
-                AmaField(placeholder: "De qué va, qué tipo de preguntas buscas", text: $desc, lines: 2...4)
+                AmaField(placeholder: String(localized: "De qué va, qué tipo de preguntas buscas"), text: $desc, lines: 2...4)
             }
             VStack(alignment: .leading, spacing: 8) {
                 AmaTitle(text: "Chat")
@@ -390,15 +390,15 @@ struct AmaStudioView: View {
                 HStack(spacing: 8) {
                     Text("amaPod").font(.system(size: 11, weight: .heavy)).kerning(0.6)
                         .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(Color.amaPod)).foregroundStyle(.black)
-                    Chip(text: studio.event.status == "active" ? "En vivo" : "Por empezar", color: studio.event.status == "active" ? .amaPod : .orange)
+                    Chip(text: studio.event.status == "active" ? String(localized: "En vivo") : String(localized: "Por empezar"), color: studio.event.status == "active" ? .amaPod : .orange)
                 }
                 Text(studio.event.title).font(.system(size: 26, weight: .bold, design: .rounded)).fixedSize(horizontal: false, vertical: true)
                 if let d = studio.event.description, !d.isEmpty { Text(d).foregroundStyle(Theme.secondary) }
 
                 VStack(alignment: .leading, spacing: 10) {
                     AmaTitle(text: "Links para compartir")
-                    linkRow("Para preguntar", "person.wave.2.fill", AmaClient.joinLink(studio.event.id), "para preguntar")
-                    linkRow("Para mirar", "eye.fill", AmaClient.watchLink(studio.event.id), "para mirar")
+                    linkRow(String(localized: "Para preguntar"), "person.wave.2.fill", AmaClient.joinLink(studio.event.id), String(localized: "para preguntar"))
+                    linkRow(String(localized: "Para mirar"), "eye.fill", AmaClient.watchLink(studio.event.id), String(localized: "para mirar"))
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -408,7 +408,7 @@ struct AmaStudioView: View {
                 }
                 .font(.callout).foregroundStyle(Theme.secondary)
 
-                AmaButton(title: studio.phase == .joining ? "Abriendo…" : studio.event.status == "active" ? "Entrar al evento" : "Empezar el evento",
+                AmaButton(title: studio.phase == .joining ? String(localized: "Abriendo…") : studio.event.status == "active" ? String(localized: "Entrar al evento") : String(localized: "Empezar el evento"),
                           symbol: "play.fill", enabled: studio.phase == .prejoin) { studio.goLive() }
             }
             .frame(maxWidth: 440, alignment: .leading)
@@ -612,11 +612,11 @@ struct AmaStudioView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let p = studio.onAir {
-                AmaButton(title: p.censored ? "Devolver la palabra" : "Silenciar y ocultar", symbol: p.censored ? "eye" : "eye.slash.fill",
+                AmaButton(title: p.censored ? String(localized: "Devolver la palabra") : String(localized: "Silenciar y ocultar"), symbol: p.censored ? "eye" : "eye.slash.fill",
                           color: .orange, filled: false) { studio.censor(p) }
                     .help("Si alguien usa el aire para algo indebido: se le corta el audio y el video al instante")
             }
-            AmaButton(title: studio.waiting.isEmpty ? (studio.onAir == nil ? "Siguiente" : "Terminar su turno") : "Siguiente: \(studio.waiting[0].display_name)",
+            AmaButton(title: studio.waiting.isEmpty ? (studio.onAir == nil ? "Siguiente" : String(localized: "Terminar su turno")) : String(localized: "Siguiente: \(studio.waiting[0].display_name)"),
                       symbol: "forward.end.fill", enabled: studio.onAir != nil || !studio.waiting.isEmpty) { studio.next() }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
@@ -711,7 +711,7 @@ struct AmaStudioView: View {
 
     private var queuePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AmaTitle(text: "En la cola", trailing: studio.waiting.isEmpty ? nil : "arrastra para ordenar").padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 6)
+            AmaTitle(text: "En la cola", trailing: studio.waiting.isEmpty ? nil : String(localized: "arrastra para ordenar")).padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 6)
             if studio.waiting.isEmpty {
                 Text("Nadie en la cola. Acepta solicitudes para que aparezcan aquí.")
                     .font(.callout).foregroundStyle(Theme.secondary).padding(.horizontal, 18).padding(.vertical, 8)
@@ -810,7 +810,7 @@ struct AmaStudioView: View {
                 .onChange(of: studio.chat.count) { _, _ in if let l = studio.chat.last { withAnimation { proxy.scrollTo(l.id, anchor: .bottom) } } }
             }
             HStack(spacing: 8) {
-                AmaField(placeholder: "Escribe al público…", text: $chatText) { studio.say(chatText); chatText = "" }
+                AmaField(placeholder: String(localized: "Escribe al público…"), text: $chatText) { studio.say(chatText); chatText = "" }
                 Button { studio.say(chatText); chatText = "" } label: {
                     Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .bold))
                         .frame(width: 40, height: 40)
@@ -826,10 +826,10 @@ struct AmaStudioView: View {
     private var sharePanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             AmaTitle(text: "Links del evento")
-            linkRow("Para preguntar", "person.wave.2.fill", AmaClient.joinLink(studio.event.id), "para preguntar")
+            linkRow(String(localized: "Para preguntar"), "person.wave.2.fill", AmaClient.joinLink(studio.event.id), String(localized: "para preguntar"))
             Text("Se anotan con su nombre y hasta 3 preguntas. Tú los aceptas y decides el orden.")
                 .font(.caption).foregroundStyle(Theme.secondary)
-            linkRow("Para mirar", "eye.fill", AmaClient.watchLink(studio.event.id), "para mirar")
+            linkRow(String(localized: "Para mirar"), "eye.fill", AmaClient.watchLink(studio.event.id), String(localized: "para mirar"))
             Text("Miran sin cuenta, dan “me gusta” y desde ahí también pueden pedir preguntar.")
                 .font(.caption).foregroundStyle(Theme.secondary)
         }

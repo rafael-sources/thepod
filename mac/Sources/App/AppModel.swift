@@ -57,12 +57,12 @@ final class AppModel: ObservableObject {
 
     func importItems(_ urls: [URL]) {
         guard importJob == nil, !urls.isEmpty else { return }
-        importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
+        importJob = JobState(title: String(localized: "Importando tu grabación"), detail: "Preparando…", fraction: 0)
         importTask = Task {
             do {
                 // Sin la app en el plan (Gratis o Web): cada grabación nueva que se importa cuenta como un episodio
                 if PrePodClient.isConfigured, !Plan.includesApp {
-                    if let denied = await PrePodClient.shared.claimEpisode("mac:\(UUID().uuidString)") {
+                    if let denied = await PrePodClient.shared.claimEpisode(String(localized: "mac:\(UUID().uuidString)")) {
                         importJob = nil
                         errorMessage = denied
                         return
@@ -86,7 +86,7 @@ final class AppModel: ObservableObject {
         try await Importer.importItems(urls) { stage, fraction in
             Task { @MainActor in
                 guard self.importJob != nil else { return }
-                self.importJob = JobState(title: "Importando tu grabación", detail: stage, fraction: fraction)
+                self.importJob = JobState(title: String(localized: "Importando tu grabación"), detail: stage, fraction: fraction)
             }
         }
     }
@@ -121,8 +121,8 @@ final class AppModel: ObservableObject {
     /// downloading the .zip by hand and dragging it here.
     func importFromWeb(_ web: PostPodWebClient.WebProject) {
         guard importJob == nil else { return }
-        let title = "Trayendo «\(web.name)» de postPod"
-        importJob = JobState(title: title, detail: "Conectando con postPod…", fraction: nil)
+        let title = String(localized: "Trayendo «\(web.name)» de postPod")
+        importJob = JobState(title: title, detail: String(localized: "Conectando con postPod…"), fraction: nil)
         webDownloading = web.slug
         importTask = Task {
             var zip: URL?
@@ -138,24 +138,24 @@ final class AppModel: ObservableObject {
                         switch phase {
                         case .preparing(let f):
                             self.importJob = JobState(title: title,
-                                                      detail: "postPod está preparando el episodio" + (f.map { " · \(Int($0 * 100))%" } ?? "…"),
+                                                      detail: String(localized: "postPod está preparando el episodio") + (f.map { " · \(Int($0 * 100))%" } ?? "…"),
                                                       fraction: f)
                         case .downloading(let got, let total):
                             self.importJob = JobState(title: title,
-                                                      detail: total > 0 ? "Descargando \(size(got)) de \(size(total))" : "Descargando \(size(got))",
+                                                      detail: total > 0 ? String(localized: "Descargando \(size(got)) de \(size(total))") : String(localized: "Descargando \(size(got))"),
                                                       fraction: total > 0 ? Double(got) / Double(total) : nil)
                         case .reconnecting:
-                            self.importJob = JobState(title: title, detail: "Se cortó la conexión. Reanudando desde donde quedó…",
+                            self.importJob = JobState(title: title, detail: String(localized: "Se cortó la conexión. Reanudando desde donde quedó…"),
                                                       fraction: self.importJob?.fraction)
                         }
                     }
                 }
                 zip = file
                 try Task.checkCancellation()
-                importJob = JobState(title: "Importando tu grabación", detail: "Preparando…", fraction: 0)
+                importJob = JobState(title: String(localized: "Importando tu grabación"), detail: "Preparando…", fraction: 0)
                 var project = try await runImport([file])
                 project.postpodSlug = web.slug
-                importJob = JobState(title: "Importando tu grabación", detail: "Buscando el fondo y el logo del podcast en prePod…", fraction: 1)
+                importJob = JobState(title: String(localized: "Importando tu grabación"), detail: String(localized: "Buscando el fondo y el logo del podcast en prePod…"), fraction: 1)
                 _ = await Importer.fetchBrandingFromPrepod(&project)
                 try? ProjectStore.save(project)
                 importJob = nil
@@ -353,7 +353,7 @@ final class ProjectSession: ObservableObject {
         // Sin el análisis de audio la vista previa no sabe quién habla (siempre saldría la primera persona en grande):
         // calcularlo al abrir si hay más de una persona.
         if energy == nil, !project.lanes.isEmpty {
-            run(project.lanes.count > 1 ? "Analizando quién habla" : "Analizando el sonido") { [self] in
+            run(project.lanes.count > 1 ? String(localized: "Analizando quién habla") : String(localized: "Analizando el sonido")) { [self] in
                 try await ensureEnergy()
                 schedulePreview(immediate: true)
             }
@@ -362,7 +362,7 @@ final class ProjectSession: ObservableObject {
 
     /// Busca en prePod el fondo y el logo del podcast (si el proyecto no los tiene).
     func fetchBranding() {
-        brandingStatus = "Buscando en prePod el fondo, el logo, los sponsors y el guion…"
+        brandingStatus = String(localized: "Buscando en prePod el fondo, el logo, los sponsors y el guion…")
         Task { [weak self] in
             guard let self else { return }
             var p = project
@@ -377,7 +377,7 @@ final class ProjectSession: ObservableObject {
                 if project.podcastName == nil { project.podcastName = p.podcastName }
                 brandingStatus = nil
             } else {
-                brandingStatus = project.backgroundFile == nil ? "No encontré el fondo en prePod. Puedes elegir una imagen aquí." : nil
+                brandingStatus = project.backgroundFile == nil ? String(localized: "No encontré el fondo en prePod. Puedes elegir una imagen aquí.") : nil
             }
         }
     }
@@ -388,7 +388,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
         panel.allowsMultipleSelection = false
-        panel.message = kind == "background" ? "Elige la imagen de fondo para el video" : "Elige el logo del podcast"
+        panel.message = kind == "background" ? String(localized: "Elige la imagen de fondo para el video") : String(localized: "Elige el logo del podcast")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do { try Importer.setBranding(&project, kind: kind, from: url); brandingStatus = nil }
         catch { errorMessage = error.localizedDescription }
@@ -520,7 +520,7 @@ final class ProjectSession: ObservableObject {
         let a = max(0, min(start, end)), b = min(project.duration, max(start, end))
         guard b - a > 0.05 else { return }
         player.pause()
-        project.cuts.append(Cut(start: a, end: b, kind: .manual, label: "Cortado a mano"))
+        project.cuts.append(Cut(start: a, end: b, kind: .manual, label: String(localized: "Cortado a mano")))
     }
 
     /// Seek preview to a TIMELINE time.
@@ -585,7 +585,7 @@ final class ProjectSession: ObservableObject {
 
     /// The one-button fix: better audio → transcript → remove silences & filler sounds.
     func fixEverything() {
-        run("Arreglando tu episodio") { [self] in try await performFix() }
+        run(String(localized: "Arreglando tu episodio")) { [self] in try await performFix() }
     }
 
     func performFix() async throws {
@@ -610,11 +610,11 @@ final class ProjectSession: ObservableObject {
             let removedFillers = on.filter { $0.kind == .filler }.count
             let pending = fresh.filter { $0.suggested == true && $0.reviewed != true }.count
             var parts: [String] = []
-            if settings.removeSilences { parts.append("\(on.filter { $0.kind == .silence }.count) silencios") }
-            if settings.removeFillers { parts.append("\(removedFillers) muletillas") }
-            fixSummary = "Listo. Quitamos \(parts.joined(separator: " y ")) — tu episodio ahora dura \(EditEngine.clock(p.duration - saved)) (antes \(EditEngine.clock(p.duration)))."
-                + (settings.enhanceAudio ? " El audio quedó con sonido de estudio." : "")
-                + (pending > 0 ? " Te dejamos \(pending) \(pending == 1 ? "sugerencia" : "sugerencias") para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques." : "")
+            if settings.removeSilences { parts.append(String(localized: "\(on.filter { $0.kind == .silence }.count) silencios")) }
+            if settings.removeFillers { parts.append(String(localized: "\(removedFillers) muletillas")) }
+            fixSummary = String(localized: "Listo. Quitamos \(parts.joined(separator: " y ")) — tu episodio ahora dura \(EditEngine.clock(p.duration - saved)) (antes \(EditEngine.clock(p.duration))).")
+                + (settings.enhanceAudio ? String(localized: " El audio quedó con sonido de estudio.") : "")
+                + (pending > 0 ? String(localized: " Te dejamos \(pending) \(pending == 1 ? "sugerencia" : "sugerencias") para revisar (muletillas dudosas y frases repetidas): no se quitan hasta que las marques.") : "")
     }
 
     /// Silencios y muletillas que quita "Arreglar", con los ajustes del proyecto (no los agrega).
@@ -656,7 +656,7 @@ final class ProjectSession: ObservableObject {
     }
 
     func transcribe() {
-        run("Escribiendo la transcripción") { [self] in try await transcribeMissing() }
+        run(String(localized: "Escribiendo la transcripción")) { [self] in try await transcribeMissing() }
     }
 
     private func enhanceAudio() async throws {
@@ -673,9 +673,9 @@ final class ProjectSession: ObservableObject {
         let items = project.media.filter { ids.contains($0.id) && $0.hasAudio && $0.enhancedAudioFile != AudioAnalysis.enhancedRel(mediaId: $0.id, level: level) }
         for (i, m) in items.enumerated() {
             let who = project.lanes.first { $0.clips.contains { $0.mediaId == m.id } }.map { project.laneName($0.id) } ?? m.originalName
-            report("Separando la voz del ruido", "Voz de \(who) (\(i + 1) de \(items.count))", 0)
+            report(String(localized: "Separando la voz del ruido"), String(localized: "Voz de \(who) (\(i + 1) de \(items.count))"), 0)
             let rel = try await AudioAnalysis.enhance(media: m, slug: project.id, level: level) { [weak self] f in
-                self?.reportAsync("Separando la voz del ruido", "Voz de \(who) (\(i + 1) de \(items.count))", f)
+                self?.reportAsync(String(localized: "Separando la voz del ruido"), String(localized: "Voz de \(who) (\(i + 1) de \(items.count))"), f)
             }
             if let idx = project.media.firstIndex(where: { $0.id == m.id }) { project.media[idx].enhancedAudioFile = rel }
         }
@@ -691,12 +691,12 @@ final class ProjectSession: ObservableObject {
             let label = "\(who) (\(i + 1) de \(lanes.count))"
             for placed in lane.placed {
                 guard let media = project.mediaItem(placed.clip.mediaId), media.hasAudio else { continue }
-                report("Escribiendo la transcripción", "Preparando audio de \(label)", nil)
+                report(String(localized: "Escribiendo la transcripción"), String(localized: "Preparando audio de \(label)"), nil)
                 let wav = try await AudioAnalysis.whisperAudio(media: media, slug: project.id) { _ in }
                 let words = try await Transcriber.shared.transcribe(
                     wav: wav, language: project.language,
-                    status: { [weak self] s in self?.reportAsync("Escribiendo la transcripción", "\(s) — \(label)", nil) },
-                    progress: { [weak self] f in self?.reportAsync("Escribiendo la transcripción", "Escuchando a \(label)", f) })
+                    status: { [weak self] s in self?.reportAsync(String(localized: "Escribiendo la transcripción"), "\(s) — \(label)", nil) },
+                    progress: { [weak self] f in self?.reportAsync(String(localized: "Escribiendo la transcripción"), String(localized: "Escuchando a \(label)"), f) })
                 let offset = placed.tlStart - placed.clip.srcIn
                 for w in words where w.s >= placed.clip.srcIn - 0.01 && w.e <= placed.clip.srcOut + 0.01 {
                     newWords.append(Word(w: w.w, s: w.s + offset, e: w.e + offset, p: w.p, lane: lane.id))
@@ -705,9 +705,9 @@ final class ProjectSession: ObservableObject {
             project.transcribedLanes.append(lane.id)
         }
         let wasEmpty = project.words.isEmpty
-        report("Ajustando los subtítulos al audio", "", 0)
+        report(String(localized: "Ajustando los subtítulos al audio"), "", 0)
         newWords = try await SubtitleSync.align(newWords, project: project) { [weak self] f in
-            self?.reportAsync("Ajustando los subtítulos al audio", "", f)
+            self?.reportAsync(String(localized: "Ajustando los subtítulos al audio"), "", f)
         }.words
         project.words = Transcripts.merge(project.words + newWords)
         if wasEmpty { project.wordsSynced = true }
@@ -715,14 +715,14 @@ final class ProjectSession: ObservableObject {
 
     func ensureEnergy() async throws {
         guard energy == nil else { return }
-        report("Analizando quién habla", "", 0)
+        report(String(localized: "Analizando quién habla"), "", 0)
         energy = try await AudioAnalysis.computeEnergy(project: project) { [weak self] f in
-            self?.reportAsync("Analizando quién habla", "", f)
+            self?.reportAsync(String(localized: "Analizando quién habla"), "", f)
         }
     }
 
     func suggestReels() {
-        run("Buscando los mejores momentos") { [self] in try await performSuggest() }
+        run(String(localized: "Buscando los mejores momentos")) { [self] in try await performSuggest() }
     }
 
     // MARK: Notas y momentos con IA (una vez por episodio)
@@ -737,13 +737,13 @@ final class ProjectSession: ObservableObject {
             return
         }
         UserDefaults.standard.set(true, forKey: "aiConsentTranscript")
-        run("Buscando los mejores momentos con IA") { [self] in try await performAIMoments() }
+        run(String(localized: "Buscando los mejores momentos con IA")) { [self] in try await performAIMoments() }
     }
 
     func performAIMoments() async throws {
         if project.words.isEmpty { try await transcribeMissing() }
-        report("Buscando los mejores momentos con IA", "La IA está leyendo el episodio: tarda uno o dos minutos", nil)
-        let result = try await PostPodWebClient.shared.aiMoments(ref: "mac:\(project.id)", text: EditEngine.transcriptForAI(project))
+        report(String(localized: "Buscando los mejores momentos con IA"), String(localized: "La IA está leyendo el episodio: tarda uno o dos minutos"), nil)
+        let result = try await PostPodWebClient.shared.aiMoments(ref: String(localized: "mac:\(project.id)"), text: EditEngine.transcriptForAI(project))
         var p = project
         // Notas: resumen y puntos destacados (van a la descripción al publicar)
         if let notes = result["notes"] as? [String: Any] {
@@ -767,20 +767,20 @@ final class ProjectSession: ObservableObject {
         p.aiAnalyzedAt = p.aiAnalyzedAt ?? Date()
         project = p
         aiNote = added > 0
-            ? "La IA encontró \(added) \(added == 1 ? "momento" : "momentos") y escribió las notas del episodio."
-            : (first ? "La IA escribió las notas; no encontró momentos claros." : "Ya estaban todos los momentos de la IA.")
+            ? String(localized: "La IA encontró \(added) \(added == 1 ? "momento" : "momentos") y escribió las notas del episodio.")
+            : (first ? String(localized: "La IA escribió las notas; no encontró momentos claros.") : String(localized: "Ya estaban todos los momentos de la IA."))
     }
 
     func performSuggest() async throws {
             if project.words.isEmpty { try await transcribeMissing() }
             try await ensureEnergy()
-            report("Buscando los mejores momentos", Keychain.apiKey == nil ? "Análisis automático" : "Preguntándole a Claude…", nil)
+            report(String(localized: "Buscando los mejores momentos"), Keychain.apiKey == nil ? String(localized: "Análisis automático") : String(localized: "Preguntándole a Claude…"), nil)
             let result = try await ClipSuggester.suggest(project: project)
             project.reels = result.clips.map { Reel(title: $0.title, reason: $0.reason, start: $0.start, end: $0.end) }
             if let s = result.summary { project.aiSummary = s }
             reelsNote = result.clips.isEmpty
-                ? "No encontramos momentos claros. Prueba primero con “Arreglar” para tener la transcripción."
-                : (result.usedAI ? "Claude eligió \(result.clips.count) momentos." : "Elegimos \(result.clips.count) momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente.")
+                ? String(localized: "No encontramos momentos claros. Prueba primero con “Arreglar” para tener la transcripción.")
+                : (result.usedAI ? String(localized: "Claude eligió \(result.clips.count) momentos.") : String(localized: "Elegimos \(result.clips.count) momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente."))
     }
 
     func export(format: ExportFormat) {
@@ -792,12 +792,12 @@ final class ProjectSession: ObservableObject {
 
     /// Pistas por separado (WAV): una por persona y la música aparte.
     func exportStems() {
-        run("Exportando pistas") { [self] in
+        run(String(localized: "Exportando pistas")) { [self] in
             try await ensureEnergy()
             player.pause()
-            report("Exportando pistas por separado", "", 0)
+            report(String(localized: "Exportando pistas por separado"), "", 0)
             let folder = try await Exporter.exportStems(project: project, energy: energy) { [weak self] f in
-                self?.reportAsync("Exportando pistas por separado", "", f)
+                self?.reportAsync(String(localized: "Exportando pistas por separado"), "", f)
             }
             refreshExports()
             NSWorkspace.shared.activateFileViewerSelecting([folder])
@@ -809,11 +809,11 @@ final class ProjectSession: ObservableObject {
             player.pause()
             let uhd = format == .landscape && ExportFormat.uhdAvailable && UserDefaults.standard.bool(forKey: "export.youtube4k")
             let title = uhd ? "\(format.title) en 4K" : format.title
-            report("Exportando \(title)", "", 0)
+            report(String(localized: "Exportando \(title)"), "", 0)
             let project = self.project, energy = self.energy
             let url = try await ExportFormat.$uhd.withValue(uhd) {
                 try await Exporter.export(project: project, format: format, energy: energy) { [weak self] f in
-                    self?.reportAsync("Exportando \(title)", "", f)
+                    self?.reportAsync(String(localized: "Exportando \(title)"), "", f)
                 }
             }
             refreshExports()
@@ -824,16 +824,16 @@ final class ProjectSession: ObservableObject {
 
     /// Exporta el MP3 completo, lo sube a postPod web y guarda el enlace para compartir.
     func sendForReview() {
-        guard let slug = project.postpodSlug else { note = "Este episodio no vino de postPod web: no hay dónde subirlo."; return }
-        run("Enviando a revisión") { [self] in
+        guard let slug = project.postpodSlug else { note = String(localized: "Este episodio no vino de postPod web: no hay dónde subirlo."); return }
+        run(String(localized: "Enviando a revisión")) { [self] in
             let url = try await performExport(format: .audio)
-            report("Subiendo a postPod", url.lastPathComponent, 0.95)
+            report(String(localized: "Subiendo a postPod"), url.lastPathComponent, 0.95)
             let r = try await PostPodWebClient.shared.uploadReview(slug: slug, file: url, title: Exporter.episodeTitle(project))
             let keep = EditEngine.keepRanges(duration: project.duration, cuts: project.cuts)
             let intro = project.intro.map { max(1, $0.seconds) } ?? 0
             project.review = ReviewLink(token: r.token, url: r.url, sentAt: Date(), introDuration: intro, keep: keep)
             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string)
-            note = "Enlace de revisión copiado al portapapeles."
+            note = String(localized: "Enlace de revisión copiado al portapapeles.")
         }
     }
 
@@ -844,7 +844,7 @@ final class ProjectSession: ObservableObject {
                 let cs = try await PostPodWebClient.shared.reviewComments(slug: slug, token: r.token)
                 project.review?.comments = cs
                 project.review?.fetchedAt = Date()
-            } catch { note = "No se pudieron traer los comentarios: \(error.localizedDescription)" }
+            } catch { note = String(localized: "No se pudieron traer los comentarios: \(error.localizedDescription)") }
         }
     }
 
@@ -863,7 +863,7 @@ final class ProjectSession: ObservableObject {
     func exportReels() {
         let reels = project.reels.filter(\.selected)
         guard !reels.isEmpty else { return }
-        run("Exportando reels") { [self] in
+        run(String(localized: "Exportando reels")) { [self] in
             let urls = try await performExportReels()
             if let last = urls.last { NSWorkspace.shared.activateFileViewerSelecting([last]) }
         }
@@ -871,7 +871,7 @@ final class ProjectSession: ObservableObject {
 
     /// Exporta un solo reel (botón de su tarjeta) y lo muestra en el Finder.
     func exportReel(_ reel: Reel) {
-        run("Exportando reel") { [self] in
+        run(String(localized: "Exportando reel")) { [self] in
             let urls = try await performExportReels(only: reel)
             if let last = urls.last { NSWorkspace.shared.activateFileViewerSelecting([last]) }
         }
@@ -884,12 +884,12 @@ final class ProjectSession: ObservableObject {
             player.pause()
             var urls: [URL] = []
             for (i, reel) in reels.enumerated() {
-                let label = "Reel \(i + 1) de \(reels.count): \(reel.title)"
-                report("Exportando reels", label, 0)
+                let label = String(localized: "Reel \(i + 1) de \(reels.count): \(reel.title)")
+                report(String(localized: "Exportando reels"), label, 0)
                 let url = try await Exporter.export(project: project.applying(project.look(for: reel), reel: reel), format: .vertical,
                                                     window: (reel.start, reel.end),
                                                     baseName: "reel-\((project.reels.firstIndex { $0.id == reel.id } ?? i) + 1)-\(reel.title)", energy: energy) { [weak self] f in
-                    self?.reportAsync("Exportando reels", label, f)
+                    self?.reportAsync(String(localized: "Exportando reels"), label, f)
                 }
                 if let idx = project.reels.firstIndex(where: { $0.id == reel.id }) {
                     project.reels[idx].exportedFile = url.lastPathComponent
@@ -908,7 +908,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSSavePanel()
         panel.allowedContentTypes = asText ? [.plainText] : [UTType(filenameExtension: "srt") ?? .plainText]
         panel.nameFieldStringValue = ProjectStore.slugify(project.name) + (asText ? "-transcripcion.txt" : ".srt")
-        panel.message = asText ? "Transcripción en texto, con quién habla" : "Subtítulos SRT (YouTube, Spotify, editores de video)"
+        panel.message = asText ? String(localized: "Transcripción en texto, con quién habla") : String(localized: "Subtítulos SRT (YouTube, Spotify, editores de video)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let text = asText ? Exporter.transcriptText(project: project) : Exporter.srt(project: project)
         do { try text.write(to: url, atomically: true, encoding: .utf8) }
@@ -924,7 +924,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
         panel.allowsMultipleSelection = false
-        panel.message = isIntro ? "Elige la imagen del intro" : "Elige la imagen del cierre"
+        panel.message = isIntro ? String(localized: "Elige la imagen del intro") : String(localized: "Elige la imagen del cierre")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let rel = "branding/\(isIntro ? "intro" : "outro").\(url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased())"
         let dest = ProjectStore.url(rel, in: project.id)
@@ -942,7 +942,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige la música del \(isIntro ? "intro" : "cierre")"
+        panel.message = String(localized: "Elige la música del \(isIntro ? "intro" : "cierre")")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
         try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
@@ -960,7 +960,7 @@ final class ProjectSession: ObservableObject {
         guard let lane = project.lanes.first(where: { $0.id == laneId }) else { return }
         let eq = lane.eq
         let who = project.laneName(laneId)
-        run("Ecualizando la voz de \(who)") { [self] in
+        run(String(localized: "Ecualizando la voz de \(who)")) { [self] in
             for clip in lane.clips {
                 guard let i = project.media.firstIndex(where: { $0.id == clip.mediaId }) else { continue }
                 let m = project.media[i]
@@ -969,7 +969,7 @@ final class ProjectSession: ObservableObject {
                 var base = (project.enhanceAudio ? m.enhancedAudioFile : nil) ?? m.file
                 if !FileManager.default.fileExists(atPath: ProjectStore.url(base, in: project.id).path) { base = m.file }
                 let rel = try await AudioAnalysis.applyEQ(media: m, base: base, eq: eq, slug: project.id) { [weak self] f in
-                    self?.reportAsync("Ecualizando la voz de \(who)", "", f)
+                    self?.reportAsync(String(localized: "Ecualizando la voz de \(who)"), "", f)
                 }
                 if let j = project.media.firstIndex(where: { $0.id == m.id }) { project.media[j].eqAudioFile = rel }
             }
@@ -994,12 +994,12 @@ final class ProjectSession: ObservableObject {
             guard !pending.isEmpty else { return }
             for (i, m) in pending.enumerated() {
                 if Task.isCancelled { return }
-                await MainActor.run { self?.proxyStatus = "Preparando proxy \(i + 1) de \(pending.count): \(m.originalName)" }
+                await MainActor.run { self?.proxyStatus = String(localized: "Preparando proxy \(i + 1) de \(pending.count): \(m.originalName)") }
                 do {
                     try await ProxyStore.make(m, project: p.id)
                     await MainActor.run { self?.schedulePreview(immediate: true) }
                 } catch {
-                    await MainActor.run { self?.note = "No se pudo preparar el proxy de \(m.originalName): \(error.localizedDescription)" }
+                    await MainActor.run { self?.note = String(localized: "No se pudo preparar el proxy de \(m.originalName): \(error.localizedDescription)") }
                 }
             }
             await MainActor.run { self?.proxyStatus = nil }
@@ -1018,7 +1018,7 @@ final class ProjectSession: ObservableObject {
     /// Igualar cámaras: con `reference`, esa cámara manda y las demás reciben una ganancia por canal (balance) y una
     /// exposición (brillo) en su color de Studio; sin referencia (botón del paso simple), la primera en pantalla.
     func matchCameraColors(reference: Int? = nil) {
-        run("Igualando el color de las cámaras") { [self] in
+        run(String(localized: "Igualando el color de las cámaras")) { [self] in
             let ctx = CIContext()
             var avg: [Int: [Double]] = [:]
             for lane in project.lanes {
@@ -1120,7 +1120,7 @@ final class ProjectSession: ObservableObject {
             try? FileManager.default.removeItem(at: AudioAnalysis.energyURL(self.project.id))
             self.energy = nil
             guard self.project.lanes.count > 1 else { return }
-            self.run("Analizando quién habla") { [self] in
+            self.run(String(localized: "Analizando quién habla")) { [self] in
                 try await self.ensureEnergy()
                 self.schedulePreview(immediate: true)
             }
@@ -1129,10 +1129,10 @@ final class ProjectSession: ObservableObject {
 
     /// «9,0 s antes» / «0,3 s después» / «en su lugar original».
     static func offsetText(_ o: Double) -> String {
-        if abs(o) < 0.005 { return "en su lugar original" }
+        if abs(o) < 0.005 { return String(localized: "en su lugar original") }
         let v = String(format: "%.2f", abs(o)).replacingOccurrences(of: ".", with: ",")
             .replacingOccurrences(of: #",?0+$"#, with: "", options: .regularExpression)
-        return o < 0 ? "suena \(v) s antes" : "suena \(v) s después"
+        return o < 0 ? String(localized: "suena \(v) s antes") : String(localized: "suena \(v) s después")
     }
 
     // MARK: Música y efectos
@@ -1148,7 +1148,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .mpeg4Audio, .audio]
         panel.allowsMultipleSelection = true
-        panel.message = "Elige música o efectos (mp3, wav, m4a)"
+        panel.message = String(localized: "Elige música o efectos (mp3, wav, m4a)")
         guard panel.runModal() == .OK else { return }
         let dest = ProjectStore.folder(for: project.id).appendingPathComponent("sfx", isDirectory: true)
         try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
@@ -1243,10 +1243,10 @@ final class ProjectSession: ObservableObject {
         while FileManager.default.fileExists(atPath: dest.appendingPathComponent(name).path) { name = "\(stem)-\(n).caf"; n += 1 }
         let rel = "sfx/\(name)"
         let at = timeline ?? playheadTimeline
-        run("Generando la voz") { [self] in
+        run(String(localized: "Generando la voz")) { [self] in
             try await Speech.synthesize(t, voice: voice, rate: rate, to: dest.appendingPathComponent(name))
             if !project.sfxLibrary.contains(rel) { project.sfxLibrary.insert(rel, at: 0) }
-            project.sfxNames[rel] = "Voz: " + String(t.prefix(40))
+            project.sfxNames[rel] = String(localized: "Voz: ") + String(t.prefix(40))
             await addSound(rel, at: at)
             if let i = project.audioLane.firstIndex(where: { project.mediaItem($0.mediaId)?.file == rel }) {
                 project.audioLane[i].volume = 1
@@ -1264,8 +1264,8 @@ final class ProjectSession: ObservableObject {
         let id = ((reel?.cintillos ?? project.cintillos).map(\.id).max() ?? 0) + 1
         var t = min(playheadTimeline, max(0, project.duration - 1))
         if let reel { t = min(max(reel.start, t), max(reel.start, reel.end - 2)) }
-        var c = DirectorCintillo(id: id, kind: kind, title: title.isEmpty ? (style == "sponsor" ? "Nombre del sponsor" : "Título") : title,
-                                 text: text.isEmpty ? (style == "sponsor" ? "Una frase corta sobre el sponsor" : "Un texto corto debajo del título") : text,
+        var c = DirectorCintillo(id: id, kind: kind, title: title.isEmpty ? (style == "sponsor" ? String(localized: "Nombre del sponsor") : "Título") : title,
+                                 text: text.isEmpty ? (style == "sponsor" ? String(localized: "Una frase corta sobre el sponsor") : String(localized: "Un texto corto debajo del título")) : text,
                                  start: t, duration: 7, logoFile: logoFile, style: style, tag: tag)
         if style == "clean" { c.tag = "" }
         if let reelId, let r = project.reels.firstIndex(where: { $0.id == reelId }) {
@@ -1332,7 +1332,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige el logo del cintillo (un PNG con fondo transparente queda mejor)"
+        panel.message = String(localized: "Elige el logo del cintillo (un PNG con fondo transparente queda mejor)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
         let rel = "cintillos/logo-\(id)-\(Int(Date().timeIntervalSince1970)).\(ext)"
@@ -1349,7 +1349,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige el logo del cintillo (un PNG con fondo transparente queda mejor)"
+        panel.message = String(localized: "Elige el logo del cintillo (un PNG con fondo transparente queda mejor)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
         let rel = "cintillos/logo-\(Int(Date().timeIntervalSince1970)).\(ext)"
@@ -1368,7 +1368,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .video, .png, .jpeg, .heic, .webP, .gif]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige un video o una imagen para poner encima un rato (b-roll)"
+        panel.message = String(localized: "Elige un video o una imagen para poner encima un rato (b-roll)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let dir = ProjectStore.folder(for: project.id).appendingPathComponent("broll", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -1440,7 +1440,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif, .tiff]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige una imagen para poner encima del video (un PNG con fondo transparente queda mejor)"
+        panel.message = String(localized: "Elige una imagen para poner encima del video (un PNG con fondo transparente queda mejor)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
         let rel = "capas/\(Int(Date().timeIntervalSince1970))_\(ProjectStore.slugify(url.deletingPathExtension().lastPathComponent)).\(ext)"
@@ -1458,7 +1458,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP, .gif]
         panel.allowsMultipleSelection = false
-        panel.message = kind == "logo" ? "Elige el logo para los reels (un PNG con fondo transparente queda mejor)" : "Elige el fondo para los reels (vertical, 1080×1920)"
+        panel.message = kind == "logo" ? String(localized: "Elige el logo para los reels (un PNG con fondo transparente queda mejor)") : String(localized: "Elige el fondo para los reels (vertical, 1080×1920)")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
         let rel = "branding/reel-\(kind)-\(Int(Date().timeIntervalSince1970)).\(ext)"
@@ -1485,7 +1485,7 @@ final class ProjectSession: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
         panel.allowsMultipleSelection = false
-        panel.message = "Elige la imagen que va detrás de \(project.laneName(laneId))"
+        panel.message = String(localized: "Elige la imagen que va detrás de \(project.laneName(laneId))")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension.lowercased()
         let rel = "branding/fondo-\(laneId)-\(Int(Date().timeIntervalSince1970)).\(ext)"
@@ -1520,8 +1520,8 @@ final class ProjectSession: ObservableObject {
         let t = playheadTimeline
         let n = project.moments.count + 1
         let id = (project.moments.map(\.id).max() ?? 0) + 1
-        project.moments.append(Moment(id: id, time: t, duration: nil, label: "Momento \(n)"))
-        let reel = Reel(title: "Momento \(n)", reason: "Marcado en la app", start: t, end: min(project.duration, t + 60))
+        project.moments.append(Moment(id: id, time: t, duration: nil, label: String(localized: "Momento \(n)")))
+        let reel = Reel(title: String(localized: "Momento \(n)"), reason: String(localized: "Marcado en la app"), start: t, end: min(project.duration, t + 60))
         project.reels.append(reel)
         return reel
     }
@@ -1556,18 +1556,18 @@ final class ProjectSession: ObservableObject {
 
     func publishAudio() {
         guard let slug = project.episode.prepodSlug, let ep = project.episode.prepodEpisodeId else { return }
-        run("Publicando en Spotify y Apple") { [self] in
+        run(String(localized: "Publicando en Spotify y Apple")) { [self] in
             var file = latestExport(suffix: "audio", ext: "mp3")
             if file == nil { file = try await performExport(format: .audio) }
             guard let file else { return }
-            report("Publicando en Spotify y Apple", "Subiendo el MP3 a prePod…", 0)
+            report(String(localized: "Publicando en Spotify y Apple"), String(localized: "Subiendo el MP3 a prePod…"), 0)
             let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
-                self?.reportAsync("Publicando en Spotify y Apple", "Subiendo el MP3 a prePod…", f)
+                self?.reportAsync(String(localized: "Publicando en Spotify y Apple"), String(localized: "Subiendo el MP3 a prePod…"), f)
             }
-            report("Publicando en Spotify y Apple", "Poniéndolo en el feed…", nil)
+            report(String(localized: "Publicando en Spotify y Apple"), String(localized: "Poniéndolo en el feed…"), nil)
             let job = try await PrePodClient.shared.publishAudio(slug: slug, episodeId: ep, uploadId: upload)
             let result = try await PrePodClient.shared.wait(job: job) { [weak self] f in
-                self?.reportAsync("Publicando en Spotify y Apple", "Poniéndolo en el feed…", f)
+                self?.reportAsync(String(localized: "Publicando en Spotify y Apple"), String(localized: "Poniéndolo en el feed…"), f)
             }
             project.episode.publishedAudioURL = result["media_url"]
             loadPublishStatus()
@@ -1576,19 +1576,19 @@ final class ProjectSession: ObservableObject {
 
     func publishYouTube(title: String, description: String, privacy: String) {
         guard let slug = project.episode.prepodSlug, let ep = project.episode.prepodEpisodeId else { return }
-        run("Subiendo a YouTube") { [self] in
+        run(String(localized: "Subiendo a YouTube")) { [self] in
             var file = latestExport(suffix: "youtube", ext: "mp4")
             if file == nil { file = try await performExport(format: .landscape) }
             guard let file else { return }
-            report("Subiendo a YouTube", "Enviando el video a prePod…", 0)
+            report(String(localized: "Subiendo a YouTube"), String(localized: "Enviando el video a prePod…"), 0)
             let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
-                self?.reportAsync("Subiendo a YouTube", "Enviando el video a prePod…", f)
+                self?.reportAsync(String(localized: "Subiendo a YouTube"), String(localized: "Enviando el video a prePod…"), f)
             }
-            report("Subiendo a YouTube", "prePod lo está subiendo a tu canal…", 0)
+            report(String(localized: "Subiendo a YouTube"), String(localized: "prePod lo está subiendo a tu canal…"), 0)
             let job = try await PrePodClient.shared.publishYouTube(slug: slug, episodeId: ep, uploadId: upload,
                                                                    title: title, description: description, privacy: privacy)
             let result = try await PrePodClient.shared.wait(job: job) { [weak self] f in
-                self?.reportAsync("Subiendo a YouTube", "prePod lo está subiendo a tu canal…", f)
+                self?.reportAsync(String(localized: "Subiendo a YouTube"), String(localized: "prePod lo está subiendo a tu canal…"), f)
             }
             project.episode.publishedYouTubeURL = result["video_url"] ?? result["url"]
             loadPublishStatus()
@@ -1605,25 +1605,25 @@ final class ProjectSession: ObservableObject {
         guard let slug = project.episode.prepodSlug else { return }
         let episodeId = project.episode.prepodEpisodeId
         reelPosts = nil
-        run("Publicando el episodio") { [self] in
+        run(String(localized: "Publicando el episodio")) { [self] in
             var all: [PrePodClient.PubPost] = []
             for t in targets {
                 let (label, file): (String, URL)
                 switch t.platform {
                 case "feed":
-                    report("Publicando el episodio", "Exportando el audio…", nil)
+                    report(String(localized: "Publicando el episodio"), String(localized: "Exportando el audio…"), nil)
                     var mp3 = latestExport(suffix: "audio", ext: "mp3")
                     if mp3 == nil { mp3 = try await performExport(format: .audio) }
-                    (label, file) = ("el audio", mp3!)
+                    (label, file) = (String(localized: "el audio"), mp3!)
                 case "instagram_image":
-                    report("Publicando el episodio", "Preparando la portada…", nil)
-                    (label, file) = ("la portada", try await exportCover())
+                    report(String(localized: "Publicando el episodio"), String(localized: "Preparando la portada…"), nil)
+                    (label, file) = (String(localized: "la portada"), try await exportCover())
                 default:
-                    (label, file) = ("el video", try await performExport(format: .landscape))
+                    (label, file) = (String(localized: "el video"), try await performExport(format: .landscape))
                 }
-                report("Publicando el episodio", "Subiendo \(label) a thePod…", 0)
+                report(String(localized: "Publicando el episodio"), String(localized: "Subiendo \(label) a thePod…"), 0)
                 let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
-                    self?.reportAsync("Publicando el episodio", "Subiendo \(label) a thePod…", f)
+                    self?.reportAsync(String(localized: "Publicando el episodio"), String(localized: "Subiendo \(label) a thePod…"), f)
                 }
                 all += try await PrePodClient.shared.createReelPosts(
                     slug: slug, episodeId: episodeId, uploadId: upload, title: title,
@@ -1642,7 +1642,7 @@ final class ProjectSession: ObservableObject {
     func exportCover() async throws -> URL {
         let img = try await CoverScout.render(project: project, at: coverTimeline, energy: energy)
         guard let data = CoverScout.jpeg(img, quality: 0.9) else {
-            throw PrePodClient.Failure(message: "No se pudo preparar la portada")
+            throw PrePodClient.Failure(message: String(localized: "No se pudo preparar la portada"))
         }
         let url = ProjectStore.exportsFolder(for: project.id).appendingPathComponent("portada.jpg")
         try data.write(to: url, options: .atomic)
@@ -1651,23 +1651,23 @@ final class ProjectSession: ObservableObject {
 
     /// Busca los segundos donde todas las personas salen sonriendo y nítidas, y deja una imagen de cada uno.
     func findCoverCandidates() {
-        run("Buscando capturas") { [self] in
-            report("Buscando capturas", "Mirando las caras…", 0)
+        run(String(localized: "Buscando capturas")) { [self] in
+            report(String(localized: "Buscando capturas"), String(localized: "Mirando las caras…"), 0)
             let found = try await CoverScout.scan(project: project) { [weak self] f, what in
-                self?.reportAsync("Buscando capturas", what, f * 0.7)
+                self?.reportAsync(String(localized: "Buscando capturas"), what, f * 0.7)
             }
             if found.isEmpty {
                 project.coverCandidates = []
                 project.coverScannedAt = Date()
-                note = "No encontré caras en el video. Elige el segundo a mano en Portada."
+                note = String(localized: "No encontré caras en el video. Elige el segundo a mano en Portada.")
                 return
             }
-            report("Buscando capturas", "Dibujando las portadas…", 0.7)
+            report(String(localized: "Buscando capturas"), String(localized: "Dibujando las portadas…"), 0.7)
             let folder = ProjectStore.cacheFolder(for: project.id).appendingPathComponent("portadas")
             try? FileManager.default.removeItem(at: folder)
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let images = try await CoverScout.renderAll(project: project, times: found.map { $0.time }, energy: energy, maxSize: 960) { [weak self] f in
-                self?.reportAsync("Buscando capturas", "Dibujando las portadas…", 0.7 + f * 0.3)
+                self?.reportAsync(String(localized: "Buscando capturas"), String(localized: "Dibujando las portadas…"), 0.7 + f * 0.3)
             }
             var out: [CoverCandidate] = []
             for s in found {
@@ -1703,7 +1703,7 @@ final class ProjectSession: ObservableObject {
 
     /// Guarda la portada elegida como JPEG en la carpeta de exportados y la muestra en el Finder.
     func saveCover() {
-        run("Guardando la portada") { [self] in
+        run(String(localized: "Guardando la portada")) { [self] in
             let url = try await exportCover()
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
@@ -1714,14 +1714,14 @@ final class ProjectSession: ObservableObject {
         guard let slug = project.episode.prepodSlug else { return }
         let episodeId = project.episode.prepodEpisodeId
         reelPosts = nil
-        run("Publicando en redes") { [self] in
+        run(String(localized: "Publicando en redes")) { [self] in
             let urls = try await performExportReels(only: reel)
             guard let file = urls.first else { return }
-            report("Publicando en redes", "Subiendo el reel a thePod…", 0)
+            report(String(localized: "Publicando en redes"), String(localized: "Subiendo el reel a thePod…"), 0)
             let upload = try await PrePodClient.shared.upload(file: file) { [weak self] f in
-                self?.reportAsync("Publicando en redes", "Subiendo el reel a thePod…", f)
+                self?.reportAsync(String(localized: "Publicando en redes"), String(localized: "Subiendo el reel a thePod…"), f)
             }
-            report("Publicando en redes", "Enviándolo a tus redes…", nil)
+            report(String(localized: "Publicando en redes"), String(localized: "Enviándolo a tus redes…"), nil)
             reelPosts = try await PrePodClient.shared.createReelPosts(
                 slug: slug, episodeId: episodeId, uploadId: upload, title: reel.title, targets: targets, at: at)
         }
@@ -1787,14 +1787,14 @@ final class ProjectSession: ObservableObject {
 
     /// Quita los silencios solo dentro de un reel (cortes propios del reel).
     func removeSilences(in reel: Reel) {
-        run("Buscando silencios en el reel") { [self] in
+        run(String(localized: "Buscando silencios en el reel")) { [self] in
             try await ensureEnergy()
             guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
             let inside = reelSilences(project.reels[i])
             project.reels[i].cuts.removeAll { $0.kind == .silence }
             project.reels[i].cuts += inside
             if previewReel?.id == reel.id { previewReel = project.reels[i] }
-            reelsNote = inside.isEmpty ? "No hay silencios largos en este reel." : "Quitamos \(inside.count) silencios solo en este reel (\(String(format: "%.1f", inside.reduce(0) { $0 + $1.length })) s)."
+            reelsNote = inside.isEmpty ? String(localized: "No hay silencios largos en este reel.") : String(localized: "Quitamos \(inside.count) silencios solo en este reel (\(String(format: "%.1f", inside.reduce(0) { $0 + $1.length })) s).")
         }
     }
 
@@ -1815,7 +1815,7 @@ final class ProjectSession: ObservableObject {
 
     /// Solo el sonido de estudio (sin tocar cortes ni transcripción): para reels cuando el episodio no se limpió.
     func enhanceAudioOnly() {
-        run("Limpiando el sonido") { [self] in
+        run(String(localized: "Limpiando el sonido")) { [self] in
             try await enhanceAudio()
             project.enhanceAudio = true
             schedulePreview(immediate: true)
@@ -1827,10 +1827,10 @@ final class ProjectSession: ObservableObject {
     /// Ajusta al audio todas las palabras del episodio. Devuelve cuántas se corrieron y el corrimiento típico.
     @discardableResult
     func syncWords() async throws -> SubtitleSync.Result {
-        report("Ajustando los subtítulos al audio", "", 0)
+        report(String(localized: "Ajustando los subtítulos al audio"), "", 0)
         let old = project.words
         let res = try await SubtitleSync.align(old, project: project) { [weak self] f in
-            self?.reportAsync("Ajustando los subtítulos al audio", "", f)
+            self?.reportAsync(String(localized: "Ajustando los subtítulos al audio"), "", f)
         }
         var p = project
         p.sensitive = SubtitleSync.remapSensitive(p.sensitive, old: old, new: res.words)
@@ -1843,13 +1843,13 @@ final class ProjectSession: ObservableObject {
     /// Botón «Ajustar al audio»: corre las palabras a donde suena la voz y, si el episodio ya se arregló,
     /// vuelve a calcular sus silencios y muletillas (y los silencios de cada reel) con los tiempos nuevos.
     func syncSubtitles() {
-        run("Ajustando los subtítulos al audio") { [self] in
+        run(String(localized: "Ajustando los subtítulos al audio")) { [self] in
             let res = try await syncWords()
             let redid = try await redoAutoCuts()
             var msg = res.moved == 0
-                ? "Los subtítulos ya estaban en su lugar."
-                : "Listo: corrimos \(res.moved) palabras para que salgan cuando se escucha la voz (en general \(Self.ms(res.typicalShift)))."
-            if redid { msg += " También volvimos a buscar los silencios con los tiempos nuevos." }
+                ? String(localized: "Los subtítulos ya estaban en su lugar.")
+                : String(localized: "Listo: corrimos \(res.moved) palabras para que salgan cuando se escucha la voz (en general \(Self.ms(res.typicalShift))).")
+            if redid { msg += String(localized: " También volvimos a buscar los silencios con los tiempos nuevos.") }
             captionsNote = msg
             schedulePreview(immediate: true)
         }
@@ -1883,7 +1883,7 @@ final class ProjectSession: ObservableObject {
     /// Se pierden las correcciones hechas a mano en el texto; las palabras sensibles se vuelven a buscar
     /// y conservan lo que se había elegido (pitido, cambio) cuando son la misma palabra.
     func relistenEpisode() {
-        run("Escribiendo la transcripción de nuevo") { [self] in
+        run(String(localized: "Escribiendo la transcripción de nuevo")) { [self] in
             let previous = project.sensitive
             let backup = (project.words, project.transcribedLanes, project.wordsSynced)
             var p = project
@@ -1910,19 +1910,19 @@ final class ProjectSession: ObservableObject {
                 }
             }
             let redid = try await redoAutoCuts()
-            captionsNote = "Listo: escribimos la transcripción de nuevo y la ajustamos al audio."
-                + (redid ? " También volvimos a buscar los silencios." : "")
+            captionsNote = String(localized: "Listo: escribimos la transcripción de nuevo y la ajustamos al audio.")
+                + (redid ? String(localized: " También volvimos a buscar los silencios.") : "")
             schedulePreview(immediate: true)
         }
     }
 
     /// Vuelve a escuchar solo el tramo de un reel y le deja ese texto propio (el episodio no cambia).
     func relistenReel(_ reel: Reel) {
-        run("Escuchando el reel de nuevo") { [self] in
+        run(String(localized: "Escuchando el reel de nuevo")) { [self] in
             var words = try await SubtitleSync.listen(project: project, from: reel.start, to: reel.end) { [weak self] detail, f in
-                self?.reportAsync("Escuchando el reel de nuevo", detail, f)
+                self?.reportAsync(String(localized: "Escuchando el reel de nuevo"), detail, f)
             }
-            report("Ajustando los subtítulos al audio", "", nil)
+            report(String(localized: "Ajustando los subtítulos al audio"), "", nil)
             words = try await SubtitleSync.align(words, project: project).words.sorted { $0.s < $1.s }
             guard let i = project.reels.firstIndex(where: { $0.id == reel.id }) else { return }
             project.reels[i].words = words
@@ -1934,8 +1934,8 @@ final class ProjectSession: ObservableObject {
             }
             if previewReel?.id == reel.id { previewReel = project.reels[i] }
             reelsNote = words.isEmpty
-                ? "No escuchamos palabras en este reel."
-                : "Listo: este reel tiene su propio texto (\(words.count) palabras), ajustado al audio. El episodio no cambió."
+                ? String(localized: "No escuchamos palabras en este reel.")
+                : String(localized: "Listo: este reel tiene su propio texto (\(words.count) palabras), ajustado al audio. El episodio no cambió.")
             schedulePreview(immediate: true)
         }
     }
@@ -1950,7 +1950,7 @@ final class ProjectSession: ObservableObject {
 
     static func ms(_ seconds: Double) -> String {
         let txt = String(format: "%.2f", abs(seconds)).replacingOccurrences(of: ".", with: ",") + " s"
-        return seconds >= 0 ? "\(txt) más tarde" : "\(txt) antes"
+        return seconds >= 0 ? String(localized: "\(txt) más tarde") : String(localized: "\(txt) antes")
     }
 
     func updatePhrase(_ phrase: Phrase, text: String) {

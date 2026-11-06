@@ -10,8 +10,8 @@ struct LayersStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Textos, stickers y b-roll",
-                               subtitle: "Pon un título, una imagen o un emoji encima del video, o un b-roll que tape la pantalla un rato. Se agrega donde está el video ahora.", step: .layers)
+                    StepHeader(title: String(localized: "Textos, stickers y b-roll"),
+                               subtitle: String(localized: "Pon un título, una imagen o un emoji encima del video, o un b-roll que tape la pantalla un rato. Se agrega donde está el video ahora."), step: .layers)
                     Card {
                         Text("Agregar").font(.headline)
                         HStack(spacing: 10) {
@@ -287,7 +287,7 @@ struct BRollEditor: View {
         let minStart = reel?.start ?? 0
         let maxStart = reel.map { max($0.start, $0.end - 1) } ?? session.project.duration
         HStack {
-            Label((reel != nil ? "B-roll del reel · " : "B-roll · ") + clip.title, systemImage: clip.isVideo ? "film" : "photo").font(.headline).lineLimit(1)
+            Label((reel != nil ? String(localized: "B-roll del reel · ") : String(localized: "B-roll · ")) + clip.title, systemImage: clip.isVideo ? "film" : "photo").font(.headline).lineLimit(1)
             Spacer()
             Button(role: .destructive) { session.removeBRoll(clip.id, reelId: reelId) } label: { Image(systemName: "trash") }.buttonStyle(.borderless).help("Quitar")
             Button { session.selectedTrack = nil } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.borderless)
@@ -335,9 +335,9 @@ struct BRollEditor: View {
             Text("Entero, con bordes").tag(false)
         }
         .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 300)
-        Text(String(format: "Máximo %.0f s: un b-roll es un apoyo corto. ", BRollClip.maxSeconds)
-             + (reel != nil ? "Solo en este reel, y siempre más corto que el reel. " : "")
-             + "El logo, los textos y los subtítulos siguen encima. La voz no se toca.")
+        Text(String(format: String(localized: "Máximo %.0f s: un b-roll es un apoyo corto. "), BRollClip.maxSeconds)
+             + (reel != nil ? String(localized: "Solo en este reel, y siempre más corto que el reel. ") : "")
+             + String(localized: "El logo, los textos y los subtítulos siguen encima. La voz no se toca."))
             .font(.caption2).foregroundStyle(Theme.secondary)
     }
 }

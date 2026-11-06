@@ -49,16 +49,16 @@ enum Plan {
     /// «Plan Gratis · 1 de 2 episodios · hasta 720p» / «Plan Completo» / nil sin cuenta.
     static var summary: String? {
         if isFree, let max = maxEpisodes {
-            return "Plan \(name) · \(episodesUsed) de \(max) episodios · grabaciones de hasta \((maxRecordSeconds ?? 900) / 60) min · video hasta \(maxHeight ?? 720)p"
+            return String(localized: "Plan \(name) · \(episodesUsed) de \(max) episodios · grabaciones de hasta \((maxRecordSeconds ?? 900) / 60) min · video hasta \(maxHeight ?? 720)p")
         }
         if !name.isEmpty, !includesApp {
-            return "Plan \(name) · no incluye la app: aquí tienes 2 episodios de prueba en 720p"
+            return String(localized: "Plan \(name) · no incluye la app: aquí tienes 2 episodios de prueba en 720p")
         }
-        return name.isEmpty ? nil : "Plan \(name)"
+        return name.isEmpty ? nil : String(localized: "Plan \(name)")
     }
 
     /// Mensaje cuando ya no quedan episodios.
     static var noEpisodesMessage: String {
-        "El plan \(name.isEmpty ? "Gratis" : name) incluye \(maxEpisodes ?? 2) episodios y ya los usaste. Mejora tu plan para seguir."
+        String(localized: "El plan \(name.isEmpty ? "Gratis" : name) incluye \(maxEpisodes ?? 2) episodios y ya los usaste. Mejora tu plan para seguir.")
     }
 }

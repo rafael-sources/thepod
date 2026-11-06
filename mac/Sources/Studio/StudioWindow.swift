@@ -210,7 +210,7 @@ struct MasterBadge: View {
                     Text(String(format: "%.1f", r.momentary)).font(.callout.monospacedDigit())
                     Text("LUFS").font(.caption2).foregroundStyle(Theme.secondary)
                     if let i = r.integrated {
-                        Text(String(format: "int. %.1f", i)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
+                        Text(String(format: String(localized: "int. %.1f"), i)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary)
                     }
                 } else {
                     Text("— LUFS").font(.callout.monospacedDigit()).foregroundStyle(Theme.secondary)
@@ -296,7 +296,7 @@ struct ChannelStrip: View {
                 .padding(.horizontal, 6).frame(height: 22)
                 .background(RoundedRectangle(cornerRadius: 5).fill(Theme.panelStrong))
                 .help(lane.noiseProfile == nil ? "Sin huella todavía: enciéndelo en Limpiar sonido para tomarla" : "Resta espectral con la huella del segundo más quieto")
-                insertRow("EQ paramétrico", on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : "\(chain.bands.filter(\.enabled).count) bandas") { openInsert(.eq) }
+                insertRow(String(localized: "EQ paramétrico"), on: !chain.bands.isEmpty, detail: chain.bands.isEmpty ? "plano" : String(localized: "\(chain.bands.filter(\.enabled).count) bandas")) { openInsert(.eq) }
                 insertRow("Compresor", on: chain.compressorOn, detail: chain.compressorOn ? String(format: "%.0f dB · %.1f:1", chain.threshold, chain.ratio) : "apagado") { openInsert(.compressor) }
                 insertRow("De-esser", on: chain.deesserOn, detail: chain.deesserOn ? "\(Int(chain.deesserAmount * 100)) %" : "apagado") { openInsert(.deesser) }
                 insertRow("Puerta", on: chain.gateOn, detail: chain.gateOn ? String(format: "%.0f dB", chain.gateThreshold) : "apagada") { openInsert(.gate) }
@@ -340,7 +340,7 @@ struct ChannelStrip: View {
                     ForEach(Dictionary(grouping: avail, by: \.vendor).keys.sorted(), id: \.self) { vendor in
                         Menu(vendor) {
                             ForEach(avail.filter { $0.vendor == vendor }) { a in
-                                Button(a.name + (a.isV3 ? "" : "  (AUv2, dentro de la app)")) { add(a) }
+                                Button(a.name + (a.isV3 ? "" : String(localized: "  (AUv2, dentro de la app)"))) { add(a) }
                             }
                         }
                     }
@@ -365,7 +365,7 @@ struct ChannelStrip: View {
                 Spacer()
                 if session.project.matchVoices, abs(lane.matchGain) >= 0.05 {
                     Text(String(format: "%@%.1f", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption2.monospacedDigit()).foregroundStyle(Theme.accent)
-                        .help(String(format: "Voces parejas por medición: %.1f LUFS medidos, %+.1f dB aplicados antes del fader", lane.measuredLUFS ?? 0, lane.matchGain))
+                        .help(String(format: String(localized: "Voces parejas por medición: %.1f LUFS medidos, %+.1f dB aplicados antes del fader"), lane.measuredLUFS ?? 0, lane.matchGain))
                 }
                 Text(Fader.label(lane.volume)).font(.caption.monospacedDigit())
             }
@@ -387,8 +387,8 @@ struct ChannelStrip: View {
                     if !ofPodcast.isEmpty || !mine.isEmpty {
                         Divider()
                         Menu("Borrar un preset") {
-                            ForEach(ofPodcast) { p in Button(p.name + " (podcast)", role: .destructive) { ChainPresets.remove(p.id, podcast: podcastSlug); presetsTick += 1 } }
-                            ForEach(mine) { p in Button(p.name + " (esta Mac)", role: .destructive) { ChainPresets.remove(p.id); presetsTick += 1 } }
+                            ForEach(ofPodcast) { p in Button(p.name + String(localized: " (podcast)"), role: .destructive) { ChainPresets.remove(p.id, podcast: podcastSlug); presetsTick += 1 } }
+                            ForEach(mine) { p in Button(p.name + String(localized: " (esta Mac)"), role: .destructive) { ChainPresets.remove(p.id); presetsTick += 1 } }
                         }
                     }
                     Divider()
@@ -492,7 +492,7 @@ struct Meter: View {
                 }
             }
             .frame(width: 12)
-            .help(db > -119 ? String(format: "%.1f dB", db) : "en silencio")
+            .help(db > -119 ? String(format: "%.1f dB", db) : String(localized: "en silencio"))
         }
     }
 }
@@ -751,7 +751,7 @@ struct EQCurve: View {
 
 struct OpenStudioButton: View {
     @Environment(\.openWindow) private var openWindow
-    var label = "Abrir en Studio"
+    var label = String(localized: "Abrir en Studio")
     var tab: StudioTab.Tab = .audio
     var body: some View {
         Button(label) { StudioTab.shared.tab = tab; openWindow(id: "estudio") }

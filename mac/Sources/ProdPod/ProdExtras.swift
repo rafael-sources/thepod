@@ -10,7 +10,7 @@ extension ProdStudio {
     func shareScreen(recordOnly: Bool) {
         guard !screenOn else { return }
         if remoteScreen != nil && !recordOnly {
-            error = "\(remoteScreen?.name ?? "Otra persona") ya está compartiendo pantalla. Solo una a la vez."
+            error = String(localized: "\(remoteScreen?.name ?? "Otra persona") ya está compartiendo pantalla. Solo una a la vez.")
             return
         }
         Task {
@@ -19,9 +19,9 @@ extension ProdStudio {
                 try await screen.start(filter: filter, room: room, recorder: nil, recordOnly: recordOnly)
                 screenOn = true
                 if recording { startScreenRecording() }
-                flash(recordOnly ? "Grabando tu pantalla (no se muestra en la sala)" : "Compartiendo tu pantalla")
+                flash(recordOnly ? String(localized: "Grabando tu pantalla (no se muestra en la sala)") : String(localized: "Compartiendo tu pantalla"))
             } catch {
-                self.error = "No se pudo compartir la pantalla: \(error.localizedDescription)"
+                self.error = String(localized: "No se pudo compartir la pantalla: \(error.localizedDescription)")
             }
         }
     }
@@ -31,7 +31,7 @@ extension ProdStudio {
             await stopScreenRecording()
             await screen.stop(room: room)
             screenOn = false
-            flash("Dejaste de compartir la pantalla")
+            flash(String(localized: "Dejaste de compartir la pantalla"))
         }
     }
 
@@ -48,7 +48,7 @@ extension ProdStudio {
             screen.attach(screenRecorder)
             if !practice { Task { await ChunkUploader.shared.begin(sessionId: session.id, file: file, trackType: "screen") } }
         } catch {
-            self.error = "No se pudo grabar la pantalla: \(error.localizedDescription)"
+            self.error = String(localized: "No se pudo grabar la pantalla: \(error.localizedDescription)")
         }
     }
 
@@ -133,7 +133,7 @@ extension ProdStudio {
         Task {
             do {
                 try await ProdPodClient.shared.send(method: "DELETE", path: "/api/sessions/\(session.id)/participants/\(p.id)")
-                flash("Sacaste a \(p.display_name) de la sala")
+                flash(String(localized: "Sacaste a \(p.display_name) de la sala"))
                 await loadParticipants()
             } catch { self.error = error.localizedDescription }
         }
@@ -159,7 +159,7 @@ extension ProdStudio {
         liveStream = list.first { ["active", "starting"].contains($0["status"] as? String ?? "") }
         if let prev, liveStream == nil,
            let row = list.first(where: { ($0["id"] as? Int) == prev }), (row["status"] as? String) == "failed" {
-            error = (row["error"] as? String) ?? "La transmisión se cortó."
+            error = (row["error"] as? String) ?? String(localized: "La transmisión se cortó.")
         }
     }
 
@@ -169,8 +169,8 @@ extension ProdStudio {
                 let r = try await ProdPodClient.shared.postJSON("/api/sessions/\(session.id)/streams",
                                                                 ["platform": platform, "rtmp_url": url, "stream_key": key, "layout": layout])
                 liveStream = r
-                flash("Transmitiendo en vivo")
-            } catch { self.error = "No se pudo transmitir: \(error.localizedDescription)" }
+                flash(String(localized: "Transmitiendo en vivo"))
+            } catch { self.error = String(localized: "No se pudo transmitir: \(error.localizedDescription)") }
         }
     }
 
@@ -179,7 +179,7 @@ extension ProdStudio {
         Task {
             _ = try? await ProdPodClient.shared.send(method: "DELETE", path: "/api/sessions/\(session.id)/streams/\(id)")
             liveStream = nil
-            flash("Transmisión detenida")
+            flash(String(localized: "Transmisión detenida"))
         }
     }
 }
@@ -204,13 +204,13 @@ enum SessionBundle {
     static func importZip() async throws -> Bool {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.zip]
-        panel.message = "Elige el paquete de una sala de prodPod (.zip)"
+        panel.message = String(localized: "Elige el paquete de una sala de prodPod (.zip)")
         guard panel.runModal() == .OK, let url = panel.url else { return false }
         let data = try Data(contentsOf: url)
         let (code, obj) = try await ProdPodClient.shared.multipart("/api/sessions/import", fields: [:], fileField: "file",
                                                                   fileName: url.lastPathComponent, fileData: data)
         guard (200..<300).contains(code) else {
-            throw PrePodClient.Failure(message: obj["error"] as? String ?? "prodPod respondió \(code)")
+            throw PrePodClient.Failure(message: obj["error"] as? String ?? String(localized: "prodPod respondió \(code)"))
         }
         return true
     }

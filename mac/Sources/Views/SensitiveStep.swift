@@ -12,12 +12,12 @@ struct SensitiveStep: View {
         HStack(alignment: .top, spacing: 20) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Palabras sensibles",
-                               subtitle: "Groserías y palabras que las redes bajan de alcance. Pitido encima, subtítulo cambiado, o las dos cosas. El audio original no se toca.",
+                    StepHeader(title: String(localized: "Palabras sensibles"),
+                               subtitle: String(localized: "Groserías y palabras que las redes bajan de alcance. Pitido encima, subtítulo cambiado, o las dos cosas. El audio original no se toca."),
                                step: .sensitive)
 
                     if !p.isTranscribed {
-                        EmptyHint(symbol: "captions.bubble", title: "Primero los subtítulos",
+                        EmptyHint(symbol: "captions.bubble", title: String(localized: "Primero los subtítulos"),
                                   text: "Esta sección busca en la transcripción. Ve a Subtítulos y transcribe el episodio.")
                     } else {
                         HStack(spacing: 10) {
@@ -65,7 +65,7 @@ struct SensitiveStep: View {
                         }
 
                         if p.sensitiveScanned && p.sensitive.isEmpty {
-                            EmptyHint(symbol: "checkmark.seal", title: "Nada que tapar",
+                            EmptyHint(symbol: "checkmark.seal", title: String(localized: "Nada que tapar"),
                                       text: "No se encontraron groserías ni palabras sensibles en la transcripción. Si falta alguna, agrégala a la derecha y vuelve a buscar.")
                         }
                     }
@@ -107,7 +107,7 @@ struct SensitiveStep: View {
         let live = p.sensitive.filter { !$0.ignored }
         let g = live.filter { $0.category == .groseria }.count, s = live.count - g
         let b = live.filter(\.bleep).count, r = live.filter(\.replace).count
-        return "\(g) groserías · \(s) temas sensibles · \(b) con pitido · \(r) con subtítulo cambiado"
+        return String(localized: "\(g) groserías · \(s) temas sensibles · \(b) con pitido · \(r) con subtítulo cambiado")
     }
 
     private func addWord() {

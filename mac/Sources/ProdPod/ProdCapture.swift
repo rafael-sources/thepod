@@ -64,7 +64,7 @@ final class CameraPipe: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, 
         for i in session.inputs { session.removeInput(i) }
         for o in session.outputs { session.removeOutput(o) }
         let input = try AVCaptureDeviceInput(device: device)
-        guard session.canAddInput(input) else { throw PrePodClient.Failure(message: "No se pudo usar la cámara") }
+        guard session.canAddInput(input) else { throw PrePodClient.Failure(message: String(localized: "No se pudo usar la cámara")) }
         session.addInput(input)
         if let micDev = micDevice, let mic = try? AVCaptureDeviceInput(device: micDev), session.canAddInput(mic) {
             session.addInput(mic)

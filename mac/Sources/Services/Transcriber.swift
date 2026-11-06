@@ -25,8 +25,8 @@ actor Transcriber {
         let model = modelName
         if let pipe, loadedModel == model { return pipe }
         let firstTime = !FileManager.default.fileExists(atPath: Self.modelsFolder.appendingPathComponent("models").path)
-        status(firstTime ? "Preparando la transcripción por primera vez (necesita internet y tarda unos minutos; solo pasa una vez)…"
-                         : "Preparando la transcripción…")
+        status(firstTime ? String(localized: "Preparando la transcripción por primera vez (necesita internet y tarda unos minutos; solo pasa una vez)…")
+                         : String(localized: "Preparando la transcripción…"))
         let config = WhisperKitConfig(model: model, downloadBase: Self.modelsFolder, verbose: false,
                                       logLevel: .error, prewarm: true, load: true, download: true)
         let kit = try await WhisperKit(config)
@@ -40,7 +40,7 @@ actor Transcriber {
                     status: @escaping @Sendable (String) -> Void,
                     progress: @escaping @Sendable (Double) -> Void) async throws -> [Word] {
         let kit = try await load(status: status)
-        status("Escuchando y escribiendo…")
+        status(String(localized: "Escuchando y escribiendo…"))
         let options = DecodingOptions(
             task: .transcribe,
             language: language,

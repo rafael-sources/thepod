@@ -142,7 +142,7 @@ private struct StarButton: View {
             }
             .buttonStyle(.plain)
             .disabled(!(online && eligible))
-            .accessibilityLabel(star.name + (on ? ", elegida" : ""))
+            .accessibilityLabel(star.name + (on ? String(localized: ", elegida") : ""))
             .contextMenu { Button("Ver detalles…", action: open) }
             .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in open() })
             Button(action: open) {
@@ -263,7 +263,7 @@ struct PubHomeView: View {
         .onChange(of: session?.isBusy ?? false) { _, busy in
             guard !busy, phase == .sending, let s = session else { return }
             if s.reelPosts != nil { phase = .done; postsVersion += 1 }
-            else { error = s.errorMessage ?? "No se pudo publicar."; s.errorMessage = nil; phase = .choose }
+            else { error = s.errorMessage ?? String(localized: "No se pudo publicar."); s.errorMessage = nil; phase = .choose }
         }
     }
 
@@ -293,7 +293,7 @@ struct PubHomeView: View {
     private func select(_ p: Project) {
         if phase == .sending { return }
         if let s = app.session, s.project.id != p.id, s.isBusy {
-            error = "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")»."
+            error = String(localized: "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")».")
             return
         }
         projectId = p.id
@@ -406,7 +406,7 @@ struct PubHomeView: View {
                 Circle().fill(Color(white: 0.17)).frame(width: 36, height: 36)
                     .overlay(Text(String((acc?.username ?? s.name).prefix(1)).uppercased()).font(.system(size: 14, weight: .heavy)))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(online(s) ? (s.account == "instagram" ? "@\(acc?.username ?? "")" : (acc?.username ?? "Conectado")) : "Sin conectar")
+                    Text(online(s) ? (s.account == "instagram" ? "@\(acc?.username ?? "")" : (acc?.username ?? "Conectado")) : String(localized: "Sin conectar"))
                         .font(.system(size: 15, weight: .bold))
                     Text(accountNote(s)).font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
@@ -498,18 +498,18 @@ struct PubHomeView: View {
             Text("QUÉ PUBLICAS").font(.system(size: 12, weight: .bold)).kerning(1.4).foregroundStyle(Theme.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 12) {
-                    tile(.episode, "Episodio completo", "16:9 · \(EditEngine.clock(p.duration))", wide: true) {
+                    tile(.episode, String(localized: "Episodio completo"), "16:9 · \(EditEngine.clock(p.duration))", wide: true) {
                         PubThumb(project: p, size: CGSize(width: 180, height: 101))
                     }
                     ForEach(p.reels) { r in
-                        tile(.reel(r.id), r.title.isEmpty ? "Reel" : r.title, "Reel · \(EditEngine.clock(r.length))", wide: false) {
+                        tile(.reel(r.id), r.title.isEmpty ? "Reel" : r.title, String(localized: "Reel · \(EditEngine.clock(r.length))"), wide: false) {
                             PubThumb(project: p, reel: r, size: CGSize(width: 57, height: 101))
                         }
                     }
                     Button { chooseFile() } label: {
                         VStack(spacing: 8) {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 20))
-                            Text({ if case .file(let u) = choice { return u.lastPathComponent }; return "Desde la compu" }())
+                            Text({ if case .file(let u) = choice { return u.lastPathComponent }; return String(localized: "Desde la compu") }())
                                 .font(.system(size: 13, weight: .semibold)).lineLimit(2).multilineTextAlignment(.center)
                         }
                         .foregroundStyle({ if case .file = choice { return Color.white }; return Theme.secondary }())
@@ -643,7 +643,7 @@ struct PubHomeView: View {
         case "youtube": return isEpisode ? "Descripción" : "Texto del Short"
         case "instagram_image": return "Texto de la portada"
         case "tiktok": return "Texto para pegar en TikTok (el video llega a tu bandeja)"
-        default: return "Texto, con tus hashtags"
+        default: return String(localized: "Texto, con tus hashtags")
         }
     }
 
@@ -668,13 +668,13 @@ struct PubHomeView: View {
     }
 
     private var actionTitle: String {
-        if case .file = choice { return later ? "Subir y programar" : "Subir y publicar" }
-        return later ? "Exportar y programar" : "Exportar y publicar"
+        if case .file = choice { return later ? String(localized: "Subir y programar") : String(localized: "Subir y publicar") }
+        return later ? String(localized: "Exportar y programar") : String(localized: "Exportar y publicar")
     }
 
     private func send(_ ts: [PubStar]) {
         guard let p = project, let slug = p.episode.prepodSlug, !ts.isEmpty else { return }
-        if later && whenDate < Date() { error = "Esa fecha ya pasó."; return }
+        if later && whenDate < Date() { error = String(localized: "Esa fecha ya pasó."); return }
         let tg = ts.map { (platform: $0.platform, caption: captions[$0.platform] ?? "") }
         let cleanTitle = title.trimmingCharacters(in: .whitespaces)
         let at = later ? whenDate : nil
@@ -695,7 +695,7 @@ struct PubHomeView: View {
         case .episode, .reel:
             if app.session?.project.id != p.id { app.open(p) }
             guard let s = app.session else { return }
-            if s.isBusy { error = "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")»."; return }
+            if s.isBusy { error = String(localized: "Espera a que termine «\(s.job?.title ?? "lo que se está haciendo")»."); return }
             phase = .sending
             if case .reel(let id) = choice {
                 guard var reel = s.project.reels.first(where: { $0.id == id }) else { phase = .choose; return }
@@ -790,10 +790,10 @@ struct PubPostsList: View {
     }
 
     private func statusText(_ p: PrePodClient.PubPost) -> String {
-        if p.status == "scheduled", let d = date(p), d <= Date() { return "En cola" }
+        if p.status == "scheduled", let d = date(p), d <= Date() { return String(localized: "En cola") }
         return ["scheduled": "Programado", "publishing": "Publicando…", "published": "Publicado",
-                "private": "Subido en privado", "inbox": "En tu bandeja de TikTok",
-                "error": "No se publicó", "cancelled": "Cancelado"][p.status] ?? p.status
+                "private": String(localized: "Subido en privado"), "inbox": String(localized: "En tu bandeja de TikTok"),
+                "error": String(localized: "No se publicó"), "cancelled": "Cancelado"][p.status] ?? p.status
     }
     private func statusColor(_ p: PrePodClient.PubPost) -> Color {
         switch p.status {

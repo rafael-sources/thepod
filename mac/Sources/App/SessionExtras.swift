@@ -85,7 +85,7 @@ extension ProjectSession {
     /// I: marca el inicio de un reel en el reloj. O: marca el fin y crea el reel (o ajusta el reel que se está viendo).
     func markIn() {
         inPoint = playheadTimeline
-        flashNote("Inicio marcado en \(Timecode.string(inPoint ?? 0)) · pulsa O al final")
+        flashNote(String(localized: "Inicio marcado en \(Timecode.string(inPoint ?? 0)) · pulsa O al final"))
     }
 
     func markOut() {
@@ -95,18 +95,18 @@ extension ProjectSession {
             if t > project.reels[i].start + 1 {
                 project.reels[i].end = t
                 previewReel = project.reels[i]
-                flashNote("Fin del reel en \(Timecode.string(t))")
+                flashNote(String(localized: "Fin del reel en \(Timecode.string(t))"))
             }
             return
         }
-        guard let a = inPoint else { flashNote("Primero marca el inicio con I"); return }
+        guard let a = inPoint else { flashNote(String(localized: "Primero marca el inicio con I")); return }
         let start = min(a, t), end = max(a, t)
-        guard end - start >= 1 else { flashNote("El reel debe durar al menos 1 s"); return }
+        guard end - start >= 1 else { flashNote(String(localized: "El reel debe durar al menos 1 s")); return }
         let n = project.reels.count + 1
-        let reel = Reel(title: "Momento \(n)", reason: "Marcado con I y O", start: start, end: end)
+        let reel = Reel(title: String(localized: "Momento \(n)"), reason: String(localized: "Marcado con I y O"), start: start, end: end)
         project.reels.append(reel)
         inPoint = nil
-        flashNote("Reel \(Timecode.string(start, tenths: false)) → \(Timecode.string(end, tenths: false)) · lo ves en Reels")
+        flashNote(String(localized: "Reel \(Timecode.string(start, tenths: false)) → \(Timecode.string(end, tenths: false)) · lo ves en Reels"))
     }
 
     /// Qué hacer con una tecla cuando no se está escribiendo en un campo. Devuelve true si la usó.
@@ -399,7 +399,7 @@ extension ProjectSession {
         project.sensitive = SensitiveWords.scan(project)
         project.sensitiveScanned = true
         let n = project.sensitive.filter { !$0.ignored }.count
-        flashNote(n == 0 ? "No se encontraron palabras sensibles" : "\(n) palabras encontradas")
+        flashNote(n == 0 ? String(localized: "No se encontraron palabras sensibles") : String(localized: "\(n) palabras encontradas"))
     }
 
     func sensitiveBinding(_ id: String) -> Binding<SensitiveMark>? {
@@ -470,7 +470,7 @@ extension ProjectSession {
         project.lanes[i].volumePoints.removeAll { $0.t > a - 0.06 && $0.t < b + 0.06 }
         project.lanes[i].volumePoints += [VolumePoint(t: max(0, a - 0.05), db: before), VolumePoint(t: a, db: db),
                                            VolumePoint(t: b, db: db), VolumePoint(t: min(project.duration, b + 0.05), db: after)]
-        flashNote(db <= VolumePoint.minDB ? "\(project.laneName(laneId)) en silencio en ese tramo" : "\(project.laneName(laneId)) \(Int(db)) dB en ese tramo")
+        flashNote(db <= VolumePoint.minDB ? String(localized: "\(project.laneName(laneId)) en silencio en ese tramo") : String(localized: "\(project.laneName(laneId)) \(Int(db)) dB en ese tramo"))
     }
 
     func deleteSelectedVolumePoint() -> Bool {

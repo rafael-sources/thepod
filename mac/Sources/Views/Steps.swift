@@ -10,7 +10,7 @@ struct OverviewStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    StepHeader(title: "Tu grabación", subtitle: "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video.", step: .overview)
+                    StepHeader(title: String(localized: "Tu grabación"), subtitle: String(localized: "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video."), step: .overview)
                     Card {
                         TextField("Nombre del episodio", text: $session.project.name)
                             .textFieldStyle(.roundedBorder)
@@ -65,11 +65,11 @@ struct OverviewStep: View {
                     }
                     Card {
                         Text("Qué sigue").font(.headline)
-                        checklist("Grabación importada", done: true)
-                        checklist("Audio mejorado, silencios y muletillas fuera", done: session.project.fix.lastRun != nil)
-                        checklist("Transcripción para subtítulos", done: session.project.isTranscribed)
-                        checklist("Reels creados", done: session.project.reels.contains { $0.exportedFile != nil })
-                        BigButton(title: session.project.fix.lastRun == nil ? "Siguiente: arreglar el episodio" : "Ir a subtítulos",
+                        checklist(String(localized: "Grabación importada"), done: true)
+                        checklist(String(localized: "Audio mejorado, silencios y muletillas fuera"), done: session.project.fix.lastRun != nil)
+                        checklist(String(localized: "Transcripción para subtítulos"), done: session.project.isTranscribed)
+                        checklist(String(localized: "Reels creados"), done: session.project.reels.contains { $0.exportedFile != nil })
+                        BigButton(title: session.project.fix.lastRun == nil ? String(localized: "Siguiente: arreglar el episodio") : String(localized: "Ir a subtítulos"),
                                   symbol: "arrow.right") {
                             session.step = session.project.fix.lastRun == nil ? .fix : .captions
                         }
@@ -173,7 +173,7 @@ struct FixStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Arreglar todo", subtitle: "Un botón: sonido de estudio, sin silencios largos y sin “eeeh”. Nada se borra de verdad: puedes deshacer cuando quieras.", step: .fix)
+                    StepHeader(title: String(localized: "Arreglar todo"), subtitle: String(localized: "Un botón: sonido de estudio, sin silencios largos y sin “eeeh”. Nada se borra de verdad: puedes deshacer cuando quieras."), step: .fix)
                     Card {
                         Toggle(isOn: $session.project.fix.enhanceAudio) {
                             VStack(alignment: .leading) {
@@ -286,7 +286,7 @@ struct FixStep: View {
                                 .font(.caption2).foregroundStyle(Theme.secondary)
                         }
                     }
-                    BigButton(title: session.project.fix.lastRun == nil ? "Arreglar todo" : "Volver a arreglar",
+                    BigButton(title: session.project.fix.lastRun == nil ? String(localized: "Arreglar todo") : String(localized: "Volver a arreglar"),
                               symbol: "wand.and.stars", disabled: session.isBusy) {
                         session.fixEverything()
                     }
@@ -309,7 +309,7 @@ struct FixStep: View {
                     Text("Para quitar un trozo a mano: arrástralo en la línea de tiempo de abajo y pulsa “Cortar este trozo”. Lo ves en la lista de cortes y puedes desactivarlo. Para el volumen, los fades o el desfase de una persona, toca su nombre en el timeline.")
                         .font(.caption).foregroundStyle(Theme.secondary)
                     if !session.project.cuts.isEmpty {
-                        DisclosureGroup("Ver los \(session.project.cuts.count) cortes (\(EditEngine.clock(session.project.enabledCuts.reduce(0) { $0 + $1.length })) en total)",
+                        DisclosureGroup(String(localized: "Ver los \(session.project.cuts.count) cortes (\(EditEngine.clock(session.project.enabledCuts.reduce(0) { $0 + $1.length })) en total)"),
                                         isExpanded: $showCuts) {
                             CutList(session: session)
                         }
@@ -429,7 +429,7 @@ struct CaptionsStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 16) {
-                StepHeader(title: "Subtítulos", subtitle: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla.", step: .captions)
+                StepHeader(title: "Subtítulos", subtitle: String(localized: "Elige un estilo y corrige lo que haga falta. Toca una frase para oírla."), step: .captions)
                     HStack(spacing: 8) {
                         Button { session.saveSubtitles(asText: false) } label: { Label("Guardar subtítulos (.srt)", systemImage: "square.and.arrow.down") }
                         Button { session.saveSubtitles(asText: true) } label: { Label("Guardar transcripción (.txt)", systemImage: "doc.text") }
@@ -441,7 +441,7 @@ struct CaptionsStep: View {
                     Card {
                         Text("Todavía no hay transcripción.").font(.headline)
                         Text("La escribimos en tu Mac con inteligencia artificial, sin subir nada a internet.").foregroundStyle(Theme.secondary)
-                        BigButton(title: "Escribir transcripción", symbol: "text.bubble", disabled: session.isBusy) { session.transcribe() }
+                        BigButton(title: String(localized: "Escribir transcripción"), symbol: "text.bubble", disabled: session.isBusy) { session.transcribe() }
                     }
                 } else {
                     styleCard
@@ -715,7 +715,7 @@ struct ReelsStep: View {
         HStack(alignment: .top, spacing: 20) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    StepHeader(title: "Reels, TikTok y Shorts", subtitle: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos.", step: .reels)
+                    StepHeader(title: String(localized: "Reels, TikTok y Shorts"), subtitle: String(localized: "Cada momento que marcaste en postPod se convierte en un video vertical con subtítulos."), step: .reels)
                     if session.project.moments.isEmpty && session.project.reels.isEmpty {
                         Card {
                             Label("Este episodio no tiene momentos marcados", systemImage: "bookmark.slash").font(.headline)
@@ -757,7 +757,7 @@ struct ReelsStep: View {
                     }
                     if !session.project.reels.isEmpty {
                         let n = session.project.reels.filter(\.selected).count
-                        BigButton(title: (session.isBusy ? "Poner en cola: " : "Exportar ") + "\(n) \(n == 1 ? "reel" : "reels")",
+                        BigButton(title: (session.isBusy ? String(localized: "Poner en cola: ") : String(localized: "Exportar ")) + "\(n) \(n == 1 ? "reel" : "reels")",
                                   symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up",
                                   disabled: n == 0) { if session.isBusy { session.enqueue(.reels) } else { session.exportReels() } }
                     }
@@ -973,7 +973,7 @@ struct ReelLookCard: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(chosen == t ? Theme.accent : Theme.stroke))
                     }
                     .buttonStyle(.plain)
-                    .help(t == .auto ? "Pantalla completa para quien está hablando" : t.help)
+                    .help(t == .auto ? String(localized: "Pantalla completa para quien está hablando") : t.help)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -1017,9 +1017,9 @@ struct ReelLookCard: View {
             Divider()
             Text("Marca").font(.caption.bold())
             Toggle("Fondo detrás del video", isOn: look.showBackground).font(.caption)
-            brandRow(kind: "background", label: "Fondo solo para reels", file: l.backgroundFile, fallback: p.backgroundFile)
+            brandRow(kind: "background", label: String(localized: "Fondo solo para reels"), file: l.backgroundFile, fallback: p.backgroundFile)
             Toggle("Logo arriba a la derecha", isOn: look.showLogo).font(.caption)
-            brandRow(kind: "logo", label: "Logo solo para reels", file: l.logoFile, fallback: p.logoFile)
+            brandRow(kind: "logo", label: String(localized: "Logo solo para reels"), file: l.logoFile, fallback: p.logoFile)
             Toggle("Nombres de las personas", isOn: look.showNames).font(.caption)
             Divider()
             Text("Sonido").font(.caption.bold())
@@ -1179,7 +1179,7 @@ struct BrandsStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Patrocinios y marcas", subtitle: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo.", step: .brands)
+                    StepHeader(title: String(localized: "Patrocinios y marcas"), subtitle: String(localized: "Los sponsors del podcast aparecen en el momento del guion donde van; los cintillos del director, donde los puso en vivo."), step: .brands)
                     Card {
                         HStack {
                             Text("Sponsors").font(.headline)
@@ -1267,7 +1267,7 @@ struct LookStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Aspecto", subtitle: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo.", step: .look)
+                    StepHeader(title: "Aspecto", subtitle: String(localized: "Cómo se ve el video. Vale para YouTube, reels y cuadrado; cada formato se ajusta solo."), step: .look)
                     let onePerson = session.project.lanes.count <= 1
                     let choices = onePerson ? [LayoutTemplate.solo, .studio] : LayoutTemplate.allCases
                     let chosen: LayoutTemplate = (onePerson && session.project.layout == .auto) ? .solo : session.project.layout
@@ -1562,7 +1562,7 @@ struct ExportStep: View {
         HStack(alignment: .top, spacing: 24) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    StepHeader(title: "Exportar", subtitle: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto.", step: .export)
+                    StepHeader(title: "Exportar", subtitle: String(localized: "Elige dónde lo vas a publicar. Nosotros ponemos el tamaño correcto."), step: .export)
                     ExportReviewCard(session: session)
                     SharedReviewCard(session: session)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -1632,7 +1632,7 @@ struct ExportStep: View {
                     Toggle("Ajustar el volumen final: −16 LUFS para Spotify y Apple, −14 para YouTube y redes", isOn: $session.project.normalizeLoudness)
                         .font(.caption)
                     HStack(spacing: 10) {
-                        BigButton(title: session.isBusy ? "Poner en cola: \(format.title)" : "Exportar \(format.title)",
+                        BigButton(title: session.isBusy ? String(localized: "Poner en cola: \(format.title)") : String(localized: "Exportar \(format.title)"),
                                   symbol: session.isBusy ? "text.badge.plus" : "square.and.arrow.up") {
                             if session.isBusy { session.enqueue(.format(format)) } else { session.export(format: format) }
                         }
@@ -1855,7 +1855,7 @@ struct ReelBRollCard: View {
                         Image(systemName: b.isVideo ? "film" : "photo").frame(width: 22).foregroundStyle(sel ? Theme.accent : .white)
                         Text(b.title).lineLimit(1)
                         Spacer()
-                        Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? "ventanita izq." : "ventanita der.") + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
+                        Text((b.placement == "full" ? "pantalla" : b.placement == "pipLeft" ? String(localized: "ventanita izq.") : String(localized: "ventanita der.")) + " · \(EditEngine.clock(b.start)) · \(String(format: "%.0f s", b.duration))")
                             .font(.caption).monospacedDigit().foregroundStyle(Theme.secondary)
                     }
                     .padding(8)
@@ -1944,7 +1944,7 @@ struct ExportReviewCard: View {
         let pending = session.pendingSuggestions.count
         if pending > 0 {
             out.append(Item(id: "sugg", text: "\(pending) \(pending == 1 ? "sugerencia" : "sugerencias") sin revisar (muletillas dudosas o frases repetidas)", optional: false,
-                            actions: [("Ver", { session.step = .fix }), ("Dejar como están", { session.decideAllPending(remove: false) })]))
+                            actions: [("Ver", { session.step = .fix }), (String(localized: "Dejar como están"), { session.decideAllPending(remove: false) })]))
         }
         if p.isTranscribed, !p.sensitiveScanned {
             out.append(Item(id: "sens", text: "No se buscaron palabras sensibles (groserías, marcas, datos personales)", optional: true,
@@ -1970,7 +1970,7 @@ struct ExportReviewCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: it.optional ? "circle" : "exclamationmark.circle.fill")
                             .foregroundStyle(it.optional ? Theme.secondary : Color.orange)
-                        Text(it.text + (it.optional ? " (opcional)" : "")).font(.callout)
+                        Text(it.text + (it.optional ? String(localized: " (opcional)") : "")).font(.callout)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 6)
                         ForEach(Array(it.actions.enumerated()), id: \.offset) { _, a in
@@ -2057,7 +2057,7 @@ struct VoicesMatchRow: View {
                     HStack(spacing: 10) {
                         Text(session.project.laneName(lane.id)).font(.caption).frame(width: 140, alignment: .leading).lineLimit(1)
                         if let l = lane.measuredLUFS {
-                            Text(String(format: "%.1f LUFS", l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
+                            Text(String(format: String(localized: "%.1f LUFS"), l)).font(.caption.monospacedDigit()).foregroundStyle(Theme.secondary).frame(width: 80, alignment: .trailing)
                             Text(String(format: "%@%.1f dB", lane.matchGain >= 0 ? "+" : "", lane.matchGain)).font(.caption.monospacedDigit().bold())
                                 .foregroundStyle(abs(lane.matchGain) < 0.05 ? Theme.secondary : Theme.accent).frame(width: 64, alignment: .trailing)
                         } else {
@@ -2211,13 +2211,13 @@ struct SharedReviewCard: View {
                     } else if let r = session.project.review {
                         HStack(spacing: 8) {
                             TextField("", text: .constant(r.url)).textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 420)
-                            Button("Copiar") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string); session.note = "Enlace copiado." }.controlSize(.small)
+                            Button("Copiar") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(r.url, forType: .string); session.note = String(localized: "Enlace copiado.") }.controlSize(.small)
                             Button("Abrir") { if let u = URL(string: r.url) { NSWorkspace.shared.open(u) } }.controlSize(.small)
                             Button("Traer comentarios") { session.refreshReviewComments() }.controlSize(.small)
                             Button("Cerrar enlace", role: .destructive) { confirmRevoke = true }.controlSize(.small)
                         }
                         let df: DateFormatter = { let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short; return f }()
-                        Text("Enviado el \(df.string(from: r.sentAt))" + (r.fetchedAt.map { " · comentarios al \(df.string(from: $0))" } ?? " · todavía no se han traído comentarios"))
+                        Text("Enviado el \(df.string(from: r.sentAt))" + (r.fetchedAt.map { String(localized: " · comentarios al \(df.string(from: $0))") } ?? String(localized: " · todavía no se han traído comentarios")))
                             .font(.caption2).foregroundStyle(Theme.secondary)
                         if r.comments.isEmpty {
                             Text("Sin comentarios por ahora.").font(.caption).foregroundStyle(Theme.secondary)

@@ -69,7 +69,7 @@ struct MulticamStrip: View {
             }
         }
         .buttonStyle(.plain)
-        .help("Cortar a \(session.project.laneName(lane.id)) en este segundo (tecla \(n))")
+        .help(String(localized: "Cortar a \(session.project.laneName(lane.id)) en este segundo (tecla \(n))"))
     }
 
     private func cut(to lane: Int) {

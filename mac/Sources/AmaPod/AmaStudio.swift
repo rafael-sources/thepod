@@ -71,7 +71,7 @@ final class AmaStudio: NSObject, ObservableObject {
             if let old = myVideo { try? await old.stop() }
             let cam = cameras.first { $0.uniqueID == camId }
             let t = await LocalVideoTrack.createCameraTrack(options: CameraCaptureOptions(device: cam, dimensions: .h720_169, fps: 30))
-            do { try await t.start(); myVideo = t } catch { self.error = "No se pudo abrir la cámara: \(error.localizedDescription)" }
+            do { try await t.start(); myVideo = t } catch { self.error = String(localized: "No se pudo abrir la cámara: \(error.localizedDescription)") }
         }
     }
 
@@ -106,10 +106,10 @@ final class AmaStudio: NSObject, ObservableObject {
                 startPolling()
                 if !(await AmaClient.shared.recordingActive(event.id)) {
                     do { try await AmaClient.shared.startRecording(event.id); recording = true }
-                    catch { flash("No se pudo empezar a grabar en el servidor: \(error.localizedDescription)") }
+                    catch { flash(String(localized: "No se pudo empezar a grabar en el servidor: \(error.localizedDescription)")) }
                 } else { recording = true }
             } catch {
-                self.error = "No se pudo abrir el evento: \(error.localizedDescription)"
+                self.error = String(localized: "No se pudo abrir el evento: \(error.localizedDescription)")
                 await disconnect()
                 phase = .prejoin
             }
@@ -128,7 +128,7 @@ final class AmaStudio: NSObject, ObservableObject {
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 await disconnect()
                 phase = .ended
-            } catch { self.error = "No se pudo terminar el evento: \(error.localizedDescription)" }
+            } catch { self.error = String(localized: "No se pudo terminar el evento: \(error.localizedDescription)") }
         }
     }
 
@@ -164,8 +164,8 @@ final class AmaStudio: NSObject, ObservableObject {
     func toggleRecording() {
         Task {
             do {
-                if recording { try await AmaClient.shared.stopRecording(event.id); recording = false; flash("Grabación detenida") }
-                else { try await AmaClient.shared.startRecording(event.id); recording = true; flash("Grabando en el servidor") }
+                if recording { try await AmaClient.shared.stopRecording(event.id); recording = false; flash(String(localized: "Grabación detenida")) }
+                else { try await AmaClient.shared.startRecording(event.id); recording = true; flash(String(localized: "Grabando en el servidor")) }
             } catch { self.error = error.localizedDescription }
         }
     }
@@ -179,10 +179,10 @@ final class AmaStudio: NSObject, ObservableObject {
     func next() {
         act {
             if let p = try await AmaClient.shared.next(self.event.id) {
-                self.flash("\(p.display_name) al aire")
+                self.flash(String(localized: "\(p.display_name) al aire"))
                 self.send(["type": "turn_change", "participant": ["id": p.id, "display_name": p.display_name]])
             } else {
-                self.flash(self.onAir == nil ? "No hay nadie en la cola" : "Listo. No queda nadie en la cola")
+                self.flash(self.onAir == nil ? String(localized: "No hay nadie en la cola") : String(localized: "Listo. No queda nadie en la cola"))
             }
         }
     }
@@ -190,7 +190,7 @@ final class AmaStudio: NSObject, ObservableObject {
     func putOnAir(_ p: AmaClient.Person) {
         act {
             let r = try await AmaClient.shared.skip(self.event.id, to: p.id)
-            self.flash("\(r.display_name) al aire")
+            self.flash(String(localized: "\(r.display_name) al aire"))
             self.send(["type": "turn_change", "participant": ["id": r.id, "display_name": r.display_name]])
         }
     }
@@ -203,7 +203,7 @@ final class AmaStudio: NSObject, ObservableObject {
             } else {
                 try await AmaClient.shared.censor(self.event.id, p.id)
                 self.send(["type": "censor", "participant_id": p.id])
-                self.flash("\(p.display_name) silenciado y oculto")
+                self.flash(String(localized: "\(p.display_name) silenciado y oculto"))
             }
         }
     }
@@ -293,7 +293,7 @@ final class AmaStudio: NSObject, ObservableObject {
         if let r = await r {
             let fresh = r.filter { !seenRequests.contains($0.id) }
             if !fresh.isEmpty, !seenRequests.isEmpty || phase == .live {
-                flash(fresh.count == 1 ? "\(fresh[0].display_name) quiere preguntar" : "\(fresh.count) personas quieren preguntar")
+                flash(fresh.count == 1 ? String(localized: "\(fresh[0].display_name) quiere preguntar") : String(localized: "\(fresh.count) personas quieren preguntar"))
             }
             fresh.forEach { seenRequests.insert($0.id) }
             requests = r
@@ -330,7 +330,7 @@ final class AmaStudio: NSObject, ObservableObject {
     func copy(_ s: String, _ what: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
-        flash("Link \(what) copiado")
+        flash(String(localized: "Link \(what) copiado"))
     }
 }
 
@@ -360,7 +360,7 @@ extension AmaStudio: RoomDelegate {
     nonisolated func room(_ room: Room, didDisconnectWithError error: LiveKitError?) {
         Task { @MainActor in
             guard self.phase == .live, !self.leaving else { return }
-            self.error = "Se cortó la conexión con la sala" + (error.map { ": \($0.localizedDescription)" } ?? ".")
+            self.error = String(localized: "Se cortó la conexión con la sala") + (error.map { ": \($0.localizedDescription)" } ?? ".")
         }
     }
 }

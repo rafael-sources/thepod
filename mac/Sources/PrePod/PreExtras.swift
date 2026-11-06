@@ -52,7 +52,7 @@ struct IdeasTab: View {
                         .opacity(idea.status == "rejected" ? 0.6 : 1)
                     }
                     if ideas.isEmpty {
-                        EmptyHint(symbol: "lightbulb", title: "Todavía no hay ideas",
+                        EmptyHint(symbol: "lightbulb", title: String(localized: "Todavía no hay ideas"),
                                   text: "Cualquiera del equipo puede proponer. Las más votadas suben arriba.")
                     }
                 }
@@ -90,7 +90,7 @@ struct PublicationTab: View {
     @State private var error: String?
 
     private let platforms: [(String, String)] = [("youtube", "YouTube"), ("spotify", "Spotify"),
-                                                 ("apple_podcasts", "Apple Podcasts"), ("website", "Página web")]
+                                                 ("apple_podcasts", String(localized: "Apple Podcasts")), ("website", String(localized: "Página web"))]
 
     var body: some View {
         ScrollView {
@@ -452,8 +452,8 @@ struct LandingTab: View {
 
     private let socials: [(String, String, WritableKeyPath<LandingConfig, String?>)] = [
         ("YouTube", "social_youtube", \.socialYoutube), ("Spotify", "social_spotify", \.socialSpotify),
-        ("Apple Podcasts", "social_apple_podcasts", \.socialApplePodcasts), ("Instagram", "social_instagram", \.socialInstagram),
-        ("TikTok", "social_tiktok", \.socialTiktok), ("X / Twitter", "social_twitter", \.socialTwitter),
+        (String(localized: "Apple Podcasts"), "social_apple_podcasts", \.socialApplePodcasts), ("Instagram", "social_instagram", \.socialInstagram),
+        ("TikTok", "social_tiktok", \.socialTiktok), (String(localized: "X / Twitter"), "social_twitter", \.socialTwitter),
     ]
 
     var body: some View {

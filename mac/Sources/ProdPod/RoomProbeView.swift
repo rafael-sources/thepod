@@ -110,13 +110,13 @@ struct RoomProbeView: View {
     private var results: some View {
         Card {
             Label("Resultado", systemImage: "checklist").font(.headline)
-            check("Cámara para la sala y grabación a la vez",
+            check(String(localized: "Cámara para la sala y grabación a la vez"),
                   ok: probe.framesSent > 0 && probe.framesRecorded > 0,
-                  detail: probe.framesSent == 0 ? "Todavía sin datos"
-                      : "Sala \(probe.roomSize.isEmpty ? "…" : probe.roomSize) · Grabación \(probe.captureSize) · \(probe.framesRecorded) cuadros grabados")
-            check("Servidor de la sala",
+                  detail: probe.framesSent == 0 ? String(localized: "Todavía sin datos")
+                      : String(localized: "Sala \(probe.roomSize.isEmpty ? "…" : probe.roomSize) · Grabación \(probe.captureSize) · \(probe.framesRecorded) cuadros grabados"))
+            check(String(localized: "Servidor de la sala"),
                   ok: connected,
-                  detail: connected ? "Conectado · \(probe.remotes.count) persona(s) más · \(probe.dataMessages) mensajes recibidos" : "Sin conectar")
+                  detail: connected ? String(localized: "Conectado · \(probe.remotes.count) persona(s) más · \(probe.dataMessages) mensajes recibidos") : String(localized: "Sin conectar"))
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "ear").foregroundStyle(.orange)
