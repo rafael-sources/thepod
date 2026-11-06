@@ -1468,7 +1468,7 @@ def _resolve_background_image(slug) -> Path | None:
     if not podcast_slug:
         return None
     import shutil, glob
-    prepod_branding = Path("/srv/thepod/prepod/podcasts") / podcast_slug / "branding"
+    prepod_branding = Path.home() / "prepod" / "podcasts" / podcast_slug / "branding"
     matches = glob.glob(str(prepod_branding / "background*"))
     if not matches:
         return None
