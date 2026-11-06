@@ -6,6 +6,7 @@ from config import SECRET_KEY, EVENTS_DIR
 
 def create_app():
     from config import SESSION_COOKIE_DOMAIN
+    from pod_lang import current_lang
     from werkzeug.middleware.proxy_fix import ProxyFix
 
     app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -69,13 +70,13 @@ def create_app():
 
     @app.get("/")
     def index():
-        return render_template("index.html", cache_bust=_cache_bust())
+        return render_template("index.html", cache_bust=_cache_bust(), lang=current_lang(), cookie_domain=SESSION_COOKIE_DOMAIN or "")
 
     @app.get("/<path:path>")
     def spa(path):
         if path.startswith(("api/", "static/", "media/")):
             abort(404)
-        return render_template("index.html", cache_bust=_cache_bust())
+        return render_template("index.html", cache_bust=_cache_bust(), lang=current_lang(), cookie_domain=SESSION_COOKIE_DOMAIN or "")
 
     return app
 
