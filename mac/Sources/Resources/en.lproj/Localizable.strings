@@ -185,7 +185,6 @@
 "Activar micrófono" = "Turn on microphone";
 "Activo" = "Active";
 "Actualizaciones" = "Updates";
-"Actualizando…" = "Updating…";
 "Actualizar" = "Update";
 "Actualizar a %@" = "Update to %@";
 "Adelanta el siguiente clip para que se solapen 1,2 s y pone fades curvos en los dos" = "Moves the next clip earlier so they overlap by 1.2 s and gives both curved fades";
@@ -244,7 +243,6 @@
 "Apagamos cámara y micrófono en %lld" = "Turning off camera and microphone in %lld";
 "Apagar" = "Turn off";
 "Apagar cámara" = "Turn off camera";
-"Aparece cuando el episodio se edita en postPod." = "Appears when the episode is edited in postPod.";
 "Aparecen al grabar." = "They appear when recording.";
 "Aparecen en el video en el momento del bloque del guion. Puedes apagarlos al exportar." = "They appear in the video at the time of the script block. You can turn them off when exporting.";
 "Aparte del episodio: el estilo de los subtítulos del video completo se cambia en Preparar → Subtítulos." = "Separate from the episode: the subtitle style of the full video is changed in Prepare → Subtitles.";
@@ -323,14 +321,12 @@
 "Buscando el fondo y el logo del podcast en prePod…" = "Looking for the podcast's background and logo in prePod…";
 "Buscando en prePod el fondo, el logo, los sponsors y el guion…" = "Looking in prePod for the background, logo, sponsors and script…";
 "Buscando los mejores momentos" = "Looking for the best moments";
-"Buscando los mejores momentos con IA" = "Looking for the best moments with AI";
 "Buscando silencios en el reel" = "Looking for silences in the reel";
 "Buscando…" = "Searching…";
 "Buscar ahora" = "Check now";
 "Buscar de nuevo" = "Search again";
 "Buscar en prePod" = "Search in prePod";
 "Buscar las mejores capturas" = "Find the best stills";
-"Buscar momentos con IA" = "Find moments with AI";
 "Buscar palabras sensibles" = "Find sensitive words";
 "Buscar sonido…" = "Search sound…";
 "Buscar versiones nuevas al abrir" = "Check for new versions on launch";
@@ -413,9 +409,6 @@
 "Cintillos del director (%lld)" = "Director's lower thirds (%lld)";
 "Cintillos y marcas" = "Lower thirds and brands";
 "Clara" = "Clear";
-"Claude eligió %lld momentos." = "Claude chose %lld moments.";
-"Claude no devolvió un JSON válido" = "Claude didn't return valid JSON";
-"Claude respondió con un error: %@" = "Claude replied with an error: %@";
 "Clave de transmisión" = "Stream key";
 "Clásico" = "Classic";
 "Clic derecho en Cámaras" = "Right-click on Cameras";
@@ -458,7 +451,6 @@
 "Conecta la app con prePod" = "Connect the app to prePod";
 "Conecta la app con thePod en Ajustes (⌘,) para publicar." = "Connect the app to thePod in Settings (⌘,) to publish.";
 "Conecta la app con thePod en Ajustes." = "Connect the app to thePod in Settings.";
-"Conecta tu cuenta de thePod en Ajustes para que la IA busque los mejores momentos y escriba las notas del episodio." = "Connect your thePod account in Settings so the AI can find the best moments and write the episode notes.";
 "Conecta tu cuenta en Ajustes para ver tus eventos." = "Connect your account in Settings to see your events.";
 "Conecta tu cuenta en Ajustes para ver tus podcasts." = "Connect your account in Settings to see your podcasts.";
 "Conecta tu cuenta en Ajustes para ver tus salas." = "Connect your account in Settings to see your rooms.";
@@ -493,7 +485,6 @@
 "Copiar link de invitado" = "Copy guest link";
 "Copiar link para mirar" = "Copy watch link";
 "Copiar link para preguntar" = "Copy ask link";
-"Copiar notas" = "Copy notes";
 "Copias livianas de las grabaciones de más de 1080p para que la vista previa vaya fluida. El export usa siempre los originales." = "Lightweight copies of recordings above 1080p so the preview runs smoothly. The export always uses the originals.";
 "Corre cada frase a donde suena la voz. No cambia el texto." = "Moves each sentence to where the voice sounds. Doesn't change the text.";
 "Corregir texto" = "Fix text";
@@ -673,7 +664,6 @@
 "El sonido todavía no se limpió (ruido, silencios largos, «eeeh»)" = "The sound hasn't been cleaned yet (noise, long silences, “uhh”)";
 "El soundboard está vacío." = "The soundboard is empty.";
 "Elegida a mano" = "Chosen by hand";
-"Elegimos %lld momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente." = "We picked %lld moments automatically. With a Claude key in Settings the selection is much smarter.";
 "Elegimos el mejor según el formato" = "We pick the best one for the format";
 "Elegir archivos…" = "Choose files…";
 "Elegir de la biblioteca" = "Choose from the library";
@@ -1031,13 +1021,6 @@
 "LO QUE QUIERE PREGUNTAR %@" = "WHAT %@ WANTS TO ASK";
 "LO ÚLTIMO" = "LATEST";
 "LUFS" = "LUFS";
-"La IA encontró %lld %@ y escribió las notas del episodio." = "The AI found %lld %@ and wrote the episode notes.";
-"La IA escribió las notas; no encontró momentos claros." = "The AI wrote the notes; it found no clear moments.";
-"La IA está leyendo el episodio: tarda uno o dos minutos" = "The AI is reading the episode: it takes a minute or two";
-"La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo." = "The AI is taking longer than usual. Click the button again in a few minutes: you won't be charged again.";
-"La IA lee la transcripción, propone los momentos con más potencial para reels y escribe el resumen y los puntos destacados. Se hace una sola vez por episodio." = "The AI reads the transcript, proposes the moments with the most reel potential and writes the summary and highlights. Done once per episode.";
-"La IA no pudo leer el episodio. Prueba de nuevo en un rato." = "The AI couldn't read the episode. Try again in a while.";
-"La IA ya leyó este episodio el %@. Se hace una sola vez por episodio; los reels y las notas se editan a mano." = "The AI already read this episode on %@. It's done once per episode; reels and notes are edited by hand.";
 "La Mac lee el texto con una de sus voces, sin internet. Sirve para una intro, un aviso o corregir una palabra. Se pone donde está el video ahora." = "The Mac reads the text with one of its voices, offline. Good for an intro, a notice or fixing a word. It goes where the video is now.";
 "La Mac no generó audio para ese texto. Prueba otra voz." = "The Mac didn't generate audio for that text. Try another voice.";
 "La URL de prePod no es válida" = "The prePod URL is not valid";
@@ -1143,7 +1126,6 @@
 "MIDI" = "MIDI";
 "MIDI %lld" = "MIDI %lld";
 "Manda las pistas de esta grabación a postPod" = "Sends this recording's tracks to postPod";
-"Mandar y buscar" = "Send and search";
 "Manejan la sala en vivo de prodPod." = "They run the live prodPod room.";
 "Manual de thePod" = "thePod manual";
 "Mapa nanoKONTROL2 (por defecto)" = "nanoKONTROL2 map (default)";
@@ -1198,7 +1180,6 @@
 "Momento marcado en %@" = "Moment marked at %@";
 "Momento marcado en postPod" = "Moment marked in postPod";
 "Momento marcado · lo ves en Reels" = "Moment marked · see it in Reels";
-"Momentos y notas con IA" = "Moments and notes with AI";
 "Mostrar" = "Show";
 "Mostrar archivos" = "Show files";
 "Mostrar en Finder" = "Show in Finder";
@@ -1236,6 +1217,7 @@
 "Ninguno" = "None";
 "Ningún controlador MIDI conectado" = "No MIDI controller connected";
 "No cambiar subtítulos" = "Don't change subtitles";
+"Elegimos %lld momentos automáticamente." = "We picked %lld moments automatically.";
 "No encontramos momentos claros. Prueba primero con “Arreglar” para tener la transcripción." = "We found no clear moments. Try “Fix” first to get the transcript.";
 "No encontramos videos ni audios para importar. Arrastra el paquete .zip de postPod o los archivos de tu grabación." = "We found no videos or audio to import. Drop the postPod .zip package or your recording files.";
 "No encontré caras en el video. Elige el segundo a mano en Portada." = "I found no faces in the video. Choose the second by hand in Cover.";
@@ -1350,7 +1332,6 @@
 "Pantalla de %@" = "%@'s screen";
 "Para" = "For";
 "Para Spotify, Apple Podcasts…" = "For Spotify, Apple Podcasts…";
-"Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad." = "To find the moments and write the notes, this episode's text is sent to thePod's artificial intelligence (Claude, by Anthropic). Only the text: not the audio or the video. It won't ask again; see the privacy page.";
 "Para mirar" = "To watch";
 "Para preguntar" = "To ask";
 "Para publicar reels y episodios, abre pubPod." = "To publish reels and episodes, open pubPod.";
@@ -1425,7 +1406,6 @@
 "Preciso (recomendado)" = "Accurate (recommended)";
 "Preguntas del público en vivo: tú moderas desde la Mac; tu audiencia pregunta o mira desde la web con un link." = "Live audience questions: you moderate from the Mac; your audience asks or watches from the web with a link.";
 "Preguntas frecuentes" = "FAQ";
-"Preguntándole a Claude…" = "Asking Claude…";
 "Preparado" = "Ready";
 "Preparando audio de %@" = "Preparing %@'s audio";
 "Preparando la portada…" = "Preparing the cover…";
@@ -1574,11 +1554,9 @@
 "Reproducir / pausar" = "Play / pause";
 "Resaltado" = "Highlighted";
 "Resaltar palabra" = "Highlight word";
-"Respuesta de Claude inesperada" = "Unexpected reply from Claude";
 "Resta espectral con la huella del segundo más quieto" = "Spectral subtraction with the fingerprint of the quietest second";
 "Restaurar desde los momentos" = "Restore from the moments";
 "Resultado" = "Result";
-"Resumen de postPod" = "postPod summary";
 "Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video." = "Check that everyone is there and give each one a name. The names appear in the video.";
 "Revisión compartida" = "Shared review";
 "Rol" = "Role";
@@ -1688,7 +1666,6 @@
 "Sin preguntas escritas" = "No written questions";
 "Sin procesar" = "Unprocessed";
 "Sin responder" = "Unanswered";
-"Sin respuesta de Claude" = "No reply from Claude";
 "Sin título" = "Untitled";
 "Solo" = "Solo";
 "Solo %lld" = "Solo %lld";
@@ -1853,8 +1830,6 @@
 "Traer a la Mac" = "Bring to the Mac";
 "Traer comentarios" = "Fetch comments";
 "Traer de nuevo" = "Bring again";
-"Traer de nuevo sus momentos" = "Bring its moments again";
-"Traer de postPod" = "Bring from postPod";
 "Transcripción (en tu Mac)" = "Transcription (on your Mac)";
 "Transcripción en texto, con quién habla" = "Transcript as text, with who's speaking";
 "Transcripción para subtítulos" = "Transcript for subtitles";
@@ -1981,11 +1956,9 @@
 "Vuelve a crear los reels tal como vienen de postPod" = "Recreates the reels as they come from postPod";
 "Vuelve a la ventana principal, en Exportar" = "Back to the main window, in Export";
 "Vuelve a medir si cambias «Sonido de estudio» o las grabaciones." = "Measure again if you change “Studio sound” or the recordings.";
-"Vuelve a poner los momentos que borraste (no se gasta de nuevo)" = "Puts back the moments you deleted (not charged again)";
 "X / Twitter" = "X / Twitter";
 "Ya estaba en postPod (se envía solo cuando terminan de subir todas las pistas)." = "It was already in postPod (sent automatically once all tracks finish uploading).";
 "Ya estaba en postPod." = "It was already in postPod.";
-"Ya estaban todos los momentos de la IA." = "All the AI moments were already there.";
 "Ya está al aire" = "Already on air";
 "Ya está en esta Mac" = "Already on this Mac";
 "Ya exportados" = "Already exported";
@@ -2150,7 +2123,6 @@
 "¿Cerrar sesión en esta Mac?" = "Sign out on this Mac?";
 "¿De qué va a tratar?" = "What will it be about?";
 "¿Eliminar este evento?" = "Delete this event?";
-"¿Mandar la transcripción a la IA?" = "Send the transcript to the AI?";
 "¿Muletilla? «%@»" = "Filler word? “%@”";
 "¿Olvidaste tu contraseña?" = "Forgot your password?";
 "¿Qué es esto?" = "What is this?";

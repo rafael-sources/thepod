@@ -938,11 +938,6 @@ Sponsored by:
         <target>Updates</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Actualizando…" xml:space="preserve">
-        <source>Actualizando…</source>
-        <target>Updating…</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Actualizar" xml:space="preserve">
         <source>Actualizar</source>
         <target>Update</target>
@@ -1231,11 +1226,6 @@ Sponsored by:
       <trans-unit id="Apagar cámara" xml:space="preserve">
         <source>Apagar cámara</source>
         <target>Turn off camera</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Aparece cuando el episodio se edita en postPod." xml:space="preserve">
-        <source>Aparece cuando el episodio se edita en postPod.</source>
-        <target>Appears when the episode is edited in postPod.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Aparecen al grabar." xml:space="preserve">
@@ -1626,11 +1616,6 @@ Sponsored by:
         <target>Looking for the best moments</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Buscando los mejores momentos con IA" xml:space="preserve">
-        <source>Buscando los mejores momentos con IA</source>
-        <target>Looking for the best moments with AI</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Buscando silencios en el reel" xml:space="preserve">
         <source>Buscando silencios en el reel</source>
         <target>Looking for silences in the reel</target>
@@ -1659,11 +1644,6 @@ Sponsored by:
       <trans-unit id="Buscar las mejores capturas" xml:space="preserve">
         <source>Buscar las mejores capturas</source>
         <target>Find the best stills</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Buscar momentos con IA" xml:space="preserve">
-        <source>Buscar momentos con IA</source>
-        <target>Find moments with AI</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Buscar palabras sensibles" xml:space="preserve">
@@ -2077,21 +2057,6 @@ Sponsored by:
         <target>Clear</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Claude eligió %lld momentos." xml:space="preserve">
-        <source>Claude eligió %lld momentos.</source>
-        <target>Claude chose %lld moments.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Claude no devolvió un JSON válido" xml:space="preserve">
-        <source>Claude no devolvió un JSON válido</source>
-        <target>Claude didn't return valid JSON</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Claude respondió con un error: %@" xml:space="preserve">
-        <source>Claude respondió con un error: %@</source>
-        <target>Claude replied with an error: %@</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Clave de transmisión" xml:space="preserve">
         <source>Clave de transmisión</source>
         <target>Stream key</target>
@@ -2301,11 +2266,6 @@ Sponsored by:
         <target>Connect the app to thePod in Settings.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Conecta tu cuenta de thePod en Ajustes para que la IA busque los mejores momentos y escriba las notas del episodio." xml:space="preserve">
-        <source>Conecta tu cuenta de thePod en Ajustes para que la IA busque los mejores momentos y escriba las notas del episodio.</source>
-        <target>Connect your thePod account in Settings so the AI can find the best moments and write the episode notes.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Conecta tu cuenta en Ajustes para ver tus eventos." xml:space="preserve">
         <source>Conecta tu cuenta en Ajustes para ver tus eventos.</source>
         <target>Connect your account in Settings to see your events.</target>
@@ -2474,11 +2434,6 @@ Sponsored by:
       <trans-unit id="Copiar link para preguntar" xml:space="preserve">
         <source>Copiar link para preguntar</source>
         <target>Copy ask link</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Copiar notas" xml:space="preserve">
-        <source>Copiar notas</source>
-        <target>Copy notes</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Copias livianas de las grabaciones de más de 1080p para que la vista previa vaya fluida. El export usa siempre los originales." xml:space="preserve">
@@ -3373,11 +3328,6 @@ Sponsored by:
       <trans-unit id="Elegida a mano" xml:space="preserve">
         <source>Elegida a mano</source>
         <target>Chosen by hand</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Elegimos %lld momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente." xml:space="preserve">
-        <source>Elegimos %lld momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente.</source>
-        <target>We picked %lld moments automatically. With a Claude key in Settings the selection is much smarter.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Elegimos el mejor según el formato" xml:space="preserve">
@@ -5172,41 +5122,6 @@ Transcript:
         <target>LUFS</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="La IA encontró %lld %@ y escribió las notas del episodio." xml:space="preserve">
-        <source>La IA encontró %lld %@ y escribió las notas del episodio.</source>
-        <target>The AI found %lld %@ and wrote the episode notes.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA escribió las notas; no encontró momentos claros." xml:space="preserve">
-        <source>La IA escribió las notas; no encontró momentos claros.</source>
-        <target>The AI wrote the notes; it found no clear moments.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA está leyendo el episodio: tarda uno o dos minutos" xml:space="preserve">
-        <source>La IA está leyendo el episodio: tarda uno o dos minutos</source>
-        <target>The AI is reading the episode: it takes a minute or two</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo." xml:space="preserve">
-        <source>La IA está tardando más de lo normal. Vuelve a tocar el botón en unos minutos: no se cobra de nuevo.</source>
-        <target>The AI is taking longer than usual. Click the button again in a few minutes: you won't be charged again.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA lee la transcripción, propone los momentos con más potencial para reels y escribe el resumen y los puntos destacados. Se hace una sola vez por episodio." xml:space="preserve">
-        <source>La IA lee la transcripción, propone los momentos con más potencial para reels y escribe el resumen y los puntos destacados. Se hace una sola vez por episodio.</source>
-        <target>The AI reads the transcript, proposes the moments with the most reel potential and writes the summary and highlights. Done once per episode.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA no pudo leer el episodio. Prueba de nuevo en un rato." xml:space="preserve">
-        <source>La IA no pudo leer el episodio. Prueba de nuevo en un rato.</source>
-        <target>The AI couldn't read the episode. Try again in a while.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="La IA ya leyó este episodio el %@. Se hace una sola vez por episodio; los reels y las notas se editan a mano." xml:space="preserve">
-        <source>La IA ya leyó este episodio el %@. Se hace una sola vez por episodio; los reels y las notas se editan a mano.</source>
-        <target>The AI already read this episode on %@. It's done once per episode; reels and notes are edited by hand.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="La Mac lee el texto con una de sus voces, sin internet. Sirve para una intro, un aviso o corregir una palabra. Se pone donde está el video ahora." xml:space="preserve">
         <source>La Mac lee el texto con una de sus voces, sin internet. Sirve para una intro, un aviso o corregir una palabra. Se pone donde está el video ahora.</source>
         <target>The Mac reads the text with one of its voices, offline. Good for an intro, a notice or fixing a word. It goes where the video is now.</target>
@@ -5732,11 +5647,6 @@ Transcript:
         <target>Sends this recording's tracks to postPod</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Mandar y buscar" xml:space="preserve">
-        <source>Mandar y buscar</source>
-        <target>Send and search</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Manejan la sala en vivo de prodPod." xml:space="preserve">
         <source>Manejan la sala en vivo de prodPod.</source>
         <target>They run the live prodPod room.</target>
@@ -6007,11 +5917,6 @@ Transcript:
         <target>Moment marked · see it in Reels</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Momentos y notas con IA" xml:space="preserve">
-        <source>Momentos y notas con IA</source>
-        <target>Moments and notes with AI</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Mostrar" xml:space="preserve">
         <source>Mostrar</source>
         <target>Show</target>
@@ -6195,6 +6100,11 @@ Transcript:
       <trans-unit id="No cambiar subtítulos" xml:space="preserve">
         <source>No cambiar subtítulos</source>
         <target>Don't change subtitles</target>
+        <note>No comment provided by engineer.</note>
+      </trans-unit>
+      <trans-unit id="Elegimos %lld momentos automáticamente." xml:space="preserve">
+        <source>Elegimos %lld momentos automáticamente.</source>
+        <target>We picked %lld moments automatically.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="No encontramos momentos claros. Prueba primero con “Arreglar” para tener la transcripción." xml:space="preserve">
@@ -6769,11 +6679,6 @@ Transcript:
         <target>For Spotify, Apple Podcasts…</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad." xml:space="preserve">
-        <source>Para buscar los momentos y escribir las notas, el texto de este episodio se envía a la inteligencia artificial de thePod (Claude, de Anthropic). Solo el texto: ni el audio ni el video. No vuelve a preguntar; se puede ver en la página de privacidad.</source>
-        <target>To find the moments and write the notes, this episode's text is sent to thePod's artificial intelligence (Claude, by Anthropic). Only the text: not the audio or the video. It won't ask again; see the privacy page.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Para mirar" xml:space="preserve">
         <source>Para mirar</source>
         <target>To watch</target>
@@ -7142,11 +7047,6 @@ Transcript:
       <trans-unit id="Preguntas frecuentes" xml:space="preserve">
         <source>Preguntas frecuentes</source>
         <target>FAQ</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Preguntándole a Claude…" xml:space="preserve">
-        <source>Preguntándole a Claude…</source>
-        <target>Asking Claude…</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Preparado" xml:space="preserve">
@@ -7889,11 +7789,6 @@ Transcript:
         <target>Highlight word</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Respuesta de Claude inesperada" xml:space="preserve">
-        <source>Respuesta de Claude inesperada</source>
-        <target>Unexpected reply from Claude</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Resta espectral con la huella del segundo más quieto" xml:space="preserve">
         <source>Resta espectral con la huella del segundo más quieto</source>
         <target>Spectral subtraction with the fingerprint of the quietest second</target>
@@ -7907,11 +7802,6 @@ Transcript:
       <trans-unit id="Resultado" xml:space="preserve">
         <source>Resultado</source>
         <target>Result</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Resumen de postPod" xml:space="preserve">
-        <source>Resumen de postPod</source>
-        <target>postPod summary</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Revisa que estén todas las personas y ponle nombre a cada una. Los nombres salen en el video." xml:space="preserve">
@@ -8456,11 +8346,6 @@ Transcript:
       <trans-unit id="Sin responder" xml:space="preserve">
         <source>Sin responder</source>
         <target>Unanswered</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Sin respuesta de Claude" xml:space="preserve">
-        <source>Sin respuesta de Claude</source>
-        <target>No reply from Claude</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Sin título" xml:space="preserve">
@@ -9282,16 +9167,6 @@ Transcript:
         <target>Bring again</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Traer de nuevo sus momentos" xml:space="preserve">
-        <source>Traer de nuevo sus momentos</source>
-        <target>Bring its moments again</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Traer de postPod" xml:space="preserve">
-        <source>Traer de postPod</source>
-        <target>Bring from postPod</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="Transcripción (en tu Mac)" xml:space="preserve">
         <source>Transcripción (en tu Mac)</source>
         <target>Transcription (on your Mac)</target>
@@ -9920,11 +9795,6 @@ Transcript:
         <target>Measure again if you change “Studio sound” or the recordings.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
-      <trans-unit id="Vuelve a poner los momentos que borraste (no se gasta de nuevo)" xml:space="preserve">
-        <source>Vuelve a poner los momentos que borraste (no se gasta de nuevo)</source>
-        <target>Puts back the moments you deleted (not charged again)</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
       <trans-unit id="X / Twitter" xml:space="preserve">
         <source>X / Twitter</source>
         <target>X / Twitter</target>
@@ -9938,11 +9808,6 @@ Transcript:
       <trans-unit id="Ya estaba en postPod." xml:space="preserve">
         <source>Ya estaba en postPod.</source>
         <target>It was already in postPod.</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="Ya estaban todos los momentos de la IA." xml:space="preserve">
-        <source>Ya estaban todos los momentos de la IA.</source>
-        <target>All the AI moments were already there.</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="Ya está al aire" xml:space="preserve">
@@ -10730,11 +10595,6 @@ Transcript:
       <trans-unit id="¿Eliminar este evento?" xml:space="preserve">
         <source>¿Eliminar este evento?</source>
         <target>Delete this event?</target>
-        <note>No comment provided by engineer.</note>
-      </trans-unit>
-      <trans-unit id="¿Mandar la transcripción a la IA?" xml:space="preserve">
-        <source>¿Mandar la transcripción a la IA?</source>
-        <target>Send the transcript to the AI?</target>
         <note>No comment provided by engineer.</note>
       </trans-unit>
       <trans-unit id="¿Muletilla? «%@»" xml:space="preserve">

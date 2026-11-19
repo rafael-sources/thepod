@@ -1,77 +1,12 @@
 import Foundation
 import Security
 
-/// Finds the best moments for Reels/TikTok/Shorts.
-/// With a Claude API key → asks Claude (same idea as postPod web's ai_engine). Without one → local heuristic.
+/// Finds the best moments for Reels/TikTok/Shorts by analyzing the transcript on the Mac.
 enum ClipSuggester {
     struct Suggestion { var title: String; var reason: String; var start: Double; var end: Double }
 
-    static func suggest(project: Project, count: Int = 6) async throws -> (clips: [Suggestion], usedAI: Bool, summary: String?) {
-        if let key = Keychain.apiKey, !key.isEmpty {
-            let result = try await askClaude(project: project, key: key)
-            let snapped = result.clips.map { snap($0, words: project.words, duration: project.duration) }
-            return (snapped, true, result.summary)
-        }
-        return (heuristic(project: project, count: count), false, nil)
-    }
-
-    // MARK: Claude
-
-    static var model: String { UserDefaults.standard.string(forKey: "claudeModel") ?? "claude-sonnet-5" }
-
-    private static let systemPrompt = """
-    Eres un editor experto en contenido de podcasts para redes sociales (Reels, TikTok, Shorts).
-    Recibes la transcripción de un episodio con marcas de tiempo [MM:SS] y el nombre de quien habla.
-    Elige los fragmentos con más potencial viral: una idea completa, un gancho fuerte al inicio,
-    humor, una opinión polémica, una anécdota o un consejo útil. Cada clip debe entenderse solo,
-    sin contexto previo, y durar entre 25 y 75 segundos.
-
-    Devuelve ÚNICAMENTE este JSON:
-    {
-      "summary": "<resumen del episodio en 2 frases>",
-      "clips": [
-        {"start": "MM:SS", "end": "MM:SS", "title": "<título corto y llamativo, máx 8 palabras>",
-         "reason": "<por qué funciona en redes, 1 frase>"}
-      ]
-    }
-    Entre 3 y 8 clips, ordenados del mejor al peor. Sin texto fuera del JSON.
-    """
-
-    private static func askClaude(project: Project, key: String) async throws -> (clips: [Suggestion], summary: String?) {
-        var transcript = EditEngine.transcriptForAI(project)
-        if transcript.count > 180_000 { transcript = String(transcript.prefix(180_000)) }
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 180
-        req.setValue(key, forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        req.setValue("application/json", forHTTPHeaderField: "content-type")
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 3000,
-            "system": systemPrompt,
-            "messages": [["role": "user", "content": String(localized: "Episodio: \(project.name)\nIdioma: \(project.language)\n\nTranscripción:\n\(transcript)")]],
-        ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw msg(String(localized: "Sin respuesta de Claude")) }
-        guard http.statusCode == 200 else {
-            let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
-                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String } ?? String(localized: "HTTP \(http.statusCode)")
-            throw msg(String(localized: "Claude respondió con un error: \(detail)"))
-        }
-        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = obj["content"] as? [[String: Any]] else { throw msg(String(localized: "Respuesta de Claude inesperada")) }
-        let text = content.compactMap { $0["text"] as? String }.joined()
-        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"),
-              let json = try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8)) as? [String: Any] else {
-            throw msg(String(localized: "Claude no devolvió un JSON válido"))
-        }
-        let clips = (json["clips"] as? [[String: Any]] ?? []).compactMap { c -> Suggestion? in
-            guard let s = (c["start"] as? String).flatMap(parseClock), let e = (c["end"] as? String).flatMap(parseClock), e > s + 5 else { return nil }
-            return Suggestion(title: c["title"] as? String ?? String(localized: "Clip"), reason: c["reason"] as? String ?? "", start: s, end: e)
-        }
-        return (clips, json["summary"] as? String)
+    static func suggest(project: Project, count: Int = 6) -> [Suggestion] {
+        heuristic(project: project, count: count)
     }
 
     static func parseClock(_ s: String) -> Double? {
@@ -140,7 +75,6 @@ enum ClipSuggester {
         return out
     }
 
-    private static func msg(_ s: String) -> NSError { NSError(domain: "claude", code: 1, userInfo: [NSLocalizedDescriptionKey: s]) }
 }
 
 enum Keychain {
@@ -157,11 +91,6 @@ enum Keychain {
             d.removePersistentDomain(forName: legacy)
         }
         d.set(true, forKey: "migradoAThePod")
-    }
-
-    static var apiKey: String? {
-        get { get("anthropic-api-key") }
-        set { set(newValue, for: "anthropic-api-key") }
     }
 
     // Without an Apple Developer account the app is signed "ad hoc" and its signature changes with every version.

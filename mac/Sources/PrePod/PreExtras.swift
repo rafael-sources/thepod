@@ -86,7 +86,6 @@ struct PublicationTab: View {
     let saver: Debouncer
     @State private var links: [String: String] = [:]
     @State private var notes = ""
-    @State private var syncing = false
     @State private var error: String?
 
     private let platforms: [(String, String)] = [("youtube", String(localized: "YouTube")), ("spotify", String(localized: "Spotify")),
@@ -120,19 +119,6 @@ struct PublicationTab: View {
                     }
                 }
                 HStack(alignment: .top, spacing: 14) {
-                    Card {
-                        HStack {
-                            Label("Resumen de postPod", systemImage: "sparkles").font(.headline)
-                            Spacer()
-                            Button { sync() } label: { Label(syncing ? String(localized: "Actualizando…") : String(localized: "Traer de postPod"), systemImage: "arrow.triangle.2.circlepath") }
-                                .disabled(syncing)
-                        }
-                        if let s = episode.aiSummary, !s.isEmpty {
-                            Text(s).textSelection(.enabled).foregroundStyle(Theme.secondary)
-                        } else {
-                            Text("Aparece cuando el episodio se edita en postPod.").font(.caption).foregroundStyle(Theme.secondary)
-                        }
-                    }
                     Card {
                         HStack {
                             Label("Notas del episodio", systemImage: "doc.plaintext").font(.headline)
@@ -175,16 +161,6 @@ struct PublicationTab: View {
                 else { try await api.setLink(model.slug, episode.id, platform: key, url: url) }
                 notes = (try? await api.showNotes(model.slug, episode.id).text) ?? notes
                 error = nil
-            } catch { self.error = error.localizedDescription }
-        }
-    }
-    private func sync() {
-        syncing = true
-        Task {
-            defer { syncing = false }
-            do {
-                try await api.syncNotes(model.slug, episode.id)
-                if let e = try await api.preEpisodes(model.slug).first(where: { $0.id == episode.id }) { episode.aiSummary = e.aiSummary }
             } catch { self.error = error.localizedDescription }
         }
     }

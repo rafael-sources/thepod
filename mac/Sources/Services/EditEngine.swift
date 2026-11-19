@@ -456,30 +456,6 @@ enum EditEngine {
         return out
     }
 
-    // MARK: Transcript text for AI
-
-    static func transcriptForAI(_ project: Project) -> String {
-        var out = ""
-        var currentLane = -1
-        var line = ""
-        var lineStart = 0.0
-        func flush() {
-            guard !line.isEmpty else { return }
-            out += "[\(clock(lineStart))] \(project.laneName(currentLane)): \(line)\n"
-            line = ""
-        }
-        for w in project.words.sorted(by: { $0.s < $1.s }) {
-            if w.lane != currentLane || line.count > 400 {
-                flush()
-                currentLane = w.lane
-                lineStart = w.s
-            }
-            line += (line.isEmpty ? "" : " ") + w.w.trimmingCharacters(in: .whitespaces)
-        }
-        flush()
-        return out
-    }
-
     static func clock(_ t: Double) -> String {
         let s = Int(t.rounded(.down))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)

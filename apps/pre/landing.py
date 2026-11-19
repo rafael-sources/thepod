@@ -6,7 +6,6 @@ The public endpoints are intentionally NOT protected — they're meant to be
 hit by anyone (listeners, podcast apps, social previews).
 """
 
-import json
 import uuid
 from datetime import datetime, timezone
 from email.utils import format_datetime
@@ -619,23 +618,7 @@ def render_rss(slug):
     for ep in bundle["episodes"]:
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = ep.get("title") or f"Episodio {ep.get('episode_number')}"
-        # Use AI summary + highlights as description if available
-        description = ""
-        ai_summary = ep.get("ai_summary") if isinstance(ep, dict) else (ep["ai_summary"] if "ai_summary" in ep.keys() else None)
-        ai_highlights = None
-        raw_highlights = ep.get("ai_highlights") if isinstance(ep, dict) else (ep["ai_highlights"] if "ai_highlights" in ep.keys() else None)
-        if raw_highlights:
-            try:
-                ai_highlights = json.loads(raw_highlights) if isinstance(raw_highlights, str) else raw_highlights
-            except (json.JSONDecodeError, TypeError):
-                ai_highlights = None
-
-        if ai_summary:
-            description = ai_summary
-            if ai_highlights:
-                description += "\n\nPuntos clave:\n" + "\n".join(f"• {h}" for h in ai_highlights)
-        else:
-            description = ep.get("description") or ""
+        description = ep.get("description") or ""
         ET.SubElement(item, "description").text = description
         ET.SubElement(item, "link").text = f"{base}/landing/{slug}#ep{ep['id']}"
         ET.SubElement(item, "guid", attrib={"isPermaLink": "false"}).text = f"{podcast.get('shared_project_id','')}:{ep['id']}"

@@ -67,8 +67,6 @@ struct Project: Codable, Identifiable, Equatable {
     var sfxNames: [String: String] = [:] // name of each sound in prodPod's soundboard
     var moments: [Moment] = []          // "Momentos" marked in postPod/prodPod → source of the reels
     var reels: [Reel] = []
-    var aiSummary: String?
-    var aiAnalyzedAt: Date?             // the AI already looked for notes and moments in this episode (done only once)
     var coverTime: Double?              // cover: chosen episode second (nil = the usual one: first reel or a quarter in)
     var coverCandidates: [CoverCandidate] = []   // captures found (the image stays in the project cache)
     var coverScannedAt: Date?
@@ -1478,8 +1476,6 @@ extension Project {
         sfxLibrary = try c.decodeIfPresent([String].self, forKey: .sfxLibrary) ?? []
         sfxNames = try c.decodeIfPresent([String: String].self, forKey: .sfxNames) ?? [:]
         reels = try c.decodeIfPresent([Reel].self, forKey: .reels) ?? []
-        aiSummary = try c.decodeIfPresent(String.self, forKey: .aiSummary)
-        aiAnalyzedAt = try c.decodeIfPresent(Date.self, forKey: .aiAnalyzedAt)
         coverTime = try c.decodeIfPresent(Double.self, forKey: .coverTime)
         coverCandidates = try c.decodeIfPresent([CoverCandidate].self, forKey: .coverCandidates) ?? []
         coverScannedAt = try c.decodeIfPresent(Date.self, forKey: .coverScannedAt)

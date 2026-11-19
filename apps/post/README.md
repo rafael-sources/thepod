@@ -17,7 +17,6 @@ postPod receives the recordings of a live session (individual tracks per partici
 - **CNN-style banners** — participants, sponsors, topics, director overlays
 - **Speech enhancement** — highpass + denoise + EQ + compressor + loudnorm
 - **10 export presets** — YouTube (1080p/4K, 30/60fps), TikTok vertical, Instagram square, WhatsApp, Podcast MP3/M4A
-- **AI analysis** — generates show notes and suggests exportable clips
 
 ## Composition layouts
 
@@ -58,7 +57,6 @@ Each **moment** (marker on the timeline) can have operations that are applied on
 | Database | SQLite (1 DB per project, WAL mode) |
 | Processing | FFmpeg (composition, filters, encoding) |
 | Transcription | faster-whisper (model `Systran/faster-whisper-medium`) |
-| AI | Claude Sonnet via OpenAI-compatible proxy |
 
 ## Requirements
 
@@ -70,8 +68,6 @@ Each **moment** (marker on the timeline) can have operations that are applied on
 pip install -r requirements.txt
 # Optional, for transcription:
 pip install faster-whisper
-# Optional, for AI analysis:
-pip install openai
 ```
 
 ## Quick start
@@ -103,12 +99,12 @@ Open `http://localhost:5000` in the browser.
 
 ## API
 
-85 REST endpoints in total:
+78 REST endpoints in total:
 
 | Group | Count | Auth |
 |-------|----------|------|
-| User session (projects, timeline, moments, captions, exports, AI) | 62 | Signed cookie (`@require_auth`) |
-| Server-to-server (prePod/prodPod webhooks) | 14 | `X-PodPod-Secret` header |
+| User session (projects, timeline, moments, captions, exports) | 56 | Signed cookie (`@require_auth`) |
+| Server-to-server (prePod/prodPod webhooks) | 13 | `X-PodPod-Secret` header |
 | Public (login, media with HTTP Range, health) | 9 | — |
 
 The full detail of each endpoint (method, route, payload) is in [`HANDOVER_POSTPRODUCCION.md`](HANDOVER_POSTPRODUCCION.md) §5.
@@ -146,7 +142,6 @@ postpod/
 ├── timeline_api.py        # Timeline CRUD, moments, operations, silences
 ├── captions.py            # Whisper, SRT, words.json, subtitle styles
 ├── integrations.py        # Server-to-server webhooks (prePod/prodPod)
-├── ai_api.py / ai_engine.py  # Analysis with Claude
 ├── projects.py            # Projects, participants, sponsors CRUD
 ├── static/
 │   ├── js/app.js          # Vue 3 SPA (19 components, ~5100 lines)

@@ -2755,7 +2755,7 @@ var PublishPanel = {
         video.stage = "Subiendo a YouTube"; video.pct = 0;
         const job = await api("/api/mac/publish/youtube", { method: "POST",
           body: { slug: props.slug, episode_id: props.ep.id, upload_id: id, title: video.title.trim(),
-                  description: props.ep.ai_summary || "", privacy: video.privacy } });
+                  description: props.ep.description || "", privacy: video.privacy } });
         const r = await waitJob(job.job_id, p => video.pct = p);
         video.stage = "Listo"; video.url = r.video_url || "";
       } catch (e) { video.error = e.message; video.stage = ""; }
@@ -2901,21 +2901,6 @@ var EpisodeDetail = {
     function openShowNotes() { showNotesOpen.value = true; }
     function closeShowNotes() { showNotesOpen.value = false; }
 
-    // --- Show Notes (AI) ---
-    async function forceSyncNotes(slug, epId) {
-      const data = await api(`/api/podcasts/${slug}/episodes/${epId}/sync-notes`, { method: 'POST' });
-      return data;
-    }
-
-    async function syncNotes() {
-      const data = await forceSyncNotes(props.slug, ep.value.id);
-      if (data.ok) {
-        ep.value.ai_summary = data.ai_summary;
-        ep.value.ai_highlights = data.ai_highlights;
-        ep.value.ai_notes_synced_at = data.synced_at;
-      }
-    }
-
     // --- Publish ---
     const publishPath = ref('');
     const publishing = ref(false);
@@ -2959,7 +2944,7 @@ var EpisodeDetail = {
 
     return { ep, error, saveState, dirty, saveNow, fmtDate,
              showNotesOpen, openShowNotes, closeShowNotes,
-             publishPath, publishing, syncNotes, doPublish,
+             publishPath, publishing, doPublish,
              touch, mSec, M_SECS, M_ICONS, EP_STATE_LABEL, EP_STATE_COLOR, fmtWhen };
   },
   template: `
@@ -2990,11 +2975,6 @@ var EpisodeDetail = {
               <span><b>{{ sc.label }}</b><small>{{ sc.sub }}</small></span>
               <span class="m-chev" aria-hidden="true">›</span>
             </button>
-          </div>
-          <div class="show-notes-panel" v-if="ep.ai_summary">
-            <h4>Show Notes (AI)</h4>
-            <div class="show-notes-summary">{{ ep.ai_summary }}</div>
-            <div class="show-notes-actions"><button @click="syncNotes">Sincronizar notas</button></div>
           </div>
         </template>
 
@@ -3098,22 +3078,6 @@ var EpisodeDetail = {
             <span v-else class="muted" style="font-size: 12px;">Programa fecha y hora para exportar al calendario.</span>
             <div class="spacer"></div>
             <button class="ghost" @click="openShowNotes" title="Generar texto listo para publicar">📋 Show notes</button>
-          </div>
-        </div>
-
-        <div class="show-notes-panel" v-if="ep.ai_summary">
-          <h4>
-            Show Notes (AI)
-            <span class="show-notes-meta" v-if="ep.ai_notes_synced_at">
-              Sincronizado: {{ ep.ai_notes_synced_at }}
-            </span>
-          </h4>
-          <div class="show-notes-summary">{{ ep.ai_summary }}</div>
-          <ul class="show-notes-highlights" v-if="ep.ai_highlights && ep.ai_highlights.length">
-            <li v-for="h in ep.ai_highlights" :key="h">{{ h }}</li>
-          </ul>
-          <div class="show-notes-actions">
-            <button @click="syncNotes">Sincronizar notas</button>
           </div>
         </div>
 

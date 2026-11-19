@@ -2255,16 +2255,6 @@ button.settings-btn:hover { background: var(--ink-raised); color: var(--signal);
   border-bottom: 1px dotted var(--signal-dim);
 }
 
-/* --- AI Show Notes (prePod) --- */
-.show-notes-panel { margin-top: 1rem; padding: 1rem; background: var(--surface-2, #f8f9fa); border-radius: 8px; border: 1px solid var(--border, #dee2e6); }
-.show-notes-panel h4 { margin: 0 0 0.5rem; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; }
-.show-notes-summary { font-size: 0.85rem; line-height: 1.5; white-space: pre-wrap; color: var(--text-2, #495057); }
-.show-notes-highlights { list-style: disc; padding-left: 1.2rem; margin: 0.5rem 0 0; }
-.show-notes-highlights li { font-size: 0.8rem; color: var(--text-2, #495057); margin-bottom: 0.2rem; }
-.show-notes-meta { font-size: 0.7rem; color: var(--text-3, #6c757d); margin-left: auto; }
-.show-notes-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-.show-notes-actions button { font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border, #dee2e6); background: white; cursor: pointer; }
-.show-notes-actions button:hover { background: var(--accent-bg, #e7f1ff); }
 .publish-section { margin-top: 1.5rem; padding: 1rem; background: var(--ink-raised); border-radius: 8px; border: 1px solid var(--ink-line); }
 .publish-section h4 { color: var(--paper); }
 .publish-section p, .publish-section .muted { color: var(--paper-dim); }

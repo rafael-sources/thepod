@@ -236,7 +236,6 @@ extension Exporter {
     static func notes(project p: Project, keep: [EditEngine.Span], introDuration: Double = 0) -> String {
         var out = episodeTitle(p) + "\n\n"
         if let d = p.episode.description, !d.isEmpty { out += d + "\n\n" }
-        else if let s = p.aiSummary { out += s + "\n\n" }
         let chapters = chapterList(project: p, keep: keep, introDuration: introDuration,
                                    total: introDuration + EditEngine.outputDuration(keep))
         if !chapters.isEmpty {

@@ -46,7 +46,6 @@ struct PreEpisode: Decodable, Identifiable, Hashable {
     var scheduledDate: String?
     var scheduledAt: String?
     var durationEstimate: Double?
-    var aiSummary: String?
 
     var statusValue: EpisodeStatus { EpisodeStatus(rawValue: status) ?? .idea }
     var label: String { "\(episodeNumber.map { "Ep \($0) · " } ?? "")\(title)" }
@@ -352,7 +351,6 @@ extension PrePodClient {
 
     // Episode notes, links and emails
     func showNotes(_ slug: String, _ epId: Int) async throws -> ShowNotes { try dj(ShowNotes.self, await send("GET", pp(slug) + "/episodes/\(epId)/show-notes")) }
-    func syncNotes(_ slug: String, _ epId: Int) async throws { _ = try await send("POST", pp(slug) + "/episodes/\(epId)/sync-notes") }
     func links(_ slug: String, _ epId: Int) async throws -> [EpisodeLink] { try dj([EpisodeLink].self, await send("GET", pp(slug) + "/episodes/\(epId)/links")) }
     func setLink(_ slug: String, _ epId: Int, platform: String, url: String) async throws {
         _ = try await send("POST", pp(slug) + "/episodes/\(epId)/links", json: ["platform": platform, "url": url])

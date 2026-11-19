@@ -17,7 +17,6 @@ prePod covers everything that happens *before* hitting REC: the show's visual id
 - **Public landing pages** — 3 templates (minimal / bold / classic) generated with the podcast's branding + **RSS feed** with the `itunes:` namespace
 - **Distribution** — platform connection panel (Spotify / Apple Podcasts / YouTube): feed requirements validation, not_configured/pending/connected tracking and verification in the iTunes catalog
 - **Publishing** — media upload to own hosting (VPS via rsync/SSH), enclosures in the RSS, optional upload to YouTube (Data API v3 with per-podcast OAuth)
-- **AI show notes** — sync of notes generated in postPod, notes panel + "Publicar" button in the episode detail
 - **Sound library** — per-podcast sounds + global library; sent to prodPod to preload the studio soundboard
 - **Calendar** — .ics export per podcast (feed) or per episode
 - **Project Export/Import** — portable ZIP bundle (`manifest.json` + `podcast.db` + branding + sponsors) to back up or migrate podcasts

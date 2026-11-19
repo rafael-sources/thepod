@@ -730,62 +730,15 @@ final class ProjectSession: ObservableObject {
         run(String(localized: "Buscando los mejores momentos")) { [self] in try await performSuggest() }
     }
 
-    // MARK: AI notes and moments (once per episode)
-
-    @Published var askAIConsent = false
-    @Published var aiNote: String?
-
-    /// «Buscar momentos con IA» button. The first time it asks permission to send the transcript.
-    func findMomentsWithAI(confirmed: Bool = false) {
-        if !confirmed && !UserDefaults.standard.bool(forKey: "aiConsentTranscript") {
-            askAIConsent = true
-            return
-        }
-        UserDefaults.standard.set(true, forKey: "aiConsentTranscript")
-        run(String(localized: "Buscando los mejores momentos con IA")) { [self] in try await performAIMoments() }
-    }
-
-    func performAIMoments() async throws {
-        if project.words.isEmpty { try await transcribeMissing() }
-        report(String(localized: "Buscando los mejores momentos con IA"), String(localized: "La IA está leyendo el episodio: tarda uno o dos minutos"), nil)
-        let result = try await PostPodWebClient.shared.aiMoments(ref: String(localized: "mac:\(project.id)"), text: EditEngine.transcriptForAI(project))
-        var p = project
-        // Notes: summary and highlights (go into the description when publishing)
-        if let notes = result["notes"] as? [String: Any] {
-            var text = (notes["summary"] as? String) ?? ""
-            let highlights = (notes["highlights"] as? [String]) ?? []
-            if !highlights.isEmpty { text += "\n\n" + highlights.map { "• " + $0 }.joined(separator: "\n") }
-            if !text.isEmpty { p.aiSummary = text }
-        }
-        // Moments: one reel for each (without repeating existing ones)
-        var added = 0
-        for c in (result["clips"] as? [[String: Any]]) ?? [] {
-            guard let s = (c["start"] as? String).flatMap(ClipSuggester.parseClock),
-                  let e = (c["end"] as? String).flatMap(ClipSuggester.parseClock), e > s else { continue }
-            let sug = ClipSuggester.snap(.init(title: (c["title"] as? String) ?? String(localized: "Momento"), reason: (c["reason"] as? String) ?? "",
-                                               start: s, end: e), words: p.words, duration: p.duration)
-            if p.reels.contains(where: { abs($0.start - sug.start) < 3 }) { continue }
-            p.reels.append(Reel(title: sug.title, reason: sug.reason, start: sug.start, end: sug.end))
-            added += 1
-        }
-        let first = p.aiAnalyzedAt == nil
-        p.aiAnalyzedAt = p.aiAnalyzedAt ?? Date()
-        project = p
-        aiNote = added > 0
-            ? String(localized: "La IA encontró \(added) \(added == 1 ? String(localized: "momento") : String(localized: "momentos")) y escribió las notas del episodio.")
-            : (first ? String(localized: "La IA escribió las notas; no encontró momentos claros.") : String(localized: "Ya estaban todos los momentos de la IA."))
-    }
-
     func performSuggest() async throws {
             if project.words.isEmpty { try await transcribeMissing() }
             try await ensureEnergy()
-            report(String(localized: "Buscando los mejores momentos"), Keychain.apiKey == nil ? String(localized: "Análisis automático") : String(localized: "Preguntándole a Claude…"), nil)
-            let result = try await ClipSuggester.suggest(project: project)
-            project.reels = result.clips.map { Reel(title: $0.title, reason: $0.reason, start: $0.start, end: $0.end) }
-            if let s = result.summary { project.aiSummary = s }
-            reelsNote = result.clips.isEmpty
+            report(String(localized: "Buscando los mejores momentos"), String(localized: "Análisis automático"), nil)
+            let clips = ClipSuggester.suggest(project: project)
+            project.reels = clips.map { Reel(title: $0.title, reason: $0.reason, start: $0.start, end: $0.end) }
+            reelsNote = clips.isEmpty
                 ? String(localized: "No encontramos momentos claros. Prueba primero con “Arreglar” para tener la transcripción.")
-                : (result.usedAI ? String(localized: "Claude eligió \(result.clips.count) momentos.") : String(localized: "Elegimos \(result.clips.count) momentos automáticamente. Con una clave de Claude en Ajustes la selección es mucho más inteligente."))
+                : String(localized: "Elegimos \(clips.count) momentos automáticamente.")
     }
 
     func export(format: ExportFormat) {

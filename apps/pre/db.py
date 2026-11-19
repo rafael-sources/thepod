@@ -275,10 +275,6 @@ def get_db(slug: str) -> sqlite3.Connection:
     _ensure_column(conn, "podcast_meta", "background_filename", "background_filename TEXT")
     _ensure_column(conn, "podcast_meta", "voice_presets", "voice_presets TEXT")  # JSON: studio voice chains (thePod for Mac)
     _ensure_column(conn, "podcast_meta", "title_presets", "title_presets TEXT")  # JSON: Studio · Video title presets (thePod for Mac)
-    _ensure_column(conn, "episodes", "ai_summary", "ai_summary TEXT")
-    _ensure_column(conn, "episodes", "ai_highlights", "ai_highlights TEXT")
-    _ensure_column(conn, "episodes", "ai_notes_edited", "ai_notes_edited INTEGER DEFAULT 0")
-    _ensure_column(conn, "episodes", "ai_notes_synced_at", "ai_notes_synced_at TEXT")
     _ensure_column(conn, "episodes", "media_url", "media_url TEXT")
     _migrate_episodes_check_archived(conn)
     return conn

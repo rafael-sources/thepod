@@ -839,10 +839,6 @@ struct DescriptionTab: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Theme.panel))
                 .frame(minHeight: 180)
                 .onChange(of: episode.description) { _, v in saver.run("desc") { await model.save(episode.id, ["description": v ?? ""]) } }
-            if let s = episode.aiSummary, !s.isEmpty {
-                Text("Resumen de postPod").font(.headline).padding(.top, 8)
-                Text(s).foregroundStyle(Theme.secondary).textSelection(.enabled)
-            }
         }
     }
 }

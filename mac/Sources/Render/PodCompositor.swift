@@ -216,7 +216,7 @@ final class RenderScene: @unchecked Sendable {
 
     // MARK: Green screen
     //
-    // If the person recorded with a green background, AI segmentation leaves a green edge (green bounces
+    // If the person recorded with a green background, person segmentation leaves a green edge (green bounces
     // off hair and shoulders, and the mask doesn't cut right there). With a green background the cut is by color, which is
     // exact, and the green spill is removed from the person.
 
@@ -266,7 +266,7 @@ final class RenderScene: @unchecked Sendable {
               let key = Self.keyKernel?.apply(extent: frame.extent, arguments: [frame, 0.02, 0.10]),
               let clean = Self.despillKernel?.apply(extent: frame.extent, arguments: [frame]) else { return (frame, mask) }
         let e = frame.extent
-        // The AI mask, slightly larger: that way the color decides the edge, not it;
+        // The segmentation mask, slightly larger: that way the color decides the edge, not it;
         // it still serves to remove what isn't green outside the cloth (walls, lamps).
         let loose = mask.clampedToExtent()
             .applyingFilter("CIMorphologyMaximum", parameters: [kCIInputRadiusKey: max(3, e.width * 0.006)]).cropped(to: e)

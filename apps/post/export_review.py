@@ -53,10 +53,6 @@ def build_review(slug: str, username: str | None) -> list[dict]:
         if _table_exists(db, "caption_jobs"):
             running_captions = db.execute(
                 "SELECT COUNT(*) FROM caption_jobs WHERE status IN ('pending','running')").fetchone()[0]
-        ai_done = False
-        if _table_exists(db, "ai_analysis"):
-            ai_done = db.execute(
-                "SELECT 1 FROM ai_analysis WHERE status IN ('done','running','pending') LIMIT 1").fetchone() is not None
     finally:
         db.close()
 
@@ -110,13 +106,7 @@ def build_review(slug: str, username: str | None) -> list[dict]:
                       "text": "No se quitaron los silencios largos.",
                       "hint": "Usa el botón «🔇 Silencios» de arriba."})
 
-    # 4. AI (only once per episode)
-    if words and not ai_done:
-        items.append({"id": "ai", "level": "optional",
-                      "text": "La IA todavía no leyó el episodio (momentos y notas).",
-                      "hint": "Se hace una sola vez por episodio."})
-
-    # 5. Plan
+    # 4. Plan
     try:
         from plans import limits_for
         lim = limits_for(username)

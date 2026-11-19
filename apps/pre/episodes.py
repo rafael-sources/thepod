@@ -48,10 +48,6 @@ def _serialize_episode(row):
         "production_status": row["production_status"] if "production_status" in keys else None,
         "production_meta": prod_meta,
         "production_updated_at": row["production_updated_at"] if "production_updated_at" in keys else None,
-        "ai_summary": row["ai_summary"] if "ai_summary" in keys else None,
-        "ai_highlights": _json.loads(row["ai_highlights"]) if ("ai_highlights" in keys and row["ai_highlights"]) else [],
-        "ai_notes_edited": bool(row["ai_notes_edited"]) if "ai_notes_edited" in keys else False,
-        "ai_notes_synced_at": row["ai_notes_synced_at"] if "ai_notes_synced_at" in keys else None,
         "media_url": row["media_url"] if "media_url" in keys else None,
     }
 
@@ -101,56 +97,6 @@ def _current_user():
     return session.get("username") or "anon"
 
 
-def _sync_ai_notes(slug: str, ep_id: int, shared_project_id: str):
-    """Fetch show notes from postPod if available. Non-blocking, best-effort."""
-    from shared_config import load_shared_config
-    cfg = load_shared_config()
-    postpod_url = cfg.get("postpod_url")
-    if not postpod_url or not shared_project_id:
-        return
-
-    from integrations import _http_json
-    status_code, status_data = _http_json(
-        "GET",
-        f"{postpod_url}/api/integrations/status?shared_project_id={shared_project_id}&source_episode_id={ep_id}",
-        headers={"X-PodPod-Secret": cfg.get("integration_secret", "")},
-    )
-    if status_code != 200 or not status_data or not status_data.get("slug"):
-        return
-
-    postpod_slug = status_data["slug"]
-    code, data = _http_json(
-        "GET",
-        f"{postpod_url}/api/projects/{postpod_slug}/ai/show-notes",
-        headers={"X-PodPod-Secret": cfg.get("integration_secret", "")},
-    )
-    if code != 200 or not data or not data.get("summary"):
-        return
-
-    db = get_db(slug)
-    try:
-        row = db.execute("SELECT ai_notes_edited FROM episodes WHERE id=?", (ep_id,)).fetchone()
-        if not row:
-            return
-        if row["ai_notes_edited"]:
-            return
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        db.execute(
-            "UPDATE episodes SET ai_summary=?, ai_highlights=?, ai_notes_synced_at=? WHERE id=?",
-            (data["summary"], _json.dumps(data.get("highlights", []), ensure_ascii=False), now, ep_id),
-        )
-        db.commit()
-    finally:
-        db.close()
-
-
-# ---------------------------------------------------------------------------
-# Episodes
-# ---------------------------------------------------------------------------
-
-@bp.get("/api/podcasts/<slug>/episodes")
-@require_auth
 def list_episodes(slug):
     _ensure_podcast(slug)
     db = get_db(slug)
@@ -286,15 +232,6 @@ def get_episode(slug, ep_id):
         row = db.execute("SELECT * FROM episodes WHERE id=?", (ep_id,)).fetchone()
         if not row:
             return jsonify({"error": "episodio no encontrado"}), 404
-        # Trigger background AI notes sync if linked to postPod
-        if row and "production_meta" in row.keys() and row["production_meta"]:
-            try:
-                pm = _json.loads(row["production_meta"])
-                spid = pm.get("shared_project_id")
-                if spid:
-                    threading.Thread(target=_sync_ai_notes, args=(slug, ep_id, spid), daemon=True).start()
-            except (TypeError, ValueError):
-                pass
         return jsonify(_serialize_episode(row))
     finally:
         db.close()
@@ -1316,50 +1253,6 @@ def generate_show_notes(slug, ep_id):
         })
     finally:
         db.close()
-
-
-# ---------------------------------------------------------------------------
-# AI notes sync + publish
-# ---------------------------------------------------------------------------
-
-@bp.post("/api/podcasts/<slug>/episodes/<int:ep_id>/sync-notes")
-@require_auth
-def force_sync_notes(slug, ep_id):
-    """Force re-sync AI notes from postPod, resetting the edited flag."""
-    _ensure_podcast(slug)
-    db = get_db(slug)
-    try:
-        db.execute("UPDATE episodes SET ai_notes_edited=0 WHERE id=?", (ep_id,))
-        db.commit()
-        row = db.execute("SELECT * FROM episodes WHERE id=?", (ep_id,)).fetchone()
-    finally:
-        db.close()
-
-    if not row:
-        return jsonify({"error": "episodio no encontrado"}), 404
-
-    shared_project_id = None
-    if row["production_meta"]:
-        try:
-            shared_project_id = _json.loads(row["production_meta"]).get("shared_project_id")
-        except (TypeError, ValueError):
-            pass
-
-    if shared_project_id:
-        _sync_ai_notes(slug, ep_id, shared_project_id)
-
-    db = get_db(slug)
-    try:
-        updated = db.execute("SELECT ai_summary, ai_highlights, ai_notes_synced_at FROM episodes WHERE id=?", (ep_id,)).fetchone()
-    finally:
-        db.close()
-
-    return jsonify({
-        "ok": True,
-        "ai_summary": updated["ai_summary"] if updated else None,
-        "ai_highlights": _json.loads(updated["ai_highlights"]) if (updated and updated["ai_highlights"]) else [],
-        "synced_at": updated["ai_notes_synced_at"] if updated else None,
-    })
 
 
 def upload_episode_media(slug: str, ep_id: int, media_path) -> dict:
